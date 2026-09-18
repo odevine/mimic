@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+._*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Go build output. The rendercard binary is extensionless on Unix, so it is
+# named directly rather than caught by a pattern
+/dist/
+rendercard
+rendercard.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test, coverage and profiling output
+*.test
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# Rendered cards. rendercard defaults to -o card.png in the working directory,
+# and /out/ is the convention for anything else rendered by hand
+card.png
+/out/
+
+# Source frame PSDs and anything extracted from them. These are large binaries
+# and are not ours to redistribute, so the extraction step reads them from a
+# local path instead of from the repo
+*.psd
+*.psb
+/assets/
+
+# Claude Code per-user settings. Shared .claude/settings.json stays tracked
+.claude/settings.local.json

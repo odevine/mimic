@@ -1,0 +1,78 @@
+name: Release Please
+
+# release-please watches main for conventional commits and keeps a release pull
+# request open per package. Merging that pull request tags the release and
+# publishes it, which is what triggers the binary build below.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      engine-released: ${{ steps.release.outputs['engine--release_created'] }}
+      engine-tag: ${{ steps.release.outputs['engine--tag_name'] }}
+    steps:
+      # A personal access token rather than GITHUB_TOKEN, so the release pull
+      # request and the tag it pushes still trigger CI
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.MIMIC_RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Binaries attach to the release release-please just created, so this job
+  # uploads rather than creating a release of its own
+  engine-binaries:
+    needs: release-please
+    if: needs.release-please.outputs.engine-released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.engine-tag }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+
+      - name: Test
+        working-directory: engine
+        run: go test ./...
+
+      - name: Build rendercard binaries
+        working-directory: engine
+        env:
+          # engine/v0.2.0 carries the module path prefix, the binaries do not
+          TAG: ${{ needs.release-please.outputs.engine-tag }}
+        run: |
+          version="${TAG#engine/}"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            out="rendercard-${version}-${os}-${arch}${ext}"
+            echo "building ${out}"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
+              -trimpath -ldflags "-s -w" \
+              -o "${GITHUB_WORKSPACE}/dist/${out}" ./cmd/rendercard
+          done
+
+      - name: Attach binaries to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.engine-tag }}
+        run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*

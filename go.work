@@ -1,4 +1,4 @@
-go 1.25.0
+go 1.26.0
 
 // The ui module joins here once it exists; adding it is purely additive
 // and never touches any import path inside engine.

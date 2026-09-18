@@ -1,0 +1,39 @@
+# Changelog
+
+All notable changes to this project are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the engine module
+follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Because the
+module lives under `engine/`, its release tags carry that prefix, for example
+`engine/v0.1.0`.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-09-18
+
+First tagged release. It renders a Magic card through the Normal frame end to
+end against placeholder assets, and sets up the layering the design depends on.
+
+### Added
+
+- `card`: a source-agnostic `Data` model and a Scryfall client with fuzzy name
+  lookup, a separate art fetch, and a front-face fallback for double-faced
+  cards, guarded by a bounded timeout and bounded response reads.
+- `template`: the `Template` interface and a self-registering registry, the
+  `AssetProvider` and `Manifest` model, an `FSAssetProvider` with dimension and
+  path-traversal guards, and shared image and text helpers.
+- `template/normal`: the Normal frame. Color-key and legendary resolution, the
+  layer-by-layer render into an impasto document, art scaled to fit its window,
+  and code-generated placeholder assets.
+- `fonts`: role-based font sourcing that chains a user override directory, a
+  compiled-in default, then basicfont. Embedded defaults are Big Shoulders,
+  Merriweather, the Mana font, and NDPMTG, each with its license or notice.
+- `cmd/rendercard`: a CLI that fetches a card and writes a PNG.
+
+### Known gaps
+
+- No PSD asset extraction or measured geometry yet; assets are placeholders.
+- Mana and tap symbols are not yet drawn inline in text.
+- Rules text has no shrink-to-fit and clips when it overflows its box.
+
+[Unreleased]: https://github.com/odevine/mimic/compare/engine/v0.1.0...HEAD
+[0.1.0]: https://github.com/odevine/mimic/releases/tag/engine%2Fv0.1.0

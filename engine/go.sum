@@ -1,0 +1,6 @@
+github.com/odevine/impasto v0.1.1 h1:5jjmLGwspafRgfzLBlEvCEwvX8VjxF/9DSfWxt5GRw8=
+github.com/odevine/impasto v0.1.1/go.mod h1:hsDtuh29Ba47P2Rv9Zr/FIvG9pA5Zv7Tp81NJoUdbvk=
+golang.org/x/image v0.39.0 h1:skVYidAEVKgn8lZ602XO75asgXBgLj9G/FE3RbuPFww=
+golang.org/x/image v0.39.0/go.mod h1:sIbmppfU+xFLPIG0FoVUTvyBMmgng1/XAMhQ2ft0hpA=
+golang.org/x/text v0.36.0 h1:JfKh3XmcRPqZPKevfXVpI1wXPTqbkE5f7JA92a55Yxg=
+golang.org/x/text v0.36.0/go.mod h1:NIdBknypM8iqVmPiuco0Dh6P5Jcdk8lJL0CUebqK164=

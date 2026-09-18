@@ -1,0 +1,16 @@
+{
+  "name": "Lightning Bolt",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth.",
+  "colors": ["R"],
+  "color_identity": ["R"],
+  "rarity": "common",
+  "collector_number": "161",
+  "set": "2x2",
+  "artist": "Christopher Moeller",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/example-bolt.jpg"
+  }
+}

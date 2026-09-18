@@ -1,0 +1,12 @@
+NDPMTG is a Magic: The Gathering symbol font by Nick DePaola (ndepaola on
+GitHub, https://github.com/ndepaola). It is used across community proxy
+rendering projects and is bundled here for a non-commercial project that is
+labeled as such.
+
+The font software ships no license notice of its own. The mana, tap, and card
+type symbols it depicts are copyright Wizards of the Coast; the glyph outlines
+are the author's work. This project claims no affiliation with, nor endorsement
+by, Wizards of the Coast.
+
+If you are the author and want this attribution changed or the font removed,
+that will be honored.

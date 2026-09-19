@@ -1,7 +1,7 @@
 // Package fonts owns font sourcing for the engine. It resolves a role (title,
-// body, mana, symbols) to a font.Face through a chain: a font the end user
-// dropped into an override directory, then a default compiled into the binary,
-// then basicfont.Face7x13 as a last resort.
+// body, mana) to a font.Face through a chain: a font the end user dropped into
+// an override directory, then a default compiled into the binary, then
+// basicfont.Face7x13 as a last resort.
 //
 // The engine bundles no facsimile of the real Magic fonts. Titles fall back to
 // Big Shoulders and body text to Merriweather, both under the SIL Open Font
@@ -31,23 +31,22 @@ const (
 	Body
 	// BodyItalic is flavor text, the Plantin italic role
 	BodyItalic
-	// Mana is the mana-cost symbols
+	// Mana is every card symbol: mana costs, tap and untap, loyalty, card
+	// types, and watermarks. The Mana font covers all of them in one face
 	Mana
-	// Symbols is other glyphs such as tap symbols in rules text
-	Symbols
 )
 
 //go:embed embedded
 var embedded embed.FS
 
 // embeddedPath maps a role to its compiled-in default. A role without an entry
-// resolves to the basicfont fallback
+// resolves to the basicfont fallback. The mana face is Mana 1.18.0, whose
+// glyphs live in the private use area rather than at ASCII letters
 var embeddedPath = map[Role]string{
 	Title:      "embedded/title/BigShoulders-Bold.ttf",
 	Body:       "embedded/body/Merriweather-Regular.ttf",
 	BodyItalic: "embedded/body/Merriweather-Italic.ttf",
 	Mana:       "embedded/mana/mana.ttf",
-	Symbols:    "embedded/symbols/NDPMTG.ttf",
 }
 
 // userStems maps a role to the filename fragments an override file is matched
@@ -57,7 +56,6 @@ var userStems = map[Role][]string{
 	Body:       {"plantin", "mplantin"},
 	BodyItalic: {"plantin", "mplantin"},
 	Mana:       {"mana"},
-	Symbols:    {"ndpmtg", "proxyglyph", "glyph"},
 }
 
 var (

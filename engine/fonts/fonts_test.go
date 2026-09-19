@@ -10,7 +10,7 @@ import (
 
 func TestResolveEmbeddedRoles(t *testing.T) {
 	// Roles with an embedded default resolve without hitting the fallback.
-	for _, role := range []Role{Title, Body, BodyItalic, Mana, Symbols} {
+	for _, role := range []Role{Title, Body, BodyItalic, Mana} {
 		face, fallback, err := Resolve(role, "", 24)
 		if err != nil {
 			t.Errorf("Resolve(role %d): %v", role, err)
@@ -71,5 +71,40 @@ func TestFindUserFontItalicSplit(t *testing.T) {
 	}
 	if got := filepath.Base(findUserFont(BodyItalic, dir)); got != "Plantin-Italic.ttf" {
 		t.Errorf("BodyItalic matched %q, want the italic file", got)
+	}
+}
+
+func TestManaFaceHasPrivateUseGlyphs(t *testing.T) {
+	// The Mana font carries its symbols in the private use area, not at ASCII
+	// letters, so a face that resolves is not by itself proof it is usable.
+	// The codepoints below are the ones the Mana cheatsheet documents
+	face, fallback, err := Resolve(Mana, "", 32)
+	if err != nil {
+		t.Fatalf("Resolve(Mana): %v", err)
+	}
+	if fallback {
+		t.Fatal("Mana resolved to the basicfont fallback, want the embedded font")
+	}
+	for _, tc := range []struct {
+		r    rune
+		name string
+	}{
+		{0xE600, "white mana"},
+		{0xE601, "blue mana"},
+		{0xE602, "black mana"},
+		{0xE603, "red mana"},
+		{0xE604, "green mana"},
+		{0xE61A, "tap"},
+		{0xE61B, "untap"},
+		{0xE904, "colorless"},
+	} {
+		bounds, _, ok := face.GlyphBounds(tc.r)
+		if !ok {
+			t.Errorf("%s (U+%04X) is not mapped", tc.name, tc.r)
+			continue
+		}
+		if bounds.Max.X <= bounds.Min.X || bounds.Max.Y <= bounds.Min.Y {
+			t.Errorf("%s (U+%04X) maps to an empty glyph", tc.name, tc.r)
+		}
 	}
 }

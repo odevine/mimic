@@ -8,6 +8,9 @@
 *.swp
 *~
 
+# Go sum file
+go.work.sum
+
 # Go build output. The rendercard binary is extensionless on Unix, so it is
 # named directly rather than caught by a pattern
 /dist/
@@ -39,3 +42,7 @@ card.png
 
 # Claude Code per-user settings. Shared .claude/settings.json stays tracked
 .claude/settings.local.json
+
+# Internal PSD extraction tool. It converts local template PSDs into asset sets
+# once each and is never published, so it lives here without being tracked
+/tools/

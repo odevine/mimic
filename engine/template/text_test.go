@@ -1,11 +1,40 @@
 package template
 
 import (
+	"image"
 	"testing"
 
+	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
 )
+
+// scaleFace is a fake face whose glyph advance and line height scale with the
+// point size, so a layout gets narrower and shorter as the size shrinks. It
+// draws nothing, so it is for layout and fit tests only.
+type scaleFace struct{ size float64 }
+
+func (f scaleFace) Close() error { return nil }
+func (f scaleFace) Glyph(fixed.Point26_6, rune) (image.Rectangle, image.Image, image.Point, fixed.Int26_6, bool) {
+	return image.Rectangle{}, nil, image.Point{}, 0, false
+}
+func (f scaleFace) GlyphBounds(rune) (fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	return fixed.Rectangle26_6{}, 0, false
+}
+func (f scaleFace) GlyphAdvance(rune) (fixed.Int26_6, bool) { return fixed.I(int(f.size)), true }
+func (f scaleFace) Kern(rune, rune) fixed.Int26_6           { return 0 }
+func (f scaleFace) Metrics() font.Metrics {
+	return font.Metrics{
+		Height:  fixed.I(int(f.size)),
+		Ascent:  fixed.I(int(f.size * 0.8)),
+		Descent: fixed.I(int(f.size * 0.2)),
+	}
+}
+
+// scaleSource hands out scaleFaces, so a fit search sees the block shrink.
+type scaleSource struct{}
+
+func (scaleSource) Face(size float64) (font.Face, error) { return scaleFace{size: size}, nil }
 
 // basicfont.Face7x13 gives every glyph a 7px advance, so widths are exact and
 // wrapping is predictable in these tests.
@@ -108,6 +137,48 @@ func TestFirstBaselineAnchor(t *testing.T) {
 	top := TextBoxSpec{Y: 500, Height: 100}
 	if got := firstBaseline(top, m, 1, 20); got != 500+ascent {
 		t.Errorf("top anchor = %d, want %d", got, 500+ascent)
+	}
+}
+
+func TestFitLayoutShrinksToFit(t *testing.T) {
+	// Ten four-glyph words at size 100 wrap to several lines taller than the
+	// box, so the fit must pick a smaller size whose block fits.
+	text := "aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa"
+	box := TextBoxSpec{Width: 1000, Height: 250, FontSize: 100, MinFontSize: 20}
+	lay, err := fitLayout(box, text, scaleSource{})
+	if err != nil {
+		t.Fatalf("fitLayout: %v", err)
+	}
+	if lay.size >= box.FontSize {
+		t.Errorf("size = %v, want less than the max %v", lay.size, box.FontSize)
+	}
+	if h := blockHeight(lay, box); h > box.Height {
+		t.Errorf("block height %d overflows box height %d", h, box.Height)
+	}
+}
+
+func TestFitLayoutKeepsMaxWhenItFits(t *testing.T) {
+	// A short text fits at the max size, so no shrinking happens.
+	box := TextBoxSpec{Width: 1000, Height: 500, FontSize: 100, MinFontSize: 20}
+	lay, err := fitLayout(box, "aaaa", scaleSource{})
+	if err != nil {
+		t.Fatalf("fitLayout: %v", err)
+	}
+	if lay.size != box.FontSize {
+		t.Errorf("size = %v, want the max %v", lay.size, box.FontSize)
+	}
+}
+
+func TestFitLayoutBaselineDoesNotShrink(t *testing.T) {
+	// A baseline-anchored box is single-line point text, so it keeps its size
+	// even when the nominal block is taller than the box.
+	box := TextBoxSpec{Width: 1000, Height: 10, FontSize: 100, MinFontSize: 20, VAlign: "baseline"}
+	lay, err := fitLayout(box, "aaaa aaaa", scaleSource{})
+	if err != nil {
+		t.Fatalf("fitLayout: %v", err)
+	}
+	if lay.size != box.FontSize {
+		t.Errorf("size = %v, want the unshrunk max %v", lay.size, box.FontSize)
 	}
 }
 

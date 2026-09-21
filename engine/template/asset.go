@@ -59,6 +59,10 @@ type TextBoxSpec struct {
 	// font size, the way leading reads in a PSD, so 1.0 is solid. Zero or less
 	// means the face's natural line height
 	LineSpacing float64 `json:"lineSpacing,omitempty"`
+	// MinFontSize is the floor for shrink-to-fit on an area box. Text that still
+	// overflows at this size is clipped. Zero means a default fraction of
+	// FontSize. A baseline-anchored box does not shrink, so it ignores this
+	MinFontSize float64 `json:"minFontSize,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above

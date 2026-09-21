@@ -108,14 +108,13 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		}
 		box := m.TextBoxes[name]
 		sizer := fonts.ResolveFont(roleFor(name), t.FontDir)
-		face, err := sizer.Face(box.FontSize)
-		if err != nil {
-			return nil, fmt.Errorf("normal: resolving font for text box %q: %w", name, err)
-		}
 		if sizer.Fallback() {
 			text = normalizeForBasicFont(text)
 		}
-		img := template.RenderTextBox(box, text, m.Width, m.Height, face)
+		img, err := template.RenderTextBox(box, text, m.Width, m.Height, sizer)
+		if err != nil {
+			return nil, fmt.Errorf("normal: rendering text box %q: %w", name, err)
+		}
 		buf, err := raster.FromImage(img)
 		if err != nil {
 			return nil, fmt.Errorf("normal: wrapping text box %q: %w", name, err)

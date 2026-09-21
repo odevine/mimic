@@ -44,22 +44,102 @@ type textLayout struct {
 	size  float64
 }
 
-// RenderTextBox draws greedily word-wrapped text into a document-sized
-// transparent image, positioned and aligned within box, and returns it to be
-// composited like any other layer.
+// FaceSource yields a font face at a point size. Shrink-to-fit asks for several
+// sizes, so a caller passes a source rather than a single face. A source that
+// ignores size, such as a fixed bitmap face, disables shrinking on its own
+type FaceSource interface {
+	Face(size float64) (font.Face, error)
+}
+
+// RenderTextBox lays text out and draws it into a document-sized transparent
+// image, positioned and aligned within box, and returns it to be composited
+// like any other layer. An area box whose text overflows its height shrinks the
+// font toward the box's floor to fit, while a baseline-anchored box keeps its
+// size.
 //
-// The face parameter is where a caller supplies a font it has obtained itself.
-// This module bundles none. The current handling has no shaping beyond what
-// the face provides and no shrink-to-fit: text that overflows the box height
-// is dropped rather than resized, and a braced mana symbol in rules text
-// renders as its literal characters
-func RenderTextBox(box TextBoxSpec, text string, docW, docH int, face font.Face) *image.RGBA {
+// src supplies the font at whatever size the fit needs. This module bundles
+// none. There is no shaping beyond what a face provides, and a braced mana
+// symbol in rules text renders as its literal characters
+func RenderTextBox(box TextBoxSpec, text string, docW, docH int, src FaceSource) (*image.RGBA, error) {
 	img := image.NewRGBA(image.Rect(0, 0, docW, docH))
 	if strings.TrimSpace(text) == "" {
-		return img
+		return img, nil
 	}
-	drawLayout(img, box, layoutText(box, text, face))
-	return img
+	lay, err := fitLayout(box, text, src)
+	if err != nil {
+		return nil, err
+	}
+	drawLayout(img, box, lay)
+	return img, nil
+}
+
+// fitLayout returns text laid out at the largest size that fits box's height,
+// from box.FontSize down to the floor. A baseline-anchored box is single-line
+// point text and is not height-shrunk, so it lays out at box.FontSize. When
+// even the floor overflows, the floor's layout is returned for drawLayout to
+// clip
+func fitLayout(box TextBoxSpec, text string, src FaceSource) (textLayout, error) {
+	max := box.FontSize
+	lay, fits, err := layoutAt(box, text, src, max)
+	if err != nil {
+		return textLayout{}, err
+	}
+	min := minFontSize(box)
+	if box.VAlign == "baseline" || fits || max <= min {
+		return lay, nil
+	}
+	// max overflows, so search (min, max) for the largest size that fits,
+	// keeping the floor's layout as the fallback when nothing does
+	best, _, err := layoutAt(box, text, src, min)
+	if err != nil {
+		return textLayout{}, err
+	}
+	lo, hi := min, max
+	for i := 0; i < 8 && hi-lo > 0.5; i++ {
+		mid := (lo + hi) / 2
+		l, ok, err := layoutAt(box, text, src, mid)
+		if err != nil {
+			return textLayout{}, err
+		}
+		if ok {
+			best, lo = l, mid
+		} else {
+			hi = mid
+		}
+	}
+	return best, nil
+}
+
+// layoutAt lays text out at one em size and reports whether the block fits box's
+// height
+func layoutAt(box TextBoxSpec, text string, src FaceSource, size float64) (textLayout, bool, error) {
+	face, err := src.Face(size)
+	if err != nil {
+		return textLayout{}, false, err
+	}
+	sized := box
+	sized.FontSize = size
+	lay := layoutText(sized, text, face)
+	return lay, blockHeight(lay, sized) <= box.Height, nil
+}
+
+// blockHeight is the total height of a laid-out block, its line count times the
+// line height at its size
+func blockHeight(lay textLayout, box TextBoxSpec) int {
+	if len(lay.lines) == 0 {
+		return 0
+	}
+	m := faceOf(lay.lines[0]).Metrics()
+	return len(lay.lines) * lineHeightPx(m, lay.size, box.LineSpacing)
+}
+
+// minFontSize is the shrink-to-fit floor, a box's own MinFontSize or, when it
+// sets none, a little over half the font size
+func minFontSize(box TextBoxSpec) float64 {
+	if box.MinFontSize > 0 {
+		return box.MinFontSize
+	}
+	return box.FontSize * 0.55
 }
 
 // layoutText wraps text into box using face, greedily breaking between tokens
@@ -117,7 +197,7 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) {
 	metrics := face.Metrics()
 	src := image.NewUniform(parseHexColor(box.Color))
 	space := spaceAdvance(face)
-	lineHeight := lineHeightPx(metrics, box.FontSize, box.LineSpacing)
+	lineHeight := lineHeightPx(metrics, lay.size, box.LineSpacing)
 
 	baseline := firstBaseline(box, metrics, len(lay.lines), lineHeight)
 	bottom := box.Y + box.Height

@@ -210,8 +210,8 @@ func TestTrackingWidensTokens(t *testing.T) {
 	if track <= 0 {
 		t.Fatalf("trackingPx(125, 100) = %v, want positive", track)
 	}
-	plain := tokenize("aaaaa", basicfont.Face7x13, nil, nil, 0)
-	tracked := tokenize("aaaaa", basicfont.Face7x13, nil, nil, track)
+	plain := tokenize("aaaaa", partStyle{face: basicfont.Face7x13})
+	tracked := tokenize("aaaaa", partStyle{face: basicfont.Face7x13, track: track})
 	if len(plain) != 1 || len(tracked) != 1 {
 		t.Fatalf("want one token each, got %d and %d", len(plain), len(tracked))
 	}
@@ -225,7 +225,7 @@ func TestTokenizeItalicizesReminderText(t *testing.T) {
 	// face, so reminder text italicizes inline.
 	base := basicfont.Face7x13
 	emph := scaleFace{size: 1}
-	toks := tokenize("Deathtouch (Any damage.) done", base, emph, nil, 0)
+	toks := tokenize("Deathtouch (Any damage.) done", partStyle{face: base, emph: emph})
 	want := []bool{false, true, true, false}
 	if len(toks) != len(want) {
 		t.Fatalf("got %d tokens, want %d", len(toks), len(want))
@@ -243,7 +243,7 @@ func TestTokenizeItalicizesLeadingAbilityWord(t *testing.T) {
 	base := basicfont.Face7x13
 	emph := scaleFace{size: 1}
 	set := map[string]bool{"constellation": true}
-	toks := tokenize("Constellation — Whenever an", base, emph, set, 0)
+	toks := tokenize("Constellation — Whenever an", partStyle{face: base, emph: emph, emphLead: set})
 	want := []bool{true, true, false, false}
 	if len(toks) != len(want) {
 		t.Fatalf("got %d tokens, want %d", len(toks), len(want))
@@ -254,13 +254,13 @@ func TestTokenizeItalicizesLeadingAbilityWord(t *testing.T) {
 		}
 	}
 	// A word not in the set (a keyword ability) is left roman.
-	roman := tokenize("Suspend 4 — Cost", base, emph, set, 0)
+	roman := tokenize("Suspend 4 — Cost", partStyle{face: base, emph: emph, emphLead: set})
 	if roman[0].runs[0].face == font.Face(emph) {
 		t.Error("Suspend is a keyword ability and should stay roman")
 	}
 
 	// A numbered ability word prints its count, so the bare word still matches.
-	numbered := tokenize("Descend 8 — When", base, emph, map[string]bool{"descend": true}, 0)
+	numbered := tokenize("Descend 8 — When", partStyle{face: base, emph: emph, emphLead: map[string]bool{"descend": true}})
 	for i, w := range []bool{true, true, true, false} {
 		if got := numbered[i].runs[0].face == font.Face(emph); got != w {
 			t.Errorf("Descend token %d emph=%v, want %v", i, got, w)
@@ -345,3 +345,181 @@ func TestLineStartXAlign(t *testing.T) {
 		}
 	}
 }
+
+// fakeSymbols draws nothing and knows two codes, so layout tests can exercise
+// symbol runs without a font.
+type fakeSymbols struct{ drawn []image.Rectangle }
+
+func (f *fakeSymbols) Symbol(code string, size float64) (SymbolMetrics, bool) {
+	if code != "R" && code != "T" {
+		return SymbolMetrics{}, false
+	}
+	box := int(size)
+	return SymbolMetrics{Advance: fixed.I(box), Box: box, Ascent: box}, true
+}
+
+func (f *fakeSymbols) DrawSymbol(_ *image.RGBA, _ string, at image.Rectangle) error {
+	f.drawn = append(f.drawn, at)
+	return nil
+}
+
+func TestSplitSymbols(t *testing.T) {
+	codes := func(word string) []string {
+		var out []string
+		for _, p := range splitSymbols(word) {
+			if p.code != "" {
+				out = append(out, "<"+p.code+">")
+			} else {
+				out = append(out, p.text)
+			}
+		}
+		return out
+	}
+	cases := []struct {
+		word string
+		want []string
+	}{
+		{"plain", []string{"plain"}},
+		{"{R}", []string{"<R>"}},
+		{"{T}:", []string{"<T>", ":"}},
+		{"{1}{G},", []string{"<1>", "<G>", ","}},
+		{"{W/U}", []string{"<W/U>"}},
+		{"add{2/W}here", []string{"add", "<2/W>", "here"}},
+		// An unclosed brace and an empty pair have no code to look up, so they
+		// stay literal.
+		{"{oops", []string{"{oops"}},
+		{"a{}b", []string{"a{}", "b"}},
+		{"{R}{oops", []string{"<R>", "{oops"}},
+	}
+	for _, c := range cases {
+		got := codes(c.word)
+		if len(got) != len(c.want) {
+			t.Errorf("splitSymbols(%q) = %q, want %q", c.word, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("splitSymbols(%q) = %q, want %q", c.word, got, c.want)
+				break
+			}
+		}
+	}
+}
+
+func TestTokenizeBuildsSymbolRuns(t *testing.T) {
+	// "{T}:" is one token of two runs, the symbol and the colon, so the symbol
+	// never breaks away from the text it sits against.
+	st := partStyle{face: basicfont.Face7x13, sym: &fakeSymbols{}, size: 10}
+	toks := tokenize("{T}: done", st)
+	if len(toks) != 2 {
+		t.Fatalf("got %d tokens, want 2", len(toks))
+	}
+	if len(toks[0].runs) != 2 {
+		t.Fatalf("got %d runs in the first token, want 2", len(toks[0].runs))
+	}
+	if toks[0].runs[0].sym != "T" {
+		t.Errorf("first run sym = %q, want T", toks[0].runs[0].sym)
+	}
+	if toks[0].runs[1].text != ":" {
+		t.Errorf("second run text = %q, want :", toks[0].runs[1].text)
+	}
+	// The token's advance is its runs', the symbol's plus the colon's.
+	if want := toks[0].runs[0].advance + toks[0].runs[1].advance; toks[0].advance != want {
+		t.Errorf("token advance = %v, want %v", toks[0].advance, want)
+	}
+}
+
+func TestTokenizeKeepsUnknownSymbolLiteral(t *testing.T) {
+	// A code the renderer does not draw keeps its braces and measures as text,
+	// so nothing vanishes from the card.
+	st := partStyle{face: basicfont.Face7x13, sym: &fakeSymbols{}, size: 10}
+	toks := tokenize("{ZZZ}", st)
+	if len(toks) != 1 || len(toks[0].runs) != 1 {
+		t.Fatalf("got %d tokens, want one of one run", len(toks))
+	}
+	run := toks[0].runs[0]
+	if run.sym != "" || run.text != "{ZZZ}" {
+		t.Errorf("run = %+v, want the literal {ZZZ}", run)
+	}
+	if want := fixed.I(len("{ZZZ}") * glyphW); run.advance != want {
+		t.Errorf("advance = %v, want the text width %v", run.advance, want)
+	}
+}
+
+func TestTokenizeWithoutRendererKeepsBraces(t *testing.T) {
+	// A part with no renderer leaves every code literal, which is how boxes
+	// that carry no symbols behave.
+	toks := tokenize("{R}", partStyle{face: basicfont.Face7x13})
+	if len(toks) != 1 || toks[0].runs[0].text != "{R}" {
+		t.Errorf("tokens = %+v, want the literal {R}", toks)
+	}
+}
+
+func TestSymbolRunsDrawAtTheirBox(t *testing.T) {
+	// A cost of three symbols draws three boxes, each one advance further right
+	// and all on the same row.
+	sym := &fakeSymbols{}
+	box := TextBoxSpec{Width: 1000, Height: 1000, FontSize: 20, VAlign: "top"}
+	_, err := RenderTextBox(box, 1000, 1000, TextPart{Text: "{R}{R}{T}", Src: scaleSource{}, Sym: sym})
+	if err != nil {
+		t.Fatalf("RenderTextBox: %v", err)
+	}
+	if len(sym.drawn) != 3 {
+		t.Fatalf("drew %d symbols, want 3", len(sym.drawn))
+	}
+	for i, at := range sym.drawn {
+		if at.Dx() != 20 || at.Dy() != 20 {
+			t.Errorf("symbol %d box = %v, want 20 by 20", i, at)
+		}
+		if at.Min.Y != sym.drawn[0].Min.Y {
+			t.Errorf("symbol %d top = %d, want %d", i, at.Min.Y, sym.drawn[0].Min.Y)
+		}
+		if want := sym.drawn[0].Min.X + 20*i; at.Min.X != want {
+			t.Errorf("symbol %d left = %d, want %d", i, at.Min.X, want)
+		}
+	}
+}
+
+func TestMeasureTextSpan(t *testing.T) {
+	// A right-aligned line ends at the box's right edge and starts its own
+	// width short of it, which is what lets a caller size another box around it.
+	box := TextBoxSpec{X: 100, Width: 500, Height: 200, FontSize: 13, Align: "right", VAlign: "baseline"}
+	span, err := MeasureTextSpan(box, TextPart{Text: "abcd", Src: fixedSource{}})
+	if err != nil {
+		t.Fatalf("MeasureTextSpan: %v", err)
+	}
+	if span.Right != box.X+box.Width {
+		t.Errorf("right = %d, want the box edge at %d", span.Right, box.X+box.Width)
+	}
+	if want := box.X + box.Width - 4*glyphW; span.Left != want {
+		t.Errorf("left = %d, want %d", span.Left, want)
+	}
+	if span.Empty() {
+		t.Error("a measured line reports empty")
+	}
+
+	// A left-aligned box starts at its own left edge regardless of the text.
+	box.Align = "left"
+	left, err := MeasureTextSpan(box, TextPart{Text: "abcd", Src: fixedSource{}})
+	if err != nil {
+		t.Fatalf("MeasureTextSpan: %v", err)
+	}
+	if left.Left != box.X {
+		t.Errorf("left = %d, want the box edge at %d", left.Left, box.X)
+	}
+
+	// Nothing to draw measures to an empty span rather than to the box.
+	blank, err := MeasureTextSpan(box, TextPart{Text: "", Src: fixedSource{}})
+	if err != nil {
+		t.Fatalf("MeasureTextSpan: %v", err)
+	}
+	if !blank.Empty() {
+		t.Errorf("empty text measured %+v, want an empty span", blank)
+	}
+}
+
+// fixedSource hands out basicfont.Face7x13 at every size, so a span is exact
+// glyph counts and does not move when a fit tries another size.
+type fixedSource struct{}
+
+func (fixedSource) Face(float64) (font.Face, error) { return basicfont.Face7x13, nil }

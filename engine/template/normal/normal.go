@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"math"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/odevine/impasto/blend"
 	"github.com/odevine/impasto/canvas"
+	"github.com/odevine/impasto/effects"
 	"github.com/odevine/impasto/raster"
 	xdraw "golang.org/x/image/draw"
 
@@ -38,7 +40,7 @@ type Template struct {
 }
 
 // defaultCopyright is the bottom line used when a Template sets no Copyright.
-// Real cards print the set's year, which the card data does not carry, so the
+// Real cards print the set’s year, which the card data does not carry, so the
 // year is left out
 const defaultCopyright = "™ & © Wizards of the Coast"
 
@@ -142,13 +144,33 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		}
 	}
 
+	// One renderer serves every box, so its faces and rasterized pips are built
+	// once for the card rather than once per box. The artist credit draws from
+	// that same font but in its own box color, so it takes a renderer beside it
+	var syms symbols
+	if ms := newManaSymbols(t.FontDir); ms != nil {
+		syms.mana = ms
+		if box, ok := m.TextBoxes["artist"]; ok {
+			syms.artist = artistNib{sym: ms, ink: template.ParseHexColor(box.Color)}
+		}
+	}
+
+	cost, err := t.costSpan(m, req.Card, syms)
+	if err != nil {
+		return nil, fmt.Errorf("normal: measuring the mana cost: %w", err)
+	}
+
 	for _, name := range sortedKeys(m.TextBoxes) {
-		parts := t.textParts(name, req.Card)
+		parts := t.textParts(name, req.Card, syms)
 		if len(parts) == 0 {
 			continue
 		}
 		box := m.TextBoxes[name]
 		switch {
+		case name == "mana":
+			box = manaBox(box)
+		case name == "title":
+			box = titleClearOf(box, cost)
 		case name == "copyright" && f.creature:
 			box = copyrightOnArtistRow(box, m)
 		case name == "oracle" && f.creature:
@@ -166,7 +188,11 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		if err != nil {
 			return nil, fmt.Errorf("normal: wrapping text box %q: %w", name, err)
 		}
-		nodes = append(nodes, &canvas.Layer{Content: buf, Mode: blend.Normal})
+		text := &canvas.Layer{Content: buf, Mode: blend.Normal}
+		if name == "mana" {
+			text.Effects = []effects.Effect{costShadow(box.FontSize)}
+		}
+		nodes = append(nodes, text)
 
 		if res.HasDivider {
 			div, err := dividerLayer(req.Assets, m, res.DividerY)
@@ -376,10 +402,21 @@ func fitArt(src image.Image, w, h int) image.Image {
 	return dst
 }
 
+// symbols are the renderers a card's boxes draw braced codes through: the pips
+// for the cost and the rules text, the nib for the artist credit. Either may be
+// nil, which leaves a code as its literal characters
+type symbols struct {
+	mana   template.SymbolRenderer
+	artist template.SymbolRenderer
+}
+
 // textParts returns the styled parts for a named box. Most boxes are one part
 // in the box's role. The oracle box is rules in the body role then flavor in
-// the italic role, which RenderTextBox separates with a divider
-func (t *Template) textParts(name string, d *card.Data) []template.TextPart {
+// the italic role, which RenderTextBox separates with a divider. The mana cost
+// and the rules text are where a card's own symbols appear, and the artist
+// credit opens with the nib the engine prepends, so those are the parts that
+// carry a renderer
+func (t *Template) textParts(name string, d *card.Data, syms symbols) []template.TextPart {
 	if name == "oracle" {
 		var parts []template.TextPart
 		if p, ok := t.part(d.OracleText, fonts.Body); ok {
@@ -387,6 +424,7 @@ func (t *Template) textParts(name string, d *card.Data) []template.TextPart {
 			// italicize, while keyword abilities stay roman
 			p.Emph = fonts.ResolveFont(fonts.BodyItalic, t.FontDir)
 			p.EmphLead = card.EmphasisWords
+			p.Sym = syms.mana
 			parts = append(parts, p)
 		}
 		if p, ok := t.part(d.FlavorText, fonts.BodyItalic); ok {
@@ -395,13 +433,25 @@ func (t *Template) textParts(name string, d *card.Data) []template.TextPart {
 		return parts
 	}
 	text := textFor(name, d)
-	if name == "copyright" {
+	switch {
+	case name == "copyright":
 		text = t.copyright()
+	case name == "artist" && syms.artist != nil && text != "":
+		// The nib sits flush against the name, so the code carries no space and
+		// the symbol's own advance opens the gap
+		text = "{" + nibCode + "}" + text
 	}
-	if p, ok := t.part(text, roleFor(name)); ok {
-		return []template.TextPart{p}
+	p, ok := t.part(text, roleFor(name))
+	if !ok {
+		return nil
 	}
-	return nil
+	switch name {
+	case "mana":
+		p.Sym = syms.mana
+	case "artist":
+		p.Sym = syms.artist
+	}
+	return []template.TextPart{p}
 }
 
 // copyright returns the configured bottom line, or the default when unset
@@ -516,6 +566,79 @@ func setLine(d *card.Data) string {
 		lang = "EN"
 	}
 	return strings.ToUpper(d.SetCode) + " • " + lang
+}
+
+// titleCostGap is the space kept between the card name and the mana cost, as a
+// fraction of the name's font size, so the two never read as one run of ink
+const titleCostGap = 0.5
+
+// Where the black copy behind each symbol sits, both measured off a Scryfall
+// scan of a printed card. The distance is a fraction of the pip's diameter, and
+// the lean turns it off straight down, in degrees clockwise, which carries it a
+// little to the left the way a printed cost does
+const (
+	costShadowDrop = 0.116
+	costShadowLean = 25
+)
+
+// costShadow is the black disc sitting behind and below each symbol of the mana
+// cost. A printed cost draws a solid offset copy rather than a soft shadow, so
+// this casts with no blur at full opacity, and the symbol on top leaves only a
+// crescent showing. A drop shadow off the layer's alpha is that same offset
+// copy, one per symbol, without the symbol renderer knowing.
+//
+// It goes on the cost's layer alone, since the symbols in rules text lie flat.
+// It covers whatever that box draws, which is the symbols and, for a code with
+// no artwork, the literal text they fell back to
+func costShadow(size float64) *effects.DropShadow {
+	// impasto measures the angle clockwise from the positive x axis, so half pi
+	// is straight down and the lean turns it further clockwise
+	angle := math.Pi/2 + costShadowLean*math.Pi/180
+	return &effects.DropShadow{
+		Color:    color.Black,
+		Opacity:  1,
+		Angle:    float32(angle),
+		Distance: float32(size * pipDiameter * costShadowDrop),
+	}
+}
+
+// manaBox is the mana cost's box with shrink-to-fit switched off, its floor
+// raised to its own size. A symbol is a fixed size on a printed card, so a heavy
+// cost grows leftward out of its box rather than shrinking into it
+func manaBox(box template.TextBoxSpec) template.TextBoxSpec {
+	box.MinFontSize = box.FontSize
+	return box
+}
+
+// costSpan reports where the mana cost lands in the title bar, which is what
+// the name has to stop short of. A card with no cost, or a template with no
+// mana box, measures to an empty span
+func (t *Template) costSpan(m *template.Manifest, d *card.Data, syms symbols) (template.TextSpan, error) {
+	box, ok := m.TextBoxes["mana"]
+	if !ok {
+		return template.TextSpan{}, nil
+	}
+	parts := t.textParts("mana", d, syms)
+	if len(parts) == 0 {
+		return template.TextSpan{}, nil
+	}
+	return template.MeasureTextSpan(manaBox(box), parts...)
+}
+
+// titleClearOf narrows the name box so it stops a gap short of the mana cost,
+// leaving the name to shrink rather than run under the symbols. It only ever
+// narrows, so a card whose cost leaves room keeps the box the manifest gave it
+func titleClearOf(box template.TextBoxSpec, cost template.TextSpan) template.TextBoxSpec {
+	if cost.Empty() {
+		return box
+	}
+	room := cost.Left - int(math.Round(box.FontSize*titleCostGap)) - box.X
+	if room < box.Width {
+		if box.Width = room; box.Width < 0 {
+			box.Width = 0
+		}
+	}
+	return box
 }
 
 // copyrightOnArtistRow moves the copyright down from the collector row to the

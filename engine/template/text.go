@@ -11,22 +11,49 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// glyphRun is a span of text drawn in one face. A laid-out line is a sequence
-// of runs. Rules and flavor use different faces, and inline symbols later add
-// runs in a symbol face, without changing how a line is measured or drawn
+// glyphRun is a span drawn as one thing. A laid-out line is a sequence of runs.
+// Rules and flavor use different faces, and a braced symbol is a run of its own,
+// so neither changes how a line is measured or drawn
 type glyphRun struct {
 	text    string
 	face    font.Face
 	advance fixed.Int26_6
+	// sym, when set, makes this a symbol run: it holds the braced code and the
+	// run draws through ren instead of drawing text in face. The face is kept
+	// so a line of nothing but symbols still has metrics to lay out against
+	sym  string
+	metr SymbolMetrics
+	ren  SymbolRenderer
 }
 
 // token is an unbreakable unit of one or more runs with no space between them.
 // Line breaking happens between tokens, never inside one. A plain word is one
-// text run today, and a mana cost like {1}{U} becomes several runs in one
-// token once inline symbols land
+// text run, and a mana cost like {1}{U} is several symbol runs in one token
 type token struct {
 	runs    []glyphRun
 	advance fixed.Int26_6
+}
+
+// SymbolMetrics is the space one symbol takes on a line. A symbol draws into a
+// square box whose left edge sits at the pen: Box is that square's side, Ascent
+// is how far its top is above the baseline, and Advance is what the pen moves,
+// which is a little more than Box so adjacent symbols do not touch
+type SymbolMetrics struct {
+	Advance fixed.Int26_6
+	Box     int
+	Ascent  int
+}
+
+// SymbolRenderer draws the braced codes a card's text carries, like {R} or {T}.
+// Layout parses the braces and asks the renderer how much room a code needs and
+// then to paint it, which keeps this package free of any knowledge of what a
+// symbol looks like, the way it knows a FaceSource but no particular font
+type SymbolRenderer interface {
+	// Symbol reports the room code takes at a text size. It reports false for a
+	// code it does not draw, which leaves the braced text literal
+	Symbol(code string, size float64) (SymbolMetrics, bool)
+	// DrawSymbol paints code into dst, filling the square at
+	DrawSymbol(dst *image.RGBA, code string, at image.Rectangle) error
 }
 
 // line is one laid-out line. A text line carries its tokens and their combined
@@ -69,6 +96,21 @@ type TextPart struct {
 	// is in this set and an em-dash follows, the way an ability word italicizes.
 	// The keys are lowercased. Nil disables it
 	EmphLead map[string]bool
+	// Sym draws the braced symbol codes in this part, so "{T}: Add {G}." prints
+	// the two pips. Nil leaves every code as its literal characters
+	Sym SymbolRenderer
+}
+
+// partStyle is one part resolved at one size: the faces its words draw in, the
+// renderer its braced codes draw through, and the size and letter spacing they
+// were resolved at. Tokenizing needs all of it, so it travels as one value
+type partStyle struct {
+	face     font.Face
+	emph     font.Face
+	emphLead map[string]bool
+	sym      SymbolRenderer
+	size     float64
+	track    fixed.Int26_6
 }
 
 // TextBoxResult is what RenderTextBox produces: the drawn image, and where a
@@ -89,9 +131,9 @@ type TextBoxResult struct {
 // floor to fit, while a baseline-anchored box keeps its size. Parts are stacked
 // with a divider slot between them, so rules and flavor separate on their own.
 //
-// A part's source supplies the font at whatever size the fit needs. This module
-// bundles none. There is no shaping beyond what a face provides, and a braced
-// mana symbol in rules text renders as its literal characters
+// A part's source supplies the font at whatever size the fit needs and its
+// symbol renderer the braced codes. This module bundles neither, and there is no
+// shaping beyond what a face provides
 func RenderTextBox(box TextBoxSpec, docW, docH int, parts ...TextPart) (TextBoxResult, error) {
 	img := image.NewRGBA(image.Rect(0, 0, docW, docH))
 	inner := insetBox(box)
@@ -99,8 +141,51 @@ func RenderTextBox(box TextBoxSpec, docW, docH int, parts ...TextPart) (TextBoxR
 	if err != nil {
 		return TextBoxResult{}, err
 	}
-	dividerY, hasDivider := drawLayout(img, inner, lay)
+	dividerY, hasDivider, err := drawLayout(img, inner, lay)
+	if err != nil {
+		return TextBoxResult{}, err
+	}
 	return TextBoxResult{Image: img, DividerY: dividerY, HasDivider: hasDivider}, nil
+}
+
+// TextSpan is the document X range a laid-out box's text covers, from the
+// leftmost line's start to the rightmost line's end
+type TextSpan struct {
+	Left, Right int
+}
+
+// Empty reports whether the span covers nothing, which is what a box with no
+// text measures to
+func (s TextSpan) Empty() bool { return s.Right <= s.Left }
+
+// MeasureTextSpan lays the parts out in box the way RenderTextBox would, then
+// reports the X range they cover without drawing any of it. It lets one box be
+// sized around another, which is how the card name gives way to the mana cost
+func MeasureTextSpan(box TextBoxSpec, parts ...TextPart) (TextSpan, error) {
+	inner := insetBox(box)
+	lay, err := fitLayout(inner, parts)
+	if err != nil {
+		return TextSpan{}, err
+	}
+	span := TextSpan{Left: inner.X + inner.Width, Right: inner.X}
+	found := false
+	for _, ln := range lay.lines {
+		if ln.divider || len(ln.tokens) == 0 {
+			continue
+		}
+		found = true
+		start := lineStartX(inner, ln.width)
+		if left := start.Floor(); left < span.Left {
+			span.Left = left
+		}
+		if right := (start + ln.width).Ceil(); right > span.Right {
+			span.Right = right
+		}
+	}
+	if !found {
+		return TextSpan{}, nil
+	}
+	return span, nil
 }
 
 // insetBox shrinks box by its padding on every side, giving the rectangle the
@@ -198,7 +283,8 @@ func layoutParts(box TextBoxSpec, parts []TextPart, size float64) (textLayout, e
 				return textLayout{}, err
 			}
 		}
-		wrapped := wrapPart(box, p.Text, face, emph, p.EmphLead, track)
+		st := partStyle{face: face, emph: emph, emphLead: p.EmphLead, sym: p.Sym, size: size, track: track}
+		wrapped := wrapPart(box, p.Text, st)
 		if len(wrapped) == 0 {
 			continue
 		}
@@ -210,17 +296,16 @@ func layoutParts(box TextBoxSpec, parts []TextPart, size float64) (textLayout, e
 	return textLayout{lines: lines, size: size}, nil
 }
 
-// wrapPart greedily word-wraps one part's text to box.Width in face, keeping
-// paragraph breaks on explicit newlines, and returns its text lines. track is
-// the per-glyph letter spacing folded into each token's width
-func wrapPart(box TextBoxSpec, text string, face, emph font.Face, leadEmph map[string]bool, track fixed.Int26_6) []line {
-	space := spaceAdvance(face)
+// wrapPart greedily word-wraps one part's text to box.Width in its style's face,
+// keeping paragraph breaks on explicit newlines, and returns its text lines
+func wrapPart(box TextBoxSpec, text string, st partStyle) []line {
+	space := spaceAdvance(st.face)
 	maxW := fixed.I(box.Width)
 	var lines []line
 	for pi, para := range strings.Split(text, "\n") {
 		start := len(lines)
 		var cur line
-		for _, tk := range tokenize(para, face, emph, leadEmph, track) {
+		for _, tk := range tokenize(para, st) {
 			switch {
 			case len(cur.tokens) == 0:
 				cur = line{tokens: []token{tk}, width: tk.advance}
@@ -228,12 +313,12 @@ func wrapPart(box TextBoxSpec, text string, face, emph font.Face, leadEmph map[s
 				cur.tokens = append(cur.tokens, tk)
 				cur.width += space + tk.advance
 			default:
-				lines = append(lines, cur)
+				lines = append(lines, trimTrailingGap(cur))
 				cur = line{tokens: []token{tk}, width: tk.advance}
 			}
 		}
 		if len(cur.tokens) > 0 {
-			lines = append(lines, cur)
+			lines = append(lines, trimTrailingGap(cur))
 		}
 		// A paragraph after the first opens with extra space, unless it wrapped
 		// to nothing, in which case the next real paragraph carries the break
@@ -244,30 +329,47 @@ func wrapPart(box TextBoxSpec, text string, face, emph font.Face, leadEmph map[s
 	return lines
 }
 
+// trimTrailingGap takes the gap back off a line whose last run is a symbol. A
+// symbol's advance carries the space to whatever follows it, and at the end of a
+// line nothing does, so leaving it in would hold a right-aligned cost that far
+// inside its box
+func trimTrailingGap(ln line) line {
+	if len(ln.tokens) == 0 {
+		return ln
+	}
+	last := ln.tokens[len(ln.tokens)-1]
+	if len(last.runs) == 0 {
+		return ln
+	}
+	if run := last.runs[len(last.runs)-1]; run.sym != "" {
+		ln.width -= run.advance - fixed.I(run.metr.Box)
+	}
+	return ln
+}
+
 // layoutText wraps a single face's text into box, a convenience for one-part
 // layouts and tests
 func layoutText(box TextBoxSpec, text string, face font.Face) textLayout {
-	track := trackingPx(box.Tracking, box.FontSize)
-	return textLayout{lines: wrapPart(box, text, face, nil, nil, track), size: box.FontSize}
+	st := partStyle{face: face, size: box.FontSize, track: trackingPx(box.Tracking, box.FontSize)}
+	return textLayout{lines: wrapPart(box, text, st), size: box.FontSize}
 }
 
-// tokenize splits a paragraph into whitespace-delimited tokens, each a single
-// text run. A word draws in face, or in emph when it falls inside parentheses or
-// is part of a leading ability word from leadEmph, so reminder text and ability
-// words italicize. track adds letter spacing to each token's width, one
-// increment per glyph
-func tokenize(para string, face, emph font.Face, leadEmph map[string]bool, track fixed.Int26_6) []token {
+// tokenize splits a paragraph into whitespace-delimited tokens. A word draws in
+// the style's face, or in its emph face when it falls inside parentheses or is
+// part of a leading ability word from emphLead, so reminder text and ability
+// words italicize
+func tokenize(para string, st partStyle) []token {
 	words := strings.Fields(para)
 	leadEnd := -1
-	if emph != nil {
-		leadEnd = leadAbilityEnd(words, leadEmph)
+	if st.emph != nil {
+		leadEnd = leadAbilityEnd(words, st.emphLead)
 	}
 	var toks []token
 	italic := false
 	for i, word := range words {
-		f := face
-		if emph != nil && (italic || strings.Contains(word, "(") || i <= leadEnd) {
-			f = emph
+		f := st.face
+		if st.emph != nil && (italic || strings.Contains(word, "(") || i <= leadEnd) {
+			f = st.emph
 		}
 		if strings.Contains(word, "(") {
 			italic = true
@@ -275,16 +377,73 @@ func tokenize(para string, face, emph font.Face, leadEmph map[string]bool, track
 		if strings.Contains(word, ")") {
 			italic = false
 		}
-		adv := (&font.Drawer{Face: f}).MeasureString(word)
-		if track != 0 {
-			adv += track * fixed.Int26_6(len([]rune(word)))
-		}
-		toks = append(toks, token{
-			runs:    []glyphRun{{text: word, face: f, advance: adv}},
-			advance: adv,
-		})
+		toks = append(toks, buildToken(word, f, st))
 	}
 	return toks
+}
+
+// buildToken turns one word into a token, a symbol run for each braced code the
+// renderer draws and a text run for everything between them. A word with no
+// braces is the single text run it has always been
+func buildToken(word string, face font.Face, st partStyle) token {
+	var tk token
+	for _, piece := range splitSymbols(word) {
+		if piece.code != "" && st.sym != nil {
+			if m, ok := st.sym.Symbol(piece.code, st.size); ok {
+				tk.runs = append(tk.runs, glyphRun{face: face, advance: m.Advance, sym: piece.code, metr: m, ren: st.sym})
+				tk.advance += m.Advance
+				continue
+			}
+		}
+		adv := (&font.Drawer{Face: face}).MeasureString(piece.text)
+		if st.track != 0 {
+			adv += st.track * fixed.Int26_6(len([]rune(piece.text)))
+		}
+		tk.runs = append(tk.runs, glyphRun{text: piece.text, face: face, advance: adv})
+		tk.advance += adv
+	}
+	return tk
+}
+
+// symbolPiece is one piece of a split word. code is the braced symbol's code
+// without its braces, empty for a literal piece, and text is always the
+// characters as written, so an undrawn code can fall back to them
+type symbolPiece struct {
+	text string
+	code string
+}
+
+// splitSymbols splits a word into its literal and braced-symbol pieces, so
+// "{T}:" yields the symbol T and then ":". Symbols sit flush against text, which
+// is why this splits inside a word rather than at spaces. An unclosed brace and
+// an empty "{}" are literal
+func splitSymbols(word string) []symbolPiece {
+	var out []symbolPiece
+	for {
+		open := strings.IndexByte(word, '{')
+		if open < 0 {
+			break
+		}
+		end := strings.IndexByte(word[open:], '}')
+		if end < 0 {
+			break
+		}
+		end += open
+		if end == open+1 {
+			out = append(out, symbolPiece{text: word[:end+1]})
+			word = word[end+1:]
+			continue
+		}
+		if open > 0 {
+			out = append(out, symbolPiece{text: word[:open]})
+		}
+		out = append(out, symbolPiece{text: word[open : end+1], code: word[open+1 : end]})
+		word = word[end+1:]
+	}
+	if word != "" {
+		out = append(out, symbolPiece{text: word})
+	}
+	return out
 }
 
 // leadAbilityEnd returns the index of the em-dash token when a paragraph opens
@@ -339,10 +498,10 @@ func allDigits(words []string) bool {
 // clipping lines that fall past the box bottom. A divider line paints nothing,
 // its center Y is returned so the caller can place the divider art there. Text
 // lines share one line height since a box's parts are the same size
-func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool) {
+func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool, error) {
 	face := firstTextFace(lay)
 	if face == nil {
-		return 0, false
+		return 0, false, nil
 	}
 	metrics := face.Metrics()
 	ascent := metrics.Ascent.Ceil()
@@ -350,7 +509,7 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool) {
 	divHeight := dividerHeight(lay.size)
 	track := trackingPx(box.Tracking, lay.size)
 	space := spaceAdvance(face)
-	src := image.NewUniform(parseHexColor(box.Color))
+	src := image.NewUniform(ParseHexColor(box.Color))
 	bottom := box.Y + box.Height
 
 	dividerY, hasDivider := 0, false
@@ -383,24 +542,35 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool) {
 		x := lineStartX(box, ln.width)
 		for _, tk := range ln.tokens {
 			for _, run := range tk.runs {
-				x = drawRun(img, src, run, x, baseline, track)
+				next, err := drawRun(img, src, run, x, baseline, track)
+				if err != nil {
+					return 0, false, err
+				}
+				x = next
 			}
 			x += space
 		}
 		y += lineHeight
 	}
-	return dividerY, hasDivider
+	return dividerY, hasDivider, nil
 }
 
 // drawRun paints one run at pen x and the given baseline and returns the pen x
-// after it. With no tracking the run draws in one call, otherwise it draws glyph
-// by glyph so track can widen the gap after each one
-func drawRun(img *image.RGBA, src image.Image, run glyphRun, x fixed.Int26_6, baseline int, track fixed.Int26_6) fixed.Int26_6 {
+// after it. A symbol run hands its square box to the part's renderer and carries
+// no tracking, since the gap between symbols is already in its advance. With no
+// tracking a text run draws in one call, otherwise it draws glyph by glyph so
+// track can widen the gap after each one
+func drawRun(img *image.RGBA, src image.Image, run glyphRun, x fixed.Int26_6, baseline int, track fixed.Int26_6) (fixed.Int26_6, error) {
+	if run.sym != "" {
+		left, top := x.Round(), baseline-run.metr.Ascent
+		at := image.Rect(left, top, left+run.metr.Box, top+run.metr.Box)
+		return x + run.advance, run.ren.DrawSymbol(img, run.sym, at)
+	}
 	drawer := &font.Drawer{Dst: img, Src: src, Face: run.face}
 	if track == 0 {
 		drawer.Dot = fixed.Point26_6{X: x, Y: fixed.I(baseline)}
 		drawer.DrawString(run.text)
-		return x + run.advance
+		return x + run.advance, nil
 	}
 	for _, r := range run.text {
 		drawer.Dot = fixed.Point26_6{X: x, Y: fixed.I(baseline)}
@@ -411,7 +581,7 @@ func drawRun(img *image.RGBA, src image.Image, run glyphRun, x fixed.Int26_6, ba
 		}
 		x += adv + track
 	}
-	return x
+	return x, nil
 }
 
 // blockHeight is the total height of a laid-out block: its text lines at the
@@ -532,8 +702,9 @@ func minFontSize(box TextBoxSpec) float64 {
 	return box.FontSize * 0.55
 }
 
-// parseHexColor reads a "#RRGGBB" string, returning opaque black when it cannot
-func parseHexColor(s string) color.Color {
+// ParseHexColor reads a "#RRGGBB" string, returning opaque black when it cannot.
+// A caller drawing its own ink into a box reads the box color the same way
+func ParseHexColor(s string) color.Color {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
 	if len(s) != 6 {
 		return color.Black

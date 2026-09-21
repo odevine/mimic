@@ -113,12 +113,13 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) {
 	if len(lay.lines) == 0 {
 		return
 	}
+	face := faceOf(lay.lines[0])
+	metrics := face.Metrics()
 	src := image.NewUniform(parseHexColor(box.Color))
-	space := spaceAdvance(faceOf(lay.lines[0]))
-	metrics := faceOf(lay.lines[0]).Metrics()
-	lineHeight := lineHeightPx(metrics, box.LineSpacing)
+	space := spaceAdvance(face)
+	lineHeight := lineHeightPx(metrics, box.FontSize, box.LineSpacing)
 
-	baseline := blockTop(box, len(lay.lines), lineHeight) + metrics.Ascent.Ceil()
+	baseline := firstBaseline(box, metrics, len(lay.lines), lineHeight)
 	bottom := box.Y + box.Height
 	for _, ln := range lay.lines {
 		if baseline > bottom {
@@ -165,6 +166,17 @@ func lineStartX(box TextBoxSpec, width fixed.Int26_6) fixed.Int26_6 {
 	}
 }
 
+// firstBaseline is the y of the first line's baseline. A "baseline" vertical
+// anchor puts it at box.Y directly, matching point text whose stored position
+// is its baseline and so is font-independent. Any other anchor places the
+// block by its top and drops to the first baseline through the face ascent
+func firstBaseline(box TextBoxSpec, m font.Metrics, nLines, lineHeight int) int {
+	if box.VAlign == "baseline" {
+		return box.Y
+	}
+	return blockTop(box, nLines, lineHeight) + m.Ascent.Ceil()
+}
+
 // blockTop is the y of the top of an nLines block within box under box.VAlign.
 // center and bottom anchor the block inside the box, anything else the top
 func blockTop(box TextBoxSpec, nLines, lineHeight int) int {
@@ -178,16 +190,18 @@ func blockTop(box TextBoxSpec, nLines, lineHeight int) int {
 	}
 }
 
-// lineHeightPx is the baseline-to-baseline distance for a face, scaled by
-// spacing when spacing is positive. A non-positive spacing uses the natural
-// height, falling back to ascent plus descent when the face reports none
-func lineHeightPx(m font.Metrics, spacing float64) int {
+// lineHeightPx is the baseline-to-baseline distance for a line. A positive
+// spacing sets it to that multiple of the em size, the way a PSD states
+// leading, so 1.0 is solid and 1.2 is the usual auto. A non-positive spacing
+// uses the face's natural height, falling back to ascent plus descent when the
+// face reports none
+func lineHeightPx(m font.Metrics, emPx, spacing float64) int {
+	if spacing > 0 {
+		return int(math.Round(emPx * spacing))
+	}
 	h := m.Height.Ceil()
 	if h <= 0 {
 		h = m.Ascent.Ceil() + m.Descent.Ceil()
-	}
-	if spacing > 0 {
-		h = int(math.Round(float64(h) * spacing))
 	}
 	return h
 }

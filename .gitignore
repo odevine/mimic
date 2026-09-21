@@ -40,6 +40,12 @@ card.png
 *.psb
 /assets/
 
+# User-supplied real fonts (Beleren, Plantin). Copyrighted and not ours to
+# redistribute, so the dropped files are ignored while the directory's README
+# stays tracked
+/local-fonts/*
+!/local-fonts/README.md
+
 # Claude Code per-user settings. Shared .claude/settings.json stays tracked
 .claude/settings.local.json
 

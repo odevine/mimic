@@ -84,12 +84,30 @@ func TestBlockTopVAlign(t *testing.T) {
 
 func TestLineHeightSpacing(t *testing.T) {
 	m := basicfont.Face7x13.Metrics()
-	natural := lineHeightPx(m, 0)
-	if natural <= 0 {
+	if natural := lineHeightPx(m, 100, 0); natural <= 0 {
 		t.Fatalf("natural line height = %d, want positive", natural)
 	}
-	if doubled := lineHeightPx(m, 2); doubled <= natural {
-		t.Errorf("2x spacing = %d, want more than natural %d", doubled, natural)
+	// A positive spacing is a multiple of the em, independent of the face.
+	if solid := lineHeightPx(m, 100, 1.0); solid != 100 {
+		t.Errorf("solid spacing = %d, want 100", solid)
+	}
+	if loose := lineHeightPx(m, 100, 1.2); loose != 120 {
+		t.Errorf("1.2x spacing = %d, want 120", loose)
+	}
+}
+
+func TestFirstBaselineAnchor(t *testing.T) {
+	m := basicfont.Face7x13.Metrics()
+	ascent := m.Ascent.Ceil()
+	// A baseline anchor puts the first baseline exactly at Y.
+	base := TextBoxSpec{Y: 500, Height: 100, VAlign: "baseline"}
+	if got := firstBaseline(base, m, 1, 20); got != 500 {
+		t.Errorf("baseline anchor = %d, want 500", got)
+	}
+	// A top anchor drops from the box top to the baseline by the ascent.
+	top := TextBoxSpec{Y: 500, Height: 100}
+	if got := firstBaseline(top, m, 1, 20); got != 500+ascent {
+		t.Errorf("top anchor = %d, want %d", got, 500+ascent)
 	}
 }
 

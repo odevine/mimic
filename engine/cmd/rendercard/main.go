@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
@@ -23,7 +24,7 @@ func main() {
 	assetsDir := flag.String("assets", "", "template asset directory; empty generates placeholder assets")
 	tmplName := flag.String("template", "normal", "template name")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
-	fontDir := flag.String("fonts", "", "directory of font overrides (e.g. Beleren.ttf, Plantin.ttf); empty uses the embedded defaults")
+	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana); empty auto-uses ./local-fonts if present, else the embedded defaults")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout for network work")
 	flag.Parse()
 
@@ -65,9 +66,10 @@ func run(name, out, assetsDir, tmplName, fontDir string, noArt bool, timeout tim
 	if err != nil {
 		return err
 	}
-	if fontDir != "" {
+	if fontDir = resolveFontDir(fontDir); fontDir != "" {
 		if nt, ok := tmpl.(*normal.Template); ok {
 			nt.FontDir = fontDir
+			log.Printf("font overrides: %s", fontDir)
 		}
 	}
 
@@ -80,6 +82,25 @@ func run(name, out, assetsDir, tmplName, fontDir string, noArt bool, timeout tim
 		return err
 	}
 	return writePNG(out, buf.ToImage(8))
+}
+
+// defaultFontDirs lists where rendercard looks for font overrides when -fonts
+// is not given. local-fonts sits at the repo root, so both a repo-root run and
+// an engine-subdir run find it
+var defaultFontDirs = []string{"local-fonts", filepath.Join("..", "local-fonts")}
+
+// resolveFontDir returns dir when set, else the first default font directory
+// that exists, else "" for the embedded defaults
+func resolveFontDir(dir string) string {
+	if dir != "" {
+		return dir
+	}
+	for _, cand := range defaultFontDirs {
+		if info, err := os.Stat(cand); err == nil && info.IsDir() {
+			return cand
+		}
+	}
+	return ""
 }
 
 // resolveAssets returns the asset directory to render from. An empty dir means

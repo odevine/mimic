@@ -49,11 +49,15 @@ type TextBoxSpec struct {
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
 	FontSize float64 `json:"fontSize"`
-	Align    string  `json:"align"`  // "left" | "center" | "right"
-	VAlign   string  `json:"vAlign"` // "top" | "center" | "bottom", default top
-	Color    string  `json:"color"`  // "#RRGGBB"
-	// LineSpacing scales the baseline-to-baseline distance. Zero or less means
-	// the face's natural line height
+	Align    string  `json:"align"` // "left" | "center" | "right"
+	Color    string  `json:"color"` // "#RRGGBB"
+	// VAlign anchors the text block vertically: "top", "center", "bottom", or
+	// "baseline", which sets Y as the first line's baseline for point text.
+	// Empty means top
+	VAlign string `json:"vAlign,omitempty"`
+	// LineSpacing sets the baseline-to-baseline distance to this multiple of the
+	// font size, the way leading reads in a PSD, so 1.0 is solid. Zero or less
+	// means the face's natural line height
 	LineSpacing float64 `json:"lineSpacing,omitempty"`
 }
 

@@ -40,14 +40,18 @@ func TestResolveUnknownRoleFallsBack(t *testing.T) {
 }
 
 func TestResolvePrefersUserOverride(t *testing.T) {
-	// A file whose name matches the Title role stems is used ahead of the
-	// embedded default. Any real font file works as the stand-in Beleren.
+	// A font dropped into the Title role folder is used ahead of the embedded
+	// default, whatever its filename. Any real font file stands in for Beleren.
 	dir := t.TempDir()
 	src, err := embedded.ReadFile("embedded/body/Merriweather-Regular.ttf")
 	if err != nil {
 		t.Fatalf("reading embedded font: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "Beleren-Bold.ttf"), src, 0o644); err != nil {
+	titleDir := filepath.Join(dir, roleDir[Title])
+	if err := os.MkdirAll(titleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(titleDir, "AnyName.ttf"), src, 0o644); err != nil {
 		t.Fatalf("writing override: %v", err)
 	}
 	face, fallback, err := Resolve(Title, dir, 24)
@@ -59,18 +63,29 @@ func TestResolvePrefersUserOverride(t *testing.T) {
 	}
 }
 
-func TestFindUserFontItalicSplit(t *testing.T) {
+func TestFindUserFontUsesRoleFolder(t *testing.T) {
 	dir := t.TempDir()
-	for _, n := range []string{"Plantin-Regular.ttf", "Plantin-Italic.ttf"} {
-		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	bodyDir := filepath.Join(dir, roleDir[Body])
+	if err := os.MkdirAll(bodyDir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if got := filepath.Base(findUserFont(Body, dir)); got != "Plantin-Regular.ttf" {
-		t.Errorf("Body matched %q, want the non-italic file", got)
+	if err := os.WriteFile(filepath.Join(bodyDir, "whatever.otf"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if got := filepath.Base(findUserFont(BodyItalic, dir)); got != "Plantin-Italic.ttf" {
-		t.Errorf("BodyItalic matched %q, want the italic file", got)
+	// A font in the body folder fills the Body role by folder, not by name.
+	if got := filepath.Base(findUserFont(Body, dir)); got != "whatever.otf" {
+		t.Errorf("Body matched %q, want whatever.otf", got)
+	}
+	// An empty role folder yields no override, so the caller uses the default.
+	if got := findUserFont(BodyItalic, dir); got != "" {
+		t.Errorf("BodyItalic matched %q, want no override", got)
+	}
+	// A file at the override root, in no role folder, is ignored.
+	if err := os.WriteFile(filepath.Join(dir, "loose.ttf"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := findUserFont(Title, dir); got != "" {
+		t.Errorf("Title matched %q from the root, want no override", got)
 	}
 }
 

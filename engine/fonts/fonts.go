@@ -1,7 +1,7 @@
 // Package fonts owns font sourcing for the engine. It resolves a role (title,
 // body, mana) to a font.Face through a chain: a font the end user dropped into
-// an override directory, then a default compiled into the binary, then
-// basicfont.Face7x13 as a last resort.
+// that role's subfolder of an override directory, then a default compiled into
+// the binary, then basicfont.Face7x13 as a last resort.
 //
 // The engine bundles no facsimile of the real Magic fonts. Titles fall back to
 // Big Shoulders and body text to Merriweather, both under the SIL Open Font
@@ -49,13 +49,14 @@ var embeddedPath = map[Role]string{
 	Mana:       "embedded/mana/mana.ttf",
 }
 
-// userStems maps a role to the filename fragments an override file is matched
-// by, case-insensitively. A dropped "Beleren.ttf" fills the Title role
-var userStems = map[Role][]string{
-	Title:      {"beleren"},
-	Body:       {"plantin", "mplantin"},
-	BodyItalic: {"plantin", "mplantin"},
-	Mana:       {"mana"},
+// roleDir maps a role to its subfolder under the user font directory. A user
+// drops a font into the folder for its role, so no file needs a matching name.
+// A role without an entry has no override folder and always uses its default
+var roleDir = map[Role]string{
+	Title:      "title",
+	Body:       "body",
+	BodyItalic: "body-italic",
+	Mana:       "mana",
 }
 
 var (
@@ -71,8 +72,8 @@ type Sizer struct {
 	fallback bool
 }
 
-// ResolveFont picks the font for role the way Resolve does, an override file in
-// userDir first, then the embedded default, then the basicfont fallback, but
+// ResolveFont picks the font for role the way Resolve does, the role's subfolder
+// of userDir first, then the embedded default, then the basicfont fallback, but
 // leaves sizing to Face. An empty userDir skips the override step. It never
 // fails: an unresolvable role yields a Sizer whose Face returns the fallback
 func ResolveFont(role Role, userDir string) *Sizer {
@@ -104,8 +105,8 @@ func (s *Sizer) Face(size float64) (font.Face, error) {
 	return newFace(s.font, size)
 }
 
-// Resolve returns a face for role at the given point size. It tries an override
-// file in userDir first, then the embedded default, then basicfont.Face7x13.
+// Resolve returns a face for role at the given point size. It tries the role's
+// subfolder of userDir first, then the embedded default, then basicfont.Face7x13.
 // The bool is true only when the basicfont fallback was used, so a caller can
 // decide whether to normalize text for that limited face. An empty userDir
 // skips the override step
@@ -175,32 +176,25 @@ func newFace(f *opentype.Font, size float64) (font.Face, error) {
 	})
 }
 
-// findUserFont returns the first override file in dir matching role, or "" when
-// none matches. Body and BodyItalic share stems and are told apart by whether
-// the filename contains "italic"
+// findUserFont returns the first .ttf or .otf in role's subfolder of dir, or ""
+// when the folder is absent or holds no font. One folder per role means the
+// dropped file keeps its own name
 func findUserFont(role Role, dir string) string {
-	entries, err := os.ReadDir(dir)
+	sub, ok := roleDir[role]
+	if !ok {
+		return ""
+	}
+	folder := filepath.Join(dir, sub)
+	entries, err := os.ReadDir(folder)
 	if err != nil {
 		return ""
 	}
-	wantItalic := role == BodyItalic
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
-		name := strings.ToLower(e.Name())
-		if ext := filepath.Ext(name); ext != ".ttf" && ext != ".otf" {
-			continue
-		}
-		if role == Body || role == BodyItalic {
-			if strings.Contains(name, "italic") != wantItalic {
-				continue
-			}
-		}
-		for _, stem := range userStems[role] {
-			if strings.Contains(name, stem) {
-				return filepath.Join(dir, e.Name())
-			}
+		if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".ttf" || ext == ".otf" {
+			return filepath.Join(folder, e.Name())
 		}
 	}
 	return ""

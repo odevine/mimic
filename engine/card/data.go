@@ -29,5 +29,8 @@ type Data struct {
 	// colors come from, since a land's own Colors are empty
 	ProducedMana                             []Color
 	Rarity, CollectorNumber, SetCode, Artist string
-	ArtworkURL                               string // fetched separately
+	// Language is Scryfall's two-letter printing language, "en" for English. It
+	// feeds the set line at the card bottom
+	Language   string
+	ArtworkURL string // fetched separately
 }

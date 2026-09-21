@@ -95,8 +95,7 @@ func TestLayoutLongWordGetsOwnLine(t *testing.T) {
 
 func TestBlockTopVAlign(t *testing.T) {
 	box := TextBoxSpec{Y: 100, Height: 90}
-	lineHeight := 10
-	nLines := 3 // block is 30 tall
+	total := 30 // block height
 	cases := map[string]int{
 		"":       100,             // default top
 		"top":    100,             // top
@@ -105,7 +104,7 @@ func TestBlockTopVAlign(t *testing.T) {
 	}
 	for valign, want := range cases {
 		box.VAlign = valign
-		if got := blockTop(box, nLines, lineHeight); got != want {
+		if got := blockTop(box, total); got != want {
 			t.Errorf("blockTop(%q) = %d, want %d", valign, got, want)
 		}
 	}
@@ -125,18 +124,40 @@ func TestLineHeightSpacing(t *testing.T) {
 	}
 }
 
-func TestFirstBaselineAnchor(t *testing.T) {
-	m := basicfont.Face7x13.Metrics()
-	ascent := m.Ascent.Ceil()
-	// A baseline anchor puts the first baseline exactly at Y.
-	base := TextBoxSpec{Y: 500, Height: 100, VAlign: "baseline"}
-	if got := firstBaseline(base, m, 1, 20); got != 500 {
-		t.Errorf("baseline anchor = %d, want 500", got)
+func TestLayoutPartsInsertsDivider(t *testing.T) {
+	box := TextBoxSpec{Width: 10000, Height: 10000, FontSize: 100}
+	parts := []TextPart{
+		{Text: "rules text", Src: scaleSource{}},
+		{Text: "flavor text", Src: scaleSource{}},
 	}
-	// A top anchor drops from the box top to the baseline by the ascent.
-	top := TextBoxSpec{Y: 500, Height: 100}
-	if got := firstBaseline(top, m, 1, 20); got != 500+ascent {
-		t.Errorf("top anchor = %d, want %d", got, 500+ascent)
+	lay, err := layoutParts(box, parts, 100)
+	if err != nil {
+		t.Fatalf("layoutParts: %v", err)
+	}
+	// One line per part with a divider between them.
+	if len(lay.lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (rules, divider, flavor)", len(lay.lines))
+	}
+	if lay.lines[0].divider || !lay.lines[1].divider || lay.lines[2].divider {
+		t.Errorf("divider is not the middle line: %+v", []bool{lay.lines[0].divider, lay.lines[1].divider, lay.lines[2].divider})
+	}
+}
+
+func TestLayoutPartsNoDividerForOnePart(t *testing.T) {
+	box := TextBoxSpec{Width: 10000, Height: 10000, FontSize: 100}
+	// An empty part contributes nothing, so no divider is added.
+	parts := []TextPart{
+		{Text: "flavor only", Src: scaleSource{}},
+		{Text: "", Src: scaleSource{}},
+	}
+	lay, err := layoutParts(box, parts, 100)
+	if err != nil {
+		t.Fatalf("layoutParts: %v", err)
+	}
+	for i, ln := range lay.lines {
+		if ln.divider {
+			t.Errorf("line %d is a divider, want none", i)
+		}
 	}
 }
 
@@ -145,7 +166,7 @@ func TestFitLayoutShrinksToFit(t *testing.T) {
 	// box, so the fit must pick a smaller size whose block fits.
 	text := "aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa"
 	box := TextBoxSpec{Width: 1000, Height: 250, FontSize: 100, MinFontSize: 20}
-	lay, err := fitLayout(box, text, scaleSource{})
+	lay, err := fitLayout(box, []TextPart{{Text: text, Src: scaleSource{}}})
 	if err != nil {
 		t.Fatalf("fitLayout: %v", err)
 	}
@@ -160,7 +181,7 @@ func TestFitLayoutShrinksToFit(t *testing.T) {
 func TestFitLayoutKeepsMaxWhenItFits(t *testing.T) {
 	// A short text fits at the max size, so no shrinking happens.
 	box := TextBoxSpec{Width: 1000, Height: 500, FontSize: 100, MinFontSize: 20}
-	lay, err := fitLayout(box, "aaaa", scaleSource{})
+	lay, err := fitLayout(box, []TextPart{{Text: "aaaa", Src: scaleSource{}}})
 	if err != nil {
 		t.Fatalf("fitLayout: %v", err)
 	}
@@ -173,12 +194,139 @@ func TestFitLayoutBaselineDoesNotShrink(t *testing.T) {
 	// A baseline-anchored box is single-line point text, so it keeps its size
 	// even when the nominal block is taller than the box.
 	box := TextBoxSpec{Width: 1000, Height: 10, FontSize: 100, MinFontSize: 20, VAlign: "baseline"}
-	lay, err := fitLayout(box, "aaaa aaaa", scaleSource{})
+	lay, err := fitLayout(box, []TextPart{{Text: "aaaa aaaa", Src: scaleSource{}}})
 	if err != nil {
 		t.Fatalf("fitLayout: %v", err)
 	}
 	if lay.size != box.FontSize {
 		t.Errorf("size = %v, want the unshrunk max %v", lay.size, box.FontSize)
+	}
+}
+
+func TestTrackingWidensTokens(t *testing.T) {
+	// A 5-glyph token at size 100 with tracking 125 gains 5 tracking steps of
+	// 0.125em, so it is wider than the untracked token by that much.
+	track := trackingPx(125, 100)
+	if track <= 0 {
+		t.Fatalf("trackingPx(125, 100) = %v, want positive", track)
+	}
+	plain := tokenize("aaaaa", basicfont.Face7x13, nil, nil, 0)
+	tracked := tokenize("aaaaa", basicfont.Face7x13, nil, nil, track)
+	if len(plain) != 1 || len(tracked) != 1 {
+		t.Fatalf("want one token each, got %d and %d", len(plain), len(tracked))
+	}
+	if want := plain[0].advance + track*5; tracked[0].advance != want {
+		t.Errorf("tracked advance = %v, want %v", tracked[0].advance, want)
+	}
+}
+
+func TestTokenizeItalicizesReminderText(t *testing.T) {
+	// Words inside parentheses draw in the emphasis face, the rest in the base
+	// face, so reminder text italicizes inline.
+	base := basicfont.Face7x13
+	emph := scaleFace{size: 1}
+	toks := tokenize("Deathtouch (Any damage.) done", base, emph, nil, 0)
+	want := []bool{false, true, true, false}
+	if len(toks) != len(want) {
+		t.Fatalf("got %d tokens, want %d", len(toks), len(want))
+	}
+	for i, w := range want {
+		if got := toks[i].runs[0].face == font.Face(emph); got != w {
+			t.Errorf("token %d emph=%v, want %v", i, got, w)
+		}
+	}
+}
+
+func TestTokenizeItalicizesLeadingAbilityWord(t *testing.T) {
+	// A leading ability word from the set, and the em-dash, italicize; the rest
+	// stays roman. A word not in the set (a keyword ability) does not.
+	base := basicfont.Face7x13
+	emph := scaleFace{size: 1}
+	set := map[string]bool{"constellation": true}
+	toks := tokenize("Constellation — Whenever an", base, emph, set, 0)
+	want := []bool{true, true, false, false}
+	if len(toks) != len(want) {
+		t.Fatalf("got %d tokens, want %d", len(toks), len(want))
+	}
+	for i, w := range want {
+		if got := toks[i].runs[0].face == font.Face(emph); got != w {
+			t.Errorf("token %d emph=%v, want %v", i, got, w)
+		}
+	}
+	// A word not in the set (a keyword ability) is left roman.
+	roman := tokenize("Suspend 4 — Cost", base, emph, set, 0)
+	if roman[0].runs[0].face == font.Face(emph) {
+		t.Error("Suspend is a keyword ability and should stay roman")
+	}
+
+	// A numbered ability word prints its count, so the bare word still matches.
+	numbered := tokenize("Descend 8 — When", base, emph, map[string]bool{"descend": true}, 0)
+	for i, w := range []bool{true, true, true, false} {
+		if got := numbered[i].runs[0].face == font.Face(emph); got != w {
+			t.Errorf("Descend token %d emph=%v, want %v", i, got, w)
+		}
+	}
+}
+
+func TestRenderTextBoxReportsDivider(t *testing.T) {
+	box := TextBoxSpec{X: 0, Y: 0, Width: 1000, Height: 1000, FontSize: 100, VAlign: "center", LineSpacing: 1.0}
+	parts := []TextPart{
+		{Text: "rules", Src: scaleSource{}},
+		{Text: "flavor", Src: scaleSource{}},
+	}
+	res, err := RenderTextBox(box, 1000, 1000, parts...)
+	if err != nil {
+		t.Fatalf("RenderTextBox: %v", err)
+	}
+	if !res.HasDivider {
+		t.Fatal("two parts should report a divider")
+	}
+	if res.DividerY <= box.Y || res.DividerY >= box.Y+box.Height {
+		t.Errorf("divider Y %d is outside the box [%d, %d)", res.DividerY, box.Y, box.Y+box.Height)
+	}
+
+	// One part has nothing to divide, so no divider is reported.
+	solo, err := RenderTextBox(box, 1000, 1000, TextPart{Text: "rules only", Src: scaleSource{}})
+	if err != nil {
+		t.Fatalf("RenderTextBox: %v", err)
+	}
+	if solo.HasDivider {
+		t.Error("a single part should report no divider")
+	}
+}
+
+func TestBaselineShrinksToOneLine(t *testing.T) {
+	// Three tokens overflow the width at the max size, so a baseline box shrinks
+	// until they sit on one line inside the box.
+	box := TextBoxSpec{Width: 700, Height: 200, FontSize: 100, MinFontSize: 20, VAlign: "baseline"}
+	lay, err := fitLayout(box, []TextPart{{Text: "aaaa aaaa aaaa", Src: scaleSource{}}})
+	if err != nil {
+		t.Fatalf("fitLayout: %v", err)
+	}
+	if lay.size >= box.FontSize {
+		t.Errorf("size = %v, want shrunk below %v", lay.size, box.FontSize)
+	}
+	if !oneLineFits(lay, box) {
+		t.Errorf("text did not shrink to one line within the box: %d lines", len(lay.lines))
+	}
+}
+
+func TestParagraphGapAddsSpace(t *testing.T) {
+	// An explicit newline opens a new paragraph, marked on its first line and
+	// counted as a paragraph gap plus a line in the block height.
+	box := TextBoxSpec{Width: 1000, Height: 1000, FontSize: 100, LineSpacing: 1.0}
+	lay := layoutText(box, "one\ntwo", basicfont.Face7x13)
+	if len(lay.lines) != 2 {
+		t.Fatalf("got %d lines, want 2", len(lay.lines))
+	}
+	if lay.lines[0].paraStart {
+		t.Error("first paragraph should not be marked paraStart")
+	}
+	if !lay.lines[1].paraStart {
+		t.Error("second paragraph should be marked paraStart")
+	}
+	if got, want := blockHeight(lay, box), 2*100+paragraphGap(100); got != want {
+		t.Errorf("blockHeight = %d, want %d (two lines plus a paragraph gap)", got, want)
 	}
 }
 

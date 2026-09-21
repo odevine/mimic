@@ -27,6 +27,7 @@ type frame struct {
 	land      bool
 	legendary bool
 	creature  bool // has printed power and toughness, which covers Vehicles
+	nyx       bool // enchantment, so the nyx frame stands in for the background
 }
 
 // deriveFrame reads a card once into the keys and signals the render loop needs.
@@ -48,6 +49,7 @@ func deriveFrame(d *card.Data) frame {
 		land:       isLand,
 		legendary:  strings.Contains(tl, "legendary"),
 		creature:   d.Power != "" && d.Toughness != "",
+		nyx:        strings.Contains(tl, "enchantment"),
 	}
 }
 

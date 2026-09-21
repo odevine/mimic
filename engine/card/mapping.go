@@ -18,6 +18,7 @@ type scryfallCard struct {
 	Rarity          string    `json:"rarity"`
 	CollectorNumber string    `json:"collector_number"`
 	Set             string    `json:"set"`
+	Lang            string    `json:"lang"`
 	Artist          string    `json:"artist"`
 	ImageURIs       imageURIs `json:"image_uris"`
 	CardFaces       []face    `json:"card_faces"`
@@ -65,6 +66,7 @@ func (sc *scryfallCard) toData() *Data {
 		Rarity:          sc.Rarity,
 		CollectorNumber: sc.CollectorNumber,
 		SetCode:         sc.Set,
+		Language:        sc.Lang,
 		Artist:          sc.Artist,
 		ArtworkURL:      sc.ImageURIs.ArtCrop,
 	}

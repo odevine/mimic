@@ -95,6 +95,23 @@ var frameCases = []struct {
 	},
 }
 
+func TestDeriveFrameNyx(t *testing.T) {
+	cases := []struct {
+		typeLine string
+		want     bool
+	}{
+		{"Enchantment Creature — God", true},
+		{"Legendary Enchantment", true},
+		{"Creature — Angel", false},
+		{"Artifact", false},
+	}
+	for _, c := range cases {
+		if got := deriveFrame(&card.Data{TypeLine: c.typeLine}).nyx; got != c.want {
+			t.Errorf("%q: nyx = %v, want %v", c.typeLine, got, c.want)
+		}
+	}
+}
+
 func TestDeriveFrame(t *testing.T) {
 	for _, c := range frameCases {
 		t.Run(c.name, func(t *testing.T) {

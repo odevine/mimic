@@ -24,7 +24,7 @@ func main() {
 	assetsDir := flag.String("assets", "", "template asset directory; empty generates placeholder assets")
 	tmplName := flag.String("template", "normal", "template name")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
-	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana); empty auto-uses ./local-fonts if present, else the embedded defaults")
+	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana, type, info); empty auto-uses ./local-fonts if present, else the embedded defaults")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout for network work")
 	flag.Parse()
 

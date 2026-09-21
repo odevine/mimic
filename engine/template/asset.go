@@ -63,6 +63,14 @@ type TextBoxSpec struct {
 	// overflows at this size is clipped. Zero means a default fraction of
 	// FontSize. A baseline-anchored box does not shrink, so it ignores this
 	MinFontSize float64 `json:"minFontSize,omitempty"`
+	// Padding insets the text from the box edge on every side, so the box can
+	// stay the size of the visible panel while the text keeps a margin. Zero
+	// draws the text to the edge
+	Padding int `json:"padding,omitempty"`
+	// Tracking is letter spacing in Photoshop's thousandths of an em, so 125
+	// adds 0.125em after each glyph. Zero draws with the face's own advances.
+	// It applies to the drawn pen and to each token's measured width
+	Tracking float64 `json:"tracking,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above

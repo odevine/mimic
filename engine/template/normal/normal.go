@@ -61,18 +61,17 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		return nil, err
 	}
 
-	colorKey := ResolveColorKey(req.Card)
-	legendary := IsLegendary(req.Card)
+	f := deriveFrame(req.Card)
 
 	var nodes []canvas.Node
 	for _, layer := range m.Layers {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if !conditionMet(layer.Condition, colorKey, legendary) {
+		if !f.conditionMet(layer.Condition) {
 			continue
 		}
-		asset, ok := layer.ColorVariants[colorKey]
+		asset, ok := layer.ColorVariants[f.keyForLayer(layer.Name)]
 		if !ok {
 			asset, ok = layer.ColorVariants["any"]
 		}

@@ -24,6 +24,7 @@ func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 			ManaCost:      "{R}",
 			TypeLine:      "Instant",
 			OracleText:    "Lightning Bolt deals 3 damage to any target.",
+			Colors:        []card.Color{card.Red},
 			ColorIdentity: []card.Color{card.Red},
 		},
 		Art:    art,

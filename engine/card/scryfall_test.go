@@ -87,6 +87,25 @@ func TestFetchByName_DoubleFacedFallsBackToFront(t *testing.T) {
 	}
 }
 
+func TestFetchByName_ProducedMana(t *testing.T) {
+	// ProducedMana is captured in order and keeps Colorless, which a land's
+	// frame logic drops but the data model preserves.
+	c := serveFixture(t, "produced_land.json")
+	d, err := c.FetchByName(context.Background(), "test ramp land")
+	if err != nil {
+		t.Fatalf("FetchByName: %v", err)
+	}
+	want := []Color{Blue, Green, Colorless}
+	if len(d.ProducedMana) != len(want) {
+		t.Fatalf("ProducedMana = %v, want %v", d.ProducedMana, want)
+	}
+	for i, c := range want {
+		if d.ProducedMana[i] != c {
+			t.Errorf("ProducedMana[%d] = %q, want %q", i, d.ProducedMana[i], c)
+		}
+	}
+}
+
 func TestFetchByName_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)

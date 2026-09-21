@@ -14,6 +14,7 @@ type scryfallCard struct {
 	Loyalty         string    `json:"loyalty"`
 	Colors          []string  `json:"colors"`
 	ColorIdentity   []string  `json:"color_identity"`
+	ProducedMana    []string  `json:"produced_mana"`
 	Rarity          string    `json:"rarity"`
 	CollectorNumber string    `json:"collector_number"`
 	Set             string    `json:"set"`
@@ -60,6 +61,7 @@ func (sc *scryfallCard) toData() *Data {
 		Loyalty:         sc.Loyalty,
 		Colors:          toColors(sc.Colors),
 		ColorIdentity:   toColors(sc.ColorIdentity),
+		ProducedMana:    toColors(sc.ProducedMana),
 		Rarity:          sc.Rarity,
 		CollectorNumber: sc.CollectorNumber,
 		SetCode:         sc.Set,

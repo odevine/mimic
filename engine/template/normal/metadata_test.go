@@ -56,12 +56,40 @@ func TestSetLine(t *testing.T) {
 	}
 }
 
-func TestCopyrightDefaultAndOverride(t *testing.T) {
-	if got := (&Template{}).copyright(); got != defaultCopyright {
-		t.Errorf("empty Copyright = %q, want the default %q", got, defaultCopyright)
+func TestCopyrightCarriesThePrintingsYear(t *testing.T) {
+	cases := []struct {
+		name string
+		tpl  Template
+		data card.Data
+		want string
+	}{
+		{
+			name: "the year sits between the marks and the holder",
+			data: card.Data{ReleasedAt: "2017-11-17"},
+			want: "™ & © 2017 Wizards of the Coast",
+		},
+		{
+			// A printing with no date prints the line without a year rather
+			// than the year the render happens to run in
+			name: "no date drops the year",
+			data: card.Data{},
+			want: "™ & © Wizards of the Coast",
+		},
+		{
+			name: "a date that is not a year drops it too",
+			data: card.Data{ReleasedAt: "soon"},
+			want: "™ & © Wizards of the Coast",
+		},
+		{
+			name: "a set Copyright stands in whole",
+			tpl:  Template{Copyright: "© 2024 Example"},
+			data: card.Data{ReleasedAt: "2017-11-17"},
+			want: "© 2024 Example",
+		},
 	}
-	custom := "© 2024 Example"
-	if got := (&Template{Copyright: custom}).copyright(); got != custom {
-		t.Errorf("set Copyright = %q, want %q", got, custom)
+	for _, tc := range cases {
+		if got := tc.tpl.copyright(&tc.data); got != tc.want {
+			t.Errorf("%s: copyright = %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }

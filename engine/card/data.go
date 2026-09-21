@@ -31,6 +31,24 @@ type Data struct {
 	Rarity, CollectorNumber, SetCode, Artist string
 	// Language is Scryfall's two-letter printing language, "en" for English. It
 	// feeds the set line at the card bottom
-	Language   string
+	Language string
+	// ReleasedAt is when this printing came out, as Scryfall writes it,
+	// "YYYY-MM-DD". Its year is the one the copyright line carries
+	ReleasedAt string
 	ArtworkURL string // fetched separately
+}
+
+// Year is the year this printing came out, or empty when the date is missing or
+// not the four-digit year Scryfall writes
+func (d *Data) Year() string {
+	if len(d.ReleasedAt) < 4 {
+		return ""
+	}
+	y := d.ReleasedAt[:4]
+	for _, r := range y {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return y
 }

@@ -33,16 +33,16 @@ type Template struct {
 	// named for its role (Beleren, Plantin) is used ahead of the embedded
 	// default. An empty FontDir uses the embedded defaults
 	FontDir string
-	// Copyright is the boilerplate line at the card bottom. Scryfall carries no
-	// copyright string, so it is set here rather than read from the card. An
-	// empty Copyright uses defaultCopyright
+	// Copyright is the boilerplate line at the card bottom. An empty Copyright
+	// builds the printed one from the card's own year
 	Copyright string
 }
 
-// defaultCopyright is the bottom line used when a Template sets no Copyright.
-// Real cards print the set’s year, which the card data does not carry, so the
-// year is left out
-const defaultCopyright = "™ & © Wizards of the Coast"
+// The two halves of the bottom line, with the printing's year between them
+const (
+	copyrightMarks  = "™ & ©"
+	copyrightHolder = "Wizards of the Coast"
+)
 
 // hollowCrownEnabled turns on the nyx hollow-crown knockout. Off for now while a
 // missing layer is tracked down, the knockout code stays in place for the revisit
@@ -433,7 +433,7 @@ func (t *Template) textParts(name string, d *card.Data, syms symbols) []template
 	text := textFor(name, d)
 	switch {
 	case name == "copyright":
-		text = t.copyright()
+		text = t.copyright(d)
 	case name == "artist" && syms.artist != nil && text != "":
 		// The nib sits flush against the name, so the code carries no space and
 		// the symbol's own advance opens the gap
@@ -452,12 +452,17 @@ func (t *Template) textParts(name string, d *card.Data, syms symbols) []template
 	return []template.TextPart{p}
 }
 
-// copyright returns the configured bottom line, or the default when unset
-func (t *Template) copyright() string {
+// copyright is the bottom line: the printing's year between the symbols and the
+// holder, the way a card prints it. A Template's own Copyright stands in whole,
+// and a printing with no date drops the year rather than guessing one
+func (t *Template) copyright(d *card.Data) string {
 	if t.Copyright != "" {
 		return t.Copyright
 	}
-	return defaultCopyright
+	if year := d.Year(); year != "" {
+		return copyrightMarks + " " + year + " " + copyrightHolder
+	}
+	return copyrightMarks + " " + copyrightHolder
 }
 
 // part resolves a font for role and pairs it with text, normalizing the text

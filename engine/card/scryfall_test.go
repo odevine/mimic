@@ -55,6 +55,9 @@ func TestFetchByName_SingleFace(t *testing.T) {
 	if d.SetCode != "2x2" {
 		t.Errorf("SetCode = %q, want 2x2", d.SetCode)
 	}
+	if d.ReleasedAt != "2022-07-08" || d.Year() != "2022" {
+		t.Errorf("ReleasedAt = %q and Year = %q, want 2022-07-08 and 2022", d.ReleasedAt, d.Year())
+	}
 	if d.ArtworkURL == "" {
 		t.Error("ArtworkURL is empty")
 	}

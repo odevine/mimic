@@ -1,7 +1,8 @@
 // Package fonts owns font sourcing for the engine. It resolves a role (title,
 // body, mana) to a font.Face through a chain: a font the end user dropped into
 // that role's subfolder of an override directory, then a default compiled into
-// the binary, then basicfont.Face7x13 as a last resort.
+// the binary, then a fallback role's default for a role that bundles none, then
+// basicfont.Face7x13 as a last resort.
 //
 // The engine bundles no facsimile of the real Magic fonts. Titles fall back to
 // Big Shoulders and body text to Merriweather, both under the SIL Open Font
@@ -34,6 +35,12 @@ const (
 	// Mana is every card symbol: mana costs, tap and untap, loyalty, card
 	// types, and watermarks. The Mana font covers all of them in one face
 	Mana
+	// SmallCaps is the artist credit's small-caps face. It bundles no default
+	// and borrows the Title default when the user supplies no font
+	SmallCaps
+	// Info is the sans face for the collector, set, and copyright lines. It
+	// bundles no default and borrows the Body default
+	Info
 )
 
 //go:embed embedded
@@ -57,6 +64,16 @@ var roleDir = map[Role]string{
 	Body:       "body",
 	BodyItalic: "body-italic",
 	Mana:       "mana",
+	SmallCaps:  "type",
+	Info:       "info",
+}
+
+// fallbackRole borrows another role's default for a role that bundles no font
+// of its own, so a user who drops in no override still gets a fitting face
+// rather than the bitmap fallback
+var fallbackRole = map[Role]Role{
+	SmallCaps: Title,
+	Info:      Body,
 }
 
 var (
@@ -73,9 +90,10 @@ type Sizer struct {
 }
 
 // ResolveFont picks the font for role the way Resolve does, the role's subfolder
-// of userDir first, then the embedded default, then the basicfont fallback, but
-// leaves sizing to Face. An empty userDir skips the override step. It never
-// fails: an unresolvable role yields a Sizer whose Face returns the fallback
+// of userDir first, then its embedded default, then the default of a fallback
+// role, then the basicfont fallback, but leaves sizing to Face. An empty userDir
+// skips the override step. It never fails: an unresolvable role yields a Sizer
+// whose Face returns the fallback
 func ResolveFont(role Role, userDir string) *Sizer {
 	if userDir != "" {
 		if path := findUserFont(role, userDir); path != "" {
@@ -84,10 +102,17 @@ func ResolveFont(role Role, userDir string) *Sizer {
 			}
 		}
 	}
-	if path, ok := embeddedPath[role]; ok {
-		if f, err := fontFromEmbedded(path); err == nil {
-			return &Sizer{font: f}
+	for r := role; ; {
+		if path, ok := embeddedPath[r]; ok {
+			if f, err := fontFromEmbedded(path); err == nil {
+				return &Sizer{font: f}
+			}
 		}
+		next, ok := fallbackRole[r]
+		if !ok {
+			break
+		}
+		r = next
 	}
 	return &Sizer{fallback: true}
 }

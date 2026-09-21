@@ -25,6 +25,24 @@ func TestResolveEmbeddedRoles(t *testing.T) {
 	}
 }
 
+func TestResolveBorrowsFallbackRole(t *testing.T) {
+	// SmallCaps and Info bundle no default of their own, so with no override
+	// they borrow a fallback role's default rather than the bitmap face.
+	for _, role := range []Role{SmallCaps, Info} {
+		if _, ok := embeddedPath[role]; ok {
+			t.Errorf("role %d unexpectedly has its own embedded default", role)
+		}
+		_, fallback, err := Resolve(role, "", 24)
+		if err != nil {
+			t.Errorf("Resolve(role %d): %v", role, err)
+			continue
+		}
+		if fallback {
+			t.Errorf("role %d used the basicfont fallback, want a borrowed default", role)
+		}
+	}
+}
+
 func TestResolveUnknownRoleFallsBack(t *testing.T) {
 	// A role with no embedded default falls back to basicfont.
 	face, fallback, err := Resolve(Role(-1), "", 24)

@@ -67,6 +67,11 @@ type TextBoxSpec struct {
 	// stay the size of the visible panel while the text keeps a margin. Zero
 	// draws the text to the edge
 	Padding int `json:"padding,omitempty"`
+	// PaddingX and PaddingY override Padding on one axis, so a box can hold a
+	// side margin without a top and bottom one. Nil takes Padding, and a set
+	// zero really is no inset on that axis
+	PaddingX *int `json:"paddingX,omitempty"`
+	PaddingY *int `json:"paddingY,omitempty"`
 	// Tracking is letter spacing in Photoshop's thousandths of an em, so 125
 	// adds 0.125em after each glyph. Zero draws with the face's own advances.
 	// It applies to the drawn pen and to each token's measured width

@@ -188,23 +188,34 @@ func MeasureTextSpan(box TextBoxSpec, parts ...TextPart) (TextSpan, error) {
 	return span, nil
 }
 
-// insetBox shrinks box by its padding on every side, giving the rectangle the
-// text occupies. All layout and drawing use this inner rectangle, so padding
-// governs the wrap width, the horizontal anchor, and the vertical fit at once.
-// A zero padding leaves the box unchanged
+// insetBox shrinks box by its padding on each axis, giving the rectangle the
+// text occupies. All layout and drawing use this inner rectangle, so the
+// horizontal padding governs the wrap width and the horizontal anchor while the
+// vertical one governs the fit and the vertical anchor
 func insetBox(box TextBoxSpec) TextBoxSpec {
-	if box.Padding <= 0 {
-		return box
-	}
-	box.X += box.Padding
-	box.Y += box.Padding
-	if box.Width -= 2 * box.Padding; box.Width < 0 {
+	px, py := axisPadding(box.PaddingX, box.Padding), axisPadding(box.PaddingY, box.Padding)
+	box.X += px
+	box.Y += py
+	if box.Width -= 2 * px; box.Width < 0 {
 		box.Width = 0
 	}
-	if box.Height -= 2 * box.Padding; box.Height < 0 {
+	if box.Height -= 2 * py; box.Height < 0 {
 		box.Height = 0
 	}
 	return box
+}
+
+// axisPadding is one axis own padding, or the all-round one when that axis says
+// nothing. A negative value would grow the box, so it reads as none
+func axisPadding(axis *int, all int) int {
+	p := all
+	if axis != nil {
+		p = *axis
+	}
+	if p < 0 {
+		return 0
+	}
+	return p
 }
 
 // fitLayout returns the parts laid out at the largest size that fits box, from
@@ -514,14 +525,8 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool, er
 
 	dividerY, hasDivider := 0, false
 
-	// y tracks the top of the current line's slot. A baseline anchor puts the
-	// first text line's baseline at box.Y, otherwise the block is placed by top
-	var y int
-	if box.VAlign == "baseline" {
-		y = box.Y - ascent
-	} else {
-		y = blockTop(box, blockHeight(lay, box))
-	}
+	// y tracks the top of the current line's slot
+	y := blockStart(box, lay, face)
 	for _, ln := range lay.lines {
 		if ln.divider {
 			if !hasDivider {
@@ -584,8 +589,56 @@ func drawRun(img *image.RGBA, src image.Image, run glyphRun, x fixed.Int26_6, ba
 	return x, nil
 }
 
-// blockHeight is the total height of a laid-out block: its text lines at the
-// line height plus its dividers at the divider height
+// lineInk is how far one line's ink reaches above and below its baseline, and
+// whether anything on the line reported bounds at all. A symbol run gives its
+// square box and a text run its glyphs' bounds, so a line of caps measures
+// shorter than one with a descender and a line of pips taller than either
+func lineInk(ln line) (above, below int, ok bool) {
+	for _, tk := range ln.tokens {
+		for _, run := range tk.runs {
+			if run.sym != "" {
+				above, below, ok = max(above, run.metr.Ascent), max(below, run.metr.Box-run.metr.Ascent), true
+				continue
+			}
+			for _, r := range run.text {
+				b, _, found := run.face.GlyphBounds(r)
+				if !found {
+					continue
+				}
+				above, below, ok = max(above, (-b.Min.Y).Ceil()), max(below, b.Max.Y.Ceil()), true
+			}
+		}
+	}
+	return above, below, ok
+}
+
+// blockInk is how far a laid-out block's first line reaches above its baseline
+// and how far its last reaches below, the two ends of the ink a block covers. A
+// line that reports no bounds, and a block with no text at all, fall back to the
+// face's own ascent and descent
+func blockInk(lay textLayout, face font.Face) (above, below int) {
+	metrics := face.Metrics()
+	above, below, first := metrics.Ascent.Ceil(), metrics.Descent.Ceil(), true
+	for _, ln := range lay.lines {
+		if ln.divider || len(ln.tokens) == 0 {
+			continue
+		}
+		a, b, ok := lineInk(ln)
+		if !ok {
+			a, b = metrics.Ascent.Ceil(), metrics.Descent.Ceil()
+		}
+		if first {
+			above, first = a, false
+		}
+		below = b
+	}
+	return above, below
+}
+
+// blockHeight is the height a laid-out block's line slots take: its text lines
+// at the line height plus its dividers at the divider height. It is what a box
+// is asked to fit, so a block keeps the leading its face asks for even where the
+// ink stops short of it
 func blockHeight(lay textLayout, box TextBoxSpec) int {
 	face := firstTextFace(lay)
 	if face == nil {
@@ -605,6 +658,37 @@ func blockHeight(lay textLayout, box TextBoxSpec) int {
 		}
 	}
 	return total
+}
+
+// blockInkHeight is the height a block actually covers, from the top of its
+// first line's ink to the bottom of its last line's, and how far that first line
+// reaches above its own baseline. A vertical anchor works on these rather than
+// on blockHeight, whose last slot reserves a descent the last line may not use
+// and which would hang the whole block that far off center
+func blockInkHeight(lay textLayout, box TextBoxSpec, face font.Face) (height, above int) {
+	slots := blockHeight(lay, box)
+	if slots == 0 {
+		return 0, 0
+	}
+	above, below := blockInk(lay, face)
+	lineHeight := lineHeightPx(face.Metrics(), lay.size, box.LineSpacing)
+	if height = slots - lineHeight + above + below; height < 0 {
+		height = 0
+	}
+	return height, above
+}
+
+// blockStart is the y of a laid-out block's first line slot in box. A baseline
+// anchor puts the first text line's baseline at box.Y, otherwise the block's ink
+// top is placed and the first slot backed off from it, since a slot holds the
+// face while the anchor is about what shows
+func blockStart(box TextBoxSpec, lay textLayout, face font.Face) int {
+	ascent := face.Metrics().Ascent.Ceil()
+	if box.VAlign == "baseline" {
+		return box.Y - ascent
+	}
+	ink, above := blockInkHeight(lay, box, face)
+	return blockTop(box, ink) + above - ascent
 }
 
 // blockTop is the y of the top of a block of total height within box, for the

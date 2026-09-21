@@ -523,3 +523,124 @@ func TestMeasureTextSpan(t *testing.T) {
 type fixedSource struct{}
 
 func (fixedSource) Face(float64) (font.Face, error) { return basicfont.Face7x13, nil }
+
+func TestInsetBoxPadsPerAxis(t *testing.T) {
+	box := TextBoxSpec{X: 100, Y: 200, Width: 1000, Height: 400, Padding: 40}
+	ptr := func(v int) *int { return &v }
+
+	cases := []struct {
+		name string
+		box  TextBoxSpec
+		want TextBoxSpec
+	}{
+		{
+			name: "padding alone insets every side",
+			box:  box,
+			want: TextBoxSpec{X: 140, Y: 240, Width: 920, Height: 320},
+		},
+		{
+			// The case the oracle box wants: a side margin with the text free to
+			// use the panel's full height
+			name: "a zero on one axis really is none",
+			box:  withPad(box, nil, ptr(0)),
+			want: TextBoxSpec{X: 140, Y: 200, Width: 920, Height: 400},
+		},
+		{
+			name: "each axis overrides on its own",
+			box:  withPad(box, ptr(10), ptr(60)),
+			want: TextBoxSpec{X: 110, Y: 260, Width: 980, Height: 280},
+		},
+		{
+			name: "an axis padding stands without an all-round one",
+			box:  withPad(TextBoxSpec{X: 100, Y: 200, Width: 1000, Height: 400}, ptr(25), nil),
+			want: TextBoxSpec{X: 125, Y: 200, Width: 950, Height: 400},
+		},
+		{
+			// Growing the box would put text outside the panel it belongs to
+			name: "a negative padding does not grow the box",
+			box:  withPad(box, ptr(-30), nil),
+			want: TextBoxSpec{X: 100, Y: 240, Width: 1000, Height: 320},
+		},
+		{
+			name: "padding wider than the box leaves nothing rather than a negative",
+			box:  TextBoxSpec{X: 100, Y: 200, Width: 50, Height: 60, Padding: 40},
+			want: TextBoxSpec{X: 140, Y: 240, Width: 0, Height: 0},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := insetBox(c.box)
+			if got.X != c.want.X || got.Y != c.want.Y || got.Width != c.want.Width || got.Height != c.want.Height {
+				t.Errorf("insetBox gave %d,%d %dx%d, want %d,%d %dx%d",
+					got.X, got.Y, got.Width, got.Height,
+					c.want.X, c.want.Y, c.want.Width, c.want.Height)
+			}
+		})
+	}
+}
+
+// withPad copies box with the two axis paddings set, so a table case can read
+// as one line
+func withPad(box TextBoxSpec, x, y *int) TextBoxSpec {
+	box.PaddingX, box.PaddingY = x, y
+	return box
+}
+
+// inkFace is a fake face whose glyphs ink a fixed fraction of the space its
+// metrics claim, so a test can tell an ink measurement from a metric one. Every
+// glyph reaches half the ascent and nothing below the baseline.
+type inkFace struct{ scaleFace }
+
+func (f inkFace) GlyphBounds(rune) (fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	top := -fixed.I(int(f.size * 0.4))
+	return fixed.Rectangle26_6{Min: fixed.Point26_6{Y: top}}, fixed.I(int(f.size)), true
+}
+
+type inkSource struct{}
+
+func (inkSource) Face(size float64) (font.Face, error) { return inkFace{scaleFace{size: size}}, nil }
+
+func TestBlockInkMeasuresWhatIsDrawn(t *testing.T) {
+	// The face claims 0.8 of the size above the baseline and 0.2 below, while
+	// its glyphs ink 0.4 above and nothing below.
+	box := TextBoxSpec{Width: 1000, Height: 1000, FontSize: 100, LineSpacing: 1.0}
+	face := inkFace{scaleFace{size: 100}}
+	lay := layoutText(box, "one\ntwo", face)
+
+	above, below := blockInk(lay, face)
+	if above != 40 || below != 0 {
+		t.Errorf("blockInk = %d above, %d below, want 40 and 0", above, below)
+	}
+	// The fit measure still counts whole slots, so a box is asked to hold the
+	// leading the face wants.
+	if got, want := blockHeight(lay, box), 2*100+paragraphGap(100); got != want {
+		t.Errorf("blockHeight = %d, want %d", got, want)
+	}
+	// The anchor measure runs from the first line's ink to the last line's, so
+	// it drops the slot the last line leaves unused.
+	ink, first := blockInkHeight(lay, box, face)
+	if want := 100 + paragraphGap(100) + 40; ink != want {
+		t.Errorf("blockInkHeight = %d, want %d", ink, want)
+	}
+	if first != 40 {
+		t.Errorf("first line reaches %d above its baseline, want 40", first)
+	}
+}
+
+func TestVerticalCenterUsesTheInk(t *testing.T) {
+	// A line of one symbol reaches its whole box above the baseline and nothing
+	// below it, so a block centered on the face's descent would sit high.
+	sym := &fakeSymbols{}
+	box := TextBoxSpec{Y: 200, Width: 1000, Height: 1000, FontSize: 100, VAlign: "center"}
+	if _, err := RenderTextBox(box, 2000, 2000, TextPart{Text: "{R}", Src: scaleSource{}, Sym: sym}); err != nil {
+		t.Fatalf("RenderTextBox: %v", err)
+	}
+	if len(sym.drawn) != 1 {
+		t.Fatalf("drew %d symbols, want 1", len(sym.drawn))
+	}
+	at := sym.drawn[0]
+	above, below := at.Min.Y-box.Y, box.Y+box.Height-at.Max.Y
+	if above-below > 1 || below-above > 1 {
+		t.Errorf("symbol sits %d below the top and %d above the bottom, want them level", above, below)
+	}
+}

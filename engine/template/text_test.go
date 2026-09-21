@@ -2,6 +2,7 @@ package template
 
 import (
 	"image"
+	"strings"
 	"testing"
 
 	"golang.org/x/image/font"
@@ -130,7 +131,7 @@ func TestLayoutPartsInsertsDivider(t *testing.T) {
 		{Text: "rules text", Src: scaleSource{}},
 		{Text: "flavor text", Src: scaleSource{}},
 	}
-	lay, err := layoutParts(box, parts, 100)
+	lay, err := layoutParts(box, parts, 100, nil)
 	if err != nil {
 		t.Fatalf("layoutParts: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestLayoutPartsNoDividerForOnePart(t *testing.T) {
 		{Text: "flavor only", Src: scaleSource{}},
 		{Text: "", Src: scaleSource{}},
 	}
-	lay, err := layoutParts(box, parts, 100)
+	lay, err := layoutParts(box, parts, 100, nil)
 	if err != nil {
 		t.Fatalf("layoutParts: %v", err)
 	}
@@ -642,5 +643,54 @@ func TestVerticalCenterUsesTheInk(t *testing.T) {
 	above, below := at.Min.Y-box.Y, box.Y+box.Height-at.Max.Y
 	if above-below > 1 || below-above > 1 {
 		t.Errorf("symbol sits %d below the top and %d above the bottom, want them level", above, below)
+	}
+}
+
+func TestAvoidNarrowsTheLinesBesideIt(t *testing.T) {
+	// A rectangle in the bottom right, the corner a P/T box sits in. Lines
+	// clear of it take the whole box, lines level with it stop at its left
+	// edge, and the block still uses the box's full height.
+	const clear = 70
+	box := TextBoxSpec{Width: 140, Height: 100, FontSize: 13, LineSpacing: 1.0,
+		Avoid: image.Rect(clear, 40, 140, 100)}
+	text := strings.TrimSpace(strings.Repeat("ab ", 40))
+	lay, err := layoutAvoiding(box, []TextPart{{Text: text, Src: fixedSource{}}}, 13)
+	if err != nil {
+		t.Fatalf("layoutAvoiding: %v", err)
+	}
+
+	face := firstTextFace(lay)
+	m := face.Metrics()
+	y := blockStart(box, lay, face)
+	beside, past := 0, 0
+	for i, ln := range lay.lines {
+		above, below, _ := lineInk(ln)
+		baseline := y + m.Ascent.Ceil()
+		if baseline-above < box.Avoid.Max.Y && baseline+below > box.Avoid.Min.Y {
+			beside++
+			if ln.width > fixed.I(clear) {
+				t.Errorf("line %d is %v wide beside the rectangle, want no more than %d", i, ln.width, clear)
+			}
+		} else if ln.width > fixed.I(clear) {
+			past++
+		}
+		y += lineHeightPx(m, lay.size, box.LineSpacing)
+	}
+	if beside == 0 {
+		t.Fatal("no line landed beside the rectangle, so the test proves nothing")
+	}
+	if past == 0 {
+		t.Error("no line took the full width, so the rectangle narrowed the whole block")
+	}
+
+	// The same text with nothing to keep out of wraps to fewer, wider lines,
+	// which is what says the narrowing did something.
+	box.Avoid = image.Rectangle{}
+	loose, err := layoutAvoiding(box, []TextPart{{Text: text, Src: fixedSource{}}}, 13)
+	if err != nil {
+		t.Fatalf("layoutAvoiding without a rectangle: %v", err)
+	}
+	if len(loose.lines) >= len(lay.lines) {
+		t.Errorf("wrapped to %d lines around the rectangle and %d without it", len(lay.lines), len(loose.lines))
 	}
 }

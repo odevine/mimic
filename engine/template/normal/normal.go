@@ -174,10 +174,8 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		case name == "copyright" && f.creature:
 			box = copyrightOnArtistRow(box, m)
 		case name == "oracle" && f.creature:
-			if top, ok := ptBoxTop(req.Assets, layersByName, f); ok && top < box.Y+box.Height {
-				if box.Height = top - box.Y; box.Height < 0 {
-					box.Height = 0
-				}
+			if pt, ok := ptBoxRect(req.Assets, layersByName, f); ok {
+				box.Avoid = pt
 			}
 		}
 		res, err := template.RenderTextBox(box, m.Width, m.Height, parts...)
@@ -262,30 +260,30 @@ func dividerLayer(p template.AssetProvider, m *template.Manifest, centerY int) (
 	return &canvas.Layer{Content: placed, Mode: blend.Normal}, nil
 }
 
-// ptBoxTop returns the document Y of the P/T box graphic's top edge, so the
-// oracle text can treat it as its floor on creatures and not spill into the box.
-// It reports false when the P/T box layer or its asset is missing or transparent
-func ptBoxTop(p template.AssetProvider, layers map[string]template.LayerSpec, f frame) (int, bool) {
+// ptBoxRect returns where the P/T box graphic draws, so a creature's rules text
+// can keep out of it while still using the whole height of its own box. It
+// reports false when the P/T box layer or its asset is missing or transparent
+func ptBoxRect(p template.AssetProvider, layers map[string]template.LayerSpec, f frame) (image.Rectangle, bool) {
 	spec, ok := layers["pt_box"]
 	if !ok {
-		return 0, false
+		return image.Rectangle{}, false
 	}
 	path := spec.ColorVariants[f.ptBox].Path
 	if path == "" {
 		path = spec.ColorVariants["any"].Path
 	}
 	if path == "" {
-		return 0, false
+		return image.Rectangle{}, false
 	}
 	img, err := template.LoadImage(p, path)
 	if err != nil {
-		return 0, false
+		return image.Rectangle{}, false
 	}
 	b := opaqueBounds(img)
 	if b.Empty() {
-		return 0, false
+		return image.Rectangle{}, false
 	}
-	return b.Min.Y, true
+	return b, true
 }
 
 // knockoutHollowRegion erases a buffer where the nyx frame should show through a

@@ -231,7 +231,7 @@ func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
 		return blockHeight(lay, box) <= box.Height
 	}
 	max := box.FontSize
-	lay, err := layoutParts(box, parts, max)
+	lay, err := layoutAvoiding(box, parts, max)
 	if err != nil {
 		return textLayout{}, err
 	}
@@ -241,14 +241,14 @@ func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
 	}
 	// max overflows, so search (min, max) for the largest size that fits,
 	// keeping the floor's layout as the fallback when nothing does
-	best, err := layoutParts(box, parts, min)
+	best, err := layoutAvoiding(box, parts, min)
 	if err != nil {
 		return textLayout{}, err
 	}
 	lo, hi := min, max
 	for i := 0; i < 8 && hi-lo > 0.5; i++ {
 		mid := (lo + hi) / 2
-		l, err := layoutParts(box, parts, mid)
+		l, err := layoutAvoiding(box, parts, mid)
 		if err != nil {
 			return textLayout{}, err
 		}
@@ -259,6 +259,129 @@ func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
 		}
 	}
 	return best, nil
+}
+
+// lineWidths is the room each text line of a block has, in the order the lines
+// come out, for a box with something to keep out of. A nil one gives every line
+// the box's full width
+type lineWidths []fixed.Int26_6
+
+// at is the width of the line at index i, or full where nothing narrows it
+func (w lineWidths) at(i int, full fixed.Int26_6) fixed.Int26_6 {
+	if i < 0 || i >= len(w) {
+		return full
+	}
+	return w[i]
+}
+
+// countTextLines is how many of a block's lines draw text, the index a part's
+// first line takes among the widths
+func countTextLines(lines []line) int {
+	n := 0
+	for _, ln := range lines {
+		if !ln.divider {
+			n++
+		}
+	}
+	return n
+}
+
+// layoutAvoiding lays the parts out at size, then lays them out again against
+// the room its own placement leaves once box.Avoid is taken out, since a line's
+// room depends on where the block lands and where the block lands depends on
+// how many lines it wrapped to. It repeats until a pass asks for the same
+// widths as the one before it, which a rectangle in a corner settles into in a
+// pass or two, and gives up on the last layout rather than looping
+func layoutAvoiding(box TextBoxSpec, parts []TextPart, size float64) (textLayout, error) {
+	lay, err := layoutParts(box, parts, size, nil)
+	if err != nil || box.Avoid.Empty() || box.VAlign == "baseline" {
+		return lay, err
+	}
+	var widths lineWidths
+	for i := 0; i < 4; i++ {
+		next := narrowest(widths, avoidWidths(box, lay))
+		if sameWidths(widths, next) {
+			return lay, nil
+		}
+		widths = next
+		if lay, err = layoutParts(box, parts, size, widths); err != nil {
+			return textLayout{}, err
+		}
+	}
+	return lay, nil
+}
+
+// avoidWidths is the room each text line of a laid-out block has left once
+// box.Avoid is taken out of the lines its ink runs alongside. The rectangle is
+// taken off the right, which is the corner a P/T box sits in, so a line beside
+// it stops at its left edge
+func avoidWidths(box TextBoxSpec, lay textLayout) lineWidths {
+	face := firstTextFace(lay)
+	if face == nil {
+		return nil
+	}
+	metrics := face.Metrics()
+	ascent := metrics.Ascent.Ceil()
+	lineHeight := lineHeightPx(metrics, lay.size, box.LineSpacing)
+	divHeight := dividerHeight(lay.size)
+	clear := fixed.I(box.Avoid.Min.X - box.X)
+	if clear < 0 {
+		clear = 0
+	}
+	full := fixed.I(box.Width)
+
+	widths := make(lineWidths, 0, len(lay.lines))
+	y := blockStart(box, lay, face)
+	for _, ln := range lay.lines {
+		if ln.divider {
+			y += divHeight + dividerGap
+			continue
+		}
+		if ln.paraStart {
+			y += paragraphGap(lay.size)
+		}
+		baseline := y + ascent
+		above, below, ok := lineInk(ln)
+		if !ok {
+			above, below = ascent, metrics.Descent.Ceil()
+		}
+		w := full
+		if baseline-above < box.Avoid.Max.Y && baseline+below > box.Avoid.Min.Y && clear < full {
+			w = clear
+		}
+		widths = append(widths, w)
+		y += lineHeight
+	}
+	return widths
+}
+
+// narrowest keeps the tighter of two passes for each line, so a search only
+// ever takes room away. A line narrowed in one pass can push the block taller,
+// lift itself clear of the rectangle and ask for its full width back, which
+// would drop it into the rectangle again and loop
+func narrowest(prev, next lineWidths) lineWidths {
+	out := make(lineWidths, len(next))
+	for i, w := range next {
+		if i < len(prev) && prev[i] < w {
+			w = prev[i]
+		}
+		out[i] = w
+	}
+	return out
+}
+
+// sameWidths reports whether two passes asked for the same room, which is when
+// a layout has settled
+func sameWidths(a, b lineWidths) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // oneLineFits reports whether a laid-out block is a single text line no wider
@@ -280,7 +403,7 @@ func oneLineFits(lay textLayout, box TextBoxSpec) bool {
 
 // layoutParts wraps each part at size in its own face and stacks them, adding a
 // divider line between consecutive parts that both have content
-func layoutParts(box TextBoxSpec, parts []TextPart, size float64) (textLayout, error) {
+func layoutParts(box TextBoxSpec, parts []TextPart, size float64, widths lineWidths) (textLayout, error) {
 	track := trackingPx(box.Tracking, size)
 	var lines []line
 	for _, p := range parts {
@@ -295,7 +418,7 @@ func layoutParts(box TextBoxSpec, parts []TextPart, size float64) (textLayout, e
 			}
 		}
 		st := partStyle{face: face, emph: emph, emphLead: p.EmphLead, sym: p.Sym, size: size, track: track}
-		wrapped := wrapPart(box, p.Text, st)
+		wrapped := wrapPart(box, p.Text, st, widths, countTextLines(lines))
 		if len(wrapped) == 0 {
 			continue
 		}
@@ -307,15 +430,18 @@ func layoutParts(box TextBoxSpec, parts []TextPart, size float64) (textLayout, e
 	return textLayout{lines: lines, size: size}, nil
 }
 
-// wrapPart greedily word-wraps one part's text to box.Width in its style's face,
-// keeping paragraph breaks on explicit newlines, and returns its text lines
-func wrapPart(box TextBoxSpec, text string, st partStyle) []line {
+// wrapPart greedily word-wraps one part's text to the width its line has, in
+// the style's face, keeping paragraph breaks on explicit newlines. The lines
+// before it in the block are counted in first, since widths are indexed across
+// the whole block rather than per part
+func wrapPart(box TextBoxSpec, text string, st partStyle, widths lineWidths, first int) []line {
 	space := spaceAdvance(st.face)
-	maxW := fixed.I(box.Width)
+	full := fixed.I(box.Width)
 	var lines []line
 	for pi, para := range strings.Split(text, "\n") {
 		start := len(lines)
 		var cur line
+		maxW := widths.at(first+len(lines), full)
 		for _, tk := range tokenize(para, st) {
 			switch {
 			case len(cur.tokens) == 0:
@@ -326,6 +452,7 @@ func wrapPart(box TextBoxSpec, text string, st partStyle) []line {
 			default:
 				lines = append(lines, trimTrailingGap(cur))
 				cur = line{tokens: []token{tk}, width: tk.advance}
+				maxW = widths.at(first+len(lines), full)
 			}
 		}
 		if len(cur.tokens) > 0 {
@@ -362,7 +489,7 @@ func trimTrailingGap(ln line) line {
 // layouts and tests
 func layoutText(box TextBoxSpec, text string, face font.Face) textLayout {
 	st := partStyle{face: face, size: box.FontSize, track: trackingPx(box.Tracking, box.FontSize)}
-	return textLayout{lines: wrapPart(box, text, st), size: box.FontSize}
+	return textLayout{lines: wrapPart(box, text, st, nil, 0), size: box.FontSize}
 }
 
 // tokenize splits a paragraph into whitespace-delimited tokens. A word draws in

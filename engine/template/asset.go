@@ -1,6 +1,9 @@
 package template
 
-import "io"
+import (
+	"image"
+	"io"
+)
 
 // AssetProvider supplies the two things impasto has no opinion about: where a
 // template's layer PNGs live, and where things go on the canvas. Keeping it an
@@ -72,6 +75,14 @@ type TextBoxSpec struct {
 	// zero really is no inset on that axis
 	PaddingX *int `json:"paddingX,omitempty"`
 	PaddingY *int `json:"paddingY,omitempty"`
+	// Avoid is a rectangle inside the box that text keeps out of, in document
+	// coordinates. A line whose ink would cross it wraps to stop at its left
+	// edge instead, so a creature's rules text runs the full height of its box
+	// and steps around the P/T box rather than stopping above it. It narrows a
+	// line from the right, which is the corner a P/T box sits in. The zero
+	// rectangle keeps nothing out, and the manifest does not carry it since the
+	// P/T box's place comes from its art
+	Avoid image.Rectangle `json:"-"`
 	// Tracking is letter spacing in Photoshop's thousandths of an em, so 125
 	// adds 0.125em after each glyph. Zero draws with the face's own advances.
 	// It applies to the drawn pen and to each token's measured width

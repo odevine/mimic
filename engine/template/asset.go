@@ -49,8 +49,12 @@ type TextBoxSpec struct {
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
 	FontSize float64 `json:"fontSize"`
-	Align    string  `json:"align"` // "left" | "center" | "right"
-	Color    string  `json:"color"` // "#RRGGBB"
+	Align    string  `json:"align"`  // "left" | "center" | "right"
+	VAlign   string  `json:"vAlign"` // "top" | "center" | "bottom", default top
+	Color    string  `json:"color"`  // "#RRGGBB"
+	// LineSpacing scales the baseline-to-baseline distance. Zero or less means
+	// the face's natural line height
+	LineSpacing float64 `json:"lineSpacing,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above

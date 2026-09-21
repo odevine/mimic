@@ -63,53 +63,93 @@ var (
 	fontCache = map[string]*opentype.Font{}
 )
 
+// Sizer holds a role's resolved font so faces can be built at any point size
+// without re-reading or re-parsing the file. A pass that tries several sizes
+// for one text box uses one Sizer rather than resolving once per size
+type Sizer struct {
+	font     *opentype.Font // nil means the basicfont fallback
+	fallback bool
+}
+
+// ResolveFont picks the font for role the way Resolve does, an override file in
+// userDir first, then the embedded default, then the basicfont fallback, but
+// leaves sizing to Face. An empty userDir skips the override step. It never
+// fails: an unresolvable role yields a Sizer whose Face returns the fallback
+func ResolveFont(role Role, userDir string) *Sizer {
+	if userDir != "" {
+		if path := findUserFont(role, userDir); path != "" {
+			if f, err := fontFromFile(path); err == nil {
+				return &Sizer{font: f}
+			}
+		}
+	}
+	if path, ok := embeddedPath[role]; ok {
+		if f, err := fontFromEmbedded(path); err == nil {
+			return &Sizer{font: f}
+		}
+	}
+	return &Sizer{fallback: true}
+}
+
+// Fallback reports whether Face returns basicfont.Face7x13, so a caller can
+// decide whether to normalize text for that limited face
+func (s *Sizer) Fallback() bool { return s.fallback }
+
+// Face returns a face for the resolved font at size, or basicfont.Face7x13
+// when no font resolved. The fallback is a fixed size and ignores size
+func (s *Sizer) Face(size float64) (font.Face, error) {
+	if s.font == nil {
+		return basicfont.Face7x13, nil
+	}
+	return newFace(s.font, size)
+}
+
 // Resolve returns a face for role at the given point size. It tries an override
 // file in userDir first, then the embedded default, then basicfont.Face7x13.
 // The bool is true only when the basicfont fallback was used, so a caller can
 // decide whether to normalize text for that limited face. An empty userDir
 // skips the override step
 func Resolve(role Role, userDir string, size float64) (font.Face, bool, error) {
-	if userDir != "" {
-		if path := findUserFont(role, userDir); path != "" {
-			if face, err := faceFromFile(path, size); err == nil {
-				return face, false, nil
-			}
-		}
-	}
-	if path, ok := embeddedPath[role]; ok {
-		if face, err := faceFromEmbedded(path, size); err == nil {
-			return face, false, nil
-		}
-	}
-	return basicfont.Face7x13, true, nil
+	s := ResolveFont(role, userDir)
+	face, err := s.Face(size)
+	return face, s.fallback, err
 }
 
-func faceFromFile(path string, size float64) (font.Face, error) {
+func fontFromFile(path string) (*opentype.Font, error) {
+	key := "file:" + path
+	if f := cachedFont(key); f != nil {
+		return f, nil
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	f, err := parse("file:"+path, raw)
-	if err != nil {
-		return nil, err
-	}
-	return newFace(f, size)
+	return parse(key, raw)
 }
 
-func faceFromEmbedded(path string, size float64) (font.Face, error) {
+func fontFromEmbedded(path string) (*opentype.Font, error) {
+	key := "embed:" + path
+	if f := cachedFont(key); f != nil {
+		return f, nil
+	}
 	raw, err := embedded.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	f, err := parse("embed:"+path, raw)
-	if err != nil {
-		return nil, err
-	}
-	return newFace(f, size)
+	return parse(key, raw)
+}
+
+// cachedFont returns the parsed font for key, or nil when none is cached, so a
+// caller can skip reading the file on a hit
+func cachedFont(key string) *opentype.Font {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	return fontCache[key]
 }
 
 // parse returns the parsed font for a cache key, parsing and caching on a miss.
-// A parsed font is reused across renders, while each Resolve builds its own face
+// A parsed font is reused across renders, while each Face builds its own sized
+// face from it
 func parse(key string, raw []byte) (*opentype.Font, error) {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()

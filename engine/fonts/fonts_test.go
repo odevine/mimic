@@ -74,6 +74,41 @@ func TestFindUserFontItalicSplit(t *testing.T) {
 	}
 }
 
+func TestSizerBuildsFacesPerSize(t *testing.T) {
+	// One resolved font produces distinct faces at different sizes, and a
+	// bigger size has a taller line height.
+	s := ResolveFont(Body, "")
+	if s.Fallback() {
+		t.Fatal("Body resolved to the basicfont fallback, want the embedded font")
+	}
+	small, err := s.Face(12)
+	if err != nil {
+		t.Fatalf("Face(12): %v", err)
+	}
+	large, err := s.Face(48)
+	if err != nil {
+		t.Fatalf("Face(48): %v", err)
+	}
+	if small.Metrics().Height >= large.Metrics().Height {
+		t.Errorf("12pt height %v is not smaller than 48pt height %v",
+			small.Metrics().Height, large.Metrics().Height)
+	}
+}
+
+func TestSizerFallbackFace(t *testing.T) {
+	s := ResolveFont(Role(-1), "")
+	if !s.Fallback() {
+		t.Error("an unmapped role should report the basicfont fallback")
+	}
+	face, err := s.Face(24)
+	if err != nil {
+		t.Fatalf("Face: %v", err)
+	}
+	if face != basicfont.Face7x13 {
+		t.Error("fallback Face should be basicfont.Face7x13")
+	}
+}
+
 func TestManaFaceHasPrivateUseGlyphs(t *testing.T) {
 	// The Mana font carries its symbols in the private use area, not at ASCII
 	// letters, so a face that resolves is not by itself proof it is usable.

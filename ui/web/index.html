@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mimic</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <form id="search-form" class="search">
+      <input id="search-input" list="recents" autocomplete="off"
+             placeholder="Search Scryfall, e.g. t:goblin c:r cmc=1">
+      <datalist id="recents"></datalist>
+      <button id="search-btn" type="submit">Search</button>
+    </form>
+    <div class="template-bar">
+      <span id="template-label" class="template-label"></span>
+      <button id="templates-btn" type="button">Templates…</button>
+    </div>
+  </header>
+
+  <main class="panes">
+    <section class="results" aria-label="Search results">
+      <ul id="results-list"></ul>
+    </section>
+
+    <section class="editor">
+      <form id="editor-form">
+        <div class="field"><label for="f-name">Name</label><input id="f-name"></div>
+        <div class="field"><label for="f-manaCost">Mana cost</label><input id="f-manaCost" placeholder="{2}{U}{U}"></div>
+        <div class="field"><label for="f-colors">Colors</label><input id="f-colors" placeholder="WUBRG letters, drives the frame"></div>
+        <div class="field"><label for="f-typeLine">Type line</label><input id="f-typeLine"></div>
+        <div class="field"><label for="f-oracle">Rules text</label><textarea id="f-oracle" rows="6"></textarea></div>
+        <div class="field"><label for="f-flavor">Flavor text</label><textarea id="f-flavor" rows="3"></textarea></div>
+        <div class="field"><label for="f-power">Power</label><input id="f-power"></div>
+        <div class="field"><label for="f-toughness">Toughness</label><input id="f-toughness"></div>
+        <div class="field"><label for="f-loyalty">Loyalty</label><input id="f-loyalty"></div>
+        <div class="field"><label for="f-artist">Artist</label><input id="f-artist"></div>
+        <fieldset class="printing">
+          <legend>Printing</legend>
+          <div class="field"><label for="f-setCode">Set</label><input id="f-setCode"></div>
+          <div class="field"><label for="f-collector">Collector #</label><input id="f-collector"></div>
+          <div class="field"><label for="f-rarity">Rarity</label><input id="f-rarity"></div>
+          <div class="field"><label for="f-released">Released</label><input id="f-released" placeholder="YYYY-MM-DD"></div>
+          <div class="field"><label for="f-language">Language</label><input id="f-language"></div>
+        </fieldset>
+        <div class="editor-buttons">
+          <button id="reset-btn" type="button" disabled>Reset to card</button>
+          <button id="render-btn" type="submit" class="primary" disabled>Render preview</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="preview">
+      <div class="preview-frame">
+        <img id="preview-img" alt="Card preview">
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <progress id="render-progress" max="1" value="0" hidden></progress>
+    <span id="status">Search for a card to begin.</span>
+    <a id="save-link" class="save" download hidden>Save PNG</a>
+  </footer>
+
+  <div id="templates-modal" class="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>Templates</h2>
+        <button id="templates-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div id="templates-list" class="modal-body"></div>
+      <div class="modal-foot">
+        <progress id="templates-progress" max="1" value="0" hidden></progress>
+        <span id="templates-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

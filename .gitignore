@@ -11,11 +11,14 @@
 # Go sum file
 go.work.sum
 
-# Go build output. The rendercard binary is extensionless on Unix, so it is
-# named directly rather than caught by a pattern
+# Go build output. The rendercard and mimic binaries are extensionless on Unix,
+# so they are named directly rather than caught by a pattern. A plain go build in
+# ui/ names its output after the directory, so ignore that too
 /dist/
 rendercard
 rendercard.exe
+mimic
+/ui/ui
 *.exe
 *.dll
 *.so

@@ -1,0 +1,139 @@
+/* Every color, size and timing the interface uses. Values come from Monokai Pro,
+   default filter: its base ramp supplies surfaces, borders and text, and its
+   accents supply the accent and status colors. Rows marked derived fill gaps the
+   dark-weighted ramp leaves in the light theme. Swapping filters is this file */
+
+:root {
+  color-scheme: dark;
+
+  --stage: #19181a;
+  --bg: #221f22;
+  --surface: #2d2a2e;
+  --surface-raised: #403e41;
+  --border: #403e41;
+  --border-strong: #5b595c;
+  --text: #fcfcfa;
+  --text-dim: #939293;
+  --text-faint: #727072;
+  --accent: #ab9df2;
+  --accent-text: #19181a;
+  --ok: #a9dc76;
+  --warn: #ffd866;
+  --err: #ff6188;
+  /* Held for the dirty-field dot and informational highlights */
+  --dirty: #fc9867;
+  --info: #78dce8;
+
+  /* Mana hues at reduced saturation, so the color chips read as controls */
+  --mana-w: #e6dfc3;
+  --mana-u: #7fa9cf;
+  --mana-b: #8d8290;
+  --mana-r: #d08a74;
+  --mana-g: #85ad86;
+  --mana-c: #b5b0ad;
+
+  --overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+  --scrim: rgb(10 9 10 / 0.6);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --u: 4px;
+  --gap: 8px;
+  --section-gap: 16px;
+  --control-h: 28px;
+  --primary-h: 32px;
+  --topbar-h: 40px;
+  --statusbar-h: 28px;
+  --rail-w: 64px;
+
+  --r-control: 6px;
+  --r-panel: 8px;
+  --r-chip: 4px;
+
+  --t-hover: 120ms ease-out;
+  --t-panel: 180ms ease-out;
+}
+
+/* Status colors are full strength on a dot and mixed toward the surface
+   everywhere else, so a failure never floods a row the way a red frame would */
+:root {
+  --accent-weak: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --ok-weak: color-mix(in srgb, var(--ok) 16%, var(--surface));
+  --warn-weak: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  --err-weak: color-mix(in srgb, var(--err) 16%, var(--surface));
+  /* Text selection sits well above accent-weak so a highlight is never lost
+     against a selected row or a raised input */
+  --selection: color-mix(in srgb, var(--accent) 55%, var(--bg));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --stage: #c1c0c0;
+  --bg: #edecec;
+  --surface: #fcfcfa;
+  --surface-raised: #f4f3f2;
+  --border: #c1c0c0;
+  --border-strong: #939293;
+  --text: #221f22;
+  --text-dim: #5b595c;
+  --text-faint: #727072;
+  --accent: #6b5bc4;
+  --accent-text: #fcfcfa;
+  --ok: #5e9b32;
+  --warn: #9a7b12;
+  --err: #d13a63;
+  --dirty: #c8642f;
+  --info: #1f8a99;
+
+  --mana-w: #cfc6a0;
+  --mana-u: #5d8bb5;
+  --mana-b: #6f6570;
+  --mana-r: #bf6c53;
+  --mana-g: #5f8f61;
+  --mana-c: #9c9794;
+
+  --overlay-shadow: 0 12px 32px rgb(34 31 34 / 0.18), 0 2px 6px rgb(34 31 34 / 0.12);
+  --scrim: rgb(34 31 34 / 0.35);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+
+    --stage: #c1c0c0;
+    --bg: #edecec;
+    --surface: #fcfcfa;
+    --surface-raised: #f4f3f2;
+    --border: #c1c0c0;
+    --border-strong: #939293;
+    --text: #221f22;
+    --text-dim: #5b595c;
+    --text-faint: #727072;
+    --accent: #6b5bc4;
+    --accent-text: #fcfcfa;
+    --ok: #5e9b32;
+    --warn: #9a7b12;
+    --err: #d13a63;
+    --dirty: #c8642f;
+    --info: #1f8a99;
+
+    --mana-w: #cfc6a0;
+    --mana-u: #5d8bb5;
+    --mana-b: #6f6570;
+    --mana-r: #bf6c53;
+    --mana-g: #5f8f61;
+    --mana-c: #9c9794;
+
+    --overlay-shadow: 0 12px 32px rgb(34 31 34 / 0.18), 0 2px 6px rgb(34 31 34 / 0.12);
+    --scrim: rgb(34 31 34 / 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-hover: 0ms;
+    --t-panel: 0ms;
+  }
+}

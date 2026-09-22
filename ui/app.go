@@ -41,11 +41,12 @@ type ui struct {
 	editor        *cardEditor
 	renderBtn     *widget.Button
 	resetBtn      *widget.Button
-	preview       *canvas.Image
-	status        *widget.Label
+	preview        *canvas.Image
+	status         *widget.Label
 	saveBtn        *widget.Button
-	templatesBtn  *widget.Button
-	templateLabel *widget.Label
+	templatesBtn   *widget.Button
+	templateLabel  *widget.Label
+	renderProgress *widget.ProgressBar
 
 	// activeName and activeVersion mirror the pipeline's active template for the
 	// indicator and the manager's active tag. UI-goroutine only, like the rest
@@ -134,16 +135,17 @@ func (a *ui) selectResult(id widget.ListItemID) {
 
 	ctx, cancel, seq := a.beginOp()
 	a.saveBtn.Disable()
-	a.status.SetText("Loading " + d.Name + "…")
+	a.beginRenderProgress("Fetching art…")
 
 	go func() {
 		defer cancel()
 		art, artErr := a.pipe.fetchArt(ctx, d)
-		img, err := a.pipe.render(ctx, d, art)
+		img, err := a.pipe.render(ctx, d, art, a.renderProgressFor(seq))
 		fyne.Do(func() {
 			if a.staleOp(seq) {
 				return
 			}
+			a.endRenderProgress()
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					a.status.SetText("Render failed: " + err.Error())
@@ -172,15 +174,16 @@ func (a *ui) renderEdited() {
 	ctx, cancel, seq := a.beginOp()
 	art := a.art
 	a.saveBtn.Disable()
-	a.status.SetText("Rendering " + edited.Name + "…")
+	a.beginRenderProgress("Rendering " + edited.Name + "…")
 
 	go func() {
 		defer cancel()
-		img, err := a.pipe.render(ctx, edited, art)
+		img, err := a.pipe.render(ctx, edited, art, a.renderProgressFor(seq))
 		fyne.Do(func() {
 			if a.staleOp(seq) {
 				return
 			}
+			a.endRenderProgress()
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					a.status.SetText("Render failed: " + err.Error())
@@ -276,6 +279,55 @@ func templateDisplay(name, version string) string {
 		return name + " · local"
 	default:
 		return name + " · " + version
+	}
+}
+
+// beginRenderProgress shows the progress bar at zero and sets the status text.
+// It runs on the UI goroutine
+func (a *ui) beginRenderProgress(text string) {
+	if a.renderProgress != nil {
+		a.renderProgress.SetValue(0)
+		a.renderProgress.Show()
+	}
+	a.status.SetText(text)
+}
+
+// stepRenderProgress advances the bar and, for a non-empty step, updates the
+// status label with the step name. It runs on the UI goroutine
+func (a *ui) stepRenderProgress(step string, frac float64) {
+	if a.renderProgress != nil {
+		a.renderProgress.SetValue(frac)
+	}
+	if step != "" {
+		a.status.SetText(step + "…")
+	}
+}
+
+// endRenderProgress hides the bar. The caller sets the final status. It runs on
+// the UI goroutine
+func (a *ui) endRenderProgress() {
+	if a.renderProgress != nil {
+		a.renderProgress.Hide()
+	}
+}
+
+// renderProgress builds a progress callback for one render operation. It hands
+// updates to the UI goroutine, drops them once a newer operation has started,
+// and throttles a per-layer stream to steps or fraction moves of at least 0.01
+func (a *ui) renderProgressFor(seq uint64) func(step string, frac float64) {
+	lastFrac := -1.0
+	lastStep := ""
+	return func(step string, frac float64) {
+		if step == lastStep && frac-lastFrac < 0.01 && frac < 1 {
+			return
+		}
+		lastStep, lastFrac = step, frac
+		fyne.Do(func() {
+			if a.staleOp(seq) {
+				return
+			}
+			a.stepRenderProgress(step, frac)
+		})
 	}
 }
 

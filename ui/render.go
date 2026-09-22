@@ -73,16 +73,31 @@ func (p *renderPipeline) fetchArt(ctx context.Context, d *card.Data) (image.Imag
 }
 
 // render composes the card and art into a finished image through the template.
-// Art may be nil, which renders a frame with no artwork
-func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image) (image.Image, error) {
+// Art may be nil, which renders a frame with no artwork. progress, when set,
+// receives step updates: the engine's own steps scaled into the first 90% of the
+// bar, then a final downscale step. progress may be nil
+func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image, progress func(step string, frac float64)) (image.Image, error) {
 	at := p.active.Load()
-	buf, err := at.template.Render(ctx, template.RenderRequest{
+	req := template.RenderRequest{
 		Card:   d,
 		Art:    art,
 		Assets: at.provider,
-	})
+	}
+	if progress != nil {
+		// The engine render is the bulk of the work, so it owns the bar up to
+		// 0.9 and the downscale below fills the rest
+		req.Progress = func(step string, frac float64) { progress(step, frac*0.9) }
+	}
+	buf, err := at.template.Render(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("rendering %q: %w", d.Name, err)
 	}
-	return buf.ToImage(8), nil
+	if progress != nil {
+		progress("Encoding image", 0.92)
+	}
+	img := buf.ToImage(8)
+	if progress != nil {
+		progress("", 1)
+	}
+	return img, nil
 }

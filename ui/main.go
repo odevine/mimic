@@ -152,7 +152,10 @@ func buildUI(a *ui) {
 	a.saveBtn.Disable()
 
 	a.status = widget.NewLabel("Search for a card to begin.")
-	bottomBar := container.NewBorder(nil, nil, nil, a.saveBtn, a.status)
+	a.renderProgress = widget.NewProgressBar()
+	a.renderProgress.Hide()
+	statusRow := container.NewBorder(nil, nil, nil, a.saveBtn, a.status)
+	bottomBar := container.NewVBox(a.renderProgress, statusRow)
 
 	// Three panes: results pick a card, the editor tweaks its fields, the
 	// preview shows the render

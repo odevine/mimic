@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/odevine/mimic/compare/ui/v0.2.0...ui/v0.3.0) (2026-09-22)
+
+
+### Features
+
+* **ui:** show each template's description in the manager ([bfa98eb](https://github.com/odevine/mimic/commit/bfa98eb83b2ff648361148e161f3840a56dece38))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.5.0 ([f280e0b](https://github.com/odevine/mimic/commit/f280e0b59d1e718cfd60a56c4e6bc75eb408ff8c))
+
+
+### Code Refactoring
+
+* **engine:** pull template-agnostic logic out of normal ([b8dccb8](https://github.com/odevine/mimic/commit/b8dccb8f3b68d9531f3122c755bf38e031935a65))
+
 ## [0.2.0](https://github.com/odevine/mimic/compare/ui/v0.1.0...ui/v0.2.0) (2026-09-22)
 
 

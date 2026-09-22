@@ -16,11 +16,27 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
+// ProgressFunc reports render progress: a human-readable step and a fraction in
+// [0,1]. It may be called many times per step, and is called from the render
+// goroutine, so an implementation that touches UI state marshals it itself
+type ProgressFunc func(step string, frac float64)
+
 // RenderRequest is everything a template needs to render one card
 type RenderRequest struct {
 	Card   *card.Data
 	Art    image.Image // nil renders without art
 	Assets AssetProvider
+	// Progress, when set, receives step updates during the render. Nil disables
+	// reporting, which is the common case for a batch or a headless render
+	Progress ProgressFunc
+}
+
+// Report forwards a progress update when a callback is set, so a template's call
+// sites stay one line and nil-safe
+func (r RenderRequest) Report(step string, frac float64) {
+	if r.Progress != nil {
+		r.Progress(step, frac)
+	}
 }
 
 // Template renders a card into a finished pixel buffer. Implementations must

@@ -45,6 +45,45 @@ func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
 	}
 }
 
+func TestRenderReportsProgress(t *testing.T) {
+	req := renderBolt(t, nil)
+	var steps []string
+	last := -1.0
+	req.Progress = func(step string, frac float64) {
+		if frac < 0 || frac > 1 {
+			t.Errorf("fraction %v out of [0,1] at step %q", frac, step)
+		}
+		if frac < last {
+			t.Errorf("fraction went backward: %v after %v at step %q", frac, last, step)
+		}
+		last = frac
+		if len(steps) == 0 || steps[len(steps)-1] != step {
+			steps = append(steps, step)
+		}
+	}
+
+	if _, err := (&Template{}).Render(context.Background(), *req); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if len(steps) == 0 {
+		t.Fatal("Progress was never called")
+	}
+	for _, want := range []string{stepManifest, stepFrame, stepText, stepFinalize} {
+		if !containsStep(steps, want) {
+			t.Errorf("step %q not reported; got %v", want, steps)
+		}
+	}
+}
+
+func containsStep(steps []string, want string) bool {
+	for _, s := range steps {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRenderPicksColorKeyedBackground(t *testing.T) {
 	// The top-left pixel is bare background, so a red card must show the red
 	// background fill there rather than another color's.

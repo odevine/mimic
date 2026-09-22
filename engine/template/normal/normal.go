@@ -23,6 +23,23 @@ import (
 
 const templateName = "normal"
 
+// Render step names and the cumulative fraction each phase spans. The fractions
+// are for feedback, not timing: the frame loop does the PNG decodes and is the
+// heaviest, so it owns the widest band
+const (
+	stepManifest = "Reading template"
+	stepFrame    = "Compositing frame"
+	stepText     = "Rendering text"
+	stepFinalize = "Finalizing"
+
+	fracManifest  = 0.02
+	fracFrameFrom = 0.05
+	fracFrameTo   = 0.55
+	fracTextFrom  = 0.55
+	fracTextTo    = 0.85
+	fracFinalize  = 0.9
+)
+
 func init() {
 	template.Register(templateName, func() template.Template { return &Template{} })
 }
@@ -80,6 +97,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	if err != nil {
 		return nil, err
 	}
+	req.Report(stepManifest, fracManifest)
 
 	f := deriveFrame(req.Card)
 
@@ -89,10 +107,11 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 
 	var nodes []canvas.Node
-	for _, layer := range m.Layers {
+	for i, layer := range m.Layers {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
 		if !f.conditionMet(layer.Condition) {
 			continue
 		}
@@ -160,7 +179,9 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		return nil, fmt.Errorf("normal: measuring the mana cost: %w", err)
 	}
 
-	for _, name := range sortedKeys(m.TextBoxes) {
+	boxNames := sortedKeys(m.TextBoxes)
+	for i, name := range boxNames {
+		req.Report(stepText, lerp(fracTextFrom, fracTextTo, i, len(boxNames)))
 		parts := t.textParts(name, req.Card, syms)
 		if len(parts) == 0 {
 			continue
@@ -205,12 +226,22 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 
 	// A pass-through root is the correct default. Nothing sits beneath the
 	// document root, so pass-through and isolated behave the same here
+	req.Report(stepFinalize, fracFinalize)
 	doc := &canvas.Document{
 		Width:  m.Width,
 		Height: m.Height,
 		Root:   canvas.Group{PassThrough: true, Layers: nodes},
 	}
 	return canvas.Render(doc)
+}
+
+// lerp reports the cumulative fraction at item i of n across a phase spanning
+// [from, to], stepping to the end as items complete. n <= 0 yields from
+func lerp(from, to float64, i, n int) float64 {
+	if n <= 0 {
+		return from
+	}
+	return from + (to-from)*float64(i+1)/float64(n)
 }
 
 // loadLayer decodes a layer PNG and places it at the document origin. Frame

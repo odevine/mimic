@@ -8,15 +8,29 @@ import (
 )
 
 // prefsData is the on-disk shape: the recent-search list, the last chosen
-// template, and the two render resolutions, so the next launch restores them
-// all. The resolutions are stored as dpi rather than pixels, since dpi means
-// the same thing across templates authored at different canvas sizes
+// template, the two render resolutions, and the interface settings, so the next
+// launch restores them all. The resolutions are stored as dpi rather than
+// pixels, since dpi means the same thing across templates authored at different
+// canvas sizes
 type prefsData struct {
 	RecentSearches  []string `json:"recentSearches"`
 	TemplateName    string   `json:"templateName"`
 	TemplateVersion string   `json:"templateVersion"`
 	PreviewDPI      int      `json:"previewDpi,omitempty"`
 	OutputDPI       int      `json:"outputDpi,omitempty"`
+	uiSettings
+}
+
+// uiSettings is the part of prefs the browser reads and writes whole through
+// /api/settings. Splits holds each flow's region widths in pixels, keyed by
+// flow name
+type uiSettings struct {
+	// Theme is "dark", "light", or "system". Empty reads as dark, the default
+	Theme string `json:"theme,omitempty"`
+	// ExpandPrintings lists every printing as its own search result rather than
+	// collapsing them to one row per card name
+	ExpandPrintings bool                 `json:"expandPrintings,omitempty"`
+	Splits          map[string][]float64 `json:"splits,omitempty"`
 }
 
 // prefs persists a little user state to a JSON file, guarded by a mutex. It
@@ -115,5 +129,20 @@ func (p *prefs) setResolution(preview, output int) {
 	defer p.mu.Unlock()
 	p.data.PreviewDPI = preview
 	p.data.OutputDPI = output
+	p.save()
+}
+
+// settings returns the interface settings
+func (p *prefs) settings() uiSettings {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.data.uiSettings
+}
+
+// setSettings stores the interface settings and persists them
+func (p *prefs) setSettings(u uiSettings) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.data.uiSettings = u
 	p.save()
 }

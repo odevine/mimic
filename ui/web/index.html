@@ -16,6 +16,7 @@
     </form>
     <div class="template-bar">
       <span id="template-label" class="template-label"></span>
+      <button id="resolution-btn" type="button">Resolution…</button>
       <button id="templates-btn" type="button">Templates…</button>
     </div>
   </header>
@@ -62,8 +63,43 @@
   <footer class="statusbar">
     <progress id="render-progress" max="1" value="0" hidden></progress>
     <span id="status">Search for a card to begin.</span>
-    <a id="save-link" class="save" download hidden>Save PNG</a>
+    <button id="save-btn" type="button" class="save" hidden>Save PNG</button>
   </footer>
+
+  <div id="resolution-modal" class="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>Resolution</h2>
+        <button id="resolution-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="res-group">
+          <h3><label for="preview-select">Preview</label></h3>
+          <p class="description">What the preview pane renders at. A smaller preview renders faster and lays out identically.</p>
+          <select id="preview-select"></select>
+          <div id="preview-custom" class="res-custom" hidden>
+            <label for="preview-dpi">dpi</label>
+            <input id="preview-dpi" type="number" inputmode="numeric">
+          </div>
+          <p id="preview-size" class="res-size"></p>
+        </div>
+        <div class="res-group">
+          <h3><label for="output-select">Output</label></h3>
+          <p class="description">What Save PNG renders at. The card is re-rendered at this size when you save.</p>
+          <select id="output-select"></select>
+          <div id="output-custom" class="res-custom" hidden>
+            <label for="output-dpi">dpi</label>
+            <input id="output-dpi" type="number" inputmode="numeric">
+          </div>
+          <p id="output-size" class="res-size"></p>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span id="resolution-status"></span>
+        <button id="resolution-save" type="button" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
 
   <div id="templates-modal" class="modal" hidden>
     <div class="modal-box">

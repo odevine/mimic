@@ -7,12 +7,16 @@ import (
 	"sync"
 )
 
-// prefsData is the on-disk shape: the recent-search list and the last chosen
-// template, so the next launch restores both
+// prefsData is the on-disk shape: the recent-search list, the last chosen
+// template, and the two render resolutions, so the next launch restores them
+// all. The resolutions are stored as dpi rather than pixels, since dpi means
+// the same thing across templates authored at different canvas sizes
 type prefsData struct {
 	RecentSearches  []string `json:"recentSearches"`
 	TemplateName    string   `json:"templateName"`
 	TemplateVersion string   `json:"templateVersion"`
+	PreviewDPI      int      `json:"previewDpi,omitempty"`
+	OutputDPI       int      `json:"outputDpi,omitempty"`
 }
 
 // prefs persists a little user state to a JSON file, guarded by a mutex. It
@@ -94,5 +98,22 @@ func (p *prefs) setTemplate(name, version string) {
 	defer p.mu.Unlock()
 	p.data.TemplateName = name
 	p.data.TemplateVersion = version
+	p.save()
+}
+
+// resolution returns the stored preview and output dpi. A zero means nothing
+// was chosen yet, which the caller resolves against the active template
+func (p *prefs) resolution() (preview, output int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.data.PreviewDPI, p.data.OutputDPI
+}
+
+// setResolution stores the two render resolutions and persists them
+func (p *prefs) setResolution(preview, output int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.data.PreviewDPI = preview
+	p.data.OutputDPI = output
 	p.save()
 }

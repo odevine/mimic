@@ -13,8 +13,13 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
-// netTimeout bounds a search or a render, matching the rendercard CLI
+// netTimeout bounds a search or an art fetch, matching the rendercard CLI
 const netTimeout = 30 * time.Second
+
+// renderTimeout bounds the compositing itself. A full-resolution export of a
+// large template decodes and blends every layer at its authored size, so it is
+// given far more room than a network round trip
+const renderTimeout = 10 * time.Minute
 
 // artCacheMax bounds the art cache so a long session does not grow without
 // limit. Art crops are large, so a modest cap holds many recently viewed cards
@@ -225,14 +230,19 @@ func (s *server) lookupJob(id string) (*job, bool) {
 }
 
 // doRender fetches art (once per URL) and renders the card through the active
-// template, streaming progress to the job and ending with a done event carrying
-// whether art was missing
-func (s *server) doRender(j *job, d *card.Data) {
-	ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+// template at dpi, streaming progress to the job and ending with a done event
+// carrying whether art was missing
+func (s *server) doRender(j *job, d *card.Data, dpi int) {
+	artCtx, cancelArt := context.WithTimeout(context.Background(), netTimeout)
+	art, artErr := s.artFor(artCtx, d)
+	cancelArt()
+
+	// The render is local work on a bound that has nothing to do with the
+	// network's, and a full-resolution export is the slowest thing the app does
+	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
 	defer cancel()
 
-	art, artErr := s.artFor(ctx, d)
-	img, err := s.pipe.render(ctx, d, art, throttleRender(func(step string, frac float64) {
+	img, err := s.pipe.render(ctx, d, art, dpi, throttleRender(func(step string, frac float64) {
 		j.emit(jobEvent{Step: step, Frac: frac})
 	}))
 	if err != nil {

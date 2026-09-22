@@ -66,6 +66,13 @@ func (p *renderPipeline) close() {
 	p.cleanups = nil
 }
 
+// manifest reads the active template's manifest, which is what turns a dpi into
+// the pixel size a render produces. It re-reads and re-parses on every call, so
+// it belongs on a settings request rather than in a hot loop
+func (p *renderPipeline) manifest() (*template.Manifest, error) {
+	return p.active.Load().provider.Manifest()
+}
+
 // fetchArt downloads the card's art crop. A card with no artwork URL is not an
 // error, it returns a nil image the render places nothing for. Art is fetched
 // once per selected card so later edits re-render without a network round trip
@@ -76,17 +83,20 @@ func (p *renderPipeline) fetchArt(ctx context.Context, d *card.Data) (image.Imag
 	return p.client.FetchArt(ctx, d)
 }
 
-// render composes the card and art into a finished image through the template.
-// Art may be nil, which renders a frame with no artwork. progress, when set,
+// render composes the card and art into a finished image through the template,
+// at dpi. Art may be nil, which renders a frame with no artwork. A dpi past what
+// the template was authored at renders at the authored size, so a caller can
+// pass a saved preference through without checking it first. progress, when set,
 // receives step updates: the engine's own steps scaled into the first 90% of the
 // bar, then a final downscale step. progress may be nil
-func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image, progress func(step string, frac float64)) (image.Image, error) {
+func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image, dpi int, progress func(step string, frac float64)) (image.Image, error) {
 	at := p.active.Load()
 	req := template.RenderRequest{
 		Card:    d,
 		Art:     art,
 		Assets:  at.provider,
 		FontDir: at.fontDir,
+		DPI:     dpi,
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to

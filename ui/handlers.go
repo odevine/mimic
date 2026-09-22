@@ -22,6 +22,8 @@ func (s *server) routes() {
 	mux.HandleFunc("POST /api/render", s.handleRender)
 	mux.HandleFunc("GET /api/render/{id}/events", s.handleJobEvents)
 	mux.HandleFunc("GET /api/render/{id}/image", s.handleRenderImage)
+	mux.HandleFunc("GET /api/resolution", s.handleResolution)
+	mux.HandleFunc("POST /api/resolution", s.handleSetResolution)
 	mux.HandleFunc("GET /api/templates", s.handleTemplates)
 	mux.HandleFunc("GET /api/template/active", s.handleActiveTemplate)
 	mux.HandleFunc("POST /api/template/select", s.handleSelectTemplate)
@@ -77,6 +79,9 @@ func (s *server) handleRecents(w http.ResponseWriter, r *http.Request) {
 type renderBody struct {
 	Base  card.Data  `json:"base"`
 	Edits editFields `json:"edits"`
+	// Target picks which resolution to render at: "output" for the full-size
+	// render behind Save, anything else for the preview
+	Target string `json:"target,omitempty"`
 }
 
 // handleRender starts a render job and returns its id. The render runs in a
@@ -90,9 +95,66 @@ func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
 	}
 	d := applyEdits(&body.Base, body.Edits)
 
+	// Resolving the dpi once here rather than once in the handler and again in
+	// the job keeps the number reported back the one actually rendered, even if
+	// the setting changes while this render is in flight
+	dpi := s.renderDPI(body.Target)
+	if m, err := s.pipe.manifest(); err == nil {
+		dpi = m.ClampDPI(dpi)
+	}
+
 	id, j := s.newJob()
-	go s.doRender(j, d)
-	writeJSON(w, map[string]string{"jobId": id})
+	go s.doRender(j, d, dpi)
+	writeJSON(w, map[string]any{"jobId": id, "dpi": dpi})
+}
+
+// handleResolution returns the preview and output resolutions, the presets a
+// picker offers, and the bounds a custom dpi stays inside, all resolved against
+// the active template
+func (s *server) handleResolution(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.resolutions()
+	if err != nil {
+		http.Error(w, "reading template manifest: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, settings)
+}
+
+// resolutionBody is the POST /api/resolution payload. Both are dpi, and a zero
+// output means the active template's own resolution
+type resolutionBody struct {
+	PreviewDPI int `json:"previewDpi"`
+	OutputDPI  int `json:"outputDpi"`
+}
+
+// handleSetResolution stores the two resolutions and returns them resolved the
+// way the GET does, so the client renders back what was actually kept rather
+// than what it asked for
+func (s *server) handleSetResolution(w http.ResponseWriter, r *http.Request) {
+	var body resolutionBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad resolution request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	m, err := s.pipe.manifest()
+	if err != nil {
+		http.Error(w, "reading template manifest: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Clamping before the store keeps a dpi the active template cannot reach
+	// from sitting in prefs and surprising a later, larger template
+	s.prefs.setResolution(m.ClampDPI(previewOrDefault(body.PreviewDPI)), clampOutputDPI(m, body.OutputDPI))
+	s.handleResolution(w, r)
+}
+
+// clampOutputDPI keeps a stored output resolution inside what the template can
+// render, preserving zero as "the template's own" so the preference tracks a
+// later template rather than pinning this one's number
+func clampOutputDPI(m *template.Manifest, dpi int) int {
+	if dpi <= 0 || dpi >= m.NativeDPI() {
+		return 0
+	}
+	return m.ClampDPI(dpi)
 }
 
 // handleRenderImage writes a finished render's PNG. With a download query it

@@ -68,16 +68,14 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, tim
 		return err
 	}
 	if fontDir = resolveFontDir(fontDir); fontDir != "" {
-		if nt, ok := tmpl.(*normal.Template); ok {
-			nt.FontDir = fontDir
-			log.Printf("font overrides: %s", fontDir)
-		}
+		log.Printf("font overrides: %s", fontDir)
 	}
 
 	buf, err := tmpl.Render(ctx, template.RenderRequest{
-		Card:   data,
-		Art:    art,
-		Assets: assets,
+		Card:    data,
+		Art:     art,
+		Assets:  assets,
+		FontDir: fontDir,
 	})
 	if err != nil {
 		return err

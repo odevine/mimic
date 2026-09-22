@@ -1,4 +1,8 @@
-package normal
+// Package mana draws the braced codes a Magic card's mana cost and rules text
+// carry, like {R} or {T}, as the pips a printed card shows: a colored disc with
+// a Mana font icon on it. This is printed-card iconography, the same on any
+// frame, not the pixels of a particular template
+package mana
 
 import (
 	"image"
@@ -39,12 +43,14 @@ const (
 	glyphArtistNib = '' // the nib the artist credit opens with
 )
 
-// The pip's proportions. A symbol is centered near the middle of a capital, so
-// it dips just below the baseline and reaches about cap height. The diameter and
-// the rise are fractions of the text size, measured off a Scryfall scan of a
-// printed card
+// PipDiameter is a pip's diameter as a fraction of the text size it draws at,
+// measured off a Scryfall scan of a printed card. A caller sizing something
+// else against a pip, like the cost's drop shadow, scales off this
+const PipDiameter = 0.782
+
+// The pip's other proportions. A symbol is centered near the middle of a
+// capital, so it dips just below the baseline and reaches about cap height
 const (
-	pipDiameter = 0.782
 	// pipGap is the space after a pip, as a fraction of its own diameter, which
 	// keeps the symbols of a cost apart. The two together are the advance, which
 	// a printed card holds steady while the split between disc and gap varies a
@@ -193,12 +199,12 @@ func genericIcon(s string) (rune, bool) {
 	return 0, false
 }
 
-// manaSymbols draws the braced codes a card carries as the pips it prints: a
+// Symbols draws the braced codes a card carries as the pips it prints: a
 // colored disc with a Mana font icon on it. It satisfies
 // template.SymbolRenderer, so text layout places symbols without knowing any of
 // this. Faces and rasterized pips are cached, since a cost repeats symbols and
 // a card's rules text repeats them again
-type manaSymbols struct {
+type Symbols struct {
 	sizer *fonts.Sizer
 	mu    sync.Mutex
 	faces map[int]font.Face
@@ -211,16 +217,16 @@ type pipKey struct {
 	box  int
 }
 
-// newManaSymbols builds the renderer from the mana font in fontDir, or the
+// NewSymbols builds the renderer from the mana font in fontDir, or the
 // embedded one. It returns nil when no mana font resolves, which leaves braced
 // codes as their literal characters rather than drawing them in a face that has
 // no icons
-func newManaSymbols(fontDir string) *manaSymbols {
+func NewSymbols(fontDir string) *Symbols {
 	sizer := fonts.ResolveFont(fonts.Mana, fontDir)
 	if sizer.Fallback() {
 		return nil
 	}
-	return &manaSymbols{
+	return &Symbols{
 		sizer: sizer,
 		faces: map[int]font.Face{},
 		pips:  map[pipKey]*image.RGBA{},
@@ -230,23 +236,23 @@ func newManaSymbols(fontDir string) *manaSymbols {
 // Symbol reports the room code takes at a text size. It is arithmetic over a
 // table lookup, with nothing rasterized, so the shrink-to-fit search can measure
 // a box at as many sizes as it likes
-func (s *manaSymbols) Symbol(code string, size float64) (template.SymbolMetrics, bool) {
+func (s *Symbols) Symbol(code string, size float64) (template.SymbolMetrics, bool) {
 	if _, ok := lookupPip(code); !ok {
 		return template.SymbolMetrics{}, false
 	}
-	box := int(math.Round(size * pipDiameter))
+	box := int(math.Round(size * PipDiameter))
 	if box < 2 {
 		return template.SymbolMetrics{}, false
 	}
 	return template.SymbolMetrics{
-		Advance: f26(size * pipDiameter * (1 + pipGap)),
+		Advance: f26(size * PipDiameter * (1 + pipGap)),
 		Box:     box,
 		Ascent:  int(math.Round(size*pipRise)) + box/2,
 	}, true
 }
 
 // DrawSymbol paints code into dst, filling at
-func (s *manaSymbols) DrawSymbol(dst *image.RGBA, code string, at image.Rectangle) error {
+func (s *Symbols) DrawSymbol(dst *image.RGBA, code string, at image.Rectangle) error {
 	img, err := s.pipImage(code, at.Dx())
 	if err != nil || img == nil {
 		return err
@@ -258,7 +264,7 @@ func (s *manaSymbols) DrawSymbol(dst *image.RGBA, code string, at image.Rectangl
 // pipImage returns the rasterized pip for code at a box size, building it on
 // first use. It returns a nil image for a code with no artwork, which
 // DrawSymbol treats as nothing to paint
-func (s *manaSymbols) pipImage(code string, box int) (*image.RGBA, error) {
+func (s *Symbols) pipImage(code string, box int) (*image.RGBA, error) {
 	p, ok := lookupPip(code)
 	if !ok || box < 2 {
 		return nil, nil
@@ -280,7 +286,7 @@ func (s *manaSymbols) pipImage(code string, box int) (*image.RGBA, error) {
 // drawPip rasterizes one symbol at a box size: the disc through a circle mask,
 // then the icon over it. A hybrid draws both icons smaller, one in each half.
 // The caller holds the lock, so this may reach the face cache directly
-func (s *manaSymbols) drawPip(p pip, box int) (*image.RGBA, error) {
+func (s *Symbols) drawPip(p pip, box int) (*image.RGBA, error) {
 	img := image.NewRGBA(image.Rect(0, 0, box, box))
 	paintDisc(img, discMask(box), p)
 	center := float64(box) / 2
@@ -298,7 +304,7 @@ func (s *manaSymbols) drawPip(p pip, box int) (*image.RGBA, error) {
 // drawIcon paints one Mana font icon centered on (cx, cy) at an em size. Every
 // icon in the font is one em wide and centered iconRise above its baseline, so
 // the pen follows from the center alone
-func (s *manaSymbols) drawIcon(img *image.RGBA, r rune, em, cx, cy float64, ink color.Color) error {
+func (s *Symbols) drawIcon(img *image.RGBA, r rune, em, cx, cy float64, ink color.Color) error {
 	face, err := s.face(em)
 	if err != nil {
 		return err
@@ -311,7 +317,7 @@ func (s *manaSymbols) drawIcon(img *image.RGBA, r rune, em, cx, cy float64, ink 
 
 // face returns the mana face at a whole-pixel em, building it on first use. The
 // caller holds the lock
-func (s *manaSymbols) face(em float64) (font.Face, error) {
+func (s *Symbols) face(em float64) (font.Face, error) {
 	size := int(math.Round(em))
 	if size < 1 {
 		size = 1
@@ -408,34 +414,35 @@ func f26(v float64) fixed.Int26_6 {
 	return fixed.Int26_6(math.Round(v * 64))
 }
 
+// NibCode is the braced code an artist credit opens with to draw the nib.
+// Scryfall has no code for the nib, since it is part of a card's printing
+// rather than its rules, so this one is the engine's own
+const NibCode = "ARTIST"
+
 // The nib's proportions, measured off a printed card. Its em runs a little over
 // the text size, the glyph inks that whole em across, and the gap after it is
 // what holds the artist's name off it
 const (
-	// nibCode is the braced code the artist credit opens with. Scryfall has no
-	// code for the nib, since it is part of a card's printing rather than its
-	// rules, so this one is the engine's own
-	nibCode = "ARTIST"
-	nibEm   = 1.02
-	nibGap  = 0.2
+	nibEm  = 1.02
+	nibGap = 0.2
 	// nibRise is where the nib centers above the baseline, in ems of the nib. A
 	// printed card centers it on the capitals beside it, which this is measured
 	// to land on for the small-caps face the credit draws in
 	nibRise = 0.306
 )
 
-// artistNib draws the nib the artist credit opens with. It is flat ink in the
+// ArtistNib draws the nib an artist credit opens with. It is flat ink in the
 // line's own color rather than a pip, so it reads as part of the credit, and it
 // borrows the mana renderer's font and caches
-type artistNib struct {
-	sym *manaSymbols
-	ink color.Color
+type ArtistNib struct {
+	Sym *Symbols
+	Ink color.Color
 }
 
 // Symbol reports the room the nib takes at a text size, and nothing for any
 // other code, so an artist name that happens to hold braces keeps them
-func (n artistNib) Symbol(code string, size float64) (template.SymbolMetrics, bool) {
-	if code != nibCode {
+func (n ArtistNib) Symbol(code string, size float64) (template.SymbolMetrics, bool) {
+	if code != NibCode {
 		return template.SymbolMetrics{}, false
 	}
 	em := size * nibEm
@@ -451,12 +458,12 @@ func (n artistNib) Symbol(code string, size float64) (template.SymbolMetrics, bo
 }
 
 // DrawSymbol paints the nib into dst, centered on at
-func (n artistNib) DrawSymbol(dst *image.RGBA, code string, at image.Rectangle) error {
-	if code != nibCode || at.Dx() < 2 {
+func (n ArtistNib) DrawSymbol(dst *image.RGBA, code string, at image.Rectangle) error {
+	if code != NibCode || at.Dx() < 2 {
 		return nil
 	}
-	n.sym.mu.Lock()
-	defer n.sym.mu.Unlock()
+	n.Sym.mu.Lock()
+	defer n.Sym.mu.Unlock()
 	em := float64(at.Dx())
-	return n.sym.drawIcon(dst, glyphArtistNib, em, float64(at.Min.X)+em/2, float64(at.Min.Y)+em/2, n.ink)
+	return n.Sym.drawIcon(dst, glyphArtistNib, em, float64(at.Min.X)+em/2, float64(at.Min.Y)+em/2, n.Ink)
 }

@@ -40,34 +40,19 @@ const (
 	sourceExplicit
 )
 
-// buildTemplate constructs a fresh template instance and applies the font
-// override when one is present, the way the CLI does
-func buildTemplate(name string) (template.Template, error) {
-	tmpl, err := template.Get(name)
-	if err != nil {
-		return nil, err
-	}
-	if fontDir := resolveFontDir(); fontDir != "" {
-		if nt, ok := tmpl.(*normal.Template); ok {
-			nt.FontDir = fontDir
-		}
-	}
-	return tmpl, nil
-}
-
 // resolveActiveTemplate builds the startup template from a network-free fallback
 // chain: a loose developer directory, then the newest cached bundle, then
 // generated placeholders. It never blocks on the network, so a fresh offline
 // install still renders. The returned source lets the caller decide whether to
 // look for an update
 func resolveActiveTemplate(name string) (*activeTemplate, assetSource, error) {
-	tmpl, err := buildTemplate(name)
+	tmpl, err := template.Get(name)
 	if err != nil {
 		return nil, sourcePlaceholder, err
 	}
 	if dir := looseDir(name); dir != "" {
 		return &activeTemplate{
-			name: name, version: localVersion, template: tmpl,
+			name: name, version: localVersion, template: tmpl, fontDir: resolveFontDir(),
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, sourceLoose, nil
 	}
@@ -90,7 +75,7 @@ func resolveActiveTemplate(name string) (*activeTemplate, assetSource, error) {
 // cache (downloaded and verified when missing) and opened as a bundle. progress
 // may be nil
 func activeFromVersion(ctx context.Context, name, version string, progress func(done, total int64)) (*activeTemplate, error) {
-	tmpl, err := buildTemplate(name)
+	tmpl, err := template.Get(name)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +85,7 @@ func activeFromVersion(ctx context.Context, name, version string, progress func(
 			return nil, fmt.Errorf("no local assets for %q", name)
 		}
 		return &activeTemplate{
-			name: name, version: localVersion, template: tmpl,
+			name: name, version: localVersion, template: tmpl, fontDir: resolveFontDir(),
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, nil
 	}
@@ -140,7 +125,7 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*acti
 		return nil, err
 	}
 	return &activeTemplate{
-		name: name, version: version, template: tmpl,
+		name: name, version: version, template: tmpl, fontDir: resolveFontDir(),
 		provider: p, cleanup: func() { p.Close() },
 	}, nil
 }
@@ -161,7 +146,7 @@ func placeholderActive(name string, tmpl template.Template) (*activeTemplate, er
 		return nil, err
 	}
 	return &activeTemplate{
-		name: name, version: "", template: tmpl,
+		name: name, version: "", template: tmpl, fontDir: resolveFontDir(),
 		provider: template.NewFSAssetProvider(tmp), cleanup: func() { os.RemoveAll(tmp) },
 	}, nil
 }

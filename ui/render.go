@@ -21,7 +21,11 @@ type activeTemplate struct {
 	version  string
 	template template.Template
 	provider template.AssetProvider
-	cleanup  func()
+	// fontDir is the font-override directory resolved at construction time, if
+	// any, applied to every render request rather than stored on the template
+	// itself, since it is caller configuration rather than the template's own
+	fontDir string
+	cleanup func()
 }
 
 // renderPipeline holds the pieces reused across every render: the client that
@@ -79,9 +83,10 @@ func (p *renderPipeline) fetchArt(ctx context.Context, d *card.Data) (image.Imag
 func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image, progress func(step string, frac float64)) (image.Image, error) {
 	at := p.active.Load()
 	req := template.RenderRequest{
-		Card:   d,
-		Art:    art,
-		Assets: at.provider,
+		Card:    d,
+		Art:     art,
+		Assets:  at.provider,
+		FontDir: at.fontDir,
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to

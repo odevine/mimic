@@ -29,6 +29,16 @@ type RenderRequest struct {
 	// Progress, when set, receives step updates during the render. Nil disables
 	// reporting, which is the common case for a batch or a headless render
 	Progress ProgressFunc
+	// FontDir is an optional directory of user-supplied font overrides, one
+	// file per role subfolder (title, body, body-italic, mana, type, info). An
+	// empty FontDir uses the engine's embedded defaults. It is caller
+	// configuration rather than the card's own data, so it travels on the
+	// request instead of a template's own struct, which every template gets
+	// for free
+	FontDir string
+	// Copyright is the boilerplate line a card's bottom carries. An empty
+	// Copyright builds the printed one from the card's own year
+	Copyright string
 }
 
 // Report forwards a progress update when a callback is set, so a template's call

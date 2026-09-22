@@ -20,7 +20,7 @@ const (
 )
 
 // placeholderColors gives each color key a flat fill for its background layer.
-// The keys are the color keys deriveFrame produces for background
+// The keys are the color keys frame.Derive produces for background
 var placeholderColors = map[string]color.NRGBA{
 	"w":         {0xF8, 0xF6, 0xD8, 0xFF},
 	"u":         {0xB5, 0xD7, 0xE9, 0xFF},

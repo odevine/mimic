@@ -7,17 +7,17 @@ import (
 	"image/color"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/odevine/impasto/blend"
 	"github.com/odevine/impasto/canvas"
 	"github.com/odevine/impasto/effects"
 	"github.com/odevine/impasto/raster"
-	xdraw "golang.org/x/image/draw"
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/fonts"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/mana"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -44,22 +44,10 @@ func init() {
 	template.Register(templateName, func() template.Template { return &Template{} })
 }
 
-// Template renders a card with the Normal frame
-type Template struct {
-	// FontDir is an optional directory of user-supplied font overrides. A file
-	// named for its role (Beleren, Plantin) is used ahead of the embedded
-	// default. An empty FontDir uses the embedded defaults
-	FontDir string
-	// Copyright is the boilerplate line at the card bottom. An empty Copyright
-	// builds the printed one from the card's own year
-	Copyright string
-}
-
-// The two halves of the bottom line, with the printing's year between them
-const (
-	copyrightMarks  = "™ & ©"
-	copyrightHolder = "Wizards of the Coast"
-)
+// Template renders a card with the Normal frame. It carries no state of its
+// own: FontDir and Copyright travel on the RenderRequest, since they are
+// caller configuration rather than anything specific to this frame
+type Template struct{}
 
 // hollowCrownEnabled turns on the nyx hollow-crown knockout. Off for now while a
 // missing layer is tracked down, the knockout code stays in place for the revisit
@@ -99,7 +87,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 	req.Report(stepManifest, fracManifest)
 
-	f := deriveFrame(req.Card)
+	f := frame.Derive(req.Card)
 
 	layersByName := make(map[string]template.LayerSpec, len(m.Layers))
 	for _, l := range m.Layers {
@@ -112,18 +100,18 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			return nil, err
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
-		if !f.conditionMet(layer.Condition) {
+		if !conditionMet(f, layer.Condition) {
 			continue
 		}
 		// An enchantment draws the nyx frame in the background slot, so it sits
 		// below the art and follows the same color key as the background
 		variants := layer.ColorVariants
-		if layer.Name == "background" && f.nyx {
+		if layer.Name == "background" && f.Nyx {
 			if nyx, ok := layersByName["nyx"]; ok {
 				variants = nyx.ColorVariants
 			}
 		}
-		asset, ok := variants[f.keyForLayer(layer.Name)]
+		asset, ok := variants[keyForLayer(f, layer.Name)]
 		if !ok {
 			asset, ok = variants["any"]
 		}
@@ -132,11 +120,11 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			// lets a manifest leave a layer out where it does not apply
 			continue
 		}
-		placed, err := loadLayer(req.Assets, asset.Path, m.Width, m.Height)
+		placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height)
 		if err != nil {
 			return nil, err
 		}
-		mode, err := blendMode(layer.Blend)
+		mode, err := template.BlendMode(layer.Blend)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +132,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		// An enchantment legend gets a hollow crown: erase the crown and the
 		// shadow beneath it where the nyx frame shows through, keeping the edge.
 		// Off pending a missing layer, the knockout code is kept for that revisit
-		if hollowCrownEnabled && (layer.Name == "legendary_crown" || layer.Name == "shadows") && f.nyx && f.legendary {
+		if hollowCrownEnabled && (layer.Name == "legendary_crown" || layer.Name == "shadows") && f.Nyx && f.Legendary {
 			if err := knockoutHollowRegion(req.Assets, m, placed); err != nil {
 				return nil, err
 			}
@@ -153,7 +141,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		nodes = append(nodes, &canvas.Layer{Content: placed, Mode: mode})
 
 		if req.Art != nil && m.Art.After == layer.Name {
-			art := fitArt(req.Art, m.Art.Width, m.Art.Height)
+			art := template.FitArt(req.Art, m.Art.Width, m.Art.Height)
 			artBuf, err := raster.FromImage(art)
 			if err != nil {
 				return nil, fmt.Errorf("normal: wrapping art: %w", err)
@@ -167,14 +155,14 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	// once for the card rather than once per box. The artist credit draws from
 	// that same font but in its own box color, so it takes a renderer beside it
 	var syms symbols
-	if ms := newManaSymbols(t.FontDir); ms != nil {
+	if ms := mana.NewSymbols(req.FontDir); ms != nil {
 		syms.mana = ms
 		if box, ok := m.TextBoxes["artist"]; ok {
-			syms.artist = artistNib{sym: ms, ink: template.ParseHexColor(box.Color)}
+			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.Color)}
 		}
 	}
 
-	cost, err := t.costSpan(m, req.Card, syms)
+	cost, err := costSpan(m, req.Card, syms, req.FontDir)
 	if err != nil {
 		return nil, fmt.Errorf("normal: measuring the mana cost: %w", err)
 	}
@@ -182,7 +170,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	boxNames := sortedKeys(m.TextBoxes)
 	for i, name := range boxNames {
 		req.Report(stepText, lerp(fracTextFrom, fracTextTo, i, len(boxNames)))
-		parts := t.textParts(name, req.Card, syms)
+		parts := textParts(name, req.Card, syms, req.FontDir, req.Copyright)
 		if len(parts) == 0 {
 			continue
 		}
@@ -192,9 +180,9 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			box = manaBox(box)
 		case name == "title":
 			box = titleClearOf(box, cost)
-		case name == "copyright" && f.creature:
+		case name == "copyright" && f.Creature:
 			box = copyrightOnArtistRow(box, m)
-		case name == "oracle" && f.creature:
+		case name == "oracle" && f.Creature:
 			if pt, ok := ptBoxRect(req.Assets, layersByName, f); ok {
 				box.Avoid = pt
 			}
@@ -214,7 +202,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		nodes = append(nodes, text)
 
 		if res.HasDivider {
-			div, err := dividerLayer(req.Assets, m, res.DividerY)
+			div, err := template.Divider(req.Assets, m, res.DividerY)
 			if err != nil {
 				return nil, err
 			}
@@ -244,62 +232,15 @@ func lerp(from, to float64, i, n int) float64 {
 	return from + (to-from)*float64(i+1)/float64(n)
 }
 
-// loadLayer decodes a layer PNG and places it at the document origin. Frame
-// layers are authored document-sized, so the origin placement leaves them where
-// the artwork put them
-func loadLayer(p template.AssetProvider, path string, w, h int) (*raster.Buffer, error) {
-	img, err := template.LoadImage(p, path)
-	if err != nil {
-		return nil, err
-	}
-	buf, err := raster.FromImage(img)
-	if err != nil {
-		return nil, fmt.Errorf("normal: wrapping layer %q: %w", path, err)
-	}
-	return canvas.Place(w, h, buf, 0, 0), nil
-}
-
-// dividerLayer builds the floating flavor divider. The divider asset bakes a
-// thin graphic into an otherwise transparent full-document image, so this crops
-// that strip to its opaque bounds and places its center at centerY, the
-// document Y the text layout reported for the divider. It returns nil when the
-// manifest carries no divider asset, so a template without one still renders
-func dividerLayer(p template.AssetProvider, m *template.Manifest, centerY int) (*canvas.Layer, error) {
-	path := layerAssetPath(m, "divider")
-	if path == "" {
-		return nil, nil
-	}
-	img, err := template.LoadImage(p, path)
-	if err != nil {
-		return nil, err
-	}
-	strip := opaqueBounds(img)
-	if strip.Empty() {
-		return nil, nil
-	}
-	sub, ok := img.(interface {
-		SubImage(image.Rectangle) image.Image
-	})
-	if !ok {
-		return nil, fmt.Errorf("normal: divider asset %q does not support cropping", path)
-	}
-	buf, err := raster.FromImage(sub.SubImage(strip))
-	if err != nil {
-		return nil, fmt.Errorf("normal: wrapping divider: %w", err)
-	}
-	placed := canvas.Place(m.Width, m.Height, buf, strip.Min.X, centerY-strip.Dy()/2)
-	return &canvas.Layer{Content: placed, Mode: blend.Normal}, nil
-}
-
 // ptBoxRect returns where the P/T box graphic draws, so a creature's rules text
 // can keep out of it while still using the whole height of its own box. It
 // reports false when the P/T box layer or its asset is missing or transparent
-func ptBoxRect(p template.AssetProvider, layers map[string]template.LayerSpec, f frame) (image.Rectangle, bool) {
+func ptBoxRect(p template.AssetProvider, layers map[string]template.LayerSpec, f frame.Keys) (image.Rectangle, bool) {
 	spec, ok := layers["pt_box"]
 	if !ok {
 		return image.Rectangle{}, false
 	}
-	path := spec.ColorVariants[f.ptBox].Path
+	path := spec.ColorVariants[f.PTBox].Path
 	if path == "" {
 		path = spec.ColorVariants["any"].Path
 	}
@@ -310,7 +251,7 @@ func ptBoxRect(p template.AssetProvider, layers map[string]template.LayerSpec, f
 	if err != nil {
 		return image.Rectangle{}, false
 	}
-	b := opaqueBounds(img)
+	b := template.OpaqueBounds(img)
 	if b.Empty() {
 		return image.Rectangle{}, false
 	}
@@ -324,11 +265,11 @@ func ptBoxRect(p template.AssetProvider, layers map[string]template.LayerSpec, f
 // where the sky shows, so its alpha is the keep factor. It is a no-op when the
 // shadow asset is absent
 func knockoutHollowRegion(p template.AssetProvider, m *template.Manifest, buf *raster.Buffer) error {
-	path := layerAssetPath(m, "hollow_crown_shadow")
+	path := template.LayerAssetPath(m, "hollow_crown_shadow")
 	if path == "" {
 		return nil
 	}
-	shadow, err := loadLayer(p, path, m.Width, m.Height)
+	shadow, err := template.LoadLayer(p, path, m.Width, m.Height)
 	if err != nil {
 		return err
 	}
@@ -344,50 +285,6 @@ func knockoutHollowRegion(p template.AssetProvider, m *template.Manifest, buf *r
 		buf.Pix[j+3] *= keep
 	}
 	return nil
-}
-
-// layerAssetPath returns the color-invariant "any" asset path for a named
-// layer, or "" when the layer or that variant is absent
-func layerAssetPath(m *template.Manifest, name string) string {
-	for _, l := range m.Layers {
-		if l.Name == name {
-			return l.ColorVariants["any"].Path
-		}
-	}
-	return ""
-}
-
-// opaqueBounds is the smallest rectangle covering every pixel of img with any
-// alpha, the extent of a graphic baked into an otherwise transparent image. It
-// returns the empty rectangle when img is fully transparent
-func opaqueBounds(img image.Image) image.Rectangle {
-	b := img.Bounds()
-	minX, minY := b.Max.X, b.Max.Y
-	maxX, maxY := b.Min.X, b.Min.Y
-	found := false
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			if _, _, _, a := img.At(x, y).RGBA(); a > 0 {
-				found = true
-				if x < minX {
-					minX = x
-				}
-				if y < minY {
-					minY = y
-				}
-				if x >= maxX {
-					maxX = x + 1
-				}
-				if y >= maxY {
-					maxY = y + 1
-				}
-			}
-		}
-	}
-	if !found {
-		return image.Rectangle{}
-	}
-	return image.Rect(minX, minY, maxX, maxY)
 }
 
 // roleFor returns the font role a named box draws in, defaulting to the body
@@ -410,27 +307,6 @@ func normalizeForBasicFont(s string) string {
 	return basicFontReplacer.Replace(s)
 }
 
-// fitArt scales art to cover a w by h window, preserving aspect ratio and
-// cropping the overflow so any source art fills the window. A non-positive
-// window returns the art unchanged, leaving it at native size
-func fitArt(src image.Image, w, h int) image.Image {
-	if w <= 0 || h <= 0 {
-		return src
-	}
-	sb := src.Bounds()
-	sw, sh := sb.Dx(), sb.Dy()
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	if sw <= 0 || sh <= 0 {
-		return dst
-	}
-	scale := math.Max(float64(w)/float64(sw), float64(h)/float64(sh))
-	dw := int(math.Round(float64(sw) * scale))
-	dh := int(math.Round(float64(sh) * scale))
-	offset := image.Rect((w-dw)/2, (h-dh)/2, (w-dw)/2+dw, (h-dh)/2+dh)
-	xdraw.CatmullRom.Scale(dst, offset, src, sb, xdraw.Over, nil)
-	return dst
-}
-
 // symbols are the renderers a card's boxes draw braced codes through: the pips
 // for the cost and the rules text, the nib for the artist credit. Either may be
 // nil, which leaves a code as its literal characters
@@ -445,32 +321,32 @@ type symbols struct {
 // and the rules text are where a card's own symbols appear, and the artist
 // credit opens with the nib the engine prepends, so those are the parts that
 // carry a renderer
-func (t *Template) textParts(name string, d *card.Data, syms symbols) []template.TextPart {
+func textParts(name string, d *card.Data, syms symbols, fontDir, copyrightOverride string) []template.TextPart {
 	if name == "oracle" {
 		var parts []template.TextPart
-		if p, ok := t.part(d.OracleText, fonts.Body); ok {
+		if p, ok := part(d.OracleText, fonts.Body, fontDir); ok {
 			// Parenthesized reminder text and leading ability or flavor words
 			// italicize, while keyword abilities stay roman
-			p.Emph = fonts.ResolveFont(fonts.BodyItalic, t.FontDir)
+			p.Emph = fonts.ResolveFont(fonts.BodyItalic, fontDir)
 			p.EmphLead = card.EmphasisWords
 			p.Sym = syms.mana
 			parts = append(parts, p)
 		}
-		if p, ok := t.part(d.FlavorText, fonts.BodyItalic); ok {
+		if p, ok := part(d.FlavorText, fonts.BodyItalic, fontDir); ok {
 			parts = append(parts, p)
 		}
 		return parts
 	}
-	text := textFor(name, d)
+	text := card.TextFor(name, d)
 	switch {
 	case name == "copyright":
-		text = t.copyright(d)
+		text = card.CopyrightLine(copyrightOverride, d)
 	case name == "artist" && syms.artist != nil && text != "":
 		// The nib sits flush against the name, so the code carries no space and
 		// the symbol's own advance opens the gap
-		text = "{" + nibCode + "}" + text
+		text = "{" + mana.NibCode + "}" + text
 	}
-	p, ok := t.part(text, roleFor(name))
+	p, ok := part(text, roleFor(name), fontDir)
 	if !ok {
 		return nil
 	}
@@ -483,123 +359,17 @@ func (t *Template) textParts(name string, d *card.Data, syms symbols) []template
 	return []template.TextPart{p}
 }
 
-// copyright is the bottom line: the printing's year between the symbols and the
-// holder, the way a card prints it. A Template's own Copyright stands in whole,
-// and a printing with no date drops the year rather than guessing one
-func (t *Template) copyright(d *card.Data) string {
-	if t.Copyright != "" {
-		return t.Copyright
-	}
-	if year := d.Year(); year != "" {
-		return copyrightMarks + " " + year + " " + copyrightHolder
-	}
-	return copyrightMarks + " " + copyrightHolder
-}
-
 // part resolves a font for role and pairs it with text, normalizing the text
 // when the font falls back to the basic face. It reports false for empty text
-func (t *Template) part(text string, role fonts.Role) (template.TextPart, bool) {
+func part(text string, role fonts.Role, fontDir string) (template.TextPart, bool) {
 	if strings.TrimSpace(text) == "" {
 		return template.TextPart{}, false
 	}
-	sizer := fonts.ResolveFont(role, t.FontDir)
+	sizer := fonts.ResolveFont(role, fontDir)
 	if sizer.Fallback() {
 		text = normalizeForBasicFont(text)
 	}
 	return template.TextPart{Text: text, Src: sizer}, true
-}
-
-// textFor returns the card text for a named box. Unknown names return empty so
-// a manifest can define boxes this mapping does not fill. The oracle box is
-// built by textParts, so its case here covers only a direct lookup
-func textFor(name string, d *card.Data) string {
-	switch name {
-	case "title":
-		return d.Name
-	case "mana":
-		return d.ManaCost
-	case "type":
-		return d.TypeLine
-	case "oracle":
-		// textParts builds the oracle box from rules and flavor as separate
-		// styled parts, so this direct lookup returns the rules text alone
-		return d.OracleText
-	case "pt":
-		switch {
-		case d.Loyalty != "":
-			return d.Loyalty
-		case d.Power != "" || d.Toughness != "":
-			return d.Power + "/" + d.Toughness
-		default:
-			return ""
-		}
-	case "artist":
-		return d.Artist
-	case "collector":
-		return collectorLine(d)
-	case "set":
-		return setLine(d)
-	default:
-		return ""
-	}
-}
-
-// collectorLine formats the rarity and collector number, as "R 0177". Real cards
-// print the set total after the number ("0177/302"), which Scryfall's card data
-// does not carry, so it is left out
-func collectorLine(d *card.Data) string {
-	num := padCollectorNumber(d.CollectorNumber)
-	if num == "" {
-		return ""
-	}
-	if letter := rarityLetter(d.Rarity); letter != "" {
-		return letter + " " + num
-	}
-	return num
-}
-
-// padCollectorNumber left-pads a purely numeric collector number to four digits,
-// so 177 reads as 0177. A number carrying a non-digit part is left as is
-func padCollectorNumber(n string) string {
-	if v, err := strconv.Atoi(n); err == nil {
-		return fmt.Sprintf("%04d", v)
-	}
-	return n
-}
-
-// rarityLetter is the single-letter rarity code the collector line prints
-func rarityLetter(rarity string) string {
-	switch strings.ToLower(rarity) {
-	case "common":
-		return "C"
-	case "uncommon":
-		return "U"
-	case "rare":
-		return "R"
-	case "mythic":
-		return "M"
-	case "special":
-		return "S"
-	case "bonus":
-		return "B"
-	case "":
-		return ""
-	default:
-		return strings.ToUpper(rarity[:1])
-	}
-}
-
-// setLine formats the set code and printing language, as "A25 • EN", defaulting
-// to English when the card carries no language
-func setLine(d *card.Data) string {
-	if d.SetCode == "" {
-		return ""
-	}
-	lang := strings.ToUpper(d.Language)
-	if lang == "" {
-		lang = "EN"
-	}
-	return strings.ToUpper(d.SetCode) + " • " + lang
 }
 
 // titleCostGap is the space kept between the card name and the mana cost, as a
@@ -632,7 +402,7 @@ func costShadow(size float64) *effects.DropShadow {
 		Color:    color.Black,
 		Opacity:  1,
 		Angle:    float32(angle),
-		Distance: float32(size * pipDiameter * costShadowDrop),
+		Distance: float32(size * mana.PipDiameter * costShadowDrop),
 	}
 }
 
@@ -647,12 +417,12 @@ func manaBox(box template.TextBoxSpec) template.TextBoxSpec {
 // costSpan reports where the mana cost lands in the title bar, which is what
 // the name has to stop short of. A card with no cost, or a template with no
 // mana box, measures to an empty span
-func (t *Template) costSpan(m *template.Manifest, d *card.Data, syms symbols) (template.TextSpan, error) {
+func costSpan(m *template.Manifest, d *card.Data, syms symbols, fontDir string) (template.TextSpan, error) {
 	box, ok := m.TextBoxes["mana"]
 	if !ok {
 		return template.TextSpan{}, nil
 	}
-	parts := t.textParts("mana", d, syms)
+	parts := textParts("mana", d, syms, fontDir, "")
 	if len(parts) == 0 {
 		return template.TextSpan{}, nil
 	}
@@ -683,48 +453,6 @@ func copyrightOnArtistRow(box template.TextBoxSpec, m *template.Manifest) templa
 		box.Y = artist.Y
 	}
 	return box
-}
-
-// blendMode maps a manifest blend name to an impasto mode. An empty name is
-// Normal, an unrecognized one is an error so a manifest typo is not silently
-// composited the wrong way
-func blendMode(name string) (blend.Mode, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "normal":
-		return blend.Normal, nil
-	case "multiply":
-		return blend.Multiply, nil
-	case "screen":
-		return blend.Screen, nil
-	case "overlay":
-		return blend.Overlay, nil
-	case "softlight":
-		return blend.SoftLight, nil
-	case "hardlight":
-		return blend.HardLight, nil
-	case "colordodge":
-		return blend.ColorDodge, nil
-	case "colorburn":
-		return blend.ColorBurn, nil
-	case "darken":
-		return blend.Darken, nil
-	case "lighten":
-		return blend.Lighten, nil
-	case "difference":
-		return blend.Difference, nil
-	case "exclusion":
-		return blend.Exclusion, nil
-	case "hue":
-		return blend.Hue, nil
-	case "saturation":
-		return blend.Saturation, nil
-	case "color":
-		return blend.Color, nil
-	case "luminosity":
-		return blend.Luminosity, nil
-	default:
-		return blend.Normal, fmt.Errorf("normal: unknown blend mode %q", name)
-	}
 }
 
 func sortedKeys(m map[string]template.TextBoxSpec) []string {

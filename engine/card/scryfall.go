@@ -23,6 +23,7 @@ import (
 const (
 	defaultTimeout      = 15 * time.Second
 	defaultMaxCardBytes = 1 << 20  // 1MB, real card JSON is a few KB
+	defaultMaxListBytes = 16 << 20 // 16MB, a full search page is up to 175 cards
 	defaultMaxArtBytes  = 64 << 20 // 64MB, a real card-art image is a few MB
 	defaultBaseURL      = "https://api.scryfall.com"
 	userAgent           = "mimic/0.1 (+https://github.com/odevine/mimic)"
@@ -33,6 +34,7 @@ type Client struct {
 	httpClient   *http.Client
 	baseURL      string
 	maxCardBytes int64
+	maxListBytes int64
 	maxArtBytes  int64
 }
 
@@ -48,6 +50,9 @@ func WithBaseURL(u string) Option { return func(c *Client) { c.baseURL = u } }
 // WithMaxCardBytes overrides the bound on a card JSON response
 func WithMaxCardBytes(n int64) Option { return func(c *Client) { c.maxCardBytes = n } }
 
+// WithMaxListBytes overrides the bound on a search list JSON response
+func WithMaxListBytes(n int64) Option { return func(c *Client) { c.maxListBytes = n } }
+
 // WithMaxArtBytes overrides the bound on an art download
 func WithMaxArtBytes(n int64) Option { return func(c *Client) { c.maxArtBytes = n } }
 
@@ -57,6 +62,7 @@ func NewClient(opts ...Option) *Client {
 		httpClient:   &http.Client{Timeout: defaultTimeout},
 		baseURL:      defaultBaseURL,
 		maxCardBytes: defaultMaxCardBytes,
+		maxListBytes: defaultMaxListBytes,
 		maxArtBytes:  defaultMaxArtBytes,
 	}
 	for _, opt := range opts {
@@ -94,6 +100,46 @@ func (c *Client) FetchByName(ctx context.Context, name string) (*Data, error) {
 		return nil, fmt.Errorf("scryfall: decoding card %q: %w", name, err)
 	}
 	return sc.toData(), nil
+}
+
+// Search runs a query through Scryfall's full search syntax and returns the
+// first page of matches. A query with no matches is not an error, Scryfall
+// answers it with a 404, so this returns an empty slice and nil. Later pages
+// are ignored, the first page holds up to 175 cards
+func (c *Client) Search(ctx context.Context, query string) ([]*Data, error) {
+	endpoint := c.baseURL + "/cards/search?q=" + url.QueryEscape(query)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("scryfall: searching %q: %w", query, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("scryfall: searching %q: unexpected status %s", query, resp.Status)
+	}
+
+	body, err := readBounded(resp.Body, c.maxListBytes)
+	if err != nil {
+		return nil, fmt.Errorf("scryfall: reading search %q: %w", query, err)
+	}
+	var list scryfallList
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, fmt.Errorf("scryfall: decoding search %q: %w", query, err)
+	}
+	out := make([]*Data, 0, len(list.Data))
+	for _, sc := range list.Data {
+		out = append(out, sc.toData())
+	}
+	return out, nil
 }
 
 // FetchArt downloads and decodes the card's art_crop image. It is separate

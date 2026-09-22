@@ -25,6 +25,12 @@ type scryfallCard struct {
 	CardFaces       []face    `json:"card_faces"`
 }
 
+// scryfallList is the subset of Scryfall's list response the search endpoint
+// returns. Only the first page is read, so has_more and next_page are ignored
+type scryfallList struct {
+	Data []scryfallCard `json:"data"`
+}
+
 type imageURIs struct {
 	ArtCrop string `json:"art_crop"`
 }

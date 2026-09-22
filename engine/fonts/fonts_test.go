@@ -176,3 +176,29 @@ func TestManaFaceHasPrivateUseGlyphs(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRole(t *testing.T) {
+	cases := map[string]Role{
+		"title":       Title,
+		"body":        Body,
+		"body-italic": BodyItalic,
+		"mana":        Mana,
+		"small-caps":  SmallCaps,
+		"info":        Info,
+	}
+	for name, want := range cases {
+		got, ok := ParseRole(name)
+		if !ok {
+			t.Errorf("ParseRole(%q) reported false, want %v", name, want)
+			continue
+		}
+		if got != want {
+			t.Errorf("ParseRole(%q) = %v, want %v", name, got, want)
+		}
+	}
+	for _, name := range []string{"", "bold", "TITLE"} {
+		if _, ok := ParseRole(name); ok {
+			t.Errorf("ParseRole(%q) reported true, want false", name)
+		}
+	}
+}

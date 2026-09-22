@@ -58,45 +58,75 @@ type Template interface {
 	Render(ctx context.Context, req RenderRequest) (*raster.Buffer, error)
 }
 
+// Registration is what a template records about itself beyond how to build
+// one: its name and a short description a person choosing a template can
+// read, returned by List
+type Registration struct {
+	Name        string
+	Description string
+}
+
+type registryEntry struct {
+	description string
+	factory     func() Template
+}
+
 var (
 	registryMu sync.RWMutex
-	registry   = map[string]func() Template{}
+	registry   = map[string]registryEntry{}
 )
 
-// Register records a template factory under name. It is meant to be called
-// from an implementation's init(). It panics on a duplicate name or a nil
-// factory, since both are programming errors visible at startup
-func Register(name string, factory func() Template) {
+// Register records a template factory under name, with a short description
+// for a ui to show whoever is choosing a template. It is meant to be called
+// from an implementation's init(). It panics on a duplicate name, a nil
+// factory, or an empty description, since all three are programming errors
+// visible at startup
+func Register(name, description string, factory func() Template) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if factory == nil {
 		panic("template: Register factory is nil for " + name)
 	}
+	if description == "" {
+		panic("template: Register description is empty for " + name)
+	}
 	if _, dup := registry[name]; dup {
 		panic("template: Register called twice for " + name)
 	}
-	registry[name] = factory
+	registry[name] = registryEntry{description: description, factory: factory}
 }
 
 // Get constructs a fresh template by name, or reports that none is registered
 func Get(name string) (Template, error) {
 	registryMu.RLock()
-	factory, ok := registry[name]
+	entry, ok := registry[name]
 	registryMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("template: no template registered as %q", name)
 	}
-	return factory(), nil
+	return entry.factory(), nil
 }
 
 // Names lists the registered template names, sorted
 func Names() []string {
-	registryMu.RLock()
-	names := make([]string, 0, len(registry))
-	for name := range registry {
-		names = append(names, name)
+	list := List()
+	names := make([]string, len(list))
+	for i, r := range list {
+		names[i] = r.Name
 	}
-	registryMu.RUnlock()
-	sort.Strings(names)
 	return names
+}
+
+// List reports every registered template's name and description, sorted by
+// name, so a ui can show a person what each template is without constructing
+// one
+func List() []Registration {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	out := make([]Registration, 0, len(registry))
+	for name, entry := range registry {
+		out = append(out, Registration{Name: name, Description: entry.description})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }

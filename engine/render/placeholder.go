@@ -1,4 +1,4 @@
-package normal
+package render
 
 import (
 	"encoding/json"
@@ -11,9 +11,9 @@ import (
 	"github.com/odevine/mimic/engine/template"
 )
 
-// Placeholder canvas size. It is a stand-in at a demo resolution, not the real
-// Normal template geometry (3264x4440), which is measured and calibrated once
-// real assets are extracted
+// Placeholder canvas size. It is a stand-in at a demo resolution, not a real
+// frame's geometry, which is measured and calibrated once real assets are
+// extracted
 const (
 	placeholderWidth  = 744
 	placeholderHeight = 1039
@@ -33,11 +33,12 @@ var placeholderColors = map[string]color.NRGBA{
 	"land":      {0xC3, 0xA8, 0x7F, 0xFF},
 }
 
-// WritePlaceholderAssets writes a manifest and flat-colored layer PNGs into dir,
-// giving the pipeline a full asset set to render against before real frame art
-// exists. The layers mirror the Normal PSD's group structure at a coarse level:
-// a color-keyed background, a text panel, and a legendary crown
-func WritePlaceholderAssets(dir string) error {
+// WritePlaceholderAssets writes a manifest and flat-colored layer PNGs into
+// dir under name, giving the pipeline a full asset set to render against
+// before a template's real frame art exists. The layers are a coarse WUBRG
+// frame at demo resolution: a color-keyed background, a text panel, and a
+// legendary crown
+func WritePlaceholderAssets(dir, name string) error {
 	layersDir := filepath.Join(dir, "layers")
 	if err := os.MkdirAll(layersDir, 0o755); err != nil {
 		return err
@@ -65,11 +66,11 @@ func WritePlaceholderAssets(dir string) error {
 	}
 
 	m := template.Manifest{
-		Template: templateName,
+		Template: name,
 		Width:    placeholderWidth,
 		Height:   placeholderHeight,
 		Layers: []template.LayerSpec{
-			{Name: "background", ColorVariants: bg},
+			{Name: "background", ColorSlot: "background", ColorVariants: bg},
 			{Name: "textbox", ColorVariants: map[string]template.LayerAsset{
 				"any": {Path: "layers/textbox.png"},
 			}},
@@ -78,11 +79,11 @@ func WritePlaceholderAssets(dir string) error {
 			}},
 		},
 		TextBoxes: map[string]template.TextBoxSpec{
-			"title":  {X: 48, Y: 40, Width: 520, Height: 52, FontSize: 38, Align: "left", Color: "#111111"},
-			"mana":   {X: 500, Y: 46, Width: 208, Height: 44, FontSize: 28, Align: "right", Color: "#111111"},
-			"type":   {X: 48, Y: 566, Width: 648, Height: 34, FontSize: 24, Align: "left", Color: "#111111"},
+			"title":  {X: 48, Y: 40, Width: 520, Height: 52, FontSize: 38, Align: "left", Color: "#111111", Font: "title", ClearOf: "mana"},
+			"mana":   {X: 500, Y: 46, Width: 208, Height: 44, FontSize: 28, MinFontSize: 28, Align: "right", Color: "#111111"},
+			"type":   {X: 48, Y: 566, Width: 648, Height: 34, FontSize: 24, Align: "left", Color: "#111111", Font: "title"},
 			"oracle": {X: 72, Y: 636, Width: 600, Height: 320, FontSize: 24, Align: "left", Color: "#111111"},
-			"pt":     {X: 596, Y: 946, Width: 112, Height: 56, FontSize: 34, Align: "center", Color: "#111111"},
+			"pt":     {X: 596, Y: 946, Width: 112, Height: 56, FontSize: 34, Align: "center", Color: "#111111", Font: "title"},
 		},
 		Art: template.ArtSlot{X: 60, Y: 132, Width: 624, Height: 424, After: "background"},
 	}

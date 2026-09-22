@@ -31,9 +31,16 @@ type Manifest struct {
 // matching the order layers are appended into a canvas group
 type LayerSpec struct {
 	Name string `json:"name"`
-	// Condition is "", "legendary", "nonlegendary", "land", "nonland", or a
-	// color key. Its vocabulary is defined by the template that reads it
+	// Condition is one of the engine's fixed vocabulary: "", "legendary",
+	// "nonlegendary", "land", "nonland", "creature", or a value the engine
+	// does not yet drive (nyx, companion, hollow_crown, fullart,
+	// color_indicator, divider, pt_dark), which renders the layer off
 	Condition string `json:"condition,omitempty"`
+	// ColorSlot names which of a WUBRG frame's slots (background, pinlines,
+	// twins, ptBox, crown) this layer's color key comes from; see
+	// engine/frame. Empty means the layer carries only a color-invariant
+	// "any" variant, such as a border or a divider
+	ColorSlot string `json:"colorSlot,omitempty"`
 	// ColorVariants is keyed by color key ("w", "gold", "land", ...). The key
 	// "any" is the color-invariant fallback
 	ColorVariants map[string]LayerAsset `json:"colorVariants"`
@@ -87,6 +94,34 @@ type TextBoxSpec struct {
 	// adds 0.125em after each glyph. Zero draws with the face's own advances.
 	// It applies to the drawn pen and to each token's measured width
 	Tracking float64 `json:"tracking,omitempty"`
+	// Font names the font role this box draws in: "title", "body",
+	// "body-italic", "mana", "small-caps", or "info" (see engine/fonts).
+	// Empty, or a name the engine does not recognize, draws in the body role
+	Font string `json:"font,omitempty"`
+	// AvoidLayer names a layer this box's ink keeps clear of, the way a
+	// creature's rules text steps around its P/T box. The engine resolves
+	// the named layer the same way the main compositing pass would (its own
+	// Condition and ColorSlot), so a box asking to avoid a layer that does
+	// not render for this card gets its full room back
+	AvoidLayer string `json:"avoidLayer,omitempty"`
+	// ClearOf names another box this one narrows to stay clear of, the way a
+	// card's name gives way to its mana cost. It only ever narrows, so a
+	// card whose named box leaves room keeps the width the manifest gave it
+	ClearOf string `json:"clearOf,omitempty"`
+	// ClearGap is the gap kept from the box named by ClearOf, as a fraction
+	// of this box's own FontSize. Zero or less defaults to 0.5
+	ClearGap float64 `json:"clearGap,omitempty"`
+	// Shadow, when set, draws a solid offset copy of this box's ink behind
+	// it, the way a printed card's mana cost casts a hard shadow rather than
+	// a soft one. A box with no Shadow draws no shadow at all
+	Shadow *ShadowSpec `json:"shadow,omitempty"`
+	// DuckLayer names a layer whose presence for this card, resolved the
+	// same way AvoidLayer is, moves this box to the row named by DuckRow,
+	// the way a copyright line ducks under the artist row on a creature
+	// whose P/T box would otherwise collide with it in the collector row.
+	// Both must be set for either to take effect
+	DuckLayer string `json:"duckLayer,omitempty"`
+	DuckRow   string `json:"duckRow,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above

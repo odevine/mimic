@@ -43,6 +43,26 @@ const (
 	Info
 )
 
+// roleNames maps a manifest's Font string to the Role it names, so a text box
+// declares its font role as data rather than a template mapping box names to
+// roles in Go
+var roleNames = map[string]Role{
+	"title":       Title,
+	"body":        Body,
+	"body-italic": BodyItalic,
+	"mana":        Mana,
+	"small-caps":  SmallCaps,
+	"info":        Info,
+}
+
+// ParseRole resolves a manifest's Font string to the Role it names, reporting
+// false for an empty or unrecognized one, which a caller treats as the body
+// role
+func ParseRole(name string) (Role, bool) {
+	role, ok := roleNames[name]
+	return role, ok
+}
+
 //go:embed embedded
 var embedded embed.FS
 

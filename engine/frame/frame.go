@@ -31,6 +31,53 @@ type Keys struct {
 	Nyx       bool // enchantment, so the nyx frame stands in for the background
 }
 
+// Slot returns the color key for one of these keys' named slots: background,
+// pinlines, twins, ptBox, or crown. It reports "" for any other name,
+// including a layer's empty ColorSlot, so an any-only layer's lookup misses
+// and falls back to its "any" variant the same way a slot with no key for
+// this card would
+func (k Keys) Slot(name string) string {
+	switch name {
+	case "background":
+		return k.Background
+	case "pinlines":
+		return k.Pinlines
+	case "twins":
+		return k.Twins
+	case "ptBox":
+		return k.PTBox
+	case "crown":
+		return k.Crown
+	default:
+		return ""
+	}
+}
+
+// ConditionMet reports whether a layer's condition, drawn from the engine's
+// fixed condition vocabulary, holds for the card these keys were derived from.
+// Every WUBRG frame template shares this vocabulary rather than defining its
+// own, the same way it shares the slot keys. Conditions the engine does not
+// yet drive (nyx, companion, hollow_crown, fullart, color_indicator, divider,
+// pt_dark) render off through the default case
+func (k Keys) ConditionMet(condition string) bool {
+	switch condition {
+	case "":
+		return true
+	case "land":
+		return k.Land
+	case "nonland":
+		return !k.Land
+	case "legendary":
+		return k.Legendary
+	case "nonlegendary":
+		return !k.Legendary
+	case "creature":
+		return k.Creature
+	default:
+		return false
+	}
+}
+
 // Derive reads a card once into the keys and signals a template's render loop
 // needs
 func Derive(d *card.Data) Keys {

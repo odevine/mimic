@@ -140,6 +140,40 @@ func TestDerive(t *testing.T) {
 	}
 }
 
+func TestConditionMet(t *testing.T) {
+	k := Keys{Land: true, Legendary: true, Creature: true}
+	yes := []string{"", "land", "legendary", "creature"}
+	no := []string{"nonland", "nonlegendary", "nyx", "companion", "fullart", "pt_dark", "color_indicator"}
+	for _, c := range yes {
+		if !k.ConditionMet(c) {
+			t.Errorf("ConditionMet(%q) = false, want true", c)
+		}
+	}
+	for _, c := range no {
+		if k.ConditionMet(c) {
+			t.Errorf("ConditionMet(%q) = true, want false", c)
+		}
+	}
+}
+
+func TestSlot(t *testing.T) {
+	k := Keys{Background: "gold", Pinlines: "wg", Twins: "colorless", PTBox: "vehicle", Crown: "wg"}
+	cases := map[string]string{
+		"background": "gold",
+		"pinlines":   "wg",
+		"twins":      "colorless",
+		"ptBox":      "vehicle",
+		"crown":      "wg",
+		"":           "",
+		"border":     "", // an any-only layer's empty ColorSlot
+	}
+	for name, want := range cases {
+		if got := k.Slot(name); got != want {
+			t.Errorf("Slot(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func TestAllHybrid(t *testing.T) {
 	cases := map[string]bool{
 		"{1}{G/W}{G/W}":   true,  // Kitchen Finks

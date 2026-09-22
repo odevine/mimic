@@ -1,4 +1,4 @@
-package normal
+package render
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 	t.Helper()
 	dir := t.TempDir()
-	if err := WritePlaceholderAssets(dir); err != nil {
+	if err := WritePlaceholderAssets(dir, "test"); err != nil {
 		t.Fatalf("WritePlaceholderAssets: %v", err)
 	}
 	return &template.RenderRequest{
@@ -34,7 +34,7 @@ func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 
 func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
 	req := renderBolt(t, nil)
-	tmpl := &Template{}
+	tmpl := New("test")
 	buf, err := tmpl.Render(context.Background(), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
@@ -62,7 +62,7 @@ func TestRenderReportsProgress(t *testing.T) {
 		}
 	}
 
-	if _, err := (&Template{}).Render(context.Background(), *req); err != nil {
+	if _, err := New("test").Render(context.Background(), *req); err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	if len(steps) == 0 {
@@ -88,7 +88,7 @@ func TestRenderPicksColorKeyedBackground(t *testing.T) {
 	// The top-left pixel is bare background, so a red card must show the red
 	// background fill there rather than another color's.
 	req := renderBolt(t, nil)
-	buf, err := (&Template{}).Render(context.Background(), *req)
+	buf, err := New("test").Render(context.Background(), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -97,17 +97,6 @@ func TestRenderPicksColorKeyedBackground(t *testing.T) {
 	want := placeholderColors["r"]
 	if !closeColor(got, want) {
 		t.Errorf("background at (4,4) = %v, want red key %v", got, want)
-	}
-}
-
-func TestRenderRegisteredViaRegistry(t *testing.T) {
-	tmpl, err := template.Get("normal")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	req := renderBolt(t, nil)
-	if _, err := tmpl.Render(context.Background(), *req); err != nil {
-		t.Fatalf("Render via registry: %v", err)
 	}
 }
 
@@ -121,7 +110,7 @@ func TestRenderPlacesArt(t *testing.T) {
 		}
 	}
 	req := renderBolt(t, art)
-	buf, err := (&Template{}).Render(context.Background(), *req)
+	buf, err := New("test").Render(context.Background(), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -137,7 +126,7 @@ func TestRenderCancelledContext(t *testing.T) {
 	req := renderBolt(t, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := (&Template{}).Render(ctx, *req); err == nil {
+	if _, err := New("test").Render(ctx, *req); err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
 }

@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
-	"github.com/odevine/mimic/engine/template/normal"
+	_ "github.com/odevine/mimic/engine/template/all" // registers every template
 )
 
 func main() {
@@ -41,7 +42,7 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, tim
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	assets, cleanup, err := resolveAssets(assetsDir, bundle)
+	assets, cleanup, err := resolveAssets(assetsDir, bundle, tmplName)
 	if err != nil {
 		return err
 	}
@@ -104,9 +105,9 @@ func resolveFontDir(dir string) string {
 
 // resolveAssets returns the asset provider to render from. A bundle path takes
 // precedence and renders through a ZipAssetProvider; else a loose directory
-// renders through an FSAssetProvider; else placeholder assets are generated into
-// a temporary directory the caller cleans up
-func resolveAssets(dir, bundle string) (template.AssetProvider, func(), error) {
+// renders through an FSAssetProvider; else placeholder assets for tmplName are
+// generated into a temporary directory the caller cleans up
+func resolveAssets(dir, bundle, tmplName string) (template.AssetProvider, func(), error) {
 	if bundle != "" {
 		p, err := template.NewZipAssetProvider(bundle)
 		if err != nil {
@@ -121,7 +122,7 @@ func resolveAssets(dir, bundle string) (template.AssetProvider, func(), error) {
 	if err != nil {
 		return nil, func() {}, err
 	}
-	if err := normal.WritePlaceholderAssets(tmp); err != nil {
+	if err := render.WritePlaceholderAssets(tmp, tmplName); err != nil {
 		os.RemoveAll(tmp)
 		return nil, func() {}, err
 	}

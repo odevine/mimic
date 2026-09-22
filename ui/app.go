@@ -16,8 +16,14 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
-// recentPrefKey is where the recent-search list persists between launches
-const recentPrefKey = "recent.searches"
+// recentPrefKey is where the recent-search list persists between launches.
+// templateNamePrefKey and templateVersionPrefKey remember the chosen template so
+// it is restored on the next launch
+const (
+	recentPrefKey          = "recent.searches"
+	templateNamePrefKey    = "template.name"
+	templateVersionPrefKey = "template.version"
+)
 
 // app holds the widgets and the mutable state a search or render touches. Every
 // field is read and written only on the Fyne UI goroutine: the background
@@ -29,15 +35,22 @@ type ui struct {
 	prefs fyne.Preferences
 	win   fyne.Window
 
-	entry       *widget.SelectEntry
-	searchBtn   *widget.Button
-	resultsList *widget.List
-	editor      *cardEditor
-	renderBtn   *widget.Button
-	resetBtn    *widget.Button
-	preview     *canvas.Image
-	status      *widget.Label
-	saveBtn     *widget.Button
+	entry         *widget.SelectEntry
+	searchBtn     *widget.Button
+	resultsList   *widget.List
+	editor        *cardEditor
+	renderBtn     *widget.Button
+	resetBtn      *widget.Button
+	preview       *canvas.Image
+	status        *widget.Label
+	saveBtn        *widget.Button
+	templatesBtn  *widget.Button
+	templateLabel *widget.Label
+
+	// activeName and activeVersion mirror the pipeline's active template for the
+	// indicator and the manager's active tag. UI-goroutine only, like the rest
+	activeName    string
+	activeVersion string
 
 	recents *recents
 	results []*card.Data // read only on the UI goroutine
@@ -218,6 +231,52 @@ func (a *ui) showRendered(d *card.Data, img image.Image) {
 		return
 	}
 	a.status.SetText("Rendered " + d.Name)
+}
+
+// setActiveTemplate installs a new template, records it for the indicator, and
+// persists the choice so the next launch restores it. It runs on the UI
+// goroutine
+func (a *ui) setActiveTemplate(at *activeTemplate) {
+	a.pipe.install(at)
+	a.activeName = at.name
+	a.activeVersion = at.version
+	a.updateTemplateIndicator()
+	if a.prefs != nil {
+		a.prefs.SetString(templateNamePrefKey, at.name)
+		a.prefs.SetString(templateVersionPrefKey, at.version)
+	}
+}
+
+// updateTemplateIndicator refreshes the top-bar label with the active template.
+// It runs on the UI goroutine
+func (a *ui) updateTemplateIndicator() {
+	if a.templateLabel == nil {
+		return
+	}
+	a.templateLabel.SetText("Template: " + templateDisplay(a.activeName, a.activeVersion))
+}
+
+// rerenderCurrent re-renders the loaded card through the active template, so a
+// template switch updates the preview without refetching art. A no-op when no
+// card is loaded. It runs on the UI goroutine
+func (a *ui) rerenderCurrent() {
+	if a.origData == nil {
+		return
+	}
+	a.renderEdited()
+}
+
+// templateDisplay names a template and version for the indicator. An empty
+// version is the placeholder fallback
+func templateDisplay(name, version string) string {
+	switch version {
+	case "":
+		return name + " (placeholder)"
+	case localVersion:
+		return name + " · local"
+	default:
+		return name + " · " + version
+	}
 }
 
 // save writes the current preview to a PNG the user picks

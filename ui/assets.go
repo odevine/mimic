@@ -1,50 +1,187 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/template/normal"
+	"github.com/odevine/mimic/engine/version"
 )
 
-// assetCandidates and fontCandidates list where the real template assets and
-// font overrides live, relative to both a repo-root run and a ui-subdir run.
-// The real manifest is developer-local, so a checkout without it falls back to
-// generated placeholders
+// looseDirBases are the roots under which a template's loose developer assets
+// live as assets/<name>, relative to both a repo-root run and a ui-subdir run.
+// Loose assets are developer-local, so a checkout without them falls back to a
+// cached bundle or generated placeholders. fontCandidates is the same idea for
+// font overrides
 var (
-	assetCandidates = []string{"assets/normal", filepath.Join("..", "assets", "normal")}
-	fontCandidates  = []string{"local-fonts", filepath.Join("..", "local-fonts")}
+	looseDirBases  = []string{"assets", filepath.Join("..", "assets")}
+	fontCandidates = []string{"local-fonts", filepath.Join("..", "local-fonts")}
 )
 
-// resolveAssetDir returns the real asset directory when one is present, else it
-// generates placeholder assets into a temp directory and returns a cleanup. The
-// cleanup is a no-op for the real directory. This mirrors rendercard so the UI
-// renders the same frames the CLI does
-func resolveAssetDir() (dir string, cleanup func(), err error) {
-	if found := firstExistingDir(assetCandidates); found != "" {
-		return found, func() {}, nil
+// localVersion is the synthetic version label for a template rendered from its
+// loose developer directory rather than a downloaded bundle
+const localVersion = "local"
+
+// assetSource records which tier of the fallback chain a template resolved from,
+// so the caller knows whether to attempt a background bundle update. A loose
+// developer directory wins by design and suppresses the download
+type assetSource int
+
+const (
+	sourceLoose assetSource = iota
+	sourceBundle
+	sourcePlaceholder
+	// sourceExplicit is a selection restored from a saved preference. Like a
+	// loose dir it is the user's choice, so the background auto-update leaves it
+	sourceExplicit
+)
+
+// buildTemplate constructs a fresh template instance and applies the font
+// override when one is present, the way the CLI does
+func buildTemplate(name string) (template.Template, error) {
+	tmpl, err := template.Get(name)
+	if err != nil {
+		return nil, err
+	}
+	if fontDir := resolveFontDir(); fontDir != "" {
+		if nt, ok := tmpl.(*normal.Template); ok {
+			nt.FontDir = fontDir
+		}
+	}
+	return tmpl, nil
+}
+
+// resolveActiveTemplate builds the startup template from a network-free fallback
+// chain: a loose developer directory, then the newest cached bundle, then
+// generated placeholders. It never blocks on the network, so a fresh offline
+// install still renders. The returned source lets the caller decide whether to
+// look for an update
+func resolveActiveTemplate(name string) (*activeTemplate, assetSource, error) {
+	tmpl, err := buildTemplate(name)
+	if err != nil {
+		return nil, sourcePlaceholder, err
+	}
+	if dir := looseDir(name); dir != "" {
+		return &activeTemplate{
+			name: name, version: localVersion, template: tmpl,
+			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+		}, sourceLoose, nil
+	}
+	if ver, ok := newestCachedVersion(name); ok {
+		if at, err := activeFromCachedBundle(name, ver, tmpl); err == nil {
+			return at, sourceBundle, nil
+		} else {
+			log.Printf("mimic-ui: skipping cached bundle %s %s: %v", name, ver, err)
+		}
+	}
+	at, err := placeholderActive(name, tmpl)
+	if err != nil {
+		return nil, sourcePlaceholder, err
+	}
+	return at, sourcePlaceholder, nil
+}
+
+// activeFromVersion builds the template for an explicit selection. The synthetic
+// local version uses the loose directory; any other version is ensured in the
+// cache (downloaded and verified when missing) and opened as a bundle. progress
+// may be nil
+func activeFromVersion(ctx context.Context, name, version string, progress func(done, total int64)) (*activeTemplate, error) {
+	tmpl, err := buildTemplate(name)
+	if err != nil {
+		return nil, err
+	}
+	if version == localVersion {
+		dir := looseDir(name)
+		if dir == "" {
+			return nil, fmt.Errorf("no local assets for %q", name)
+		}
+		return &activeTemplate{
+			name: name, version: localVersion, template: tmpl,
+			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+		}, nil
+	}
+	if _, err := ensureVersion(ctx, name, version, progress); err != nil {
+		return nil, err
+	}
+	return activeFromCachedBundle(name, version, tmpl)
+}
+
+// autoLatestActive builds the template for the newest catalog version the engine
+// can render, downloading it when needed. It is the background-update path, so a
+// missing catalog or no compatible version is a returned error the caller logs
+func autoLatestActive(ctx context.Context, name string) (*activeTemplate, error) {
+	idx, err := fetchIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	t, ok := idx.findTemplate(name)
+	if !ok {
+		return nil, fmt.Errorf("template %q not in catalog", name)
+	}
+	v, ok := pickCompatible(t)
+	if !ok {
+		return nil, fmt.Errorf("no version of %q is compatible with engine %s", name, version.Version)
+	}
+	return activeFromVersion(ctx, name, v.Version, nil)
+}
+
+// activeFromCachedBundle opens a cached bundle and pairs it with a template
+func activeFromCachedBundle(name, version string, tmpl template.Template) (*activeTemplate, error) {
+	path, err := bundlePath(name, version)
+	if err != nil {
+		return nil, err
+	}
+	p, err := template.NewZipAssetProvider(path)
+	if err != nil {
+		return nil, err
+	}
+	return &activeTemplate{
+		name: name, version: version, template: tmpl,
+		provider: p, cleanup: func() { p.Close() },
+	}, nil
+}
+
+// placeholderActive generates stand-in assets for a template that has no loose
+// directory and no cached bundle. Only the normal template ships a placeholder
+// generator, so any other name with no assets is an error the caller reports
+func placeholderActive(name string, tmpl template.Template) (*activeTemplate, error) {
+	if name != "normal" {
+		return nil, fmt.Errorf("no assets available for %q", name)
 	}
 	tmp, err := os.MkdirTemp("", "mimic-placeholder-")
 	if err != nil {
-		return "", func() {}, err
+		return nil, err
 	}
 	if err := normal.WritePlaceholderAssets(tmp); err != nil {
 		os.RemoveAll(tmp)
-		return "", func() {}, err
+		return nil, err
 	}
-	return tmp, func() { os.RemoveAll(tmp) }, nil
+	return &activeTemplate{
+		name: name, version: "", template: tmpl,
+		provider: template.NewFSAssetProvider(tmp), cleanup: func() { os.RemoveAll(tmp) },
+	}, nil
+}
+
+// looseDir returns the loose developer asset directory for a template, or "" if
+// none exists
+func looseDir(name string) string {
+	for _, base := range looseDirBases {
+		cand := filepath.Join(base, name)
+		if info, err := os.Stat(cand); err == nil && info.IsDir() {
+			return cand
+		}
+	}
+	return ""
 }
 
 // resolveFontDir returns the first font-override directory that exists, or ""
 // to use the engine's embedded default fonts
 func resolveFontDir() string {
-	return firstExistingDir(fontCandidates)
-}
-
-// firstExistingDir returns the first candidate that is an existing directory,
-// or "" when none is
-func firstExistingDir(candidates []string) string {
-	for _, cand := range candidates {
+	for _, cand := range fontCandidates {
 		if info, err := os.Stat(cand); err == nil && info.IsDir() {
 			return cand
 		}

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -14,8 +15,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/odevine/mimic/engine/card"
-	"github.com/odevine/mimic/engine/template"
-	"github.com/odevine/mimic/engine/template/normal"
 )
 
 // appID namespaces this app's stored preferences, including recent searches
@@ -29,40 +28,77 @@ const netTimeout = 30 * time.Second
 var previewMinSize = fyne.NewSize(370, 518)
 
 func main() {
-	assetDir, cleanup, err := resolveAssetDir()
-	if err != nil {
-		log.Fatalf("mimic-ui: resolving assets: %v", err)
-	}
-	defer cleanup()
-
-	tmpl, err := template.Get("normal")
-	if err != nil {
-		log.Fatalf("mimic-ui: loading template: %v", err)
-	}
-	if fontDir := resolveFontDir(); fontDir != "" {
-		if nt, ok := tmpl.(*normal.Template); ok {
-			nt.FontDir = fontDir
-		}
-	}
-
 	fyneApp := app.NewWithID(appID)
 	win := fyneApp.NewWindow("mimic")
-
 	prefs := fyneApp.Preferences()
+
+	pipe := &renderPipeline{client: card.NewClient()}
+	defer pipe.close()
+
+	// Resolve the startup template: a persisted selection when it is available
+	// without a download, otherwise the default network-free chain for normal
+	at, source := startupTemplate(prefs)
+	pipe.install(at)
+
 	a := &ui{
-		pipe: &renderPipeline{
-			client: card.NewClient(),
-			tmpl:   tmpl,
-			assets: template.NewFSAssetProvider(assetDir),
-		},
-		prefs:   prefs,
-		win:     win,
-		recents: newRecents(prefs.StringList(recentPrefKey)),
+		pipe:          pipe,
+		prefs:         prefs,
+		win:           win,
+		recents:       newRecents(prefs.StringList(recentPrefKey)),
+		activeName:    at.name,
+		activeVersion: at.version,
 	}
 
 	buildUI(a)
+
+	// Keep the default template up to date in the background so launch never
+	// blocks on a large download. A loose developer directory is the intended
+	// source when present, and an explicitly restored selection is the user's
+	// choice, so neither is auto-updated
+	if source == sourceBundle || source == sourcePlaceholder {
+		go updateTemplate(a, at.name)
+	}
+
 	win.Resize(fyne.NewSize(1240, 760))
 	win.ShowAndRun()
+}
+
+// startupTemplate builds the template to render at launch. It restores the
+// persisted selection only when it needs no download (a loose dir or an
+// already-cached bundle), so launch is never blocked, and otherwise falls back
+// to the default network-free chain for normal
+func startupTemplate(prefs fyne.Preferences) (*activeTemplate, assetSource) {
+	name := prefs.String(templateNamePrefKey)
+	ver := prefs.String(templateVersionPrefKey)
+	restorable := name != "" && ((ver == localVersion && looseDir(name) != "") || isVersionCached(name, ver))
+	if restorable {
+		if at, err := activeFromVersion(context.Background(), name, ver, nil); err == nil {
+			return at, sourceExplicit
+		} else {
+			log.Printf("mimic-ui: restoring template %s %s failed: %v", name, ver, err)
+		}
+	}
+	at, source, err := resolveActiveTemplate("normal")
+	if err != nil {
+		log.Fatalf("mimic-ui: resolving template: %v", err)
+	}
+	return at, source
+}
+
+// updateTemplate downloads the latest compatible version of a template and swaps
+// it in. It runs in the background at startup, so any failure is logged and the
+// app keeps rendering from whatever it resolved to. The swap and re-render run
+// on the UI goroutine
+func updateTemplate(a *ui, name string) {
+	at, err := autoLatestActive(context.Background(), name)
+	if err != nil {
+		log.Printf("mimic-ui: template update skipped: %v", err)
+		return
+	}
+	fyne.Do(func() {
+		a.setActiveTemplate(at)
+		a.rerenderCurrent()
+	})
 }
 
 // buildUI constructs the widgets, wires their callbacks, and lays out the
@@ -74,6 +110,12 @@ func buildUI(a *ui) {
 
 	a.searchBtn = widget.NewButton("Search", func() { a.runSearch(a.entry.Text) })
 	searchBar := container.NewBorder(nil, nil, nil, a.searchBtn, a.entry)
+
+	// Template controls: the active-template indicator and the manager button
+	a.templatesBtn = widget.NewButton("Templates…", func() { openTemplateManager(a) })
+	a.templateLabel = widget.NewLabel("")
+	a.updateTemplateIndicator()
+	templateBar := container.NewBorder(nil, nil, a.templatesBtn, nil, a.templateLabel)
 
 	a.resultsList = widget.NewList(
 		func() int { return len(a.results) },
@@ -119,7 +161,8 @@ func buildUI(a *ui) {
 	outer := container.NewHSplit(a.resultsList, inner)
 	outer.SetOffset(0.24)
 
-	content := container.NewBorder(searchBar, bottomBar, nil, nil, outer)
+	top := container.NewVBox(searchBar, templateBar)
+	content := container.NewBorder(top, bottomBar, nil, nil, outer)
 	a.win.SetContent(content)
 	a.win.Canvas().Focus(a.entry)
 }

@@ -296,6 +296,12 @@ textarea {
   font-size: 14px;
 }
 
+.template-section .description {
+  color: var(--muted);
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
 .version-row {
   display: flex;
   align-items: center;

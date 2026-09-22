@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
-	"github.com/odevine/mimic/engine/template/normal"
+	_ "github.com/odevine/mimic/engine/template/all" // registers every template
 	"github.com/odevine/mimic/engine/version"
 )
 
@@ -131,17 +132,13 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*acti
 }
 
 // placeholderActive generates stand-in assets for a template that has no loose
-// directory and no cached bundle. Only the normal template ships a placeholder
-// generator, so any other name with no assets is an error the caller reports
+// directory and no cached bundle
 func placeholderActive(name string, tmpl template.Template) (*activeTemplate, error) {
-	if name != "normal" {
-		return nil, fmt.Errorf("no assets available for %q", name)
-	}
 	tmp, err := os.MkdirTemp("", "mimic-placeholder-")
 	if err != nil {
 		return nil, err
 	}
-	if err := normal.WritePlaceholderAssets(tmp); err != nil {
+	if err := render.WritePlaceholderAssets(tmp, name); err != nil {
 		os.RemoveAll(tmp)
 		return nil, err
 	}

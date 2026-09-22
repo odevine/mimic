@@ -169,13 +169,14 @@ type versionView struct {
 	Action     string `json:"action"`
 }
 
-// templateView is one template block: its name, whether this build can render
-// it, an optional reason, and its versions
+// templateView is one template block: its name, its description, whether this
+// build can render it, an optional reason, and its versions
 type templateView struct {
-	Name       string        `json:"name"`
-	Renderable bool          `json:"renderable"`
-	Reason     string        `json:"reason,omitempty"`
-	Versions   []versionView `json:"versions"`
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	Renderable  bool          `json:"renderable"`
+	Reason      string        `json:"reason,omitempty"`
+	Versions    []versionView `json:"versions"`
 }
 
 // handleTemplates fetches the catalog (falling back to the cached copy offline)
@@ -188,11 +189,11 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 		idx = nil
 	}
 	activeName, activeVersion := s.active()
-	rows := buildTemplateRows(idx, template.Names(), func(n string) bool { return looseDir(n) != "" }, isVersionCached)
+	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return looseDir(n) != "" }, isVersionCached)
 
 	views := make([]templateView, 0, len(rows))
 	for _, row := range rows {
-		tv := templateView{Name: row.name, Renderable: row.renderable, Reason: row.reason}
+		tv := templateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason}
 		for _, v := range row.versions {
 			vv := versionView{
 				Version:    v.version,

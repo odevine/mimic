@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/odevine/mimic/compare/ui/v0.3.0...ui/v0.4.0) (2026-09-22)
+
+
+### Features
+
+* **ui:** add preview and output resolutions ([fd38041](https://github.com/odevine/mimic/commit/fd380416ea55d7967f8676a758f86c1702196fc8))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.6.0 ([9d1448d](https://github.com/odevine/mimic/commit/9d1448daf4b8a3d42f747db744f335be439ef6f3))
+
 ## [0.3.0](https://github.com/odevine/mimic/compare/ui/v0.2.0...ui/v0.3.0) (2026-09-22)
 
 

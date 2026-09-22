@@ -28,6 +28,11 @@ func (s *server) routes() {
 	mux.HandleFunc("GET /api/template/active", s.handleActiveTemplate)
 	mux.HandleFunc("POST /api/template/select", s.handleSelectTemplate)
 	mux.HandleFunc("GET /api/template/select/{id}/events", s.handleJobEvents)
+	mux.HandleFunc("GET /api/capabilities", s.handleCapabilities)
+	mux.HandleFunc("GET /api/settings", s.handleSettings)
+	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("GET /api/printings", s.handlePrintings)
+	mux.HandleFunc("GET /api/symbol", s.handleSymbol)
 	mux.Handle("/", http.FileServerFS(staticFS()))
 	s.mux = mux
 }
@@ -65,6 +70,38 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		out[i] = searchResult{Text: rowText(c), Card: c}
 	}
 	writeJSON(w, out)
+}
+
+// printingsQuery is the Scryfall search listing every printing of one card by
+// exact name, newest first
+func printingsQuery(name string) string {
+	return fmt.Sprintf("!%q unique:prints order:released dir:desc", name)
+}
+
+// handlePrintings lists every printing of a card, for the editor's printing
+// picker. It goes through Search rather than a set-and-number fetch, so it needs
+// nothing the card client does not already do
+func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		writeJSON(w, []*card.Data{})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), netTimeout)
+	defer cancel()
+
+	cards, err := s.pipe.client.Search(ctx, printingsQuery(name))
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		http.Error(w, "listing printings failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if cards == nil {
+		cards = []*card.Data{}
+	}
+	writeJSON(w, cards)
 }
 
 // handleRecents returns the recent-search suggestions, newest first
@@ -280,15 +317,32 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, views)
 }
 
-// handleActiveTemplate returns the active template's name, version, and the
-// display label for the top-bar indicator
+// handleActiveTemplate returns the active template's name, version, the display
+// label for the top-bar indicator, and where its assets come from for the status
+// bar
 func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 	name, version := s.active()
 	writeJSON(w, map[string]string{
 		"name":    name,
 		"version": version,
 		"label":   templateDisplay(name, version),
+		"source":  templateSource(name, version),
 	})
+}
+
+// templateSource names where the active template's assets live: a cached
+// bundle, a loose developer directory, or the placeholder layers
+func templateSource(name, version string) string {
+	switch {
+	case version == "":
+		return "placeholder"
+	case version == localVersion:
+		return "local"
+	case isVersionCached(name, version):
+		return "cached"
+	default:
+		return "bundle"
+	}
 }
 
 // selectBody is the /api/template/select payload

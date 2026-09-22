@@ -11,6 +11,9 @@ repository's Go workspace.
 go run .
 ```
 
+Run it from a checkout of the full repository, not the `ui` directory in
+isolation, so the Go workspace resolves the local `engine` module.
+
 The window has three panes. The left pane searches Scryfall with its full query
 syntax (for example `t:goblin c:r cmc=1`) and lists the matches; the search box
 remembers recent queries and offers them as you type. Selecting a match fills

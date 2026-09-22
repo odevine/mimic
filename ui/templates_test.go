@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/odevine/mimic/engine/template"
+)
 
 // catalog builds a one-template index for the row tests
 func catalog(name string, versions ...catalogVersion) *index {
@@ -44,7 +48,7 @@ func TestBuildTemplateRows(t *testing.T) {
 			{Version: "1.0.0", MinEngine: "0.3.0"}, // compatible engine but unregistered
 		}},
 	}}
-	registered := []string{"normal"}
+	registered := []template.Registration{{Name: "normal", Description: "a test template"}}
 	hasLocal := func(n string) bool { return false }
 	isCached := func(n, v string) bool { return n == "normal" && v == "0.1.0" }
 
@@ -53,6 +57,9 @@ func TestBuildTemplateRows(t *testing.T) {
 	normalRow, ok := findRow(rows, "normal")
 	if !ok || !normalRow.renderable {
 		t.Fatalf("normal row missing or not renderable: %+v", normalRow)
+	}
+	if normalRow.description != "a test template" {
+		t.Errorf("description = %q, want the registered description", normalRow.description)
 	}
 	if v, _ := findVer(normalRow.versions, "0.1.0"); !v.selectable || !v.cached {
 		t.Errorf("normal 0.1.0 = %+v, want selectable and cached", v)
@@ -72,7 +79,7 @@ func TestBuildTemplateRows(t *testing.T) {
 
 func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
 	idx := catalog("normal", catalogVersion{Version: "0.1.0", MinEngine: "0.3.0"})
-	rows := buildTemplateRows(idx, []string{"normal"},
+	rows := buildTemplateRows(idx, []template.Registration{{Name: "normal", Description: "a test template"}},
 		func(n string) bool { return n == "normal" },
 		func(n, v string) bool { return false })
 
@@ -90,7 +97,7 @@ func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
 
 // A registered template with local assets but no catalog entry still appears
 func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
-	rows := buildTemplateRows(nil, []string{"normal"},
+	rows := buildTemplateRows(nil, []template.Registration{{Name: "normal", Description: "a test template"}},
 		func(n string) bool { return n == "normal" },
 		func(n, v string) bool { return false })
 

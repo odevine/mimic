@@ -3,6 +3,7 @@ package main
 import (
 	"sort"
 
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/version"
 )
 
@@ -20,35 +21,39 @@ type versionRow struct {
 
 // templateRow is one template in the manager: its versions and whether this
 // build can render it at all. A template the engine has no code for is listed
-// but not renderable, so the catalog stays honest about what exists
+// but not renderable, so the catalog stays honest about what exists.
+// description is the registered template's own blurb, empty for one this
+// build has no code for
 type templateRow struct {
-	name       string
-	renderable bool
-	reason     string
-	versions   []versionRow
+	name        string
+	description string
+	renderable  bool
+	reason      string
+	versions    []versionRow
 }
 
 // unsupportedReason is shown when the running build has no code for a template
 const unsupportedReason = "not supported by this build"
 
-// buildTemplateRows assembles the manager's model from the catalog, the engine's
-// registered template names, and the cache. It is pure so it can be tested
-// without any UI. A template is renderable when it is registered; a version is
-// selectable when its template is renderable and the engine satisfies its
-// minEngine. A loose developer directory contributes a synthetic local version,
-// and a registered template with local assets but no catalog entry still
-// appears, so an offline developer sees it
-func buildTemplateRows(idx *index, registered []string, hasLocal func(name string) bool, isCached func(name, ver string) bool) []templateRow {
-	regSet := make(map[string]bool, len(registered))
-	for _, n := range registered {
-		regSet[n] = true
+// buildTemplateRows assembles the manager's model from the catalog, the
+// engine's registered templates, and the cache. It is pure so it can be
+// tested without any UI. A template is renderable when it is registered; a
+// version is selectable when its template is renderable and the engine
+// satisfies its minEngine. A loose developer directory contributes a
+// synthetic local version, and a registered template with local assets but
+// no catalog entry still appears, so an offline developer sees it
+func buildTemplateRows(idx *index, registered []template.Registration, hasLocal func(name string) bool, isCached func(name, ver string) bool) []templateRow {
+	descriptions := make(map[string]string, len(registered))
+	for _, r := range registered {
+		descriptions[r.Name] = r.Description
 	}
 
 	var rows []templateRow
 	seen := map[string]bool{}
 	if idx != nil {
 		for _, t := range idx.Templates {
-			row := templateRow{name: t.Name, renderable: regSet[t.Name]}
+			desc, renderable := descriptions[t.Name]
+			row := templateRow{name: t.Name, description: desc, renderable: renderable}
 			if !row.renderable {
 				row.reason = unsupportedReason
 			}
@@ -63,11 +68,11 @@ func buildTemplateRows(idx *index, registered []string, hasLocal func(name strin
 		}
 	}
 	// Registered templates with local assets but no catalog entry
-	for _, n := range registered {
-		if seen[n] || !hasLocal(n) {
+	for _, r := range registered {
+		if seen[r.Name] || !hasLocal(r.Name) {
 			continue
 		}
-		rows = append(rows, templateRow{name: n, renderable: true, versions: []versionRow{localRow(true)}})
+		rows = append(rows, templateRow{name: r.Name, description: r.Description, renderable: true, versions: []versionRow{localRow(true)}})
 	}
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })

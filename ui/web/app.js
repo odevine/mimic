@@ -266,6 +266,12 @@ async function loadTemplates() {
     const h = document.createElement("h3");
     h.textContent = row.name;
     section.appendChild(h);
+    if (row.description) {
+      const d = document.createElement("p");
+      d.className = "description";
+      d.textContent = row.description;
+      section.appendChild(d);
+    }
     if (row.reason) {
       const r = document.createElement("p");
       r.className = "reason";

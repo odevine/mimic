@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/odevine/mimic/compare/ui/v0.1.0...ui/v0.2.0) (2026-09-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** the ui is no longer a Fyne desktop app. It runs a local web server and opens the app in a browser, and the binary is renamed from mimic-ui to mimic.
+
+### Features
+
+* **ui:** replace Fyne desktop shell with a local web server ([030c615](https://github.com/odevine/mimic/commit/030c6158c114111506179067d38b9bd4f4a2a126))
+
 ## 0.1.0 (2026-09-22)
 
 

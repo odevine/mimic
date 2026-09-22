@@ -21,6 +21,10 @@
     "engine": {
       "release-type": "go",
       "component": "engine"
+    },
+    "ui": {
+      "release-type": "go",
+      "component": "ui"
     }
   }
 }

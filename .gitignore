@@ -8,7 +8,12 @@
 *.swp
 *~
 
-# Go sum file
+# Go workspace files. engine and ui are independently versioned modules, each
+# with its own go.mod pin on the other, so CI and releases must build against
+# those pins rather than a workspace shortcut. A go.work unioning ./engine and
+# ./ui is a personal convenience for developing across both locally; create
+# your own, same as mimic-templates' own convention for this file
+go.work
 go.work.sum
 
 # Go build output. The rendercard and mimic binaries are extensionless on Unix,

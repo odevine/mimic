@@ -1,7 +1,0 @@
-go 1.26.2
-
-use (
-	// ui depends on engine's public packages only, never the reverse
-	./engine
-	./ui
-)

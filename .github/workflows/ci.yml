@@ -42,6 +42,12 @@ jobs:
     defaults:
       run:
         working-directory: ui
+    # ui depends on engine's go.mod pin, not whatever a go.work happens to
+    # union locally, so CI builds the same hermetic dependency graph a real
+    # release does (see ui-binaries in release-please.yml) rather than
+    # coupling ui's CI to every unreleased engine change
+    env:
+      GOWORK: "off"
     steps:
       - uses: actions/checkout@v7
 

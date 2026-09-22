@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -70,6 +71,19 @@ func (p *FSAssetProvider) resolve(relPath string) (string, error) {
 		return "", fmt.Errorf("template: path %q escapes asset root", relPath)
 	}
 	return full, nil
+}
+
+// safeRelPath cleans a slash-separated asset name and rejects any that is
+// absolute or escapes its root with "..". Both providers guard the same way, so
+// a manifest from a less trusted source cannot reach outside its own tree
+// whether the tree is a directory or a zip. It returns the cleaned name for
+// lookup
+func safeRelPath(relPath string) (string, error) {
+	clean := path.Clean(filepath.ToSlash(relPath))
+	if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("template: path %q escapes asset root", relPath)
+	}
+	return clean, nil
 }
 
 func validateManifest(m *Manifest) error {

@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/odevine/impasto v0.1.1
 	golang.org/x/image v0.46.0
+	golang.org/x/mod v0.41.0
 )
 
 require (

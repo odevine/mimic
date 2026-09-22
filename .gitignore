@@ -48,7 +48,3 @@ card.png
 
 # Claude Code per-user settings. Shared .claude/settings.json stays tracked
 .claude/settings.local.json
-
-# Internal PSD extraction tool. It converts local template PSDs into asset sets
-# once each and is never published, so it lives here without being tracked
-/tools/

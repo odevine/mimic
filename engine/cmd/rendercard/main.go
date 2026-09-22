@@ -22,6 +22,7 @@ func main() {
 	name := flag.String("name", "", "card name to look up (fuzzy match)")
 	out := flag.String("o", "card.png", "output PNG path")
 	assetsDir := flag.String("assets", "", "template asset directory; empty generates placeholder assets")
+	bundle := flag.String("bundle", "", "path to a .mimic bundle to render from; takes precedence over -assets")
 	tmplName := flag.String("template", "normal", "template name")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
 	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana, type, info); empty auto-uses ./local-fonts if present, else the embedded defaults")
@@ -31,16 +32,16 @@ func main() {
 	if *name == "" {
 		log.Fatal("rendercard: -name is required")
 	}
-	if err := run(*name, *out, *assetsDir, *tmplName, *fontDir, *noArt, *timeout); err != nil {
+	if err := run(*name, *out, *assetsDir, *bundle, *tmplName, *fontDir, *noArt, *timeout); err != nil {
 		log.Fatalf("rendercard: %v", err)
 	}
 }
 
-func run(name, out, assetsDir, tmplName, fontDir string, noArt bool, timeout time.Duration) error {
+func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	dir, cleanup, err := resolveAssets(assetsDir)
+	assets, cleanup, err := resolveAssets(assetsDir, bundle)
 	if err != nil {
 		return err
 	}
@@ -76,7 +77,7 @@ func run(name, out, assetsDir, tmplName, fontDir string, noArt bool, timeout tim
 	buf, err := tmpl.Render(ctx, template.RenderRequest{
 		Card:   data,
 		Art:    art,
-		Assets: template.NewFSAssetProvider(dir),
+		Assets: assets,
 	})
 	if err != nil {
 		return err
@@ -103,21 +104,30 @@ func resolveFontDir(dir string) string {
 	return ""
 }
 
-// resolveAssets returns the asset directory to render from. An empty dir means
-// generate placeholder assets into a temporary directory the caller cleans up
-func resolveAssets(dir string) (string, func(), error) {
+// resolveAssets returns the asset provider to render from. A bundle path takes
+// precedence and renders through a ZipAssetProvider; else a loose directory
+// renders through an FSAssetProvider; else placeholder assets are generated into
+// a temporary directory the caller cleans up
+func resolveAssets(dir, bundle string) (template.AssetProvider, func(), error) {
+	if bundle != "" {
+		p, err := template.NewZipAssetProvider(bundle)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		return p, func() { p.Close() }, nil
+	}
 	if dir != "" {
-		return dir, func() {}, nil
+		return template.NewFSAssetProvider(dir), func() {}, nil
 	}
 	tmp, err := os.MkdirTemp("", "mimic-placeholder-")
 	if err != nil {
-		return "", func() {}, err
+		return nil, func() {}, err
 	}
 	if err := normal.WritePlaceholderAssets(tmp); err != nil {
 		os.RemoveAll(tmp)
-		return "", func() {}, err
+		return nil, func() {}, err
 	}
-	return tmp, func() { os.RemoveAll(tmp) }, nil
+	return template.NewFSAssetProvider(tmp), func() { os.RemoveAll(tmp) }, nil
 }
 
 func writePNG(path string, img image.Image) error {

@@ -39,6 +39,11 @@ type RenderRequest struct {
 	// Copyright is the boilerplate line a card's bottom carries. An empty
 	// Copyright builds the printed one from the card's own year
 	Copyright string
+	// DPI is the resolution to render at. It is clamped to the range the
+	// template supports, so a preview at a fraction of the authored resolution
+	// costs a fraction of the work while laying out identically. Zero renders at
+	// the template's own resolution
+	DPI int
 }
 
 // Report forwards a progress update when a callback is set, so a template's call

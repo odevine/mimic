@@ -27,18 +27,19 @@ func main() {
 	tmplName := flag.String("template", "normal", "template name")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
 	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana, type, info); empty auto-uses ./local-fonts if present, else the embedded defaults")
+	dpi := flag.Int("dpi", 0, "resolution to render at, clamped to the template's own; 0 renders at the template's authored resolution")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout for network work")
 	flag.Parse()
 
 	if *name == "" {
 		log.Fatal("rendercard: -name is required")
 	}
-	if err := run(*name, *out, *assetsDir, *bundle, *tmplName, *fontDir, *noArt, *timeout); err != nil {
+	if err := run(*name, *out, *assetsDir, *bundle, *tmplName, *fontDir, *noArt, *dpi, *timeout); err != nil {
 		log.Fatalf("rendercard: %v", err)
 	}
 }
 
-func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, timeout time.Duration) error {
+func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, dpi int, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -77,6 +78,7 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, tim
 		Art:     art,
 		Assets:  assets,
 		FontDir: fontDir,
+		DPI:     dpi,
 	})
 	if err != nil {
 		return err

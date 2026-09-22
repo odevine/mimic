@@ -143,3 +143,39 @@ func closeColor(a, b color.NRGBA) bool {
 	}
 	return d(a.R, b.R) <= tol && d(a.G, b.G) <= tol && d(a.B, b.B) <= tol && d(a.A, b.A) <= tol
 }
+
+func TestRenderAtReducedDPI(t *testing.T) {
+	req := renderBolt(t, nil)
+	m, err := req.Assets.Manifest()
+	if err != nil {
+		t.Fatalf("Manifest: %v", err)
+	}
+	// Half the placeholder's authored resolution, whatever that works out to
+	half := m.Resolution(m.NativeDPI() / 2)
+	req.DPI = half.DPI
+
+	buf, err := New("test").Render(context.Background(), *req)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	w, h := buf.Bounds()
+	if w != half.Width || h != half.Height {
+		t.Errorf("buffer is %dx%d, want %dx%d", w, h, half.Width, half.Height)
+	}
+}
+
+func TestRenderClampsDPIToNative(t *testing.T) {
+	req := renderBolt(t, nil)
+	// Asking past the authored resolution renders at it rather than resampling
+	// every layer up
+	req.DPI = 100000
+
+	buf, err := New("test").Render(context.Background(), *req)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	w, h := buf.Bounds()
+	if w != placeholderWidth || h != placeholderHeight {
+		t.Errorf("buffer is %dx%d, want the native %dx%d", w, h, placeholderWidth, placeholderHeight)
+	}
+}

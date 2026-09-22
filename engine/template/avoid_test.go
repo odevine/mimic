@@ -51,7 +51,7 @@ func TestAvoidRect(t *testing.T) {
 	}
 	f := frame.Keys{Creature: true, PTBox: "gold"}
 
-	r, ok := AvoidRect(p, layers, f, "pt_box")
+	r, ok := AvoidRect(p, layers, f, "pt_box", 1)
 	if !ok {
 		t.Fatal("AvoidRect reported false for a creature with a matching variant")
 	}
@@ -61,17 +61,17 @@ func TestAvoidRect(t *testing.T) {
 
 	// The layer's own condition gates it: a noncreature never draws pt_box, so
 	// nothing needs avoiding.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: false, PTBox: "gold"}, "pt_box"); ok {
+	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: false, PTBox: "gold"}, "pt_box", 1); ok {
 		t.Error("AvoidRect reported true for a noncreature, want false")
 	}
 
 	// No color variant resolves for this key and there is no "any" fallback.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: true, PTBox: "colorless"}, "pt_box"); ok {
+	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: true, PTBox: "colorless"}, "pt_box", 1); ok {
 		t.Error("AvoidRect reported true with no matching or \"any\" variant, want false")
 	}
 
 	// A name absent from the layer map reports false rather than panicking.
-	if _, ok := AvoidRect(p, layers, f, "missing"); ok {
+	if _, ok := AvoidRect(p, layers, f, "missing", 1); ok {
 		t.Error("AvoidRect reported true for an unknown layer name, want false")
 	}
 }

@@ -70,6 +70,11 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	if err != nil {
 		return nil, err
 	}
+	// Everything below works in the scaled manifest's coordinates, so a preview
+	// and a print-ready export run the same layout over smaller numbers rather
+	// than down one path each
+	scale := m.ScaleForDPI(req.DPI)
+	m = m.Scaled(scale)
 	req.Report(stepManifest, fracManifest)
 
 	f := frame.Derive(req.Card)
@@ -105,7 +110,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			// lets a manifest leave a layer out where it does not apply
 			continue
 		}
-		placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height)
+		placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height, scale)
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +151,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			continue
 		}
 		if box.DuckLayer != "" && box.DuckRow != "" {
-			if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer); ok {
+			if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer, scale); ok {
 				box = template.MoveToRow(box, m, box.DuckRow)
 			}
 		}
@@ -162,7 +167,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			}
 		}
 		if box.AvoidLayer != "" {
-			if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer); ok {
+			if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer, scale); ok {
 				box.Avoid = r
 			}
 		}
@@ -181,7 +186,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		nodes = append(nodes, text)
 
 		if res.HasDivider {
-			div, err := template.Divider(req.Assets, m, res.DividerY)
+			div, err := template.Divider(req.Assets, m, res.DividerY, scale)
 			if err != nil {
 				return nil, err
 			}

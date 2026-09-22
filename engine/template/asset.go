@@ -21,7 +21,8 @@ type Manifest struct {
 	Template  string                 `json:"template"`
 	Width     int                    `json:"width"`
 	Height    int                    `json:"height"`
-	Layers    []LayerSpec            `json:"layers"` // bottom to top
+	DPI       int                    `json:"dpi,omitempty"` // zero infers from width
+	Layers    []LayerSpec            `json:"layers"`        // bottom to top
 	TextBoxes map[string]TextBoxSpec `json:"textBoxes"`
 	Art       ArtSlot                `json:"art"`
 }

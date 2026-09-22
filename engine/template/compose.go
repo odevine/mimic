@@ -12,15 +12,15 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-// LoadLayer decodes a layer PNG and places it at the document origin. Frame
-// layers are authored document-sized, so the origin placement leaves them where
-// the artwork put them
-func LoadLayer(p AssetProvider, path string, w, h int) (*raster.Buffer, error) {
+// LoadLayer decodes a layer PNG, resamples it to the render scale, and places
+// it at the document origin. Frame layers are authored document-sized, so the
+// origin placement leaves them where the artwork put them
+func LoadLayer(p AssetProvider, path string, w, h int, s Scale) (*raster.Buffer, error) {
 	img, err := LoadImage(p, path)
 	if err != nil {
 		return nil, err
 	}
-	buf, err := raster.FromImage(img)
+	buf, err := raster.FromImage(s.Image(img))
 	if err != nil {
 		return nil, fmt.Errorf("template: wrapping layer %q: %w", path, err)
 	}
@@ -33,7 +33,7 @@ func LoadLayer(p AssetProvider, path string, w, h int) (*raster.Buffer, error) {
 // opaque bounds and places its center at centerY, the document Y a text layout
 // reported for the divider. It returns nil when the manifest carries no
 // "divider" layer, so a template without one still renders
-func Divider(p AssetProvider, m *Manifest, centerY int) (*canvas.Layer, error) {
+func Divider(p AssetProvider, m *Manifest, centerY int, s Scale) (*canvas.Layer, error) {
 	path := LayerAssetPath(m, "divider")
 	if path == "" {
 		return nil, nil
@@ -42,6 +42,9 @@ func Divider(p AssetProvider, m *Manifest, centerY int) (*canvas.Layer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Resampling before the crop measures the strip in the scaled document's own
+	// coordinates, which is where centerY already is
+	img = s.Image(img)
 	strip := OpaqueBounds(img)
 	if strip.Empty() {
 		return nil, nil

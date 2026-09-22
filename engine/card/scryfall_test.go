@@ -138,6 +138,64 @@ func TestFetchByName_BoundedBody(t *testing.T) {
 	}
 }
 
+func TestSearch_ReturnsPage(t *testing.T) {
+	// Wrap two card fixtures in a list response the search endpoint returns
+	bolt, err := os.ReadFile(filepath.Join("testdata", "lightning_bolt.json"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	delver, err := os.ReadFile(filepath.Join("testdata", "delver.json"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	list := `{"object":"list","data":[` + string(bolt) + `,` + string(delver) + `]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cards/search" {
+			http.NotFound(w, r)
+			return
+		}
+		if q := r.URL.Query().Get("q"); q != "t:instant" {
+			t.Errorf("query = %q, want t:instant", q)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(list))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(WithBaseURL(srv.URL))
+	got, err := c.Search(context.Background(), "t:instant")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d results, want 2", len(got))
+	}
+	if got[0].Name != "Lightning Bolt" {
+		t.Errorf("result[0] = %q, want Lightning Bolt", got[0].Name)
+	}
+	if got[1].Name != "Delver of Secrets" {
+		t.Errorf("result[1] = %q, want Delver of Secrets", got[1].Name)
+	}
+}
+
+func TestSearch_NoMatchesIsEmptyNotError(t *testing.T) {
+	// Scryfall answers a zero-result search with 404, which is not an error here
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"object":"error","code":"not_found","details":"no cards"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(WithBaseURL(srv.URL))
+	got, err := c.Search(context.Background(), "t:nonesuch")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d results, want 0", len(got))
+	}
+}
+
 func TestFetchArt(t *testing.T) {
 	// A 2x2 red PNG served as the art crop
 	var buf bytes.Buffer

@@ -1,0 +1,931 @@
+/* The component inventory every flow is assembled from: button, chip, field,
+   panel, table, status pill, progress, dropdown, empty state, toast, tooltip,
+   dialog, and the gate treatments */
+
+/* Button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--t-hover), border-color var(--t-hover), color var(--t-hover);
+}
+
+.btn:hover {
+  border-color: var(--text-faint);
+}
+
+.btn.primary {
+  height: var(--primary-h);
+  padding: 0 14px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
+.btn.subtle {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.btn.subtle:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.btn.danger {
+  color: var(--err);
+}
+
+.btn.icon-only {
+  width: var(--control-h);
+  padding: 0;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.primary:disabled {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+/* A stale marker on the render button says edits are waiting to be rendered */
+.btn .stale-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dirty);
+}
+
+.btn.primary .stale-dot {
+  background: var(--accent-text);
+}
+
+/* Chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-chip);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color var(--t-hover), color var(--t-hover), border-color var(--t-hover);
+}
+
+.chip:hover {
+  color: var(--text);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-weak);
+  color: var(--text);
+}
+
+.chip .count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Color toggles, the one place mana hues appear outside rendered pips */
+.color-chip {
+  gap: 5px;
+  padding: 0 8px 0 6px;
+  font-weight: 600;
+}
+
+.color-chip .swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--swatch);
+  background: transparent;
+  transition: background-color var(--t-hover);
+}
+
+.color-chip[aria-pressed="true"] {
+  border-color: var(--swatch);
+  background: color-mix(in srgb, var(--swatch) 18%, var(--surface));
+}
+
+.color-chip[aria-pressed="true"] .swatch {
+  background: var(--swatch);
+}
+
+/* Field: a label plus a control, with a dirty dot and a revert affordance */
+.field {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 4px 10px;
+  align-items: start;
+}
+
+.field > label,
+.field > .label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-height: var(--control-h);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.field .control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field .control-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.field .control-row > input,
+.field .control-row > textarea {
+  flex: 1;
+}
+
+.field .note {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dirty);
+  visibility: hidden;
+}
+
+.field.dirty .dirty-dot {
+  visibility: visible;
+}
+
+.revert {
+  display: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.revert .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.revert:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.field.dirty:hover .dirty-dot,
+.field.dirty:focus-within .dirty-dot {
+  display: none;
+}
+
+.field.dirty:hover .revert,
+.field.dirty:focus-within .revert {
+  display: inline-grid;
+  place-items: center;
+}
+
+.field-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--gap);
+}
+
+.field-pair .field {
+  grid-template-columns: auto 1fr;
+}
+
+.field-pair .field:first-child {
+  grid-template-columns: 84px 1fr;
+}
+
+/* Pips rendered live beneath a mana-aware input */
+.pips:empty {
+  display: none;
+}
+
+.pips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 18px;
+}
+
+.pips img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.pips .unknown {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-chip);
+  background: var(--warn-weak);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.pips .pips-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-right: 4px;
+}
+
+.symbol-palette {
+  display: grid;
+  grid-template-columns: repeat(8, 28px);
+  gap: 4px;
+  padding: 10px;
+}
+
+.symbol-palette h4 {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.symbol-palette h4:first-child {
+  margin-top: 0;
+}
+
+.symbol-palette button {
+  width: 28px;
+  height: 28px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: transparent;
+  cursor: pointer;
+}
+
+.symbol-palette button:hover,
+.symbol-palette button:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.symbol-palette img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.symbol-palette .hint {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Panel */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 36px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+details.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+details.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.disclosure > summary .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--t-panel);
+  transform: rotate(-90deg);
+}
+
+details.disclosure[open] > summary .icon {
+  transform: none;
+}
+
+details.disclosure > .field-grid {
+  padding-top: 4px;
+}
+
+/* Table */
+.table-wrap {
+  overflow: auto;
+  min-height: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.table td {
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table tr.selected td {
+  background: var(--accent-weak);
+}
+
+.table tr.expanded td {
+  background: var(--surface-raised);
+  color: var(--text-dim);
+}
+
+.table .thumb {
+  display: inline-block;
+  width: 36px;
+  height: 22px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--surface-raised), var(--border-strong));
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.table .thumb.tall {
+  width: 52px;
+  height: 26px;
+}
+
+/* Status pill: a dot plus a word, six states */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--r-chip);
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.pill.ok::before { background: var(--ok); }
+.pill.warn::before { background: var(--warn); }
+.pill.err::before { background: var(--err); }
+.pill.active::before { background: var(--accent); }
+.pill.info::before { background: var(--info); }
+.pill.idle::before { background: transparent; border: 1.5px solid var(--text-faint); }
+
+/* Progress: linear on purpose, since an eased bar lies about rate */
+.progress {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.progress > .bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--accent);
+  transition: width 100ms linear;
+}
+
+.progress.lg {
+  height: 8px;
+  border-radius: 4px;
+}
+
+/* Dropdown and popovers */
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dropdown-trigger .chev {
+  width: 14px;
+  height: 14px;
+  color: var(--text-dim);
+}
+
+.popover {
+  position: fixed;
+  z-index: 40;
+  min-width: 220px;
+  max-height: min(520px, 80vh);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible,
+.menu-item.focused {
+  background: var(--surface-raised);
+  outline: none;
+}
+
+.menu-item[aria-checked="true"] {
+  background: var(--accent-weak);
+}
+
+.menu-item .meta {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.menu-item .check {
+  width: 14px;
+  color: var(--accent);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.menu-heading {
+  padding: 8px 8px 4px;
+}
+
+/* Empty state: an icon, a line, an action and a rules block */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 440px;
+  margin: auto;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty > .icon {
+  color: var(--text-faint);
+}
+
+.empty .lede {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.empty .rules {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--bg);
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.empty .rules h3 {
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rules-table td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.rules-table td:first-child {
+  padding-right: 12px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* Toast, for confirmations that do not belong in the status bar */
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--statusbar-h) + 12px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+  animation: toast-in var(--t-panel);
+}
+
+.toast.err .icon { color: var(--err); }
+.toast.ok .icon { color: var(--ok); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* Tooltip, one sentence of reason on hover or focus */
+.tooltip {
+  position: fixed;
+  z-index: 70;
+  max-width: 280px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface-raised);
+  box-shadow: var(--overlay-shadow);
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.tooltip .tip-level {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Dialog */
+dialog.dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 64px));
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--overlay-shadow);
+}
+
+dialog.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialog-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dialog-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap);
+  min-height: 52px;
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+}
+
+.dialog-foot .status {
+  flex: 1;
+  color: var(--text-dim);
+}
+
+/* Settings groups */
+.settings-group + .settings-group {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-group > .section-heading {
+  margin-bottom: 10px;
+}
+
+.setting {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 4px 16px;
+  align-items: center;
+  padding: 5px 0;
+}
+
+.setting > label,
+.setting > .label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+.setting .desc {
+  grid-column: 2;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.setting .inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.setting .inline input[type="number"] {
+  width: 96px;
+}
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.shortcut-list dt {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.shortcut-list dd {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+/* Gates. A gated control keeps its layout so nothing shifts when it goes live,
+   drops to the faint text color, and carries a lock or a badge */
+.gated,
+.gated:hover {
+  color: var(--text-faint) !important;
+  cursor: default !important;
+  border-color: var(--border) !important;
+  background: transparent !important;
+}
+
+.btn.primary.gated {
+  background: var(--surface-raised) !important;
+}
+
+.gated input,
+.gated select,
+.gated textarea,
+input.gated,
+select.gated,
+textarea.gated {
+  pointer-events: none;
+}
+
+.gate-glyph {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-faint);
+  stroke-width: 2;
+}
+
+/* An icon-only button has no label to trail, so its lock sits in the corner */
+.btn.icon-only {
+  position: relative;
+}
+
+.btn.icon-only > .gate-glyph {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  width: 9px;
+  height: 9px;
+}
+
+.gate-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: var(--r-chip);
+  background: var(--warn-weak);
+  color: var(--warn);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* A gated region renders at 40% with a centered pill naming the gate, so the
+   shape of the feature shows through */
+.gated-section {
+  position: relative;
+  isolation: isolate;
+}
+
+.gated-section > .gated-content {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+  height: 100%;
+}
+
+.gate-pill {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.gate-pill .gate-glyph {
+  width: 14px;
+  height: 14px;
+  color: var(--warn);
+}
+
+.gate-pill .level {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+input[type="checkbox"].gated,
+select.gated,
+input.gated {
+  filter: grayscale(1);
+  opacity: 0.55;
+}

@@ -19,6 +19,8 @@ jobs:
     outputs:
       engine-released: ${{ steps.release.outputs['engine--release_created'] }}
       engine-tag: ${{ steps.release.outputs['engine--tag_name'] }}
+      ui-released: ${{ steps.release.outputs['ui--release_created'] }}
+      ui-tag: ${{ steps.release.outputs['ui--tag_name'] }}
     steps:
       # A personal access token rather than GITHUB_TOKEN, so the release pull
       # request and the tag it pushes still trigger CI
@@ -75,4 +77,67 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.engine-tag }}
+        run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*
+
+  # The mimic app builds without cgo, so all six targets cross-compile from this
+  # one Linux runner and archive per OS
+  ui-binaries:
+    needs: release-please
+    if: needs.release-please.outputs.ui-released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.ui-tag }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+
+      - name: Test
+        working-directory: ui
+        run: go test ./...
+
+      - name: Build mimic binaries
+        working-directory: ui
+        env:
+          # ui/v0.2.0 carries the module path prefix, the binaries do not
+          TAG: ${{ needs.release-please.outputs.ui-tag }}
+          # Build against the pinned engine module, not the workspace checkout,
+          # so the release is hermetic and the stamped version is the real one
+          GOWORK: off
+        run: |
+          version="${TAG#ui/}"
+          # Stamp the engine version this ui release depends on, so the shipped
+          # binary keeps real template-compatibility gating rather than the
+          # unstamped "dev" that renders anything
+          engine_version="$(go list -m -f '{{.Version}}' github.com/odevine/mimic/engine)"
+          echo "stamping engine version ${engine_version}"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            stage="mimic-${version}-${os}-${arch}"
+            mkdir -p "${stage}"
+            echo "building ${stage}"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
+              -trimpath -ldflags "-s -w -X github.com/odevine/mimic/engine/version.Version=${engine_version}" \
+              -o "${stage}/mimic${ext}" .
+            cp README.md "${stage}/"
+            if [ "$os" = "windows" ]; then
+              zip -qr "${GITHUB_WORKSPACE}/dist/${stage}.zip" "${stage}"
+            else
+              tar -czf "${GITHUB_WORKSPACE}/dist/${stage}.tar.gz" "${stage}"
+            fi
+          done
+
+      - name: Attach binaries to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.ui-tag }}
         run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/odevine/mimic/compare/ui/v0.4.0...ui/v0.5.0) (2026-09-22)
+
+
+### Features
+
+* **ui:** rebuild the frontend as one shell with modes and gating ([17cf927](https://github.com/odevine/mimic/commit/17cf9270f1ff2d7dc6c8eb25ecb34dc27ef6df73))
+* **ui:** serve feature gates, settings, printings and mana symbols ([6ff73fa](https://github.com/odevine/mimic/commit/6ff73fafc0e935d6440a313d5d9284ed1571dc83))
+
 ## [0.4.0](https://github.com/odevine/mimic/compare/ui/v0.3.0...ui/v0.4.0) (2026-09-22)
 
 

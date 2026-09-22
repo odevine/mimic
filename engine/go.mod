@@ -1,6 +1,6 @@
 module github.com/odevine/mimic/engine
 
-go 1.26.0
+go 1.26.2
 
 require (
 	github.com/odevine/impasto v0.1.1

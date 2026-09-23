@@ -68,6 +68,15 @@ by hand while the app is closed is supported.
 The page drives the server entirely through a small JSON API on the loopback
 address, so a script can drive it too.
 
+The server answers only requests addressed to `localhost` or an IP address,
+which keeps another website from reaching it through DNS rebinding. It refuses
+a POST or PUT whose `Origin` header names a different site. A script that sends
+no `Origin`, such as curl, is let through.
+
+Calls to the Scryfall API share one queue paced at about ten requests a second,
+in line with Scryfall's rate limit guidance. Card images come from Scryfall's
+image hosts, which have no limit, so they skip the queue.
+
 | Endpoint                           | Purpose                                              |
 | ---------------------------------- | ---------------------------------------------------- |
 | `GET /api/search?q=`               | Scryfall search, one result per match                |

@@ -66,7 +66,7 @@ type server struct {
 // from a bundle or a placeholder it kicks off the background default-template
 // auto-update, matching the desktop app
 func newServer() *server {
-	pipe := &renderPipeline{client: card.NewClient()}
+	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(scryfallHTTPClient()))}
 	p := loadPrefs()
 
 	at, source := startupTemplate(p)

@@ -33,7 +33,7 @@ func main() {
 	url := "http://" + ln.Addr().String()
 	fmt.Println(url)
 
-	srv := &http.Server{Handler: s.mux}
+	srv := &http.Server{Handler: guard(s.mux)}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("mimic: serving: %v", err)

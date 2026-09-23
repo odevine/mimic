@@ -19,10 +19,10 @@ function send(method, path, body, opts) {
   }).then(json);
 }
 
-// watchJob follows a job's event stream, calling onStep for progress and
-// resolving with the terminal event. It rejects when the job reports an error
-// or the connection drops. The returned promise carries close() so a caller can
-// abandon a job it has superseded
+// watchJob follows a job's event stream, calling onStep with each progress
+// event's step, fraction and the whole event, and resolving with the terminal
+// event. It rejects when the job reports an error or the connection drops. The
+// returned promise carries close() so a caller can abandon a job it superseded
 export function watchJob(path, onStep) {
   let es;
   const p = new Promise((resolve, reject) => {
@@ -35,7 +35,7 @@ export function watchJob(path, onStep) {
         else resolve(e);
         return;
       }
-      if (onStep) onStep(e.step, e.frac);
+      if (onStep) onStep(e.step, e.frac, e);
     };
     es.onerror = () => {
       es.close();
@@ -70,4 +70,19 @@ export const api = {
   activeTemplate: () => get("/api/template/active"),
   selectTemplate: (name, version) => send("POST", "/api/template/select", { name, version }),
   selectEvents: (jobId, onStep) => watchJob(`/api/template/select/${jobId}/events`, onStep),
+
+  // resolve parses a list and resolves to { jobId, format, rows }, with one
+  // resolved row per event on the stream
+  resolve: (text, format) => send("POST", "/api/resolve", { text, format }),
+  resolveEvents: (jobId, onStep) => watchJob(`/api/resolve/${jobId}/events`, onStep),
+
+  run: (rows, outDir, label) => send("POST", "/api/run", { rows, outDir, label }),
+  latestRun: () => fetch("/api/run").then((r) => (r.status === 204 ? null : json(r))),
+  runEvents: (id, onStep) => watchJob(`/api/run/${id}/events`, onStep),
+  runImageURL: (id, n) => `/api/run/${id}/image/${n}`,
+  stopRun: (id) => fetch(`/api/run/${id}/stop`, { method: "POST" }),
+  retryRun: (id) => send("POST", `/api/run/${id}/retry`, {}),
+  openRunFolder: (id) => fetch(`/api/run/${id}/open`, { method: "POST" }),
+
+  listDir: (path) => get(`/api/fs/list?path=${encodeURIComponent(path || "")}`),
 };

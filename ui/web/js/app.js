@@ -9,6 +9,8 @@ import { initPreview, setZoom } from "./components/preview.js";
 import { initSplitters } from "./components/splitter.js";
 import { popoverOpen } from "./components/popover.js";
 import { initSingle, single } from "./flows/single.js";
+import { initList, list } from "./flows/list.js";
+import { initRun } from "./flows/run.js";
 
 // Entry point: loads what every mode shares, wires the shell, and routes
 // between modes. Switching modes changes the workspace and nothing else
@@ -118,9 +120,14 @@ function initKeyboard() {
         setMode(MODES[Number(e.key) - 1]);
         return;
       }
-      if (e.key === "Enter" && app.mode.peek() === "single" && !dialogOpen) {
-        e.preventDefault();
-        single.render();
+      if (e.key === "Enter" && !dialogOpen) {
+        if (app.mode.peek() === "single") {
+          e.preventDefault();
+          single.render();
+        } else if (app.mode.peek() === "list") {
+          e.preventDefault();
+          list.render();
+        }
         return;
       }
       if (e.key.toLowerCase() === "s" && app.mode.peek() === "single" && !dialogOpen) {
@@ -161,6 +168,8 @@ async function boot() {
   initSettings();
   initPreview();
   initSingle();
+  initList();
+  initRun();
   initKeyboard();
   initSplitters(document.querySelector("#mode-single .regions"), (app.settings.peek().splits || {}).single, (w) =>
     persistSplits("single", w),

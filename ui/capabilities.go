@@ -33,9 +33,9 @@ type feature struct {
 // state here, never the markup, since the frontend renders what it is told
 var features = []feature{
 	{key: "flow.single", state: gateLive},
-	{key: "flow.list", state: gatePlanned, reason: "Rendering from a list is coming in v1.0"},
+	{key: "flow.list", state: gateLive},
 	{key: "flow.art", state: gateNeedsEngine, reason: "Needs engine support for art override"},
-	{key: "flow.run", state: gatePlanned, reason: "The Run Console arrives with batch rendering in v1.0"},
+	{key: "flow.run", state: gateLive},
 
 	{key: "single.printings", state: gateLive},
 	{key: "single.symbols", state: gateLive},
@@ -51,17 +51,20 @@ var features = []feature{
 	{key: "overrides.assets", state: gatePlanned, reason: "Asset substitution is planned after v1.0"},
 	{key: "presets", state: gatePlanned, reason: "Presets are coming in v1.0"},
 
-	{key: "run.retryFailed", state: gatePlanned, reason: "Coming in v1.0"},
+	{key: "run.retryFailed", state: gateLive},
+	{key: "run.openInReview", state: gatePlanned, reason: "Loading a run back into review is coming in v1.0"},
+	{key: "list.inspector", state: gatePlanned, reason: "Editing a row in the field editor is coming in v1.0"},
+	{key: "list.bulk", state: gatePlanned, reason: "Bulk actions on checked rows are coming in v1.0"},
 	{key: "palette", state: gatePlanned, reason: "The command palette is coming in v1.0"},
 
 	{key: "settings.resolution", state: gateLive},
 	{key: "settings.bitDepth", state: gateNeedsEngine, reason: "Needs engine support for 16-bit output"},
 	{key: "settings.bleed", state: gateNeedsEngine, reason: "Needs engine support for trimming the bleed"},
-	{key: "settings.concurrency", state: gatePlanned, reason: "Arrives with batch rendering in v1.0"},
-	{key: "settings.outputDir", state: gatePlanned, reason: "Arrives with batch rendering in v1.0"},
-	{key: "settings.filenameTemplate", state: gatePlanned, reason: "Arrives with batch rendering in v1.0"},
-	{key: "settings.runReport", state: gatePlanned, reason: "Arrives with batch rendering in v1.0"},
-	{key: "settings.scryfallRate", state: gatePlanned, reason: "Arrives with batch rendering in v1.0"},
+	{key: "settings.concurrency", state: gateLive},
+	{key: "settings.outputDir", state: gateLive},
+	{key: "settings.filenameTemplate", state: gatePlanned, reason: "Runs name files like Sol Ring [C21-263].png, and templates for that are coming in v1.0"},
+	{key: "settings.runReport", state: gatePlanned, reason: "Every run writes its report, and turning that off is coming in v1.0"},
+	{key: "settings.scryfallRate", state: gatePlanned, reason: "Scryfall calls are paced at ten a second, and changing that is coming in v1.0"},
 	{key: "settings.preferNonPromo", state: gatePlanned, reason: "Coming in v1.0"},
 	{key: "settings.language", state: gatePlanned, reason: "Coming in v1.0"},
 	{key: "settings.filenameRegex", state: gatePlanned, reason: "Arrives with rendering from your art in v1.0"},

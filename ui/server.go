@@ -59,6 +59,17 @@ type server struct {
 	// back on every change. Guarded by its own mutex
 	recentsMu sync.Mutex
 	recents   *recents
+
+	// resolveCancel abandons the list resolve in flight when a new one starts,
+	// and resolved caches lookups for the session
+	resolveMu     sync.Mutex
+	resolveCancel context.CancelFunc
+	resolved      resolveCache
+
+	// run is the latest batch run, kept after it finishes until the next starts
+	runMu  sync.Mutex
+	run    *batchRun
+	runSeq uint64
 }
 
 // newServer builds the server: it resolves the startup template without

@@ -1,6 +1,11 @@
 package main
 
-import "github.com/odevine/mimic/engine/card"
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/odevine/mimic/engine/card"
+)
 
 // editFields is the editable half of a card: every field the center-pane form
 // exposes, all as strings the way the form carries them. Colors is the raw
@@ -44,4 +49,51 @@ func applyEdits(base *card.Data, e editFields) *card.Data {
 	d.ReleasedAt = e.Released
 	d.Language = e.Language
 	return &d
+}
+
+// editsOf reads a card back into its editable fields, the inverse of applyEdits
+func editsOf(d *card.Data) editFields {
+	var colors strings.Builder
+	for _, c := range d.Colors {
+		colors.WriteString(string(c))
+	}
+	return editFields{
+		Name:      d.Name,
+		ManaCost:  d.ManaCost,
+		Colors:    colors.String(),
+		TypeLine:  d.TypeLine,
+		Oracle:    d.OracleText,
+		Flavor:    d.FlavorText,
+		Power:     d.Power,
+		Toughness: d.Toughness,
+		Loyalty:   d.Loyalty,
+		Artist:    d.Artist,
+		SetCode:   d.SetCode,
+		Collector: d.CollectorNumber,
+		Rarity:    d.Rarity,
+		Released:  d.ReleasedAt,
+		Language:  d.Language,
+	}
+}
+
+// overlayFields returns a copy of base with the named edit fields replaced, keyed
+// the way editFields marshals. Keys it does not know are ignored, so a partial
+// set from a CSV row or the review table changes only what it names
+func overlayFields(base *card.Data, fields map[string]string) *card.Data {
+	if len(fields) == 0 {
+		d := *base
+		return &d
+	}
+	raw, _ := json.Marshal(editsOf(base))
+	var m map[string]string
+	_ = json.Unmarshal(raw, &m)
+	for k, v := range fields {
+		if _, ok := m[k]; ok {
+			m[k] = v
+		}
+	}
+	raw, _ = json.Marshal(m)
+	var e editFields
+	_ = json.Unmarshal(raw, &e)
+	return applyEdits(base, e)
 }

@@ -73,9 +73,11 @@ which keeps another website from reaching it through DNS rebinding. It refuses
 a POST or PUT whose `Origin` header names a different site. A script that sends
 no `Origin`, such as curl, is let through.
 
-Calls to the Scryfall API share one queue paced at about ten requests a second,
-in line with Scryfall's rate limit guidance. Card images come from Scryfall's
-image hosts, which have no limit, so they skip the queue.
+Calls to the Scryfall API are paced to Scryfall's
+[published rate limits](https://scryfall.com/docs/api/rate-limits): two a second
+for search and named lookups, and ten a second for everything else. If Scryfall
+still answers 429, every call waits out the 30 seconds it asks for. Card images
+come from Scryfall's image hosts, which have no limit, so they skip the queue.
 
 | Endpoint                           | Purpose                                              |
 | ---------------------------------- | ---------------------------------------------------- |

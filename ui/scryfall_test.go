@@ -109,9 +109,9 @@ func TestPacedTransportSkipsOtherHosts(t *testing.T) {
 
 func TestRetryAfter(t *testing.T) {
 	cases := map[string]time.Duration{
-		"":       time.Second,
-		"junk":   time.Second,
-		"-3":     time.Second,
+		"":       scryfallPenalty,
+		"junk":   scryfallPenalty,
+		"-3":     scryfallPenalty,
 		"0":      0,
 		"2":      2 * time.Second,
 		"999999": maxRetryAfter,
@@ -120,5 +120,45 @@ func TestRetryAfter(t *testing.T) {
 		if got := retryAfter(in); got != want {
 			t.Errorf("retryAfter(%q) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+func TestPacedTransportQueuesSlowPathsApart(t *testing.T) {
+	var mu sync.Mutex
+	hits := make(map[string][]time.Time)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits[r.URL.Path] = append(hits[r.URL.Path], time.Now())
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	tr := newPacedTransport(http.DefaultTransport, u.Host, time.Millisecond)
+	tr.slow["/cards/search"] = 60 * time.Millisecond
+	c := &http.Client{Transport: tr}
+
+	start := time.Now()
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Go(func() {
+			if resp, err := c.Get(srv.URL + "/cards/search?q=x"); err == nil {
+				resp.Body.Close()
+			}
+		})
+	}
+	// A cheap call is not stuck behind the searches
+	resp, err := c.Get(srv.URL + "/sets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("a call on the default queue waited %v behind searches", d)
+	}
+	wg.Wait()
+
+	s := hits["/cards/search"]
+	if len(s) != 3 || s[2].Sub(s[0]) < 110*time.Millisecond {
+		t.Errorf("3 searches spanned %v, want at least 120ms", s[2].Sub(s[0]))
 	}
 }

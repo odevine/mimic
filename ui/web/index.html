@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/batch.css">
   <script>
     // Apply the remembered theme before first paint so a light-theme user never
     // sees a dark flash. The server copy in prefs is authoritative and app.js
@@ -203,54 +204,85 @@
         </div>
       </section>
 
-      <!-- From a List: gated until batch rendering lands -->
+      <!-- From a List: paste, review, render to a folder -->
       <section id="mode-list" class="mode" data-mode-panel="list" aria-label="From a list" hidden>
-        <div class="gated-section" data-feature-section="flow.list" style="flex:1; display:flex">
-          <div class="gated-content mode-body" style="flex:1">
-            <div class="source-pane">
-              <h2 class="section-heading">Paste a list</h2>
-              <textarea tabindex="-1" readonly>4 Lightning Bolt (2X2) 117
-1 Cryptic Command
-1 Bolt
-1 Lighning Bolt
+        <div class="mode-body">
+          <div class="source-pane">
+            <div class="source-head">
+              <h2 class="section-heading">List</h2>
+              <span class="spacer"></span>
+              <button id="list-open" class="btn subtle" type="button" data-tip="Open a .txt, .dek or .csv file">
+                <svg class="icon"><use href="icons.svg#i-upload"/></svg>Open file
+              </button>
+              <input id="list-file" type="file" accept=".txt,.dek,.dec,.csv,.tsv,text/plain,text/csv" hidden>
+            </div>
+            <textarea id="list-input" spellcheck="false" aria-label="Card list" placeholder="4 Lightning Bolt
+1 Counterspell (MH2) 267
 
 Sideboard
-2 Rest in Peace</textarea>
-              <p class="dim">Detected <strong>Arena export</strong>. Paste, drop a file, or pick one from disk.</p>
-              <table class="rules-table dim">
-                <tr><td>Lightning Bolt</td><td>Plain names</td></tr>
-                <tr><td>4x Lightning Bolt</td><td>Quantity prefix</td></tr>
-                <tr><td>4 Bolt (2X2) 117</td><td>Arena, printing honored</td></tr>
-                <tr><td>name,power,…</td><td>CSV with any field</td></tr>
-                <tr><td>?t:goblin c:r</td><td>A Scryfall query</td></tr>
-              </table>
+2 Rest in Peace"></textarea>
+            <div class="source-actions">
+              <select id="list-format" aria-label="List format">
+                <option value="">Detect format</option>
+                <option value="names">Plain names</option>
+                <option value="quantity">Quantity prefix</option>
+                <option value="arena">Arena export</option>
+                <option value="csv">CSV</option>
+              </select>
+              <button id="list-resolve" class="btn primary" type="button" data-tip="Look every line up on Scryfall (⌘↵)">
+                <svg class="icon"><use href="icons.svg#i-search"/></svg>Resolve
+              </button>
             </div>
-            <div class="review-pane">
+            <p id="list-detected" class="dim" role="status">Paste a list, drop a file, or open one from disk.</p>
+            <table class="rules-table dim">
+              <tr><td>Lightning Bolt</td><td>Plain names</td></tr>
+              <tr><td>4x Lightning Bolt</td><td>Quantity prefix</td></tr>
+              <tr><td>4 Bolt (2X2) 117</td><td>Arena, printing honored</td></tr>
+              <tr><td>name,power,…</td><td>CSV with any field</td></tr>
+              <tr><td>?t:goblin c:r</td><td>A Scryfall query</td></tr>
+              <tr><td>Sideboard</td><td>A section header</td></tr>
+            </table>
+          </div>
+
+          <div id="list-review" class="review-pane">
+            <div id="list-empty" class="empty">
+              <svg class="icon icon-lg"><use href="icons.svg#i-list"/></svg>
+              <p class="lede">Paste a decklist on the left and resolve it. Every line is checked against Scryfall before anything renders.</p>
+            </div>
+            <div id="list-review-body" class="review-body" hidden>
               <div class="review-summary">
-                <span>112 rows · 108 matched · 3 ambiguous · 1 not found</span>
+                <span id="list-summary" class="summary-text tabular"></span>
+                <div id="list-progress" class="progress" hidden><div class="bar"></div></div>
                 <span class="spacer"></span>
-                <button class="chip" type="button" tabindex="-1">All <span class="count">112</span></button>
-                <button class="chip" type="button" tabindex="-1" aria-pressed="true">Needs attention <span class="count">4</span></button>
-                <button class="chip" type="button" tabindex="-1">Custom <span class="count">0</span></button>
-                <input tabindex="-1" placeholder="Filter…">
+                <div id="list-chips" class="chips"></div>
+                <input id="list-filter" type="search" placeholder="Filter…" aria-label="Filter rows">
               </div>
               <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th style="width:32px"><input type="checkbox" tabindex="-1" checked></th><th style="width:48px">Qty</th><th>Card</th><th style="width:72px">Set</th><th style="width:150px">Status</th></tr></thead>
-                  <tbody>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td>4</td><td><span class="thumb"></span>Lightning Bolt</td><td class="mono">2X2</td><td><span class="pill ok">matched</span></td></tr>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td>1</td><td><span class="thumb"></span>Cryptic Command</td><td class="mono">IMA</td><td><span class="pill ok">matched</span></td></tr>
-                    <tr class="selected"><td><input type="checkbox" tabindex="-1" checked></td><td>1</td><td><span class="thumb"></span>Bolt</td><td class="faint">none</td><td><span class="pill warn">ambiguous</span></td></tr>
-                    <tr class="expanded"><td></td><td></td><td colspan="3">⤷ ● Lightning Bolt &nbsp; ○ Chain Lightning &nbsp; ○ Boltwing Marauder</td></tr>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td>1</td><td><span class="thumb"></span>Lighning Bolt</td><td class="faint">none</td><td><span class="pill err">not found</span></td></tr>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td>2</td><td><span class="thumb"></span>Rest in Peace</td><td class="mono">2XM</td><td><span class="pill ok">matched</span></td></tr>
-                  </tbody>
+                <table id="list-table-el" class="table review-table">
+                  <thead>
+                    <tr>
+                      <th class="col-check"><input id="list-all" type="checkbox" aria-label="Render every shown row" checked></th>
+                      <th class="col-qty">Qty</th>
+                      <th>Card</th>
+                      <th class="col-set">Printing</th>
+                      <th class="col-group">Section</th>
+                      <th class="col-status">Status</th>
+                    </tr>
+                  </thead>
                 </table>
+                <p id="list-none" class="table-none dim" hidden>No rows match this filter.</p>
               </div>
               <div class="mode-footer">
-                <span class="dim">Output</span><span class="mono">~/Documents/proxies</span>
+                <span class="dim">Output</span>
+                <button id="list-output" class="btn subtle folder-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+                  <svg class="icon"><use href="icons.svg#i-folder"/></svg><span id="list-output-label" class="mono truncate"></span>
+                  <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
+                </button>
                 <span class="spacer"></span>
-                <button class="btn primary" type="button" tabindex="-1"><svg class="icon"><use href="icons.svg#i-play"/></svg>Render 112 cards</button>
+                <span id="list-skip-note" class="dim"></span>
+                <button id="list-render" class="btn primary" type="button" disabled>
+                  <svg class="icon"><use href="icons.svg#i-play"/></svg><span id="list-render-label">Render</span>
+                </button>
               </div>
             </div>
           </div>
@@ -362,43 +394,71 @@ Sideboard
         </div>
       </section>
 
-      <!-- Run Console: gated until batch rendering lands -->
+      <!-- Run Console: watches a batch and stays readable after -->
       <section id="mode-run" class="mode" data-mode-panel="run" aria-label="Run console" hidden>
-        <div class="gated-section" data-feature-section="flow.run" style="flex:1; display:flex; flex-direction:column">
-          <div class="gated-content" style="display:flex; flex-direction:column">
-            <div class="console-head">
-              <div class="line"><span class="section-heading">Run · commander-deck</span><span class="pill active">running</span></div>
-              <div class="line">
-                <div class="progress lg"><div class="bar" style="width:66%"></div></div>
-                <span class="tabular">74 / 112</span><span class="dim">2 failed</span><span class="dim tabular">1m 48s</span>
-              </div>
-              <div class="line"><span class="mono dim">→ ~/Documents/proxies</span><span style="flex:1"></span>
-                <button class="btn" type="button" tabindex="-1"><svg class="icon"><use href="icons.svg#i-stop"/></svg>Stop</button>
-                <button class="btn subtle" type="button" tabindex="-1"><svg class="icon"><use href="icons.svg#i-folder"/></svg>Open folder</button>
-              </div>
+        <div id="run-empty" class="empty">
+          <svg class="icon icon-lg"><use href="icons.svg#i-play"/></svg>
+          <p class="lede">No run yet. Resolve a list and press Render, and its progress shows here.</p>
+          <button id="run-empty-list" class="btn primary" type="button">
+            <svg class="icon"><use href="icons.svg#i-list"/></svg>Go to List
+          </button>
+        </div>
+        <div id="run-body" class="run-body" hidden>
+          <div class="console-head">
+            <div class="line">
+              <h2 id="run-title" class="section-heading"></h2>
+              <span id="run-state" class="pill"></span>
+              <span class="spacer"></span>
+              <span id="run-meta" class="faint mono truncate"></span>
             </div>
-            <div class="mode-body">
-              <div class="review-pane">
-                <div class="review-summary">
-                  <button class="chip" type="button" tabindex="-1" aria-pressed="true">All <span class="count">112</span></button>
-                  <button class="chip" type="button" tabindex="-1">Done <span class="count">72</span></button>
-                  <button class="chip" type="button" tabindex="-1">Failed <span class="count">2</span></button>
-                </div>
-                <ul class="run-rows">
-                  <li><span class="glyph ok">✓</span><span class="name">Sol Ring</span><span class="dim tabular">1.9s</span></li>
-                  <li><span class="glyph ok">✓</span><span class="name">Arcane Signet</span><span class="dim tabular">2.1s</span></li>
-                  <li><span class="glyph err">✗</span><span class="name">my cool dragon</span><span class="dim">art decode</span></li>
-                  <li><span class="glyph active">●</span><span class="name">Swords to Plowshares</span><span class="dim tabular">62%</span></li>
-                  <li><span class="glyph faint">○</span><span class="name">Rhystic Study</span><span class="faint">queued</span></li>
-                  <li><span class="glyph faint">○</span><span class="name">Smothering Tithe</span><span class="faint">queued</span></li>
-                </ul>
+            <div class="line">
+              <div id="run-bar" class="progress lg"><div class="bar"></div></div>
+              <span id="run-summary" class="run-summary" hidden></span>
+              <span id="run-count" class="tabular"></span>
+              <button id="run-failed" class="link-btn err-text" type="button" hidden></button>
+              <span id="run-elapsed" class="dim tabular"></span>
+              <span id="run-eta" class="dim tabular" hidden></span>
+            </div>
+            <div class="line">
+              <span class="dim">→</span><span id="run-out" class="mono dim truncate"></span>
+              <span class="spacer"></span>
+              <button id="run-stop" class="btn" type="button">
+                <svg class="icon"><use href="icons.svg#i-stop"/></svg>Stop
+              </button>
+              <button id="run-retry" class="btn" type="button" data-feature="run.retryFailed" hidden>
+                <svg class="icon"><use href="icons.svg#i-render"/></svg><span id="run-retry-label">Retry failed</span>
+              </button>
+              <button id="run-review" class="btn subtle" type="button" data-feature="run.openInReview" hidden>
+                <svg class="icon"><use href="icons.svg#i-list"/></svg>Open in review
+              </button>
+              <button id="run-open" class="btn subtle" type="button">
+                <svg class="icon"><use href="icons.svg#i-folder"/></svg>Open folder
+              </button>
+            </div>
+          </div>
+          <div class="mode-body">
+            <div class="review-pane">
+              <div class="review-summary">
+                <div id="run-chips" class="chips"></div>
+                <span class="spacer"></span>
+                <input id="run-filter" type="search" placeholder="Filter…" aria-label="Filter cards">
               </div>
-              <div class="console-side">
-                <div class="placeholder-card"></div>
-                <div class="log">12:04:11 fetch art  Sol Ring
-12:04:13 render   Sol Ring  1.9s
-12:04:13 fetch art  Arcane Signet</div>
+              <ul id="run-rows" class="run-rows"></ul>
+            </div>
+            <div class="console-side">
+              <div class="run-preview">
+                <div id="run-placeholder" class="placeholder-card"></div>
+                <img id="run-image" class="card" alt="" hidden>
+                <p id="run-caption" class="mono dim truncate"></p>
               </div>
+              <details class="disclosure run-log-box">
+                <summary><svg class="icon"><use href="icons.svg#i-chevron-down"/></svg>Log
+                  <span class="spacer"></span>
+                  <button id="run-log-copy" class="btn subtle" type="button">Copy</button>
+                  <button id="run-log-save" class="btn subtle" type="button">Save</button>
+                </summary>
+                <pre id="run-log" class="log"></pre>
+              </details>
             </div>
           </div>
         </div>
@@ -446,7 +506,7 @@ Sideboard
         </div>
         <div class="setting">
           <span class="label" data-feature="settings.concurrency">Render concurrency</span>
-          <span class="inline"><input type="number" value="2" data-feature="settings.concurrency" aria-label="Render concurrency"></span>
+          <span class="inline"><input id="concurrency-input" type="number" min="1" max="6" placeholder="2" data-feature="settings.concurrency" aria-label="Render concurrency"><span class="dim">cards at once</span></span>
         </div>
       </section>
 
@@ -454,12 +514,12 @@ Sideboard
         <h3 class="section-heading">Output</h3>
         <div class="setting">
           <span class="label" data-feature="settings.outputDir">Default folder</span>
-          <input class="mono" value="~/Documents/proxies" data-feature="settings.outputDir" aria-label="Default folder">
+          <input id="output-dir-input" class="mono" placeholder="~/Documents/proxies" spellcheck="false" data-feature="settings.outputDir" aria-label="Default folder">
         </div>
         <div class="setting">
           <span class="label" data-feature="settings.filenameTemplate">Filename template</span>
-          <input class="mono" value="{name}" data-feature="settings.filenameTemplate" aria-label="Filename template">
-          <p class="desc">Lightning Bolt.png</p>
+          <input class="mono" value="{name} [{set}-{number}]" data-feature="settings.filenameTemplate" aria-label="Filename template">
+          <p class="desc">Lightning Bolt [2X2-117].png</p>
         </div>
         <div class="setting">
           <span class="label" data-feature="settings.runReport">Write run report</span>
@@ -475,7 +535,7 @@ Sideboard
         <h3 class="section-heading">Sources</h3>
         <div class="setting">
           <span class="label" data-feature="settings.scryfallRate">Scryfall requests per second</span>
-          <span class="inline"><input type="number" value="8" data-feature="settings.scryfallRate" aria-label="Scryfall rate"></span>
+          <span class="inline"><input type="number" value="10" data-feature="settings.scryfallRate" aria-label="Scryfall rate"></span>
         </div>
         <div class="setting">
           <span class="label" data-feature="settings.preferNonPromo">Prefer non-promo printings</span>

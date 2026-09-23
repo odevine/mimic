@@ -8,6 +8,9 @@ import (
 // The themes a settings write may carry. Anything else is stored as the default
 var themes = map[string]bool{"dark": true, "light": true, "system": true}
 
+// maxRecentOutputDirs bounds the recent output folders a settings write keeps
+const maxRecentOutputDirs = 6
+
 // handleCapabilities returns the gate map the frontend applies to every
 // feature-keyed control
 func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
@@ -28,6 +31,12 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if !themes[body.Theme] {
 		body.Theme = ""
+	}
+	if body.Concurrency < 0 || body.Concurrency > maxConcurrency {
+		body.Concurrency = 0
+	}
+	if len(body.RecentOutputDirs) > maxRecentOutputDirs {
+		body.RecentOutputDirs = body.RecentOutputDirs[:maxRecentOutputDirs]
 	}
 	s.prefs.setSettings(body)
 	writeJSON(w, s.prefs.settings())

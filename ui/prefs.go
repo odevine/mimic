@@ -31,6 +31,12 @@ type uiSettings struct {
 	// collapsing them to one row per card name
 	ExpandPrintings bool                 `json:"expandPrintings,omitempty"`
 	Splits          map[string][]float64 `json:"splits,omitempty"`
+	// Concurrency is how many cards a batch renders at once, zero for the default
+	Concurrency int `json:"concurrency,omitempty"`
+	// OutputDir is the folder a batch writes to, and RecentOutputDirs the
+	// folders offered beside it, newest first
+	OutputDir        string   `json:"outputDir,omitempty"`
+	RecentOutputDirs []string `json:"recentOutputDirs,omitempty"`
 }
 
 // prefs persists a little user state to a JSON file, guarded by a mutex. It

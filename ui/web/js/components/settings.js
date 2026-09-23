@@ -80,6 +80,8 @@ async function open() {
   const s = app.settings.peek();
   $("theme-select").value = s.theme || "dark";
   $("expand-printings").checked = !!s.expandPrintings;
+  $("concurrency-input").value = s.concurrency ? String(s.concurrency) : "";
+  $("output-dir-input").value = s.outputDir || "";
   $("settings-dialog").showModal();
   await loadResolution();
   fillResolution();
@@ -102,6 +104,8 @@ async function save() {
       ...app.settings.peek(),
       theme: $("theme-select").value,
       expandPrintings: $("expand-printings").checked,
+      concurrency: Math.min(Math.max(parseInt($("concurrency-input").value, 10) || 0, 0), 6),
+      outputDir: $("output-dir-input").value.trim(),
     };
     app.settings.value = await api.saveSettings(next);
     applyTheme(app.settings.peek().theme);

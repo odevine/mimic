@@ -33,6 +33,16 @@ func (s *server) routes() {
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/printings", s.handlePrintings)
 	mux.HandleFunc("GET /api/symbol", s.handleSymbol)
+	mux.HandleFunc("POST /api/resolve", s.handleResolve)
+	mux.HandleFunc("GET /api/resolve/{id}/events", s.handleJobEvents)
+	mux.HandleFunc("POST /api/run", s.handleRun)
+	mux.HandleFunc("GET /api/run", s.handleLatestRun)
+	mux.HandleFunc("GET /api/run/{id}/events", s.handleRunEvents)
+	mux.HandleFunc("GET /api/run/{id}/image/{n}", s.handleRunImage)
+	mux.HandleFunc("POST /api/run/{id}/stop", s.handleStopRun)
+	mux.HandleFunc("POST /api/run/{id}/retry", s.handleRetryRun)
+	mux.HandleFunc("POST /api/run/{id}/open", s.handleOpenRunFolder)
+	mux.HandleFunc("GET /api/fs/list", s.handleFSList)
 	mux.Handle("/", http.FileServerFS(staticFS()))
 	s.mux = mux
 }
@@ -217,15 +227,20 @@ func (s *server) handleRenderImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleJobEvents streams a job's events as server-sent events, replaying the
-// backlog to a late subscriber and ending after the terminal done event. It
-// serves both render and template-download jobs, which share the job map
+// handleJobEvents streams a job from the job map. It serves render, template
+// download and list resolve jobs
 func (s *server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 	j, ok := s.lookupJob(r.PathValue("id"))
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
+	streamJob(w, r, j)
+}
+
+// streamJob writes a job's events as server-sent events, replaying the backlog
+// to a late subscriber and ending after the terminal done event
+func streamJob(w http.ResponseWriter, r *http.Request, j *job) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -362,6 +377,10 @@ func (s *server) handleSelectTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Name == "" || body.Version == "" {
 		http.Error(w, "name and version are required", http.StatusBadRequest)
+		return
+	}
+	if s.runActive() {
+		http.Error(w, "the template cannot change while a run is in progress", http.StatusConflict)
 		return
 	}
 	id, j := s.newJob()

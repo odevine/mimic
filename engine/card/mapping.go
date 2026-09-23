@@ -1,5 +1,10 @@
 package card
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // scryfallCard is the subset of Scryfall's card JSON this project reads.
 // Nothing outside this file depends on this shape. toData is the only bridge
 // between it and *Data
@@ -108,4 +113,29 @@ func toColors(in []string) []Color {
 		out[i] = Color(s)
 	}
 	return out
+}
+
+// FromScryfallJSON maps one Scryfall card object into *Data. It reads the card
+// JSON the API returns and each line of a bulk data file alike, so a caller
+// holding Scryfall data from any source maps it the same way a lookup does
+func FromScryfallJSON(raw []byte) (*Data, error) {
+	var sc scryfallCard
+	if err := json.Unmarshal(raw, &sc); err != nil {
+		return nil, fmt.Errorf("scryfall: decoding card: %w", err)
+	}
+	return sc.toData(), nil
+}
+
+// artHost is Scryfall's image host, which carries no API rate limit
+const artHost = "https://cards.scryfall.io"
+
+// ArtCropURL is the art crop of a card's front face on Scryfall's image host,
+// built from the card's Scryfall id. The host files each image under the first
+// two characters of the id, as in art_crop/front/0/2/02645651-....jpg. It
+// returns "" for an id too short to file
+func ArtCropURL(id string) string {
+	if len(id) < 2 {
+		return ""
+	}
+	return fmt.Sprintf("%s/art_crop/front/%c/%c/%s.jpg", artHost, id[0], id[1], id)
 }

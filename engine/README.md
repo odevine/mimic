@@ -8,6 +8,9 @@ is a Go module with three layers.
 `Client.Search` runs a query through Scryfall's full search syntax and returns a
 page of matches, and `Client.FetchArt` downloads a card's art crop. Responses
 are bounded in size and time so a slow or oversized reply cannot stall a render.
+For Scryfall data from elsewhere, such as a line of a bulk data file,
+`card.FromScryfallJSON` maps one card object the same way a lookup does, and
+`card.ArtCropURL` builds a card's art crop address from its Scryfall id.
 
 `template` turns a `card.Data` and its art into a finished image. A `Template`
 reads its frame layers and geometry through an `AssetProvider`, lays out and

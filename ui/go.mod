@@ -2,7 +2,7 @@ module github.com/odevine/mimic/ui
 
 go 1.26.2
 
-require github.com/odevine/mimic/engine v0.6.0
+require github.com/odevine/mimic/engine v0.7.0
 
 require (
 	github.com/odevine/impasto v0.1.1 // indirect

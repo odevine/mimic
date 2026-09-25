@@ -28,6 +28,10 @@ drawing. A double-faced card renders as two images, chosen with
 `RenderRequest.Face`, and a manifest's layers and text boxes can name the
 `front` or `back` condition to draw on one face only.
 
+`mpcfill` lays finished cards out as an MPC Autofill project, a folder of
+PNGs plus the `cards.xml` order file its desktop tool and website import. Its
+README explains the file-naming and folder rules MPC Autofill forces on it.
+
 `cmd/rendercard` is a command that wires the two together: it looks up a card by
 name and writes a PNG, and serves as a reference for other front ends.
 

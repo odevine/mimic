@@ -85,4 +85,11 @@ export const api = {
   openRunFolder: (id) => fetch(`/api/run/${id}/open`, { method: "POST" }),
 
   listDir: (path) => get(`/api/fs/list?path=${encodeURIComponent(path || "")}`),
+
+  // cardData reports the local copy of Scryfall bulk data and what a download
+  // would fetch, and downloadCardData starts a download job
+  cardData: () => get("/api/carddata"),
+  downloadCardData: () => send("POST", "/api/carddata/download", {}),
+  cardDataEvents: (jobId, onStep) => watchJob(`/api/carddata/${jobId}/events`, onStep),
+  removeCardData: () => send("DELETE", "/api/carddata", {}),
 };

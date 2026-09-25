@@ -80,7 +80,7 @@ func TestLookup(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			res := lookup(context.Background(), newFake(), c.row)
+			res := lookup(context.Background(), apiBackend{newFake()}, c.row)
 			if res.Status != c.status {
 				t.Fatalf("status = %q, want %q (%s)", res.Status, c.status, res.Note)
 			}
@@ -97,7 +97,7 @@ func TestLookup(t *testing.T) {
 func TestLookupNetworkErrorIsNotNotFound(t *testing.T) {
 	f := newFake()
 	f.fail = true
-	res := lookup(context.Background(), f, listRow{Name: "Lightning Bolt"})
+	res := lookup(context.Background(), apiBackend{f}, listRow{Name: "Lightning Bolt"})
 	if res.Status != rowError {
 		t.Errorf("status = %q, want error", res.Status)
 	}
@@ -107,21 +107,21 @@ func TestResolveRowCachesAndCustom(t *testing.T) {
 	f := newFake()
 	var cache resolveCache
 	row := listRow{Name: "Lightning Bolt"}
-	resolveRow(context.Background(), f, &cache, row)
+	resolveRow(context.Background(), apiResolver(f), &cache, row)
 	before := f.calls
-	if res := resolveRow(context.Background(), f, &cache, row); res.Status != rowMatched || f.calls != before {
+	if res := resolveRow(context.Background(), apiResolver(f), &cache, row); res.Status != rowMatched || f.calls != before {
 		t.Errorf("second lookup: status %q, %d new calls", res.Status, f.calls-before)
 	}
 
 	custom := listRow{Name: "Big Dragon", Custom: true, Fields: map[string]string{"name": "Big Dragon", "typeLine": "Creature", "power": "9"}}
-	res := resolveRow(context.Background(), f, &cache, custom)
+	res := resolveRow(context.Background(), apiResolver(f), &cache, custom)
 	if res.Status != rowCustom || res.Card.Name != "Big Dragon" || res.Card.Power != "9" {
 		t.Errorf("custom row = %+v", res)
 	}
 
 	// A CSV row naming no real card becomes custom once it has a type line
 	fallback := listRow{Name: "Nothing Here", Fields: map[string]string{"name": "Nothing Here", "typeLine": "Artifact"}}
-	if res := resolveRow(context.Background(), f, &cache, fallback); res.Status != rowCustom || res.Card.TypeLine != "Artifact" {
+	if res := resolveRow(context.Background(), apiResolver(f), &cache, fallback); res.Status != rowCustom || res.Card.TypeLine != "Artifact" {
 		t.Errorf("fallback row = %+v", res)
 	}
 }
@@ -130,7 +130,7 @@ func TestResolveRowsStreamsEveryRow(t *testing.T) {
 	rows, _, _ := parseList("Lightning Bolt\nBolt\nNothing Here\n?t:goblin c:r", "")
 	j := &job{}
 	var cache resolveCache
-	resolveRows(context.Background(), j, newFake(), &cache, rows)
+	resolveRows(context.Background(), j, apiResolver(newFake()), &cache, rows)
 
 	events, finished, _ := j.stream(0)
 	if !finished {
@@ -163,4 +163,8 @@ func TestOverlayFields(t *testing.T) {
 	if base.Power != "2" {
 		t.Error("overlay changed the base")
 	}
+}
+
+func apiResolver(src cardSource) resolver {
+	return resolver{mode: cardDataAPI, primary: apiBackend{src}}
 }

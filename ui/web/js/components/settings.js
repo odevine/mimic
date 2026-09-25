@@ -2,6 +2,7 @@ import { api } from "../api.js";
 import { $ } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "./toast.js";
+import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
 // them against the active template, and the interface settings go through
@@ -82,6 +83,7 @@ async function open() {
   $("expand-printings").checked = !!s.expandPrintings;
   $("concurrency-input").value = s.concurrency ? String(s.concurrency) : "";
   $("output-dir-input").value = s.outputDir || "";
+  openCardData(s.cardData);
   $("settings-dialog").showModal();
   await loadResolution();
   fillResolution();
@@ -106,6 +108,7 @@ async function save() {
       expandPrintings: $("expand-printings").checked,
       concurrency: Math.min(Math.max(parseInt($("concurrency-input").value, 10) || 0, 0), 6),
       outputDir: $("output-dir-input").value.trim(),
+      cardData: cardDataChoice(),
     };
     app.settings.value = await api.saveSettings(next);
     applyTheme(app.settings.peek().theme);
@@ -120,6 +123,7 @@ async function save() {
 }
 
 export function initSettings() {
+  initCardData();
   $("settings-btn").addEventListener("click", open);
   $("settings-save").addEventListener("click", save);
   // Previewing the theme as it is picked, reverted on cancel

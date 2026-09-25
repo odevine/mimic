@@ -534,6 +534,23 @@ Sideboard
       <section class="settings-group">
         <h3 class="section-heading">Sources</h3>
         <div class="setting">
+          <label for="card-data-select" data-feature="settings.localData">Card data</label>
+          <select id="card-data-select" data-feature="settings.localData">
+            <option value="api">Scryfall API</option>
+            <option value="local">Local copy</option>
+          </select>
+          <div id="card-data" class="card-data" role="status" aria-live="polite">
+            <p id="card-data-text"></p>
+            <div id="card-data-progress" class="progress" hidden><div class="bar"></div></div>
+            <div class="card-data-actions">
+              <button id="card-data-download" class="btn" type="button" hidden>
+                <svg class="icon"><use href="icons.svg#i-download"/></svg><span id="card-data-download-label">Download</span>
+              </button>
+              <button id="card-data-remove" class="btn subtle" type="button" hidden>Remove</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting">
           <span class="label" data-feature="settings.scryfallRate">Scryfall requests per second</span>
           <span class="inline"><input type="number" value="10" data-feature="settings.scryfallRate" aria-label="Scryfall rate"></span>
         </div>

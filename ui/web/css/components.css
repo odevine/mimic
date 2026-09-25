@@ -929,3 +929,30 @@ input.gated {
   filter: grayscale(1);
   opacity: 0.55;
 }
+
+/* The Card data setting's status line, download progress and actions */
+.card-data {
+  display: flex;
+  grid-column: 2;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.card-data.warn p {
+  color: var(--warn);
+}
+
+.card-data.err p {
+  color: var(--err);
+}
+
+.card-data-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-data-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}

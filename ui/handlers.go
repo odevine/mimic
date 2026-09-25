@@ -43,6 +43,10 @@ func (s *server) routes() {
 	mux.HandleFunc("POST /api/run/{id}/retry", s.handleRetryRun)
 	mux.HandleFunc("POST /api/run/{id}/open", s.handleOpenRunFolder)
 	mux.HandleFunc("GET /api/fs/list", s.handleFSList)
+	mux.HandleFunc("GET /api/carddata", s.handleCardData)
+	mux.HandleFunc("POST /api/carddata/download", s.handleCardDataDownload)
+	mux.HandleFunc("GET /api/carddata/{id}/events", s.handleJobEvents)
+	mux.HandleFunc("DELETE /api/carddata", s.handleCardDataDelete)
 	mux.Handle("/", http.FileServerFS(staticFS()))
 	s.mux = mux
 }
@@ -89,13 +93,22 @@ func printingsQuery(name string) string {
 }
 
 // handlePrintings lists every printing of a card, for the editor's printing
-// picker. It goes through Search rather than a set-and-number fetch, so it needs
-// nothing the card client does not already do
+// picker. It reads the local copy when that is in use, and otherwise goes
+// through Search rather than a set-and-number fetch, so it needs nothing the
+// card client does not already do
 func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	if name == "" {
 		writeJSON(w, []*card.Data{})
 		return
+	}
+	// A card newer than the local copy is not in it, so an empty answer still
+	// asks Scryfall
+	if s.useLocalCards() {
+		if cards, err := s.cards.printings(name); err == nil && len(cards) > 0 {
+			writeJSON(w, cards)
+			return
+		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), netTimeout)
 	defer cancel()

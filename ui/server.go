@@ -70,6 +70,14 @@ type server struct {
 	runMu  sync.Mutex
 	run    *batchRun
 	runSeq uint64
+
+	// cards is the local copy of Scryfall bulk data, empty until downloaded
+	cards *localStore
+	// scryfall is the paced HTTP client the card client uses, shared with the
+	// bulk data download
+	scryfall *http.Client
+	// remoteCards caches Scryfall's bulk data index for the settings panel
+	remoteCards remoteCache
 }
 
 // newServer builds the server: it resolves the startup template without
@@ -77,7 +85,8 @@ type server struct {
 // from a bundle or a placeholder it kicks off the background default-template
 // auto-update, matching the desktop app
 func newServer() *server {
-	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(scryfallHTTPClient()))}
+	httpc := scryfallHTTPClient()
+	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc))}
 	p := loadPrefs()
 
 	at, source := startupTemplate(p)
@@ -91,8 +100,11 @@ func newServer() *server {
 		activeName:    at.name,
 		activeVersion: at.version,
 		recents:       newRecents(p.recentSearches()),
+		cards:         newLocalStore(cardDir()),
+		scryfall:      httpc,
 	}
 	s.routes()
+	go s.cards.load()
 
 	// Keep the default template up to date in the background so launch never
 	// blocks on a large download. A loose developer directory and an explicitly

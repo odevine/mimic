@@ -24,7 +24,7 @@ jobs:
     steps:
       # A personal access token rather than GITHUB_TOKEN, so the release pull
       # request and the tag it pushes still trigger CI
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           token: ${{ secrets.MIMIC_RELEASE_PLEASE_TOKEN }}

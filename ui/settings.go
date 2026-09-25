@@ -32,6 +32,9 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if !themes[body.Theme] {
 		body.Theme = ""
 	}
+	if body.CardData != cardDataLocal {
+		body.CardData = ""
+	}
 	if body.Concurrency < 0 || body.Concurrency > maxConcurrency {
 		body.Concurrency = 0
 	}

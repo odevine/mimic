@@ -101,6 +101,18 @@ Settings persist in `prefs.json` under the per-OS user config directory, in a
 `mimic` folder beside the template cache. The file is plain JSON, and editing it
 by hand while the app is closed is supported.
 
+Card data, in the Sources group, chooses where lookups read cards from. Scryfall
+API is the default. Local copy downloads Scryfall's
+[bulk data](https://scryfall.com/docs/api/bulk-data), about 100 MB, and keeps a
+trimmed copy of every printing in a `scryfall` folder beside `prefs.json`, about
+70 MB. With it, a list of a hundred cards resolves in well under a second and
+Single's printing picker reads from disk. Lines naming a card the copy does not
+have, usually one printed after the download, still go to the API, and so do
+`?query` lines and Single's search box, since those use Scryfall's search
+syntax. Art comes from Scryfall's image host either way. Scryfall refreshes the
+files daily, and the panel offers an update once a copy is a week old or a
+newer one is out.
+
 ## HTTP API
 
 The page drives the server entirely through a small JSON API on the loopback
@@ -116,8 +128,9 @@ Calls to the Scryfall API are paced to Scryfall's
 for search and named lookups, and ten a second for everything else. If Scryfall
 still answers 429, every call waits out the 30 seconds it asks for. Resolving a
 list makes one search per matched line, so a 100-line list takes about a minute
-the first time and is cached for the rest of the session. Card images come from
-Scryfall's image hosts, which have no limit, so they skip the queue.
+the first time and is cached for the rest of the session, unless a local copy of
+the card data is in use. Card images come from Scryfall's image hosts, which
+have no limit, so they skip the queue.
 
 | Endpoint                           | Purpose                                              |
 | ---------------------------------- | ---------------------------------------------------- |
@@ -144,3 +157,7 @@ Scryfall's image hosts, which have no limit, so they skip the queue.
 | `POST /api/run/{id}/retry`         | Start a new run from the failed cards                |
 | `POST /api/run/{id}/open`          | Open the run's folder in the file browser            |
 | `GET /api/fs/list?path=`           | Subfolders of a folder, for the folder picker        |
+| `GET /api/carddata`                | The local card data, and what a download would fetch |
+| `POST /api/carddata/download`      | Download and install the local card data             |
+| `GET /api/carddata/{id}/events`    | Card data download progress                          |
+| `DELETE /api/carddata`             | Remove the local card data                           |

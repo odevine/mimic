@@ -37,6 +37,9 @@ type uiSettings struct {
 	// folders offered beside it, newest first
 	OutputDir        string   `json:"outputDir,omitempty"`
 	RecentOutputDirs []string `json:"recentOutputDirs,omitempty"`
+	// CardData is where lookups read cards from, "api" or "local". Empty reads
+	// as the API
+	CardData string `json:"cardData,omitempty"`
 }
 
 // prefs persists a little user state to a JSON file, guarded by a mutex. It

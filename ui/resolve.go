@@ -121,7 +121,7 @@ func (s *server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	id, j := s.newJob()
 	go func() {
 		defer cancel()
-		resolveRows(ctx, j, s.pipe.client, &s.resolved, rows)
+		resolveRows(ctx, j, s.resolver(), &s.resolved, rows)
 	}()
 	writeJSON(w, map[string]any{"jobId": id, "format": format, "rows": rows})
 }
@@ -129,7 +129,7 @@ func (s *server) handleResolve(w http.ResponseWriter, r *http.Request) {
 // resolveRows looks every row up and emits each result as it lands, in
 // completion order with its index, then a final done event. A cancelled resolve
 // ends without a done event's error, since the page has already moved on
-func resolveRows(ctx context.Context, j *job, src cardSource, cache *resolveCache, rows []listRow) {
+func resolveRows(ctx context.Context, j *job, rv resolver, cache *resolveCache, rows []listRow) {
 	next := make(chan int)
 	var mu sync.Mutex
 	done := 0
@@ -137,7 +137,7 @@ func resolveRows(ctx context.Context, j *job, src cardSource, cache *resolveCach
 	for range min(resolveWorkers, max(len(rows), 1)) {
 		wg.Go(func() {
 			for i := range next {
-				res := resolveRow(ctx, src, cache, rows[i])
+				res := resolveRow(ctx, rv, cache, rows[i])
 				res.Index = i
 				mu.Lock()
 				done++
@@ -172,19 +172,27 @@ func resolveRows(ctx context.Context, j *job, src cardSource, cache *resolveCach
 	j.emit(jobEvent{Done: true, Frac: 1, Step: fmt.Sprintf("Resolved %d of %d", len(rows), len(rows))})
 }
 
-// resolveRow looks one row up, from the cache when it can. Transient failures
-// are not cached, so resolving again retries them
-func resolveRow(ctx context.Context, src cardSource, cache *resolveCache, row listRow) resolvedRow {
+// resolveRow looks one row up, from the cache when it can. A name the primary
+// source has never heard of goes to the fallback, which is how a card newer
+// than the local copy still resolves. Transient failures are not cached, so
+// resolving again retries them
+func resolveRow(ctx context.Context, rv resolver, cache *resolveCache, row listRow) resolvedRow {
 	if row.Custom {
 		return customRow(row)
 	}
-	key := row.cacheKey()
+	key := rv.mode + "\x00" + row.cacheKey()
 	if res, ok := cache.get(key); ok {
 		return withCustomFallback(res, row)
 	}
 	// No overall deadline here, since a long list spends most of its time queued
 	// behind Scryfall's rate limit. Each request times out on its own network wait
-	res := lookup(ctx, src, row)
+	res := lookup(ctx, rv.primary, row)
+	if res.Status == rowNotFound && rv.fallback != nil && row.Query == "" {
+		if api := lookup(ctx, rv.fallback, row); api.Status != rowNotFound {
+			api.Note = joinNotes(api.Note, "Not in the local card data, so this came from Scryfall")
+			res = api
+		}
+	}
 	if res.Status != rowError {
 		cache.put(key, res)
 	}
@@ -208,14 +216,14 @@ func withCustomFallback(res resolvedRow, row listRow) resolvedRow {
 	return res
 }
 
-// lookup resolves a row against Scryfall. A query expands to its results. A
+// lookup resolves a row through one backend. A query expands to its results. A
 // name with a set and collector number looks up that printing first. An exact
 // name match is matched with Scryfall's default printing. Anything else tries a
 // fuzzy match and a name search, and lands ambiguous with the choices found or
 // not found when there are none
-func lookup(ctx context.Context, src cardSource, row listRow) resolvedRow {
+func lookup(ctx context.Context, b lookupBackend, row listRow) resolvedRow {
 	if row.Query != "" {
-		cards, err := src.Search(ctx, row.Query)
+		cards, err := b.query(ctx, row.Query)
 		if err != nil {
 			return resolvedRow{Status: rowError, Note: err.Error()}
 		}
@@ -232,37 +240,33 @@ func lookup(ctx context.Context, src cardSource, row listRow) resolvedRow {
 
 	note := ""
 	if row.Set != "" {
-		q := fmt.Sprintf("!%q set:%s", row.Name, row.Set)
-		if row.Number != "" {
-			q += " cn:" + row.Number
-		}
-		cards, err := src.Search(ctx, q+" unique:prints")
+		d, err := b.printing(ctx, row.Name, row.Set, row.Number)
 		if err != nil {
 			return resolvedRow{Status: rowError, Note: err.Error()}
 		}
-		if len(cards) > 0 {
-			return resolvedRow{Status: rowMatched, Card: exactName(cards, row.Name)}
+		if d != nil {
+			return resolvedRow{Status: rowMatched, Card: d}
 		}
 		note = fmt.Sprintf("No printing %s %s, so this is Scryfall's default", strings.ToUpper(row.Set), row.Number)
 	}
 
-	cards, err := src.Search(ctx, fmt.Sprintf("!%q", row.Name))
+	d, err := b.exact(ctx, row.Name)
 	if err != nil {
 		return resolvedRow{Status: rowError, Note: err.Error()}
 	}
-	if len(cards) > 0 {
-		return resolvedRow{Status: rowMatched, Card: exactName(cards, row.Name), Note: note}
+	if d != nil {
+		return resolvedRow{Status: rowMatched, Card: d, Note: note}
 	}
 
-	fuzzy, err := src.FetchByName(ctx, row.Name)
-	if err != nil && !isNotFound(err) {
+	fuzzy, err := b.fuzzy(ctx, row.Name)
+	if err != nil {
 		return resolvedRow{Status: rowError, Note: err.Error()}
 	}
 	// A name search finds the cards whose names contain every word, most played
 	// first, which is what makes a short name like Bolt lead with Lightning Bolt.
 	// The fuzzy hit is the answer for a typo, which a name search cannot match
 	var candidates []*card.Data
-	if similar, err := src.Search(ctx, row.Name+" order:edhrec"); err == nil {
+	if similar, err := b.similar(ctx, row.Name); err == nil {
 		candidates = similar[:min(len(similar), maxCandidates)]
 	}
 	if fuzzy != nil && !slices.ContainsFunc(candidates, func(c *card.Data) bool { return c.Name == fuzzy.Name }) {
@@ -296,4 +300,15 @@ func exactName(cards []*card.Data, name string) *card.Data {
 		}
 	}
 	return cards[0]
+}
+
+// joinNotes puts two row notes together, either of which may be empty
+func joinNotes(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + ". " + b
 }

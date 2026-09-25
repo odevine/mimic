@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/odevine/mimic/compare/ui/v0.5.0...ui/v0.6.0) (2026-09-25)
+
+
+### Features
+
+* **ui:** render a pasted list to a folder, watched from a run console ([2a3292c](https://github.com/odevine/mimic/commit/2a3292c50221bbf1e214c24ccc24e3b6f6e15313))
+* **ui:** resolve lists from a local copy of Scryfall's bulk data ([b3df74d](https://github.com/odevine/mimic/commit/b3df74d33c830edd9d4eed80d5520da919cafc92))
+
+
+### Bug Fixes
+
+* **ui:** pace Scryfall search and named lookups at two a second ([ce8d120](https://github.com/odevine/mimic/commit/ce8d120bcc7c55ee0fa098498709e6c25dbbccba))
+* **ui:** refuse cross-site requests and pace Scryfall calls ([b8f603f](https://github.com/odevine/mimic/commit/b8f603ff514e12eb1e5cf9565c114c4df241801b))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.7.0 ([850911c](https://github.com/odevine/mimic/commit/850911c76f61eeb23b298abb3ae6700f6f64eee1))
+
 ## [0.5.0](https://github.com/odevine/mimic/compare/ui/v0.4.0...ui/v0.5.0) (2026-09-22)
 
 

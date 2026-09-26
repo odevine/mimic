@@ -8,6 +8,7 @@
   "rarity": "common",
   "collector_number": "51",
   "set": "isd",
+  "layout": "transform",
   "card_faces": [
     {
       "name": "Delver of Secrets",

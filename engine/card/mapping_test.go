@@ -27,6 +27,16 @@ func TestFromScryfallJSON(t *testing.T) {
 	if d, err = FromScryfallJSON(raw); err != nil || d.Name != "Delver of Secrets" {
 		t.Errorf("mapped %+v, %v", d, err)
 	}
+	if d.Layout != "transform" || len(d.Faces) != 2 {
+		t.Fatalf("layout %q with %d faces, want transform with 2", d.Layout, len(d.Faces))
+	}
+	back := d.Face(1)
+	if back.Name != "Insectile Aberration" || back.Power != "3" || back.SetCode != "isd" || back.ArtworkURL == d.ArtworkURL {
+		t.Errorf("back face %+v", back)
+	}
+	if d.Face(0) != d || d.Face(5) != d {
+		t.Error("face 0 and an out of range face should be the card itself")
+	}
 
 	if _, err := FromScryfallJSON([]byte("{not json")); err == nil {
 		t.Error("malformed JSON should fail")

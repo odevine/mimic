@@ -23,7 +23,10 @@ type ProgressFunc func(step string, frac float64)
 
 // RenderRequest is everything a template needs to render one card
 type RenderRequest struct {
-	Card   *card.Data
+	Card *card.Data
+	// Face picks which of Classify(Card)'s images to render, 0 for the front.
+	// Only a double-faced card has more than one
+	Face   int
 	Art    image.Image // nil renders without art
 	Assets AssetProvider
 	// Progress, when set, receives step updates during the render. Nil disables
@@ -64,15 +67,17 @@ type Template interface {
 }
 
 // Registration is what a template records about itself beyond how to build
-// one: its name and a short description a person choosing a template can
-// read, returned by List
+// one: its name, a short description a person choosing a template can read,
+// and the faces it can render, returned by List
 type Registration struct {
 	Name        string
 	Description string
+	Supports    Supports
 }
 
 type registryEntry struct {
 	description string
+	supports    Supports
 	factory     func() Template
 }
 
@@ -82,11 +87,11 @@ var (
 )
 
 // Register records a template factory under name, with a short description
-// for a ui to show whoever is choosing a template. It is meant to be called
-// from an implementation's init(). It panics on a duplicate name, a nil
-// factory, or an empty description, since all three are programming errors
-// visible at startup
-func Register(name, description string, factory func() Template) {
+// for a ui to show whoever is choosing a template and the faces it supports.
+// It is meant to be called from an implementation's init(). It panics on a
+// duplicate name, a nil factory, an empty description, or a supports outside
+// the engine's vocabulary, since all are programming errors visible at startup
+func Register(name, description string, supports Supports, factory func() Template) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if factory == nil {
@@ -95,13 +100,18 @@ func Register(name, description string, factory func() Template) {
 	if description == "" {
 		panic("template: Register description is empty for " + name)
 	}
+	if err := supports.validate(); err != nil {
+		panic("template: Register " + name + ": " + err.Error())
+	}
 	if _, dup := registry[name]; dup {
 		panic("template: Register called twice for " + name)
 	}
-	registry[name] = registryEntry{description: description, factory: factory}
+	registry[name] = registryEntry{description: description, supports: supports, factory: factory}
 }
 
-// Get constructs a fresh template by name, or reports that none is registered
+// Get constructs a fresh template by name, or reports that none is registered.
+// Its Render refuses a face the registration does not support with an
+// *UnsupportedError before drawing anything
 func Get(name string) (Template, error) {
 	registryMu.RLock()
 	entry, ok := registry[name]
@@ -109,7 +119,27 @@ func Get(name string) (Template, error) {
 	if !ok {
 		return nil, fmt.Errorf("template: no template registered as %q", name)
 	}
-	return entry.factory(), nil
+	return &checked{Template: entry.factory(), supports: entry.supports}, nil
+}
+
+// checked guards a registered template's Render with its Supports
+type checked struct {
+	Template
+	supports Supports
+}
+
+func (c *checked) Render(ctx context.Context, req RenderRequest) (*raster.Buffer, error) {
+	if req.Card == nil {
+		return nil, fmt.Errorf("template: request has no card")
+	}
+	shapes := Classify(req.Card)
+	if req.Face < 0 || req.Face >= len(shapes) {
+		return nil, fmt.Errorf("template: face %d out of range, %q renders %d", req.Face, req.Card.Name, len(shapes))
+	}
+	if sh := shapes[req.Face]; !c.supports.Allows(sh) {
+		return nil, &UnsupportedError{Template: c.Name(), Shape: sh}
+	}
+	return c.Template.Render(ctx, req)
 }
 
 // Names lists the registered template names, sorted
@@ -130,7 +160,7 @@ func List() []Registration {
 	defer registryMu.RUnlock()
 	out := make([]Registration, 0, len(registry))
 	for name, entry := range registry {
-		out = append(out, Registration{Name: name, Description: entry.description})
+		out = append(out, Registration{Name: name, Description: entry.description, Supports: entry.supports})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

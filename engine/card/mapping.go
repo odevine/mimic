@@ -57,12 +57,24 @@ type face struct {
 	ImageURIs  imageURIs `json:"image_uris"`
 }
 
+// doubleFacedLayouts are the Scryfall layouts printed on two physical faces.
+// Their top level joins both faces, as in "Delver of Secrets // Insectile
+// Aberration", and carries no mana cost, colors, or art, so the real fields
+// live only in card_faces. Split, adventure, and flip cards also have
+// card_faces but print on one face, so their top level already describes the
+// whole card
+var doubleFacedLayouts = map[string]bool{
+	"transform":          true,
+	"modal_dfc":          true,
+	"battle":             true,
+	"double_faced_token": true,
+	"reversible_card":    true,
+}
+
 // toData maps a Scryfall card into *Data.
 //
-// Modal double-faced and transform cards carry their real per-face fields in
-// card_faces, with the top-level fields empty, so the top level falls back to
-// the front face. Every face is kept in Faces either way, so a back face can
-// render through Data.Face
+// A double-faced card's top level takes its front face's fields. Every face is
+// kept in Faces either way, so a back face can render through Data.Face
 func (sc *scryfallCard) toData() *Data {
 	d := &Data{
 		Name:            sc.Name,
@@ -101,10 +113,11 @@ func (sc *scryfallCard) toData() *Data {
 		})
 	}
 
-	// An empty type line with faces present marks a DFC whose per-face fields
-	// live one level down. ColorIdentity, rarity, set, and collector number
-	// stay shared at the top level
-	if sc.TypeLine == "" && len(sc.CardFaces) > 0 {
+	// An empty type line with faces present also marks per-face fields living
+	// one level down, for a layout the list above does not name yet.
+	// ColorIdentity, rarity, set, and collector number stay shared at the top
+	// level
+	if len(sc.CardFaces) > 0 && (doubleFacedLayouts[sc.Layout] || sc.TypeLine == "") {
 		f := sc.CardFaces[0]
 		d.Name = f.Name
 		d.ManaCost = f.ManaCost

@@ -53,3 +53,53 @@ func TestArtCropURL(t *testing.T) {
 		t.Error("a one-character id should give no URL")
 	}
 }
+
+func TestFromScryfallJSONFrontFaceByLayout(t *testing.T) {
+	// Trimmed from the live API. A double-faced card's top level joins both
+	// faces and has no art, while a split, adventure, or flip card prints on one
+	// face and its top level already describes it
+	cases := []struct {
+		name, raw         string
+		wantName, wantArt string
+	}{
+		{
+			"modal double-faced",
+			`{"name":"Emeria's Call // Emeria, Shattered Skyclave","layout":"modal_dfc","type_line":"Sorcery // Land",
+			  "card_faces":[{"name":"Emeria's Call","type_line":"Sorcery","mana_cost":"{4}{W}{W}{W}","image_uris":{"art_crop":"front.jpg"}},
+			                {"name":"Emeria, Shattered Skyclave","type_line":"Land","image_uris":{"art_crop":"back.jpg"}}]}`,
+			"Emeria's Call", "front.jpg",
+		},
+		{
+			"split",
+			`{"name":"Fire // Ice","layout":"split","type_line":"Instant // Instant","mana_cost":"{1}{R} // {1}{U}","image_uris":{"art_crop":"whole.jpg"},
+			  "card_faces":[{"name":"Fire","type_line":"Instant"},{"name":"Ice","type_line":"Instant"}]}`,
+			"Fire // Ice", "whole.jpg",
+		},
+		{
+			"adventure",
+			`{"name":"Bonecrusher Giant // Stomp","layout":"adventure","type_line":"Creature — Giant // Instant — Adventure","power":"4","image_uris":{"art_crop":"whole.jpg"},
+			  "card_faces":[{"name":"Bonecrusher Giant","type_line":"Creature — Giant"},{"name":"Stomp","type_line":"Instant — Adventure"}]}`,
+			"Bonecrusher Giant // Stomp", "whole.jpg",
+		},
+		{
+			"flip",
+			`{"name":"Nezumi Shortfang // Stabwhisker the Odious","layout":"flip","type_line":"Creature — Rat Rogue // Legendary Creature — Rat Shaman","image_uris":{"art_crop":"whole.jpg"},
+			  "card_faces":[{"name":"Nezumi Shortfang","type_line":"Creature — Rat Rogue"},{"name":"Stabwhisker the Odious","type_line":"Legendary Creature — Rat Shaman"}]}`,
+			"Nezumi Shortfang // Stabwhisker the Odious", "whole.jpg",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d, err := FromScryfallJSON([]byte(c.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.Name != c.wantName || d.ArtworkURL != c.wantArt {
+				t.Errorf("name %q art %q, want %q %q", d.Name, d.ArtworkURL, c.wantName, c.wantArt)
+			}
+			if len(d.Faces) != 2 {
+				t.Errorf("kept %d faces, want 2", len(d.Faces))
+			}
+		})
+	}
+}

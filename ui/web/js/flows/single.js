@@ -4,6 +4,7 @@ import { app, signal, effect, batch } from "../state.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { renderPips, symbolPalette, insertAtCursor } from "../components/symbols.js";
 import { setZoom } from "../components/preview.js";
+import { unsupportedBy } from "../supports.js";
 
 // Flow 1: search a card, adjust anything about it, render, download. The
 // browser holds the fetched card as the base and the form values as edits, so
@@ -217,7 +218,7 @@ function selectResult(i) {
     store.edits.value = valuesOf(card);
   });
   loadPrintings(card.Name, g.cards.length > 1 ? g.cards : null);
-  render();
+  renderIfSupported();
 }
 
 // Arrow keys move through results, Enter opens the focused one
@@ -316,7 +317,7 @@ function choosePrinting(card) {
     store.base.value = card;
     store.edits.value = merged;
   });
-  render();
+  renderIfSupported();
 }
 
 // --- editor ---
@@ -560,6 +561,27 @@ async function render() {
   }
 }
 
+// renderIfSupported draws a newly picked card, or for one the active template
+// cannot render, clears the preview and leaves the strip idle so it shows the
+// warning. Render stays available, since an edited type line can make the card
+// one the template renders
+function renderIfSupported() {
+  if (!unsupportedBy(store.base.peek())) {
+    render();
+    return;
+  }
+  if (renderJob) renderJob.close();
+  renderJob = null;
+  preview = null;
+  clearInterval(ticker);
+  batch(() => {
+    store.rendered.value = null;
+    store.activity.value = { state: "idle", title: "", step: "", frac: 0 };
+  });
+  $("preview-img").hidden = true;
+  $("stage-placeholder").hidden = false;
+}
+
 function download(jobId) {
   const a = h("a", { href: api.renderImageURL(jobId, true), download: "" });
   document.body.append(a);
@@ -706,6 +728,8 @@ export function initSingle() {
   effect(() => {
     const a = store.activity.value;
     const has = !!store.base.value;
+    app.template.value;
+    const why = has ? unsupportedBy(store.base.value) : "";
     let { state, title, step } = a;
     let meta = "";
 
@@ -713,6 +737,10 @@ export function initSingle() {
       state = "idle";
       title = "No card selected";
       step = "Search for a card and pick a result to render it here";
+    } else if (state === "idle" && why) {
+      state = "warn";
+      title = why;
+      step = "Pick a template that does from the template menu, or edit the type line and press Render";
     } else if (state === "working") {
       meta = `${Math.round(a.frac * 100)}% · ${seconds((performance.now() - a.started) / 1000)}`;
     } else if (state === "done" && stale()) {
@@ -736,7 +764,7 @@ export function initSingle() {
   });
 
   document.addEventListener("mimic:template-changed", () => {
-    if (store.base.peek()) render();
+    if (store.base.peek()) renderIfSupported();
   });
   document.addEventListener("mimic:resolution-changed", () => {
     if (store.base.peek()) render();

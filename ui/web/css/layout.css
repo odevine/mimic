@@ -794,6 +794,7 @@ body.resizing * {
 
 .run-rows .glyph.ok { color: var(--ok); }
 .run-rows .glyph.err { color: var(--err); }
+.run-rows .glyph.warn { color: var(--warn); }
 .run-rows .glyph.active { color: var(--accent); }
 
 .overrides-tree {

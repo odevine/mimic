@@ -54,8 +54,8 @@ func (s *server) routes() {
 // searchResult is one row the search endpoint returns: the display line the list
 // shows and the full card the client fills its form from and posts back
 type searchResult struct {
-	Text string     `json:"text"`
-	Card *card.Data `json:"card"`
+	Text string      `json:"text"`
+	Card *shapedCard `json:"card"`
 }
 
 // handleSearch runs a Scryfall search and returns the matches. A successful
@@ -81,7 +81,7 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]searchResult, len(cards))
 	for i, c := range cards {
-		out[i] = searchResult{Text: rowText(c), Card: c}
+		out[i] = searchResult{Text: rowText(c), Card: shaped(c)}
 	}
 	writeJSON(w, out)
 }
@@ -106,7 +106,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	// asks Scryfall
 	if s.useLocalCards() {
 		if cards, err := s.cards.printings(name); err == nil && len(cards) > 0 {
-			writeJSON(w, cards)
+			writeJSON(w, shapedAll(cards))
 			return
 		}
 	}
@@ -124,7 +124,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	if cards == nil {
 		cards = []*card.Data{}
 	}
-	writeJSON(w, cards)
+	writeJSON(w, shapedAll(cards))
 }
 
 // handleRecents returns the recent-search suggestions, newest first
@@ -346,15 +346,16 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleActiveTemplate returns the active template's name, version, the display
-// label for the top-bar indicator, and where its assets come from for the status
-// bar
+// label for the top-bar indicator, where its assets come from for the status
+// bar, and the faces it supports for the list review
 func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 	name, version := s.active()
-	writeJSON(w, map[string]string{
-		"name":    name,
-		"version": version,
-		"label":   templateDisplay(name, version),
-		"source":  templateSource(name, version),
+	writeJSON(w, map[string]any{
+		"name":     name,
+		"version":  version,
+		"label":    templateDisplay(name, version),
+		"source":   templateSource(name, version),
+		"supports": s.pipe.supports(),
 	})
 }
 

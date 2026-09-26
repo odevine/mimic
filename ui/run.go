@@ -20,16 +20,23 @@ import (
 )
 
 // The states a card moves through in a run. Skipped is a card a Stop reached
-// before it finished
+// before it finished. Unsupported is a card the run's template does not render,
+// which no retry fixes
 const (
-	cardQueued    = "queued"
-	cardFetching  = "fetching"
-	cardRendering = "rendering"
-	cardWriting   = "writing"
-	cardDone      = "done"
-	cardFailed    = "failed"
-	cardSkipped   = "skipped"
+	cardQueued      = "queued"
+	cardFetching    = "fetching"
+	cardRendering   = "rendering"
+	cardWriting     = "writing"
+	cardDone        = "done"
+	cardFailed      = "failed"
+	cardSkipped     = "skipped"
+	cardUnsupported = "unsupported"
 )
+
+// settledStatus reports whether a card has finished moving through the run
+func settledStatus(status string) bool {
+	return status == cardDone || status == cardFailed || status == cardSkipped || status == cardUnsupported
+}
 
 // defaultConcurrency is how many cards render at once when nothing is set. Each
 // full-size render holds a buffer of tens of megabytes, so memory rather than
@@ -134,7 +141,7 @@ func (r *batchRun) update(i int, logLine string, fn func(c *runCard)) {
 	c := r.cards[i]
 	settled := 0
 	for _, x := range r.cards {
-		if x.Status == cardDone || x.Status == cardFailed || x.Status == cardSkipped {
+		if settledStatus(x.Status) {
 			settled++
 		}
 	}
@@ -394,8 +401,11 @@ func (s *server) execute(ctx context.Context, run *batchRun) {
 	}
 	v := run.view()
 	counts := countCards(v.Cards)
-	summary := fmt.Sprintf("%d done, %d failed, %d skipped in %s", counts[cardDone], counts[cardFailed], counts[cardSkipped],
-		v.Finished.Sub(v.Started).Round(100*time.Millisecond))
+	summary := fmt.Sprintf("%d done, %d failed, %d skipped", counts[cardDone], counts[cardFailed], counts[cardSkipped])
+	if n := counts[cardUnsupported]; n > 0 {
+		summary += fmt.Sprintf(", %d unsupported by %s", n, run.template)
+	}
+	summary += " in " + v.Finished.Sub(v.Started).Round(100*time.Millisecond).String()
 	run.log("finished: " + summary)
 	run.job.emit(jobEvent{Done: true, Frac: 1, Step: summary})
 }
@@ -414,12 +424,24 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 			run.update(i, name+": stopped", func(c *runCard) { c.Status = cardSkipped; c.Frac = 0 })
 			return
 		}
+		if isUnsupported(err) {
+			run.update(i, name+": "+err.Error(), func(c *runCard) {
+				c.Status, c.Stage, c.Err, c.Frac = cardUnsupported, stage, err.Error(), 0
+			})
+			return
+		}
 		run.update(i, fmt.Sprintf("%s: %s failed: %v", name, stage, err), func(c *runCard) {
 			c.Status, c.Stage, c.Err, c.Frac = cardFailed, stage, err.Error(), 0
 		})
 	}
 
 	d := overlayFields(&row.Base, row.Fields)
+	// Checked before the art download, which would be wasted on a card the
+	// template refuses
+	if err := s.pipe.unsupported(d); err != nil {
+		fail("check", err)
+		return
+	}
 	run.update(i, "", func(c *runCard) { c.Status = cardFetching })
 	var art image.Image
 	if row.Base.ArtworkURL != "" {

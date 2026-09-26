@@ -26,8 +26,9 @@ import (
 // card's default printing in index.gob, which loads into memory at startup
 
 // localCardFormat versions the files the store writes. A copy in an older
-// format is ignored, and the settings panel offers a fresh download
-const localCardFormat = 1
+// format is ignored, and the settings panel offers a fresh download. Format 2
+// records carry each card's layout and faces, which template support reads
+const localCardFormat = 2
 
 // The store's states as the settings panel shows them
 const (

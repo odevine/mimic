@@ -24,11 +24,38 @@ const STATUS = {
   notFound: { label: "not found", cls: "err" },
   error: { label: "lookup failed", cls: "err" },
   custom: { label: "custom", cls: "info" },
+  unsupported: { label: "unsupported", cls: "warn" },
 };
 
-// A row needs attention until it has one card the user can stand behind
+// describeShape names a face's shape the way a person would, for "normal does
+// not render planeswalker cards" or "transform front faces"
+function describeShape(sh) {
+  if (sh.role === "unknown") return "cards with this layout";
+  const kind = sh.kind === "standard" ? "" : `${sh.kind.replace(/_/g, " ")} `;
+  if (sh.role === "single") return `${kind || "standard "}cards`;
+  if (sh.role === "split" || sh.role === "adventure") return `${kind}${sh.role} cards`;
+  const [layout, side] = sh.role.split("_");
+  return `${kind}${layout === "mdfc" ? "MDFC" : layout} ${side} faces`;
+}
+
+// unsupportedBy says why the active template cannot render a card's front
+// face, or "" when it can. A card sent without shapes is left to the run's own
+// check
+function unsupportedBy(card) {
+  const t = app.template.peek();
+  const sh = card && card.shapes && card.shapes[0];
+  if (!sh || !t || !t.supports || !t.supports.roles) return "";
+  if (t.supports.roles.includes(sh.role) && t.supports.kinds.includes(sh.kind)) return "";
+  return `${t.name || "This template"} does not render ${describeShape(sh)}`;
+}
+
+// A row needs attention until it has one card the user can stand behind. A
+// matched card the active template cannot render shows as unsupported, which
+// no edit fixes but switching templates can
 const needsAttention = (s) => s.status === "ambiguous" || s.status === "notFound" || s.status === "error";
-const renderable = (s) => !s.excluded && (s.status === "matched" || s.status === "custom") && s.card;
+const resolved = (s) => (s.status === "matched" || s.status === "custom") && s.card;
+const effectiveStatus = (s) => (resolved(s) && unsupportedBy(s.card) ? "unsupported" : s.status);
+const renderable = (s) => !s.excluded && resolved(s) && !unsupportedBy(s.card);
 
 const store = {
   rows: signal([]), // [{ id, line, text, qty, group, fields, key, state: signal }]
@@ -174,11 +201,16 @@ async function retryRow(row, name) {
 // --- counts and filters ---
 
 function counts() {
-  const c = { total: 0, matched: 0, ambiguous: 0, notFound: 0, error: 0, custom: 0, attention: 0, render: 0, cards: 0, groups: new Map() };
+  const c = { total: 0, matched: 0, ambiguous: 0, notFound: 0, error: 0, custom: 0, unsupported: 0, attention: 0, render: 0, cards: 0, groups: new Map() };
+  // unsupportedIncluded is what the skip note counts, since an unticked row is
+  // skipped for its own reason
+  c.unsupportedIncluded = 0;
   for (const row of store.rows.peek()) {
     const s = row.state.peek();
+    const status = effectiveStatus(s);
     c.total++;
-    if (c[s.status] !== undefined) c[s.status]++;
+    if (c[status] !== undefined) c[status]++;
+    if (status === "unsupported" && !s.excluded) c.unsupportedIncluded++;
     if (needsAttention(s)) c.attention++;
     if (renderable(s)) {
       c.render++;
@@ -194,6 +226,7 @@ function matchesFilter(row) {
   const f = store.filter.peek();
   if (f === "attention" && !needsAttention(s)) return false;
   if (f === "custom" && s.status !== "custom") return false;
+  if (f === "unsupported" && effectiveStatus(s) !== "unsupported") return false;
   if (f.startsWith("group:") && row.group !== f.slice(6)) return false;
   const q = store.query.peek().trim().toLowerCase();
   if (q) {
@@ -252,6 +285,8 @@ function buildRow(row) {
 
   const disposeState = effect(() => {
     const s = row.state.value;
+    // Read so a template switch redraws the row's status
+    app.template.value;
     include.checked = !s.excluded;
     tr.classList.toggle("excluded", !!s.excluded);
     qty.textContent = row.qty > 1 ? String(row.qty) : "1";
@@ -266,8 +301,9 @@ function buildRow(row) {
     cardCell.replaceChildren(thumb(s.status === "notFound" ? null : card), h("span", { class: "row-text" }, name, sub));
     set.textContent = s.status === "matched" || s.status === "custom" ? printingOf(card) : "";
     group.textContent = row.group;
-    const st = STATUS[s.status] || STATUS.pending;
-    const pill = h("span", { class: `pill ${st.cls}` }, st.label);
+    const st = STATUS[effectiveStatus(s)] || STATUS.pending;
+    const why = resolved(s) ? unsupportedBy(s.card) : "";
+    const pill = h("span", why ? { class: `pill ${st.cls}`, "data-tip": why } : { class: `pill ${st.cls}` }, st.label);
     status.replaceChildren(pill);
     if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note }, icon("warn")));
     buildDetail(row, s, detail);
@@ -541,6 +577,7 @@ function initReview() {
   // Summary line, filter chips, and which rows show
   effect(() => {
     store.version.value;
+    app.template.value;
     const filter = store.filter.value;
     store.query.value;
     const c = counts();
@@ -556,6 +593,7 @@ function initReview() {
     if (c.notFound) parts.push(`${c.notFound} not found`);
     if (c.error) parts.push(`${c.error} failed`);
     if (c.custom) parts.push(`${c.custom} custom`);
+    if (c.unsupported) parts.push(`${c.unsupported} unsupported`);
     $("list-summary").textContent = res ? `Resolved ${res.done} of ${res.total}` : parts.join(" · ");
     $("list-progress").hidden = !res;
     if (res) $("list-progress").firstElementChild.style.width = `${(res.done / Math.max(res.total, 1)) * 100}%`;
@@ -565,6 +603,7 @@ function initReview() {
       { label: "Needs attention", value: "attention", count: c.attention },
     ];
     if (c.custom) chips.push({ label: "Custom", value: "custom", count: c.custom });
+    if (c.unsupported) chips.push({ label: "Unsupported", value: "unsupported", count: c.unsupported });
     for (const [g, n] of c.groups) chips.push({ label: g, value: `group:${g}`, count: n });
     syncChips($("list-chips"), chips, filter, (v) => (store.filter.value = v));
     // Section is empty for a list with no headers, so it only shows when used
@@ -578,7 +617,14 @@ function initReview() {
     const skipped = c.total - c.render - store.rows.peek().filter((r) => r.state.peek().excluded).length;
     $("list-render-label").textContent = c.render ? `Render ${c.render} ${c.render === 1 ? "card" : "cards"}` : "Render";
     $("list-render").disabled = !!res || !c.render;
-    $("list-skip-note").textContent = !res && skipped > 0 ? `${skipped} ${skipped === 1 ? "row needs" : "rows need"} attention and will be skipped` : "";
+    const attention = skipped - c.unsupportedIncluded;
+    const reasons = [];
+    if (attention > 0) reasons.push(`${attention} ${attention === 1 ? "row needs" : "rows need"} attention`);
+    if (c.unsupportedIncluded > 0) {
+      const name = app.template.peek()?.name || "this template";
+      reasons.push(`${c.unsupportedIncluded} ${c.unsupportedIncluded === 1 ? "is" : "are"} not supported by ${name}`);
+    }
+    $("list-skip-note").textContent = !res && reasons.length ? `${reasons.join(" and ")}, so ${skipped === 1 ? "it" : "they"} will be skipped` : "";
   });
 
   // The selected row's detail line reads the filter, so a filter change

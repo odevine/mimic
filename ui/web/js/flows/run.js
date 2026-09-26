@@ -18,9 +18,13 @@ const GLYPH = {
   done: { text: "✓", cls: "ok" },
   failed: { text: "✗", cls: "err" },
   skipped: { text: "–", cls: "faint" },
+  unsupported: { text: "⊘", cls: "warn" },
 };
 
-const STAGE = { art: "art download", render: "render", write: "writing the file" };
+const STAGE = { check: "template check", art: "art download", render: "render", write: "writing the file" };
+
+// A failed or unsupported card opens to show why
+const explained = (s) => s === "failed" || s === "unsupported";
 
 const inFlight = (s) => s === "fetching" || s === "rendering" || s === "writing";
 
@@ -58,14 +62,14 @@ function duration(ms) {
 }
 
 function counts() {
-  const c = { total: store.cards.length, queued: 0, active: 0, done: 0, failed: 0, skipped: 0, ms: 0 };
+  const c = { total: store.cards.length, queued: 0, active: 0, done: 0, failed: 0, skipped: 0, unsupported: 0, ms: 0 };
   for (const card of store.cards) {
     const s = card.state.peek();
     if (inFlight(s.status)) c.active++;
     else if (c[s.status] !== undefined) c[s.status]++;
     if (s.status === "done") c.ms += s.ms || 0;
   }
-  c.settled = c.done + c.failed + c.skipped;
+  c.settled = c.done + c.failed + c.skipped + c.unsupported;
   return c;
 }
 
@@ -155,7 +159,7 @@ function buildRow(card) {
       tabindex: "-1",
       onClick: () => {
         const s = card.state.peek();
-        if (s.status === "failed") {
+        if (explained(s.status)) {
           if (store.expanded.has(card.index)) store.expanded.delete(card.index);
           else store.expanded.add(card.index);
           card.state.value = { ...s };
@@ -180,9 +184,10 @@ function buildRow(card) {
     else if (s.status === "rendering") detail.textContent = `${Math.round((s.frac || 0) * 100)}%`;
     else if (s.status === "fetching") detail.textContent = "fetching art";
     else if (s.status === "writing") detail.textContent = "writing";
+    else if (s.status === "unsupported") detail.textContent = "not supported";
     else detail.textContent = s.status;
     detail.className = `detail tabular ${s.status === "failed" ? "err-text" : s.status === "done" ? "dim" : "faint"}`;
-    const open = s.status === "failed" && store.expanded.has(card.index);
+    const open = explained(s.status) && store.expanded.has(card.index);
     err.hidden = !open;
     if (open) {
       err.replaceChildren(
@@ -323,6 +328,7 @@ function initView() {
       const parts = [`${c.done} done`];
       if (c.failed) parts.push(`${c.failed} failed`);
       if (c.skipped) parts.push(`${c.skipped} skipped`);
+      if (c.unsupported) parts.push(`${c.unsupported} unsupported`);
       summary.textContent = `${parts.join(" · ")} in ${duration(elapsed)}`;
     }
     $("run-meta").textContent = [r.id, r.template, `${r.dpi} dpi`, r.report].filter(Boolean).join(" · ");
@@ -342,6 +348,7 @@ function initView() {
     if (live) chips.push({ label: "In progress", value: "active", count: c.active + c.queued });
     chips.push({ label: "Done", value: "done", count: c.done }, { label: "Failed", value: "failed", count: c.failed });
     if (c.skipped) chips.push({ label: "Skipped", value: "skipped", count: c.skipped });
+    if (c.unsupported) chips.push({ label: "Unsupported", value: "unsupported", count: c.unsupported });
     syncChips($("run-chips"), chips, filter, (v) => (store.filter.value = v));
 
     rows.show(store.cards, matches);
@@ -370,7 +377,14 @@ function initView() {
     if (!r || !s || s.status !== "done") {
       img.hidden = true;
       $("run-placeholder").hidden = false;
-      caption.textContent = s && s.status === "failed" ? `${s.name} failed at ${STAGE[s.stage] || s.stage}` : s ? `${s.name} is ${s.status}` : "";
+      caption.textContent =
+        s && s.status === "failed"
+          ? `${s.name} failed at ${STAGE[s.stage] || s.stage}`
+          : s && s.status === "unsupported"
+            ? `${s.name} is not supported by ${r ? r.template : "this template"}`
+            : s
+              ? `${s.name} is ${s.status}`
+              : "";
       return;
     }
     const src = api.runImageURL(r.id, index);
@@ -391,7 +405,7 @@ function initView() {
     const live = !!r && !r.finished;
     if (wasLive && !live) {
       const c = counts();
-      app.status.value = `Run finished: ${c.done} done${c.failed ? `, ${c.failed} failed` : ""}${c.skipped ? `, ${c.skipped} skipped` : ""}.`;
+      app.status.value = `Run finished: ${c.done} done${c.failed ? `, ${c.failed} failed` : ""}${c.skipped ? `, ${c.skipped} skipped` : ""}${c.unsupported ? `, ${c.unsupported} unsupported` : ""}.`;
       app.progress.value = null;
       if (app.mode.peek() !== "run") toast(app.status.peek(), c.failed ? "err" : "ok", 5000);
     }

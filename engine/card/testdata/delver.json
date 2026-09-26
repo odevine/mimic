@@ -1,9 +1,6 @@
 {
   "name": "Delver of Secrets // Insectile Aberration",
-  "mana_cost": "",
-  "type_line": "",
-  "oracle_text": "",
-  "colors": [],
+  "type_line": "Creature — Human Wizard // Creature — Human Insect",
   "color_identity": ["U"],
   "rarity": "common",
   "collector_number": "51",

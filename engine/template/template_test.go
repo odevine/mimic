@@ -15,7 +15,7 @@ func (f fakeTemplate) Render(context.Context, RenderRequest) (*raster.Buffer, er
 }
 
 func TestRegisterAndGet(t *testing.T) {
-	Register("fake-get", "a fake template for tests", func() Template { return fakeTemplate{name: "fake-get"} })
+	Register("fake-get", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-get"} })
 
 	got, err := Get("fake-get")
 	if err != nil {
@@ -34,7 +34,7 @@ func TestGetUnknown(t *testing.T) {
 
 func TestGetReturnsFreshInstance(t *testing.T) {
 	// The factory runs per Get, so callers never share one template instance
-	Register("fake-fresh", "a fake template for tests", func() Template { return &fakeTemplate{name: "fake-fresh"} })
+	Register("fake-fresh", "a fake template for tests", testSupports, func() Template { return &fakeTemplate{name: "fake-fresh"} })
 	a, _ := Get("fake-fresh")
 	b, _ := Get("fake-fresh")
 	if a == b {
@@ -43,8 +43,8 @@ func TestGetReturnsFreshInstance(t *testing.T) {
 }
 
 func TestNamesSorted(t *testing.T) {
-	Register("fake-zeta", "a fake template for tests", func() Template { return fakeTemplate{name: "fake-zeta"} })
-	Register("fake-alpha", "a fake template for tests", func() Template { return fakeTemplate{name: "fake-alpha"} })
+	Register("fake-zeta", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-zeta"} })
+	Register("fake-alpha", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-alpha"} })
 
 	names := Names()
 	var sawAlpha, sawZeta bool
@@ -66,7 +66,7 @@ func TestNamesSorted(t *testing.T) {
 }
 
 func TestListReportsDescriptions(t *testing.T) {
-	Register("fake-described", "what this fake template is for", func() Template { return fakeTemplate{name: "fake-described"} })
+	Register("fake-described", "what this fake template is for", testSupports, func() Template { return fakeTemplate{name: "fake-described"} })
 
 	var found *Registration
 	for _, r := range List() {
@@ -90,8 +90,8 @@ func TestRegisterDuplicatePanics(t *testing.T) {
 			t.Error("expected panic on duplicate Register")
 		}
 	}()
-	Register("fake-dup", "a fake template for tests", func() Template { return fakeTemplate{name: "fake-dup"} })
-	Register("fake-dup", "a fake template for tests", func() Template { return fakeTemplate{name: "fake-dup"} })
+	Register("fake-dup", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-dup"} })
+	Register("fake-dup", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-dup"} })
 }
 
 func TestRegisterNilFactoryPanics(t *testing.T) {
@@ -100,7 +100,7 @@ func TestRegisterNilFactoryPanics(t *testing.T) {
 			t.Error("expected panic on nil factory")
 		}
 	}()
-	Register("fake-nil", "a fake template for tests", nil)
+	Register("fake-nil", "a fake template for tests", testSupports, nil)
 }
 
 func TestRegisterEmptyDescriptionPanics(t *testing.T) {
@@ -109,5 +109,5 @@ func TestRegisterEmptyDescriptionPanics(t *testing.T) {
 			t.Error("expected panic on empty description")
 		}
 	}()
-	Register("fake-no-description", "", func() Template { return fakeTemplate{name: "fake-no-description"} })
+	Register("fake-no-description", "", testSupports, func() Template { return fakeTemplate{name: "fake-no-description"} })
 }

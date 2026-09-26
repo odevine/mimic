@@ -28,6 +28,7 @@ type scryfallCard struct {
 	Artist          string    `json:"artist"`
 	ImageURIs       imageURIs `json:"image_uris"`
 	CardFaces       []face    `json:"card_faces"`
+	Layout          string    `json:"layout"`
 }
 
 // scryfallList is the subset of Scryfall's list response the search endpoint
@@ -59,9 +60,9 @@ type face struct {
 // toData maps a Scryfall card into *Data.
 //
 // Modal double-faced and transform cards carry their real per-face fields in
-// card_faces, with the top-level fields empty, so this falls back to the front
-// face. Full double-faced support needs its own template concept, a back face
-// rendered as a second pass, which v1 does not cover
+// card_faces, with the top-level fields empty, so the top level falls back to
+// the front face. Every face is kept in Faces either way, so a back face can
+// render through Data.Face
 func (sc *scryfallCard) toData() *Data {
 	d := &Data{
 		Name:            sc.Name,
@@ -82,6 +83,22 @@ func (sc *scryfallCard) toData() *Data {
 		ReleasedAt:      sc.ReleasedAt,
 		Artist:          sc.Artist,
 		ArtworkURL:      sc.ImageURIs.ArtCrop,
+		Layout:          sc.Layout,
+	}
+	for _, f := range sc.CardFaces {
+		d.Faces = append(d.Faces, Face{
+			Name:       f.Name,
+			ManaCost:   f.ManaCost,
+			TypeLine:   f.TypeLine,
+			OracleText: f.OracleText,
+			FlavorText: f.FlavorText,
+			Power:      f.Power,
+			Toughness:  f.Toughness,
+			Loyalty:    f.Loyalty,
+			Colors:     toColors(f.Colors),
+			Artist:     f.Artist,
+			ArtworkURL: f.ImageURIs.ArtCrop,
+		})
 	}
 
 	// An empty type line with faces present marks a DFC whose per-face fields

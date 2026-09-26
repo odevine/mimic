@@ -14,6 +14,11 @@ const (
 	description  = "The standard, modern Magic card frame"
 )
 
+var supports = template.Supports{
+	Roles: []template.Role{template.RoleSingle},
+	Kinds: []template.Kind{template.KindStandard},
+}
+
 func init() {
-	template.Register(templateName, description, func() template.Template { return render.New(templateName) })
+	template.Register(templateName, description, supports, func() template.Template { return render.New(templateName) })
 }

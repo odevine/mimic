@@ -77,7 +77,8 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	m = m.Scaled(scale)
 	req.Report(stepManifest, fracManifest)
 
-	f := frame.Derive(req.Card)
+	d := req.FaceCard()
+	f := frame.Derive(d)
 
 	layersByName := make(map[string]template.LayerSpec, len(m.Layers))
 	for _, l := range m.Layers {
@@ -146,7 +147,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	for i, name := range boxNames {
 		req.Report(stepText, lerp(fracTextFrom, fracTextTo, i, len(boxNames)))
 		box := m.TextBoxes[name]
-		parts := textParts(name, box, req.Card, syms, req.FontDir, req.Copyright)
+		parts := textParts(name, box, d, syms, req.FontDir, req.Copyright)
 		if len(parts) == 0 {
 			continue
 		}
@@ -157,7 +158,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		}
 		if box.ClearOf != "" {
 			if otherBox, ok := m.TextBoxes[box.ClearOf]; ok {
-				if otherParts := textParts(box.ClearOf, otherBox, req.Card, syms, req.FontDir, req.Copyright); len(otherParts) > 0 {
+				if otherParts := textParts(box.ClearOf, otherBox, d, syms, req.FontDir, req.Copyright); len(otherParts) > 0 {
 					span, err := template.MeasureTextSpan(otherBox, otherParts...)
 					if err != nil {
 						return nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)

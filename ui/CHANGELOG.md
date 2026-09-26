@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/odevine/mimic/compare/ui/v0.6.0...ui/v0.7.0) (2026-09-26)
+
+
+### Features
+
+* **ui:** mark cards the active template does not support ([c14197f](https://github.com/odevine/mimic/commit/c14197f3285bfbfae6bf47ff4014a58369acfeab))
+* **ui:** warn in the single-card editor when a card is unsupported ([10a50ad](https://github.com/odevine/mimic/commit/10a50ade57fed9056cb942d0f81703f0f0a95167))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.8.1 ([86c09d3](https://github.com/odevine/mimic/commit/86c09d335500b4a72ae3a3f7556e91b2d2be7b4a))
+
 ## [0.6.0](https://github.com/odevine/mimic/compare/ui/v0.5.0...ui/v0.6.0) (2026-09-25)
 
 

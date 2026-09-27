@@ -1,4 +1,4 @@
-package main
+package carddata
 
 import (
 	"compress/gzip"
@@ -37,23 +37,23 @@ func TestLocalCardsRealBulk(t *testing.T) {
 
 	dir := t.TempDir()
 	start := time.Now()
-	meta, err := buildLocalCards(context.Background(), filepath.Join(dir, "current"), open("oracle-cards-*.jsonl.gz"), open("default-cards-*.jsonl.gz"), time.Now(), nil)
+	meta, err := Build(context.Background(), filepath.Join(dir, "current"), open("oracle-cards-*.jsonl.gz"), open("default-cards-*.jsonl.gz"), time.Now(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("built %d printings, %.1f MB of records, in %v", meta.Printings, float64(meta.Bytes)/1e6, time.Since(start).Round(time.Millisecond))
 
-	s := newLocalStore(dir)
+	s := New(dir)
 	start = time.Now()
-	s.load()
-	if !s.ready() {
-		t.Fatalf("store not ready: %+v", s.status())
+	s.Load()
+	if !s.Ready() {
+		t.Fatalf("store not ready: %+v", s.Status())
 	}
 	t.Logf("loaded the index in %v", time.Since(start).Round(time.Millisecond))
 
 	start = time.Now()
 	for _, name := range []string{"Lightning Bolt", "Sol Ring", "Counterspell", "Llanowar Elves", "Swords to Plowshares", "Kykar, Zephyr Awakener", "Lim-Dul's Vault", "Delver of Secrets"} {
-		d, err := s.exact(name)
+		d, err := s.Exact(name)
 		if err != nil || d == nil {
 			t.Errorf("exact %q: %v, %v", name, d, err)
 			continue
@@ -62,18 +62,18 @@ func TestLocalCardsRealBulk(t *testing.T) {
 	}
 	t.Logf("8 exact lookups in %v", time.Since(start).Round(time.Microsecond))
 
-	if d, _ := s.printing("Lightning Bolt", "2x2", "117"); d == nil || d.SetCode != "2x2" {
+	if d, _ := s.Printing("Lightning Bolt", "2x2", "117"); d == nil || d.SetCode != "2x2" {
 		t.Errorf("printing 2X2 117 = %+v", d)
 	}
 	start = time.Now()
-	d, _ := s.fuzzy("Lighning Bolt")
+	d, _ := s.Fuzzy("Lighning Bolt")
 	t.Logf("fuzzy Lighning Bolt -> %v in %v", d != nil, time.Since(start).Round(time.Microsecond))
-	sim, _ := s.similar("Bolt", 8)
+	sim, _ := s.Similar("Bolt", 8)
 	var names []string
 	for _, c := range sim {
 		names = append(names, c.Name)
 	}
 	t.Logf("similar Bolt -> %v", names)
-	ps, _ := s.printings("Sol Ring")
+	ps, _ := s.Printings("Sol Ring")
 	t.Logf("Sol Ring has %d printings, newest %s", len(ps), ps[0].SetCode)
 }

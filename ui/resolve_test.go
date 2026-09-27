@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/carddata"
+	"github.com/odevine/mimic/ui/internal/carddata/carddatatest"
 )
 
 // fakeSource answers lookups from fixed tables and counts calls
@@ -167,4 +171,60 @@ func TestOverlayFields(t *testing.T) {
 
 func apiResolver(src cardSource) resolver {
 	return resolver{mode: cardDataAPI, primary: apiBackend{src}}
+}
+
+// localCards builds and loads a card store from the carddatatest fixtures
+
+func localCards(t *testing.T) *carddata.Store {
+
+	t.Helper()
+
+	dir := t.TempDir()
+
+	_, err := carddata.Build(context.Background(), filepath.Join(dir, "current"), strings.NewReader(carddatatest.Oracle), strings.NewReader(carddatatest.Cards), time.Now(), nil)
+
+	if err != nil {
+
+		t.Fatal(err)
+
+	}
+
+	s := carddata.New(dir)
+
+	s.Load()
+
+	if !s.Ready() {
+
+		t.Fatalf("store not ready: %+v", s.Status())
+
+	}
+
+	return s
+
+}
+
+func TestLocalResolveFallsBackToAPI(t *testing.T) {
+	s := localCards(t)
+	api := apiBackend{newFake()}
+	rv := resolver{mode: cardDataLocal, primary: localBackend{store: s, api: api}, fallback: api}
+	var cache resolveCache
+
+	// Known locally, so the fake API is never asked
+	f := api.src.(*fakeSource)
+	res := resolveRow(context.Background(), rv, &cache, listRow{Name: "Lightning Bolt"})
+	if res.Status != rowMatched || res.Card.SetCode != "clu" || f.calls != 0 {
+		t.Errorf("local row = %+v after %d API calls", res, f.calls)
+	}
+	// A typo resolves locally too
+	res = resolveRow(context.Background(), rv, &cache, listRow{Name: "Lighning Bolt"})
+	if res.Status != rowAmbiguous || f.calls != 0 {
+		t.Errorf("typo row = %+v after %d API calls", res, f.calls)
+	}
+	// Unknown locally but known to Scryfall, as a card newer than the copy is
+	f.searches[`!"Brand New Card"`] = nil
+	f.fuzzy["Brand New Card"] = bolt("new", "1")
+	res = resolveRow(context.Background(), rv, &cache, listRow{Name: "Brand New Card"})
+	if res.Status == rowNotFound || !strings.Contains(res.Note, "Not in the local card data") {
+		t.Errorf("fallback row = %+v", res)
+	}
 }

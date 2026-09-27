@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/carddata"
 )
 
 // lookupBackend answers the questions resolving a list asks, from Scryfall's
@@ -68,7 +69,7 @@ func (b apiBackend) similar(ctx context.Context, name string) ([]*card.Data, err
 // API, since the copy cannot run Scryfall's search syntax, and so does a
 // printing the copy lacks, which is usually one newer than the download
 type localBackend struct {
-	store *localStore
+	store *carddata.Store
 	api   apiBackend
 }
 
@@ -77,7 +78,7 @@ func (b localBackend) query(ctx context.Context, q string) ([]*card.Data, error)
 }
 
 func (b localBackend) printing(ctx context.Context, name, set, number string) (*card.Data, error) {
-	d, err := b.store.printing(name, set, number)
+	d, err := b.store.Printing(name, set, number)
 	if d != nil || err != nil {
 		return d, err
 	}
@@ -85,15 +86,15 @@ func (b localBackend) printing(ctx context.Context, name, set, number string) (*
 }
 
 func (b localBackend) exact(ctx context.Context, name string) (*card.Data, error) {
-	return b.store.exact(name)
+	return b.store.Exact(name)
 }
 
 func (b localBackend) fuzzy(ctx context.Context, name string) (*card.Data, error) {
-	return b.store.fuzzy(name)
+	return b.store.Fuzzy(name)
 }
 
 func (b localBackend) similar(ctx context.Context, name string) ([]*card.Data, error) {
-	return b.store.similar(name, maxCandidates)
+	return b.store.Similar(name, maxCandidates)
 }
 
 // resolver is how a resolve looks rows up: a primary backend, and a fallback
@@ -123,5 +124,5 @@ func (s *server) resolver() resolver {
 
 // useLocalCards reports whether lookups should read the local copy
 func (s *server) useLocalCards() bool {
-	return s.cards != nil && s.prefs.Settings().CardData == cardDataLocal && s.cards.ready()
+	return s.cards != nil && s.prefs.Settings().CardData == cardDataLocal && s.cards.Ready()
 }

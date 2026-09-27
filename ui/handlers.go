@@ -108,7 +108,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	// A card newer than the local copy is not in it, so an empty answer still
 	// asks Scryfall
 	if s.useLocalCards() {
-		if cards, err := s.cards.printings(name); err == nil && len(cards) > 0 {
+		if cards, err := s.cards.Printings(name); err == nil && len(cards) > 0 {
 			writeJSON(w, shapedAll(cards))
 			return
 		}

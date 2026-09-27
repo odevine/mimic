@@ -2,7 +2,8 @@ name: Release Please
 
 # release-please watches main for conventional commits and keeps a release pull
 # request open per package. Merging that pull request tags the release and
-# publishes it, which is what triggers the binary build below.
+# publishes it. A ui release then gets its app binaries built below. The engine
+# is a Go module, so its release is the tag alone
 on:
   push:
     branches: [main]
@@ -18,7 +19,6 @@ jobs:
       pull-requests: write
     outputs:
       engine-released: ${{ steps.release.outputs['engine--release_created'] }}
-      engine-tag: ${{ steps.release.outputs['engine--tag_name'] }}
       ui-released: ${{ steps.release.outputs['ui--release_created'] }}
       ui-tag: ${{ steps.release.outputs['ui--tag_name'] }}
     steps:
@@ -32,55 +32,9 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   # Binaries attach to the release release-please just created, so this job
-  # uploads rather than creating a release of its own
-  engine-binaries:
-    needs: release-please
-    if: needs.release-please.outputs.engine-released == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.engine-tag }}
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: engine/go.mod
-          cache-dependency-path: engine/go.sum
-
-      - name: Test
-        working-directory: engine
-        run: go test ./...
-
-      - name: Build rendercard binaries
-        working-directory: engine
-        env:
-          # engine/v0.2.0 carries the module path prefix, the binaries do not
-          TAG: ${{ needs.release-please.outputs.engine-tag }}
-        run: |
-          version="${TAG#engine/}"
-          mkdir -p "${GITHUB_WORKSPACE}/dist"
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
-            os="${target%/*}"
-            arch="${target#*/}"
-            ext=""
-            [ "$os" = "windows" ] && ext=".exe"
-            out="rendercard-${version}-${os}-${arch}${ext}"
-            echo "building ${out}"
-            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
-              -trimpath -ldflags "-s -w -X github.com/odevine/mimic/engine/version.Version=${version}" \
-              -o "${GITHUB_WORKSPACE}/dist/${out}" ./cmd/rendercard
-          done
-
-      - name: Attach binaries to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-please.outputs.engine-tag }}
-        run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*
-
-  # The mimic app builds without cgo, so all six targets cross-compile from this
-  # one Linux runner and archive per OS
+  # uploads rather than creating a release of its own. The mimic app builds
+  # without cgo, so all six targets cross-compile from this one Linux runner and
+  # archive per OS
   ui-binaries:
     needs: release-please
     if: needs.release-please.outputs.ui-released == 'true'
@@ -141,3 +95,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.ui-tag }}
         run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*
+
+  # GitHub marks each new release as latest, so an engine release would take the
+  # badge from the app. This hands it back to the newest ui release after either
+  # package releases, and waits for ui-binaries so the badge lands on a release
+  # that already has its downloads
+  pin-latest:
+    needs: [release-please, ui-binaries]
+    if: >-
+      !cancelled() && needs.ui-binaries.result != 'failure' &&
+      (needs.release-please.outputs.engine-released == 'true' ||
+       needs.release-please.outputs.ui-released == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Mark the newest ui release as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$(gh release list --limit 100 --exclude-drafts --exclude-pre-releases \
+            --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("ui/"))] | sort_by(.createdAt) | last | .tagName')"
+          if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+            echo "no ui release to mark as latest"
+            exit 0
+          fi
+          echo "marking ${tag} as latest"
+          gh release edit "$tag" --latest

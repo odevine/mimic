@@ -86,8 +86,8 @@ type server struct {
 // auto-update, matching the desktop app
 func newServer() *server {
 	httpc := scryfallHTTPClient()
-	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc))}
 	p := loadPrefs()
+	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc)), preferences: p.faceTemplates}
 
 	at, source := startupTemplate(p)
 	pipe.install(at)
@@ -252,12 +252,12 @@ func (s *server) lookupJob(id string) (*job, bool) {
 	return j, ok
 }
 
-// doRender fetches art (once per URL) and renders the card through the active
-// template at dpi, streaming progress to the job and ending with a done event
+// doRender fetches the face's art (once per URL) and renders that face through
+// the template chosen for it at dpi, streaming progress to the job and ending with a done event
 // carrying whether art was missing
-func (s *server) doRender(j *job, d *card.Data, dpi int) {
+func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 	artCtx, cancelArt := context.WithTimeout(context.Background(), netTimeout)
-	art, artErr := s.artFor(artCtx, d)
+	art, artErr := s.artFor(artCtx, d.Face(face))
 	cancelArt()
 
 	// The render is local work on a bound that has nothing to do with the
@@ -265,14 +265,14 @@ func (s *server) doRender(j *job, d *card.Data, dpi int) {
 	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
 	defer cancel()
 
-	img, err := s.pipe.render(ctx, d, art, dpi, throttleRender(func(step string, frac float64) {
+	img, err := s.pipe.render(ctx, d, face, art, dpi, throttleRender(func(step string, frac float64) {
 		j.emit(jobEvent{Step: step, Frac: frac})
 	}))
 	if err != nil {
 		j.emit(jobEvent{Done: true, Err: err.Error()})
 		return
 	}
-	j.setResult(img, d.Name)
+	j.setResult(img, faceName(d, face))
 	j.emit(jobEvent{Done: true, ArtMissing: artErr != nil})
 }
 

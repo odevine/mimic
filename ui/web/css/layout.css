@@ -399,6 +399,13 @@ body.resizing * {
   gap: 8px;
 }
 
+.face-note {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
 .editor-title h2 {
   flex: 1;
   overflow: hidden;

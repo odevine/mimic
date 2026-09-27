@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
@@ -63,23 +62,4 @@ func supportsOf(name string) template.Supports {
 // supports is what the template renders currently go through can render
 func (p *renderPipeline) supports() template.Supports {
 	return supportsOf(p.active.Load().name)
-}
-
-// unsupported reports why the active template cannot render d's front face,
-// or nil when it can. A run checks this before fetching any art, the same
-// check the engine makes again at render time
-func (p *renderPipeline) unsupported(d *card.Data) error {
-	at := p.active.Load()
-	shape := template.Classify(d)[0]
-	if supportsOf(at.name).Allows(shape) {
-		return nil
-	}
-	return &template.UnsupportedError{Template: at.name, Shape: shape}
-}
-
-// isUnsupported reports whether err is the engine refusing a card its template
-// does not render, as opposed to a render that failed partway
-func isUnsupported(err error) bool {
-	var u *template.UnsupportedError
-	return errors.As(err, &u)
 }

@@ -27,8 +27,9 @@ import (
 
 // localCardFormat versions the files the store writes. A copy in an older
 // format is ignored, and the settings panel offers a fresh download. Format 2
-// records carry each card's layout and faces, which template support reads
-const localCardFormat = 2
+// records carry each card's layout and faces, which template support reads,
+// and format 3 adds the frame effects and color indicators a frame draws from
+const localCardFormat = 3
 
 // The store's states as the settings panel shows them
 const (

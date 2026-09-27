@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/template"
 )
 
 // The states a card moves through in a run. Skipped is a card a Stop reached
@@ -47,13 +48,15 @@ const (
 )
 
 // runRow is one card of a run as the review table sends it: the resolved card,
-// any field overrides on top, and how many copies the list asked for
+// any field overrides on top, and how many copies the list asked for. A run
+// renders each face of a card as its own row, and Face picks which
 type runRow struct {
 	Name   string            `json:"name"`
 	Qty    int               `json:"qty"`
 	Group  string            `json:"group,omitempty"`
 	Base   card.Data         `json:"base"`
 	Fields map[string]string `json:"fields,omitempty"`
+	Face   int               `json:"face,omitempty"`
 }
 
 // runCard is one card's progress, sent whole on every change so an event never
@@ -61,6 +64,7 @@ type runRow struct {
 type runCard struct {
 	Index  int     `json:"index"`
 	Name   string  `json:"name"`
+	Face   int     `json:"face,omitempty"`
 	Status string  `json:"status"`
 	Stage  string  `json:"stage,omitempty"`
 	Err    string  `json:"error,omitempty"`
@@ -190,7 +194,11 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad run request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.startRun(w, body.Rows, body.OutDir, body.Label)
+	if len(body.Rows) > maxListRows {
+		http.Error(w, fmt.Sprintf("a run takes at most %d cards", maxListRows), http.StatusBadRequest)
+		return
+	}
+	s.startRun(w, expandFaces(body.Rows), body.OutDir, body.Label)
 }
 
 // handleRetryRun starts a fresh run from the cards that failed in the latest
@@ -221,10 +229,6 @@ func (s *server) startRun(w http.ResponseWriter, rows []runRow, outDir, label st
 		http.Error(w, "the run has no cards", http.StatusBadRequest)
 		return
 	}
-	if len(rows) > maxListRows {
-		http.Error(w, fmt.Sprintf("a run takes at most %d cards", maxListRows), http.StatusBadRequest)
-		return
-	}
 	dir, err := prepareOutDir(outDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -252,7 +256,7 @@ func (s *server) startRun(w http.ResponseWriter, rows []runRow, outDir, label st
 		job:         &job{created: time.Now()},
 	}
 	for i, row := range rows {
-		run.cards[i] = runCard{Index: i, Name: row.displayName(), Status: cardQueued}
+		run.cards[i] = runCard{Index: i, Name: row.displayName(), Face: row.Face, Status: cardQueued}
 	}
 
 	s.runMu.Lock()
@@ -403,7 +407,7 @@ func (s *server) execute(ctx context.Context, run *batchRun) {
 	counts := countCards(v.Cards)
 	summary := fmt.Sprintf("%d done, %d failed, %d skipped", counts[cardDone], counts[cardFailed], counts[cardSkipped])
 	if n := counts[cardUnsupported]; n > 0 {
-		summary += fmt.Sprintf(", %d unsupported by %s", n, run.template)
+		summary += fmt.Sprintf(", %d unsupported", n)
 	}
 	summary += " in " + v.Finished.Sub(v.Started).Round(100*time.Millisecond).String()
 	run.log("finished: " + summary)
@@ -436,17 +440,17 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	}
 
 	d := overlayFields(&row.Base, row.Fields)
-	// Checked before the art download, which would be wasted on a card the
-	// template refuses
-	if err := s.pipe.unsupported(d); err != nil {
+	// Checked before the art download, which would be wasted on a face no
+	// template renders
+	if err := s.pipe.unsupported(d, row.Face); err != nil {
 		fail("check", err)
 		return
 	}
 	run.update(i, "", func(c *runCard) { c.Status = cardFetching })
 	var art image.Image
-	if row.Base.ArtworkURL != "" {
+	if faceBase := row.Base.Face(row.Face); faceBase.ArtworkURL != "" {
 		artCtx, cancel := context.WithTimeout(ctx, netTimeout)
-		img, err := s.pipe.fetchArt(artCtx, &row.Base)
+		img, err := s.pipe.fetchArt(artCtx, faceBase)
 		cancel()
 		if err != nil {
 			fail("art", err)
@@ -459,7 +463,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	renderCtx, cancel := context.WithTimeout(ctx, renderTimeout)
 	defer cancel()
 	last := 0.0
-	img, err := s.pipe.render(renderCtx, d, art, run.dpi, func(step string, frac float64) {
+	img, err := s.pipe.render(renderCtx, d, row.Face, art, run.dpi, func(step string, frac float64) {
 		// A tenth at a time keeps a long run's event backlog short
 		if frac-last < 0.1 && frac < 1 {
 			return
@@ -484,7 +488,13 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	})
 }
 
+// displayName is the name the face prints, or the edited name for a front
 func (row runRow) displayName() string {
+	if row.Face > 0 {
+		if n := row.Base.Face(row.Face).Name; n != "" {
+			return n
+		}
+	}
 	if n := row.Fields["name"]; n != "" {
 		return n
 	}
@@ -667,6 +677,7 @@ type reportCard struct {
 	Group     string            `json:"group,omitempty"`
 	Set       string            `json:"set,omitempty"`
 	Collector string            `json:"collector,omitempty"`
+	Face      int               `json:"face,omitempty"`
 	Status    string            `json:"status"`
 	Stage     string            `json:"stage,omitempty"`
 	Error     string            `json:"error,omitempty"`
@@ -697,6 +708,7 @@ func writeReport(run *batchRun) (string, error) {
 			Group:     row.Group,
 			Set:       row.Base.SetCode,
 			Collector: row.Base.CollectorNumber,
+			Face:      row.Face,
 			Status:    c.Status,
 			Stage:     c.Stage,
 			Error:     c.Err,
@@ -711,4 +723,22 @@ func writeReport(run *batchRun) (string, error) {
 	}
 	path := filepath.Join(run.outDir, "mimic-run-"+v.Started.Format("20060102-150405")+".json")
 	return path, os.WriteFile(path, raw, 0o644)
+}
+
+// expandFaces turns each card the list sends into one row per image it
+// renders to, so a double-faced card renders its front and back as two cards
+// with their own files. The faces follow their card in list order
+func expandFaces(rows []runRow) []runRow {
+	out := make([]runRow, 0, len(rows))
+	for _, row := range rows {
+		row.Face = 0
+		out = append(out, row)
+		n := len(template.Classify(overlayFields(&row.Base, row.Fields)))
+		for f := 1; f < n; f++ {
+			back := row
+			back.Face = f
+			out = append(out, back)
+		}
+	}
+	return out
 }

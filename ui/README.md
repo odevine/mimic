@@ -77,6 +77,16 @@ it. A second copy of the same printing in one run gets a `(2)` suffix, and a
 quantity is recorded in the run report rather than written as extra files.
 Cards render two at a time by default, which the settings panel changes.
 
+A double-faced card renders one PNG per face, each named after that face, as in
+`Delver of Secrets [MID-51].png` and `Insectile Aberration [MID-51].png`, and
+the run treats each face as its own card. Each face renders through the
+template chosen for its shape: standard cards through the one in the top bar,
+and every other shape through the one picked in the settings panel, or the
+first installed template that supports it. A face no installed template
+supports is marked unsupported while the other face still renders. The
+single-card editor previews either face with Back face, and its fields edit the
+front.
+
 Run shows the batch as it goes: overall progress with an estimate, a line per
 card with its time or its own progress, and the finished render of whichever
 card is picked. A failed card opens to its error and the stage it failed at.
@@ -147,6 +157,7 @@ have no limit, so they skip the queue.
 | `GET /api/templates`               | Template catalog rows                                |
 | `GET /api/template/active`         | The active template and where its assets come from   |
 | `POST /api/template/select`        | Switch template, downloading first when needed       |
+| `GET, PUT /api/template/faces`     | The template chosen for each face shape              |
 | `POST /api/resolve`                | Parse a list and start resolving it                  |
 | `GET /api/resolve/{id}/events`     | One resolved row per event                           |
 | `POST /api/run`                    | Start a batch into an output folder                  |

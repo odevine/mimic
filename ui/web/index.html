@@ -145,11 +145,12 @@
                     <span id="printing-count" class="faint"></span>
                     <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
                   </button>
-                  <button class="btn subtle" type="button" data-feature="single.dfc">
-                    <svg class="icon"><use href="icons.svg#i-flip"/></svg>Back face
+                  <button id="face-toggle" class="btn subtle" type="button" data-feature="single.dfc" hidden data-tip="Preview the other face of this card">
+                    <svg class="icon"><use href="icons.svg#i-flip"/></svg><span id="face-toggle-label">Back face</span>
                   </button>
                 </div>
               </div>
+              <p id="face-note" class="face-note faint" hidden>Showing the back face. These fields edit the front face, and editing the back face is not supported yet.</p>
               <form id="editor-form" class="editor-form panel-body" autocomplete="off"></form>
             </div>
           </div>
@@ -508,6 +509,12 @@ Sideboard
           <span class="label" data-feature="settings.concurrency">Render concurrency</span>
           <span class="inline"><input id="concurrency-input" type="number" min="1" max="6" placeholder="2" data-feature="settings.concurrency" aria-label="Render concurrency"><span class="dim">cards at once</span></span>
         </div>
+      </section>
+
+      <section class="settings-group">
+        <h3 class="section-heading">Templates</h3>
+        <p class="desc">Standard cards render with the template picked in the top bar. Each other kind of face renders with the template chosen here, or the first installed one that supports it.</p>
+        <div id="face-templates"></div>
       </section>
 
       <section class="settings-group">

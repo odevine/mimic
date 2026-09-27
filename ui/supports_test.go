@@ -10,6 +10,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/batch"
 )
 
 func TestActiveTemplateReportsSupports(t *testing.T) {
@@ -28,18 +29,18 @@ func TestActiveTemplateReportsSupports(t *testing.T) {
 func TestRunMarksUnsupportedCards(t *testing.T) {
 	s := runServer(t)
 	dir := t.TempDir()
-	rows := []runRow{
+	rows := []batch.Row{
 		customRunRow("Grizzly Bears", "", ""),
 		{Qty: 1, Base: card.Data{Name: "Jace", TypeLine: "Legendary Planeswalker — Jace", ArtworkURL: "http://127.0.0.1:1/never-fetched.jpg"}},
 	}
 	postRun(t, s, runBody{Rows: rows, OutDir: dir})
 	v := waitRun(t, s)
 
-	if v.Cards[0].Status != cardDone {
+	if v.Cards[0].Status != batch.StatusDone {
 		t.Errorf("bears = %+v", v.Cards[0])
 	}
 	// Refused before the art fetch, which would otherwise fail on the bad URL
-	if c := v.Cards[1]; c.Status != cardUnsupported || !strings.Contains(c.Err, "planeswalker") {
+	if c := v.Cards[1]; c.Status != batch.StatusUnsupported || !strings.Contains(c.Err, "planeswalker") {
 		t.Errorf("jace = %+v", c)
 	}
 	if matches, _ := filepath.Glob(filepath.Join(dir, "Jace*.png")); len(matches) != 0 {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
@@ -30,8 +31,8 @@ func facesServer(t *testing.T) *server {
 	return s
 }
 
-func transformRow(front, back card.Face) runRow {
-	return runRow{Qty: 1, Base: card.Data{
+func transformRow(front, back card.Face) batch.Row {
+	return batch.Row{Qty: 1, Base: card.Data{
 		Name: front.Name, TypeLine: front.TypeLine, Power: front.Power, Toughness: front.Toughness,
 		SetCode: "isd", CollectorNumber: "51", Layout: "transform", Faces: []card.Face{front, back},
 	}}
@@ -65,7 +66,7 @@ func TestChooseTemplatePerFace(t *testing.T) {
 func TestRunRendersEveryFace(t *testing.T) {
 	s := facesServer(t)
 	dir := t.TempDir()
-	rows := []runRow{
+	rows := []batch.Row{
 		transformRow(card.Face{Name: "Delver of Secrets", TypeLine: "Creature — Human Wizard", Power: "1", Toughness: "1"},
 			card.Face{Name: "Insectile Aberration", TypeLine: "Creature — Human Insect", Power: "3", Toughness: "2"}),
 		transformRow(card.Face{Name: "Nissa, Vastwood Seer", TypeLine: "Legendary Creature — Elf Scout", Power: "2", Toughness: "2"},
@@ -81,10 +82,10 @@ func TestRunRendersEveryFace(t *testing.T) {
 		name, status, file string
 		face               int
 	}{
-		{"Delver of Secrets", cardDone, "Delver of Secrets [ISD-51].png", 0},
-		{"Insectile Aberration", cardDone, "Insectile Aberration [ISD-51].png", 1},
-		{"Nissa, Vastwood Seer", cardDone, "Nissa, Vastwood Seer [ISD-51].png", 0},
-		{"Nissa, Sage Animist", cardUnsupported, "", 1},
+		{"Delver of Secrets", batch.StatusDone, "Delver of Secrets [ISD-51].png", 0},
+		{"Insectile Aberration", batch.StatusDone, "Insectile Aberration [ISD-51].png", 1},
+		{"Nissa, Vastwood Seer", batch.StatusDone, "Nissa, Vastwood Seer [ISD-51].png", 0},
+		{"Nissa, Sage Animist", batch.StatusUnsupported, "", 1},
 	}
 	for i, w := range want {
 		c := v.Cards[i]
@@ -96,13 +97,6 @@ func TestRunRendersEveryFace(t *testing.T) {
 				t.Errorf("card %d: %v", i, err)
 			}
 		}
-	}
-}
-
-func TestExpandFacesKeepsOneRowForOneFace(t *testing.T) {
-	rows := expandFaces([]runRow{customRunRow("Grizzly Bears", "", ""), {Base: card.Data{Name: "Meld", Layout: "meld"}}})
-	if len(rows) != 2 || rows[0].Face != 0 || rows[1].Face != 0 {
-		t.Errorf("rows = %+v", rows)
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/odevine/mimic/ui/internal/batch"
 )
 
 // fsListing is one folder as the output picker shows it. Parent is empty at a
@@ -27,7 +29,7 @@ func (s *server) handleFSList(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(p) == "" {
 		p = home
 	}
-	dir, err := expandPath(p)
+	dir, err := batch.ExpandPath(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

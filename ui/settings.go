@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -37,7 +38,7 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if body.CardData != cardDataLocal {
 		body.CardData = ""
 	}
-	if body.Concurrency < 0 || body.Concurrency > maxConcurrency {
+	if body.Concurrency < 0 || body.Concurrency > batch.MaxConcurrency {
 		body.Concurrency = 0
 	}
 	if len(body.RecentOutputDirs) > maxRecentOutputDirs {

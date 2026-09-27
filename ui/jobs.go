@@ -4,6 +4,8 @@ import (
 	"image"
 	"sync"
 	"time"
+
+	"github.com/odevine/mimic/ui/internal/cardlist"
 )
 
 // jobEvent is one message in a job's progress stream. Step and Frac drive a
@@ -12,14 +14,14 @@ import (
 // resolved Row per event and a batch run carries one Card update, so a single
 // stream reports on every item in the job
 type jobEvent struct {
-	Step       string       `json:"step,omitempty"`
-	Frac       float64      `json:"frac"`
-	Done       bool         `json:"done,omitempty"`
-	ArtMissing bool         `json:"artMissing,omitempty"`
-	Err        string       `json:"error,omitempty"`
-	Row        *resolvedRow `json:"row,omitempty"`
-	Card       *runCard     `json:"card,omitempty"`
-	Log        string       `json:"log,omitempty"`
+	Step       string             `json:"step,omitempty"`
+	Frac       float64            `json:"frac"`
+	Done       bool               `json:"done,omitempty"`
+	ArtMissing bool               `json:"artMissing,omitempty"`
+	Err        string             `json:"error,omitempty"`
+	Row        *cardlist.Resolved `json:"row,omitempty"`
+	Card       *runCard           `json:"card,omitempty"`
+	Log        string             `json:"log,omitempty"`
 }
 
 // job is one render or template-download in flight. It records every event so a

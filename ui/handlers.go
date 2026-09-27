@@ -11,6 +11,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
@@ -57,8 +58,8 @@ func (s *server) routes() {
 // searchResult is one row the search endpoint returns: the display line the list
 // shows and the full card the client fills its form from and posts back
 type searchResult struct {
-	Text string      `json:"text"`
-	Card *shapedCard `json:"card"`
+	Text string               `json:"text"`
+	Card *cardlist.ShapedCard `json:"card"`
 }
 
 // handleSearch runs a Scryfall search and returns the matches. A successful
@@ -84,7 +85,7 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]searchResult, len(cards))
 	for i, c := range cards {
-		out[i] = searchResult{Text: rowText(c), Card: shaped(c)}
+		out[i] = searchResult{Text: rowText(c), Card: cardlist.Shaped(c)}
 	}
 	writeJSON(w, out)
 }
@@ -109,7 +110,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	// asks Scryfall
 	if s.useLocalCards() {
 		if cards, err := s.cards.Printings(name); err == nil && len(cards) > 0 {
-			writeJSON(w, shapedAll(cards))
+			writeJSON(w, cardlist.ShapedAll(cards))
 			return
 		}
 	}
@@ -127,7 +128,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	if cards == nil {
 		cards = []*card.Data{}
 	}
-	writeJSON(w, shapedAll(cards))
+	writeJSON(w, cardlist.ShapedAll(cards))
 }
 
 // handleRecents returns the recent-search suggestions, newest first
@@ -140,8 +141,8 @@ func (s *server) handleRecents(w http.ResponseWriter, r *http.Request) {
 // fields the form does not expose (color identity, produced mana, artwork URL)
 // intact and lets the art cache key on the unchanged URL
 type renderBody struct {
-	Base  card.Data  `json:"base"`
-	Edits editFields `json:"edits"`
+	Base  card.Data      `json:"base"`
+	Edits cardlist.Edits `json:"edits"`
 	// Target picks which resolution to render at: "output" for the full-size
 	// render behind Save, anything else for the preview
 	Target string `json:"target,omitempty"`
@@ -159,7 +160,7 @@ func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad render request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	d := applyEdits(&body.Base, body.Edits)
+	d := cardlist.ApplyEdits(&body.Base, body.Edits)
 
 	// Resolving the dpi once here rather than once in the handler and again in
 	// the job keeps the number reported back the one actually rendered, even if

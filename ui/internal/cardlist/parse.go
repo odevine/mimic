@@ -1,4 +1,7 @@
-package main
+// Package cardlist reads a pasted card list into rows and resolves each row to
+// Scryfall cards, from the API or the local card data. It also holds the card
+// field edits a list row or the editor can overlay onto a card
+package cardlist
 
 import (
 	"encoding/csv"
@@ -18,17 +21,17 @@ const (
 	formatCSV      = "csv"
 )
 
-// maxListRows bounds one list so a stray paste of a huge file fails fast rather
+// MaxRows bounds one list so a stray paste of a huge file fails fast rather
 // than queueing thousands of Scryfall lookups
-const maxListRows = 1000
+const MaxRows = 1000
 
 // maxQuantity caps a line's count, since a typo like 4000 Island is far more
 // likely than a real need for that many copies of one file's worth of output
 const maxQuantity = 999
 
-// listRow is one card-producing line of a list. Query is set for a line that
+// Row is one card-producing line of a list. Query is set for a line that
 // starts with ?, and Fields carries a CSV row's columns keyed by edit field
-type listRow struct {
+type Row struct {
 	Line   int               `json:"line"`
 	Text   string            `json:"text"`
 	Qty    int               `json:"qty"`
@@ -50,15 +53,15 @@ var (
 	headerRe = regexp.MustCompile(`(?i)^(deck|main|mainboard|maindeck|sideboard|side|commander|companion|maybeboard|considering|tokens)\s*:?$`)
 )
 
-// parseList reads a pasted list into rows. format forces one reading, and an
+// Parse reads a pasted list into rows. format forces one reading, and an
 // empty format sniffs it. It returns the format actually used, so the page can
 // name it and offer the others
-func parseList(text, format string) ([]listRow, string, error) {
+func Parse(text, format string) ([]Row, string, error) {
 	text = strings.TrimPrefix(text, "\ufeff")
 	if format == "" {
 		format = sniffFormat(text)
 	}
-	var rows []listRow
+	var rows []Row
 	var err error
 	switch format {
 	case formatCSV:
@@ -71,8 +74,8 @@ func parseList(text, format string) ([]listRow, string, error) {
 	if err != nil {
 		return nil, format, err
 	}
-	if len(rows) > maxListRows {
-		return nil, format, fmt.Errorf("the list has %d cards, more than the %d one run takes", len(rows), maxListRows)
+	if len(rows) > MaxRows {
+		return nil, format, fmt.Errorf("the list has %d cards, more than the %d one run takes", len(rows), MaxRows)
 	}
 	return rows, format, nil
 }
@@ -121,8 +124,8 @@ func contentLines(text string) []string {
 
 // parseLines reads one card per line. A section header sets the group for the
 // lines below it, and Arena's About and Name metadata lines are skipped
-func parseLines(text, format string) []listRow {
-	var rows []listRow
+func parseLines(text, format string) []Row {
+	var rows []Row
 	group := ""
 	about := false
 	for i, raw := range strings.Split(text, "\n") {
@@ -142,7 +145,7 @@ func parseLines(text, format string) []listRow {
 			about = false
 			continue
 		}
-		row := listRow{Line: i + 1, Text: l, Qty: 1, Group: group}
+		row := Row{Line: i + 1, Text: l, Qty: 1, Group: group}
 		if q, ok := strings.CutPrefix(l, "?"); ok {
 			row.Query = strings.TrimSpace(q)
 			if row.Query != "" {
@@ -210,10 +213,10 @@ var csvAliases = map[string]string{
 	"custom":           "custom",
 }
 
-// editFieldKeys is the set of JSON keys editFields carries, read from its tags
+// editFieldKeys is the set of JSON keys Edits carries, read from its tags
 // so the CSV columns can never drift from what the editor and a render accept
 var editFieldKeys = func() map[string]bool {
-	raw, _ := json.Marshal(editFields{})
+	raw, _ := json.Marshal(Edits{})
 	var m map[string]any
 	_ = json.Unmarshal(raw, &m)
 	keys := make(map[string]bool, len(m))
@@ -253,7 +256,7 @@ func csvColumns(header []string) []string {
 // parseCSV reads a CSV list whose header row names its columns. The name column
 // becomes the row's lookup name, and every other edit field column is carried
 // in Fields to overlay onto whatever the lookup returns
-func parseCSV(text string) ([]listRow, error) {
+func parseCSV(text string) ([]Row, error) {
 	r := csv.NewReader(strings.NewReader(text))
 	r.FieldsPerRecord = -1
 	r.TrimLeadingSpace = true
@@ -268,9 +271,9 @@ func parseCSV(text string) ([]listRow, error) {
 	if cols == nil {
 		return nil, fmt.Errorf("the CSV header names no known column, such as name")
 	}
-	var rows []listRow
+	var rows []Row
 	for i, rec := range records[1:] {
-		row := listRow{Line: i + 2, Text: strings.Join(rec, ","), Qty: 1}
+		row := Row{Line: i + 2, Text: strings.Join(rec, ","), Qty: 1}
 		empty := true
 		for j, v := range rec {
 			v = strings.TrimSpace(v)

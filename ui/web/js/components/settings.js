@@ -176,12 +176,18 @@ async function fillFaceTemplates() {
     ...faceRows.map((row) => {
       const id = `face-${row.key.replace(/[^a-z0-9]/gi, "-")}`;
       const select = h("select", { id, "data-key": row.key });
-      select.append(new Option(`Automatic · ${row.using || "none"}`, ""));
+      // Standard cards always render with the active template, so their row
+      // offers exact versions and no automatic choice
+      if (!row.primary) select.append(new Option(`Automatic · ${row.using || "none"}`, ""));
       for (const o of row.options) {
-        select.append(new Option(`${o.name} · newest installed`, `${o.name}@`));
+        if (!row.primary) select.append(new Option(`${o.name} · newest installed`, `${o.name}@`));
         for (const v of o.versions) select.append(new Option(`${o.name} · ${v === "local" ? "local" : v}`, `${o.name}@${v}`));
       }
-      select.value = choiceValue(row.chosen);
+      const current = choiceValue(row.chosen);
+      // An active template with nothing installed, such as placeholders, still
+      // shows as the current choice
+      if (row.primary && ![...select.options].some((o) => o.value === current)) select.prepend(new Option(row.using, current));
+      select.value = current;
       return h("div", { class: "setting" }, h("label", { for: id }, shapeLabel(row)), select);
     }),
   );

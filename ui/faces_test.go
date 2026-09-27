@@ -120,7 +120,7 @@ func TestSetFaceTemplate(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0].Key != "transform_back/standard" || rows[0].Using != "transform · local" {
+	if len(rows) != 3 || !rows[0].Primary || rows[0].Key != "single/standard" || rows[1].Key != "transform_back/standard" || rows[1].Using != "transform · local" {
 		t.Errorf("face rows = %s", rec.Body)
 	}
 
@@ -138,5 +138,35 @@ func TestSetFaceTemplate(t *testing.T) {
 	}
 	if rec := put(faceChoiceBody{Key: "transform_front/standard"}); rec.Code != http.StatusOK || len(s.prefs.faceTemplates()) != 0 {
 		t.Errorf("clearing = %d, prefs %v", rec.Code, s.prefs.faceTemplates())
+	}
+}
+
+func TestSetStandardTemplateSwitchesActive(t *testing.T) {
+	s := facesServer(t)
+	// A second loose template that renders standard cards to switch to
+	if err := render.WritePlaceholderAssets(filepath.Join(looseDirBases[0], "normal"), "normal"); err != nil {
+		t.Fatal(err)
+	}
+	put := func(body faceChoiceBody) *httptest.ResponseRecorder {
+		raw, _ := json.Marshal(body)
+		rec := httptest.NewRecorder()
+		s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/template/faces", bytes.NewReader(raw)))
+		return rec
+	}
+
+	if rec := put(faceChoiceBody{Key: "single/standard", Name: "transform"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("a template that does not render standard cards = %d", rec.Code)
+	}
+	if rec := put(faceChoiceBody{Key: "single/standard"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("clearing the standard template = %d", rec.Code)
+	}
+	if rec := put(faceChoiceBody{Key: "single/standard", Name: "normal"}); rec.Code != http.StatusOK {
+		t.Fatalf("switching to normal = %d %s", rec.Code, rec.Body)
+	}
+	if name, version := s.active(); name != "normal" || version != localVersion {
+		t.Errorf("active = %s %s, want normal local", name, version)
+	}
+	if len(s.prefs.faceTemplates()) != 0 {
+		t.Errorf("the standard choice was saved as a face preference: %v", s.prefs.faceTemplates())
 	}
 }

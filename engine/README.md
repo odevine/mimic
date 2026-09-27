@@ -15,7 +15,8 @@ For Scryfall data from elsewhere, such as a line of a bulk data file,
 `template` turns a `card.Data` and its art into a finished image. A `Template`
 reads its frame layers and geometry through an `AssetProvider`, lays out and
 draws the text, and returns a pixel buffer. `template/normal` is the modern
-frame. `RenderTextBox` handles wrapping, shrink-to-fit, and inline mana symbols.
+frame, and `template/transform` is the same frame for both faces of a transform
+card. `RenderTextBox` handles wrapping, shrink-to-fit, and inline mana symbols.
 
 A template only draws the cards its frame was made for. `template.Classify`
 gives each image a card renders to a role, where the face sits on the card
@@ -24,7 +25,8 @@ frame it needs (`standard`, `planeswalker`, `saga`, `basic_land`, and so on).
 Each template registers the roles and kinds it `Supports`, and a template from
 `template.Get` refuses any other face with an `*UnsupportedError` before
 drawing. A double-faced card renders as two images, chosen with
-`RenderRequest.Face`.
+`RenderRequest.Face`, and a manifest's layers and text boxes can name the
+`front` or `back` condition to draw on one face only.
 
 `cmd/rendercard` is a command that wires the two together: it looks up a card by
 name and writes a PNG, and serves as a reference for other front ends.
@@ -37,7 +39,8 @@ go run ./cmd/rendercard -name "Lightning Bolt" -o bolt.png
 
 With no `-assets` directory it generates placeholder frame layers, so the command
 runs without a local asset set. Point `-assets` at a real template directory for
-finished frames, and `-fonts` at a directory of font overrides.
+finished frames, and `-fonts` at a directory of font overrides. `-face 1` renders
+a double-faced card's back face with its own art.
 
 Card data comes from Scryfall (https://scryfall.com). Respect their API
 guidelines when fetching at volume.

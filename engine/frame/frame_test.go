@@ -192,3 +192,74 @@ func TestAllHybrid(t *testing.T) {
 		}
 	}
 }
+
+func TestConditionMetFaceAndCompound(t *testing.T) {
+	land := &card.Data{TypeLine: "Land", ProducedMana: wubrg(card.Blue)}
+	front, back, single := DeriveFace(land, Front), DeriveFace(land, Back), Derive(land)
+	cases := []struct {
+		keys      Keys
+		condition string
+		want      bool
+	}{
+		{front, "front", true},
+		{front, "back", false},
+		{back, "back", true},
+		{single, "front", false},
+		{single, "back", false},
+		{back, "back,land", true},
+		{back, "back, land", true},
+		{front, "back,land", false},
+		{back, "back,nonland", false},
+		{back, "back,land,nyx", false},
+	}
+	for _, c := range cases {
+		if got := c.keys.ConditionMet(c.condition); got != c.want {
+			t.Errorf("ConditionMet(%q) with front=%v back=%v = %v, want %v", c.condition, c.keys.Front, c.keys.Back, got, c.want)
+		}
+	}
+}
+
+func TestIndicatorSlot(t *testing.T) {
+	cases := []struct {
+		colors []card.Color
+		want   string
+	}{
+		{nil, ""},
+		{wubrg(card.Blue), "u"},
+		{wubrg(card.Green, card.Red), "rg"},
+		{wubrg(card.Green, card.White), "wg"},
+		{wubrg(card.Red, card.White), "wr"},
+		{wubrg(card.Green, card.Blue), "ug"},
+		{wubrg(card.Red, card.Blue, card.Black), "ubr"},
+	}
+	for _, c := range cases {
+		k := Derive(&card.Data{TypeLine: "Creature", ColorIndicator: c.colors})
+		if got := k.Slot("indicator"); got != c.want {
+			t.Errorf("indicator for %v = %q, want %q", c.colors, got, c.want)
+		}
+		if got := k.ConditionMet("color_indicator"); got != (c.want != "") {
+			t.Errorf("color_indicator for %v = %v", c.colors, got)
+		}
+	}
+}
+
+func TestTransformIconSlot(t *testing.T) {
+	cases := []struct {
+		effects []string
+		want    string
+	}{
+		{nil, "sunmoondfc"},
+		{[]string{"compasslanddfc"}, "compasslanddfc"},
+		{[]string{"legendary", "originpwdfc"}, "originpwdfc"},
+		{[]string{"waxingandwaningmoondfc"}, "sunmoondfc"},
+	}
+	for _, c := range cases {
+		d := &card.Data{TypeLine: "Creature", FrameEffects: c.effects}
+		if got := DeriveFace(d, Back).Slot("transform_icon"); got != c.want {
+			t.Errorf("icon for %v = %q, want %q", c.effects, got, c.want)
+		}
+	}
+	if got := Derive(&card.Data{FrameEffects: []string{"sunmoondfc"}}).Slot("transform_icon"); got != "" {
+		t.Errorf("single-faced icon = %q, want empty", got)
+	}
+}

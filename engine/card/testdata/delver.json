@@ -6,6 +6,7 @@
   "collector_number": "51",
   "set": "isd",
   "layout": "transform",
+  "frame_effects": ["sunmoondfc"],
   "card_faces": [
     {
       "name": "Delver of Secrets",
@@ -31,7 +32,8 @@
       "artist": "Nils Hamm",
       "image_uris": {
         "art_crop": "https://cards.scryfall.io/art_crop/back/example-aberration.jpg"
-      }
+      },
+      "color_indicator": ["U"]
     }
   ]
 }

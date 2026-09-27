@@ -103,3 +103,25 @@ func TestFromScryfallJSONFrontFaceByLayout(t *testing.T) {
 		})
 	}
 }
+func TestFromScryfallJSONColorIndicator(t *testing.T) {
+	// A single-faced card carries its indicator at the top level, and a
+	// double-faced card's top level takes its front face's
+	d, err := FromScryfallJSON([]byte(`{"name":"Dryad Arbor","layout":"normal","type_line":"Land Creature — Forest Dryad","color_indicator":["G"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.ColorIndicator) != 1 || d.ColorIndicator[0] != Green {
+		t.Errorf("indicator %v, want [G]", d.ColorIndicator)
+	}
+	d, err = FromScryfallJSON([]byte(`{"name":"A // B","layout":"transform","frame_effects":["legendary","sunmoondfc"],
+	  "card_faces":[{"name":"A","type_line":"Creature","color_indicator":["R"]},{"name":"B","type_line":"Creature","color_indicator":["G","R"]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.ColorIndicator) != 1 || d.ColorIndicator[0] != Red {
+		t.Errorf("front indicator %v, want [R]", d.ColorIndicator)
+	}
+	if got := d.Face(1).ColorIndicator; len(got) != 2 {
+		t.Errorf("back indicator %v, want [G R]", got)
+	}
+}

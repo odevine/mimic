@@ -33,14 +33,16 @@ type Manifest struct {
 type LayerSpec struct {
 	Name string `json:"name"`
 	// Condition is one of the engine's fixed vocabulary: "", "legendary",
-	// "nonlegendary", "land", "nonland", "creature", or a value the engine
-	// does not yet drive (nyx, companion, hollow_crown, fullart,
-	// color_indicator, divider, pt_dark), which renders the layer off
+	// "nonlegendary", "land", "nonland", "creature", "color_indicator",
+	// "front", "back", or a value the engine does not yet drive (nyx,
+	// companion, hollow_crown, fullart, divider, pt_dark), which renders the
+	// layer off. A comma-separated list such as "back,land" holds when every
+	// entry does
 	Condition string `json:"condition,omitempty"`
 	// ColorSlot names which of a WUBRG frame's slots (background, pinlines,
-	// twins, ptBox, crown) this layer's color key comes from; see
-	// engine/frame. Empty means the layer carries only a color-invariant
-	// "any" variant, such as a border or a divider
+	// twins, ptBox, crown, indicator, transform_icon) this layer's color key
+	// comes from, see engine/frame. Empty means the layer carries only a
+	// color-invariant "any" variant, such as a border or a divider
 	ColorSlot string `json:"colorSlot,omitempty"`
 	// ColorVariants is keyed by color key ("w", "gold", "land", ...). The key
 	// "any" is the color-invariant fallback
@@ -123,6 +125,16 @@ type TextBoxSpec struct {
 	// Both must be set for either to take effect
 	DuckLayer string `json:"duckLayer,omitempty"`
 	DuckRow   string `json:"duckRow,omitempty"`
+	// Box names the logical box this spec fills, such as "title", so several
+	// specs can offer one box under different conditions. Empty means the
+	// spec's own key in TextBoxes
+	Box string `json:"box,omitempty"`
+	// Condition is a layer condition (see LayerSpec.Condition) that must hold
+	// for this spec to fill its box. Of the specs filling one box, the one
+	// drawn is the first whose condition holds, trying those naming the most
+	// conditions first and then in sorted key order, so a spec with no
+	// condition is the fallback when none of the others hold
+	Condition string `json:"condition,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above

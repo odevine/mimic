@@ -78,7 +78,13 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	req.Report(stepManifest, fracManifest)
 
 	d := req.FaceCard()
-	f := frame.Derive(d)
+	f := frame.DeriveFace(d, req.FaceSide())
+	// Of the specs a manifest offers for one box, only the one whose condition
+	// holds for this face draws, and every lookup by box name below sees it.
+	// The copy keeps a provider's cached manifest untouched
+	resolved := *m
+	resolved.TextBoxes = template.ResolveTextBoxes(m.TextBoxes, f)
+	m = &resolved
 
 	layersByName := make(map[string]template.LayerSpec, len(m.Layers))
 	for _, l := range m.Layers {
@@ -91,36 +97,17 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			return nil, err
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
-		if !f.ConditionMet(layer.Condition) {
-			continue
-		}
-		// An enchantment draws the nyx frame in the background slot, so it sits
-		// below the art and follows the same color key as the background
-		variants := layer.ColorVariants
-		if layer.ColorSlot == "background" && f.Nyx {
-			if nyx, ok := layersByName["nyx"]; ok {
-				variants = nyx.ColorVariants
-			}
-		}
-		asset, ok := variants[f.Slot(layer.ColorSlot)]
-		if !ok {
-			asset, ok = variants["any"]
-		}
-		if !ok {
-			// No variant applies to this color. Skipping rather than erroring
-			// lets a manifest leave a layer out where it does not apply
-			continue
-		}
-		placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height, scale)
+		node, err := layerNode(req, m, layer, layersByName, f, scale)
 		if err != nil {
 			return nil, err
 		}
-		mode, err := template.BlendMode(layer.Blend)
-		if err != nil {
-			return nil, err
+		if node != nil {
+			nodes = append(nodes, node)
 		}
-		nodes = append(nodes, &canvas.Layer{Content: placed, Mode: mode})
 
+		// The art takes its place in the stack whether or not the layer it
+		// follows draws for this card, so a template with a background per face
+		// can name the last of them
 		if req.Art != nil && m.Art.After == layer.Name {
 			art := template.FitArt(req.Art, m.Art.Width, m.Art.Height)
 			artBuf, err := raster.FromImage(art)
@@ -215,6 +202,40 @@ func lerp(from, to float64, i, n int) float64 {
 		return from
 	}
 	return from + (to-from)*float64(i+1)/float64(n)
+}
+
+// layerNode loads one frame layer's variant for this card, or returns nil when
+// its condition does not hold or no variant applies to the card's color
+func layerNode(req template.RenderRequest, m *template.Manifest, layer template.LayerSpec, layersByName map[string]template.LayerSpec, f frame.Keys, scale template.Scale) (canvas.Node, error) {
+	if !f.ConditionMet(layer.Condition) {
+		return nil, nil
+	}
+	// An enchantment draws the nyx frame in the background slot, so it sits
+	// below the art and follows the same color key as the background
+	variants := layer.ColorVariants
+	if layer.ColorSlot == "background" && f.Nyx {
+		if nyx, ok := layersByName["nyx"]; ok {
+			variants = nyx.ColorVariants
+		}
+	}
+	asset, ok := variants[f.Slot(layer.ColorSlot)]
+	if !ok {
+		asset, ok = variants["any"]
+	}
+	if !ok {
+		// No variant applies to this color. Skipping rather than erroring
+		// lets a manifest leave a layer out where it does not apply
+		return nil, nil
+	}
+	placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height, scale)
+	if err != nil {
+		return nil, err
+	}
+	mode, err := template.BlendMode(layer.Blend)
+	if err != nil {
+		return nil, err
+	}
+	return &canvas.Layer{Content: placed, Mode: mode}, nil
 }
 
 // roleFor returns the font role a box's manifest Font names, defaulting to the

@@ -40,11 +40,22 @@ type Data struct {
 	// "transform", "split", or "saga". It is empty for a card typed in by hand,
 	// which classifies from its type line alone
 	Layout string
+	// FrameEffects are Scryfall's frame_effects for the printing, such as
+	// "legendary" or "sunmoondfc", which name the transform icon a double-faced
+	// card prints
+	FrameEffects []string
+	// ColorIndicator is the colored dot a card whose colors its mana cost does
+	// not show prints beside its type line, in WUBRG as Scryfall lists them. A
+	// double-faced card's is its front face's
+	ColorIndicator []Color
 	// Faces holds each face's own printed fields, in Scryfall's order, for a
 	// card printed with more than one: double-faced, split, adventure, and flip
 	// cards. It is empty for a single-faced card. The top-level fields above
 	// are the front face, and are the ones an edit changes
 	Faces []Face
+	// FaceIndex is which of Faces the top-level fields print, 0 for the front.
+	// Face sets it on the copy it returns
+	FaceIndex int
 }
 
 // Face is the printed information one face of a multi-faced card carries on
@@ -54,6 +65,7 @@ type Face struct {
 	Name, ManaCost, TypeLine, OracleText, FlavorText string
 	Power, Toughness, Loyalty                        string
 	Colors                                           []Color
+	ColorIndicator                                   []Color
 	Artist, ArtworkURL                               string
 }
 
@@ -75,10 +87,12 @@ func (d *Data) Face(i int) *Data {
 	out.Toughness = f.Toughness
 	out.Loyalty = f.Loyalty
 	out.Colors = f.Colors
+	out.ColorIndicator = f.ColorIndicator
 	if f.Artist != "" {
 		out.Artist = f.Artist
 	}
 	out.ArtworkURL = f.ArtworkURL
+	out.FaceIndex = i
 	return &out
 }
 

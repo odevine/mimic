@@ -24,7 +24,7 @@ func main() {
 	flag.Parse()
 
 	s := newServer()
-	defer s.pipe.close()
+	defer s.pipe.Close()
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {

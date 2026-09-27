@@ -19,6 +19,7 @@ import (
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/cardlist"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -238,7 +239,7 @@ func (s *server) startRun(w http.ResponseWriter, rows []runRow, outDir, label st
 	}
 
 	dpi := s.renderDPI(targetOutput)
-	if m, err := s.pipe.manifest(); err == nil {
+	if m, err := s.pipe.Manifest(); err == nil {
 		dpi = m.ClampDPI(dpi)
 	}
 	name, version := s.active()
@@ -430,7 +431,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 			run.update(i, name+": stopped", func(c *runCard) { c.Status = cardSkipped; c.Frac = 0 })
 			return
 		}
-		if isUnsupported(err) {
+		if pipeline.IsUnsupported(err) {
 			run.update(i, name+": "+err.Error(), func(c *runCard) {
 				c.Status, c.Stage, c.Err, c.Frac = cardUnsupported, stage, err.Error(), 0
 			})
@@ -444,7 +445,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	d := cardlist.Overlay(&row.Base, row.Fields)
 	// Checked before the art download, which would be wasted on a face no
 	// template renders
-	if err := s.pipe.unsupported(d, row.Face); err != nil {
+	if err := s.pipe.Unsupported(d, row.Face); err != nil {
 		fail("check", err)
 		return
 	}
@@ -452,7 +453,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	var art image.Image
 	if faceBase := row.Base.Face(row.Face); faceBase.ArtworkURL != "" {
 		artCtx, cancel := context.WithTimeout(ctx, netTimeout)
-		img, err := s.pipe.fetchArt(artCtx, faceBase)
+		img, err := s.pipe.FetchArt(artCtx, faceBase)
 		cancel()
 		if err != nil {
 			fail("art", err)
@@ -465,7 +466,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 	renderCtx, cancel := context.WithTimeout(ctx, renderTimeout)
 	defer cancel()
 	last := 0.0
-	img, err := s.pipe.render(renderCtx, d, row.Face, art, run.dpi, func(step string, frac float64) {
+	img, err := s.pipe.Render(renderCtx, d, row.Face, art, run.dpi, func(step string, frac float64) {
 		// A tenth at a time keeps a long run's event backlog short
 		if frac-last < 0.1 && frac < 1 {
 			return

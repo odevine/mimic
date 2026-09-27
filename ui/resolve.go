@@ -78,9 +78,9 @@ func resolveRows(ctx context.Context, j *job, rv cardlist.Resolver, cache *cardl
 // when it is chosen in settings and loaded, and the API otherwise
 func (s *server) resolver() cardlist.Resolver {
 	if s.useLocalCards() {
-		return cardlist.LocalResolver(s.cards, s.pipe.client)
+		return cardlist.LocalResolver(s.cards, s.pipe.Client())
 	}
-	return cardlist.APIResolver(s.pipe.client)
+	return cardlist.APIResolver(s.pipe.Client())
 }
 
 // useLocalCards reports whether lookups should read the local copy

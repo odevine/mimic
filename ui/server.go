@@ -16,6 +16,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/scryfall"
 )
@@ -43,7 +44,7 @@ const jobTTL = 10 * time.Minute
 // persisted prefs, the in-flight jobs, and the active-template labels. Each is
 // guarded by its own mutex or an atomic inside the pipeline
 type server struct {
-	pipe  *renderPipeline
+	pipe  *pipeline.Pipeline
 	prefs *prefs.Store
 	mux   *http.ServeMux
 
@@ -94,18 +95,18 @@ type server struct {
 func newServer() *server {
 	httpc := scryfall.NewHTTPClient(netTimeout)
 	p := loadPrefs()
-	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc)), preferences: p.FaceTemplates}
+	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
 
 	at, source := startupTemplate(p)
-	pipe.install(at)
+	pipe.Install(at)
 
 	s := &server{
 		pipe:          pipe,
 		prefs:         p,
 		artCache:      make(map[string]image.Image),
 		jobs:          make(map[string]*job),
-		activeName:    at.name,
-		activeVersion: at.version,
+		activeName:    at.Name,
+		activeVersion: at.Version,
 		recents:       prefs.NewRecents(p.RecentSearches()),
 		cards:         carddata.New(cardDir()),
 		scryfall:      httpc,
@@ -116,8 +117,8 @@ func newServer() *server {
 	// Keep the default template up to date in the background so launch never
 	// blocks on a large download. A loose developer directory and an explicitly
 	// restored selection are the user's choice, so neither is auto-updated
-	if source == sourceBundle || source == sourcePlaceholder {
-		go s.updateTemplateBackground(at.name)
+	if source == pipeline.SourceBundle || source == pipeline.SourcePlaceholder {
+		go s.updateTemplateBackground(at.Name)
 	}
 	return s
 }
@@ -166,17 +167,17 @@ func cardDir() string {
 // persisted selection only when it needs no download (a loose dir or an
 // already-cached bundle), so launch is never blocked, and otherwise falls back
 // to the default network-free chain for normal
-func startupTemplate(p *prefs.Store) (*activeTemplate, assetSource) {
+func startupTemplate(p *prefs.Store) (*pipeline.Template, pipeline.Source) {
 	name, ver := p.Template()
-	restorable := name != "" && ((ver == localVersion && looseDir(name) != "") || catalog.IsCached(name, ver))
+	restorable := name != "" && ((ver == pipeline.LocalVersion && pipeline.LooseDir(name) != "") || catalog.IsCached(name, ver))
 	if restorable {
-		if at, err := activeFromVersion(context.Background(), name, ver, nil); err == nil {
-			return at, sourceExplicit
+		if at, err := pipeline.FromVersion(context.Background(), name, ver, nil); err == nil {
+			return at, pipeline.SourceExplicit
 		} else {
 			log.Printf("mimic: restoring template %s %s failed: %v", name, ver, err)
 		}
 	}
-	at, source, err := resolveActiveTemplate("normal")
+	at, source, err := pipeline.Resolve("normal")
 	if err != nil {
 		log.Fatalf("mimic: resolving template: %v", err)
 	}
@@ -188,7 +189,7 @@ func startupTemplate(p *prefs.Store) (*activeTemplate, assetSource) {
 // keeps rendering from whatever it resolved to. The browser picks up the new
 // active template on its next poll, and its next render uses it
 func (s *server) updateTemplateBackground(name string) {
-	at, err := autoLatestActive(context.Background(), name)
+	at, err := pipeline.Latest(context.Background(), name)
 	if err != nil {
 		log.Printf("mimic: template update skipped: %v", err)
 		return
@@ -198,13 +199,13 @@ func (s *server) updateTemplateBackground(name string) {
 
 // setActiveTemplate installs a new template, records it for the indicator, and
 // persists the choice so the next launch restores it
-func (s *server) setActiveTemplate(at *activeTemplate) {
-	s.pipe.install(at)
+func (s *server) setActiveTemplate(at *pipeline.Template) {
+	s.pipe.Install(at)
 	s.activeMu.Lock()
-	s.activeName = at.name
-	s.activeVersion = at.version
+	s.activeName = at.Name
+	s.activeVersion = at.Version
 	s.activeMu.Unlock()
-	s.prefs.SetTemplate(at.name, at.version)
+	s.prefs.SetTemplate(at.Name, at.Version)
 }
 
 // rememberQuery records a successful search and persists the updated list, so
@@ -246,7 +247,7 @@ func (s *server) artFor(ctx context.Context, d *card.Data) (image.Image, error) 
 	}
 	s.artMu.Unlock()
 
-	art, err := s.pipe.fetchArt(ctx, d)
+	art, err := s.pipe.FetchArt(ctx, d)
 	if err != nil {
 		return nil, err
 	}
@@ -312,14 +313,14 @@ func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
 	defer cancel()
 
-	img, err := s.pipe.render(ctx, d, face, art, dpi, throttleRender(func(step string, frac float64) {
+	img, err := s.pipe.Render(ctx, d, face, art, dpi, throttleRender(func(step string, frac float64) {
 		j.emit(jobEvent{Step: step, Frac: frac})
 	}))
 	if err != nil {
 		j.emit(jobEvent{Done: true, Err: err.Error()})
 		return
 	}
-	j.setResult(img, faceName(d, face))
+	j.setResult(img, pipeline.FaceName(d, face))
 	j.emit(jobEvent{Done: true, ArtMissing: artErr != nil})
 }
 
@@ -328,13 +329,13 @@ func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 // job. With install set it only downloads, and the active template stays
 func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
 	var progress func(done, total int64)
-	if !catalog.IsCached(name, version) && version != localVersion {
+	if !catalog.IsCached(name, version) && version != pipeline.LocalVersion {
 		progress = throttleBytes(func(step string, frac float64) {
 			j.emit(jobEvent{Step: step, Frac: frac})
 		})
 	}
 	if install {
-		if version == localVersion {
+		if version == pipeline.LocalVersion {
 			j.emit(jobEvent{Done: true})
 			return
 		}
@@ -345,7 +346,7 @@ func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
 		j.emit(jobEvent{Done: true})
 		return
 	}
-	at, err := activeFromVersion(context.Background(), name, version, progress)
+	at, err := pipeline.FromVersion(context.Background(), name, version, progress)
 	if err != nil {
 		j.emit(jobEvent{Done: true, Err: err.Error()})
 		return

@@ -42,5 +42,15 @@ runs without a local asset set. Point `-assets` at a real template directory for
 finished frames, and `-fonts` at a directory of font overrides. `-face 1` renders
 a double-faced card's back face with its own art.
 
+Engine releases are Go module tags and carry no prebuilt binaries. To install
+the command outside a checkout, use `go install` instead:
+
+```
+go install github.com/odevine/mimic/engine/cmd/rendercard@latest
+```
+
+A binary installed this way is unstamped, so it renders any template bundle
+regardless of the engine version the bundle requires.
+
 Card data comes from Scryfall (https://scryfall.com). Respect their API
 guidelines when fetching at volume.

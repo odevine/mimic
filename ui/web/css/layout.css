@@ -18,27 +18,30 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 8px 0 14px;
+  padding: 0 8px 0 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   min-width: 0;
   overflow: hidden;
 }
 
+/* The mark caps the rail, sharing its width and right border */
 .wordmark {
+  flex: none;
+  align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-right: 8px;
+  justify-content: center;
+  width: var(--rail-w);
+  border-right: 1px solid var(--border);
 }
 
+/* The icon's alpha masks the accent fill, so the mark follows the theme */
 .wordmark .mark {
-  width: 14px;
-  height: 18px;
-  border: 1.5px solid var(--accent);
-  border-radius: 2px;
+  width: 30px;
+  height: 30px;
+  background: var(--accent);
+  mask: url("../mimic.svg") center / contain no-repeat;
 }
 
 .topbar .spacer {
@@ -156,7 +159,9 @@
   color: var(--text-dim);
   font-size: 11px;
   cursor: pointer;
-  transition: background-color var(--t-hover), color var(--t-hover);
+  transition:
+    background-color var(--t-hover),
+    color var(--t-hover);
 }
 
 .rail-item .icon {
@@ -204,8 +209,12 @@
   border-radius: 50%;
 }
 
-.rail-dot.warn { background: var(--warn); }
-.rail-dot.active { background: var(--accent); }
+.rail-dot.warn {
+  background: var(--warn);
+}
+.rail-dot.active {
+  background: var(--accent);
+}
 
 /* Workspace */
 .workspace {
@@ -576,10 +585,18 @@ body.resizing * {
   transition: background-color var(--t-panel);
 }
 
-.activity[data-state="working"] { --tone: var(--accent); }
-.activity[data-state="done"] { --tone: var(--ok); }
-.activity[data-state="stale"] { --tone: var(--dirty); }
-.activity[data-state="warn"] { --tone: var(--warn); }
+.activity[data-state="working"] {
+  --tone: var(--accent);
+}
+.activity[data-state="done"] {
+  --tone: var(--ok);
+}
+.activity[data-state="stale"] {
+  --tone: var(--dirty);
+}
+.activity[data-state="warn"] {
+  --tone: var(--warn);
+}
 .activity[data-state="error"] {
   --tone: var(--err);
   background: var(--err-weak);
@@ -614,7 +631,9 @@ body.resizing * {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -859,10 +878,18 @@ body.resizing * {
   text-align: center;
 }
 
-.run-rows .glyph.ok { color: var(--ok); }
-.run-rows .glyph.err { color: var(--err); }
-.run-rows .glyph.warn { color: var(--warn); }
-.run-rows .glyph.active { color: var(--accent); }
+.run-rows .glyph.ok {
+  color: var(--ok);
+}
+.run-rows .glyph.err {
+  color: var(--err);
+}
+.run-rows .glyph.warn {
+  color: var(--warn);
+}
+.run-rows .glyph.active {
+  color: var(--accent);
+}
 
 .overrides-tree {
   width: 380px;
@@ -1065,7 +1092,10 @@ body.resizing * {
   }
 
   #mode-single .stage {
-    --stage-h: min(calc((100cqw - 40px) * 88 / 63 + 40px), calc(100vh - var(--topbar-h) - var(--statusbar-h) - 120px));
+    --stage-h: min(
+      calc((100cqw - 40px) * 88 / 63 + 40px),
+      calc(100vh - var(--topbar-h) - var(--statusbar-h) - 120px)
+    );
     flex: none;
     height: var(--stage-h);
     min-height: 240px;

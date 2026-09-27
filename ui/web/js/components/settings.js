@@ -3,6 +3,7 @@ import { $ } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
+import { tintFavicon } from "./favicon.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
 // them against the active template, and the interface settings go through
@@ -16,6 +17,7 @@ export function applyTheme(theme) {
   } catch {
     // a blocked store only costs the pre-paint theme on the next load
   }
+  tintFavicon();
 }
 
 // sizeLabel is how a resolution reads everywhere: the pixels it produces, with

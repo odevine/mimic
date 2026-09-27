@@ -278,13 +278,25 @@ func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 
 // doSelectTemplate switches the active template to (name, version), downloading
 // first when the version is not cached and streaming download progress to the
-// job
-func (s *server) doSelectTemplate(j *job, name, version string) {
+// job. With install set it only downloads, and the active template stays
+func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
 	var progress func(done, total int64)
 	if !isVersionCached(name, version) && version != localVersion {
 		progress = throttleBytes(func(step string, frac float64) {
 			j.emit(jobEvent{Step: step, Frac: frac})
 		})
+	}
+	if install {
+		if version == localVersion {
+			j.emit(jobEvent{Done: true})
+			return
+		}
+		if _, err := ensureVersion(context.Background(), name, version, progress); err != nil {
+			j.emit(jobEvent{Done: true, Err: err.Error()})
+			return
+		}
+		j.emit(jobEvent{Done: true})
+		return
 	}
 	at, err := activeFromVersion(context.Background(), name, version, progress)
 	if err != nil {

@@ -27,9 +27,17 @@ Flags:
 ## Using it
 
 The page is one shell with a mode rail down the left: Single, From a List, and
-From Your Art make cards, while Overrides and Run hold the rules and the record
-of a batch. The active template sits in the top bar as a dropdown, and settings
-and a keyboard reference sit beside it.
+From Your Art make cards, Templates holds everything about the frames cards
+render with, and Run keeps the record of a batch. The active template's name
+sits in the top bar and opens Templates, and settings and a keyboard reference
+sit beside it.
+
+Templates has three tabs. Library lists the catalog and any template installed
+from a local folder, downloads a version, and selects the active template for
+standard cards. A template that renders only other faces, such as transform, is
+installed there rather than selected. Defaults picks which installed template
+renders each kind of face, and a change there applies at once. Overrides holds
+the per-template and global overrides.
 
 Single and From a List work today, with Run as the console for a batch. In
 Single, the left column searches Scryfall with its
@@ -80,8 +88,8 @@ Cards render two at a time by default, which the settings panel changes.
 A double-faced card renders one PNG per face, each named after that face, as in
 `Delver of Secrets [MID-51].png` and `Insectile Aberration [MID-51].png`, and
 the run treats each face as its own card. Each face renders through the
-template chosen for its shape: standard cards through the one in the top bar,
-and every other shape through the one picked in the settings panel, or the
+template chosen for its shape: standard cards through the active template, and
+every other shape through the one picked under Templates, Defaults, or the
 first installed template that supports it. A face no installed template
 supports is marked unsupported while the other face still renders. The
 single-card editor previews either face with Back face, and its fields edit the

@@ -304,11 +304,15 @@ type versionView struct {
 // templateView is one template block: its name, its description, whether this
 // build can render it, an optional reason, and its versions
 type templateView struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Renderable  bool          `json:"renderable"`
-	Reason      string        `json:"reason,omitempty"`
-	Versions    []versionView `json:"versions"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Renderable  bool   `json:"renderable"`
+	// Standard reports whether the template renders standard single cards,
+	// which is what selecting it as the active template is for. A template
+	// that does not, such as transform, is only installed
+	Standard bool          `json:"standard"`
+	Reason   string        `json:"reason,omitempty"`
+	Versions []versionView `json:"versions"`
 }
 
 // handleTemplates fetches the catalog (falling back to the cached copy offline)
@@ -325,7 +329,7 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 
 	views := make([]templateView, 0, len(rows))
 	for _, row := range rows {
-		tv := templateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason}
+		tv := templateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason, Standard: supportsOf(row.name).Allows(primaryShape)}
 		for _, v := range row.versions {
 			vv := versionView{
 				Version:    v.version,
@@ -382,10 +386,13 @@ func templateSource(name, version string) string {
 	}
 }
 
-// selectBody is the /api/template/select payload
+// selectBody is the /api/template/select payload. Install downloads the
+// version without making it the active template, for a template that renders
+// only other faces
 type selectBody struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	Install bool   `json:"install,omitempty"`
 }
 
 // handleSelectTemplate starts a template switch job and returns its id. The
@@ -406,7 +413,7 @@ func (s *server) handleSelectTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, j := s.newJob()
-	go s.doSelectTemplate(j, body.Name, body.Version)
+	go s.doSelectTemplate(j, body.Name, body.Version, body.Install)
 	writeJSON(w, map[string]string{"jobId": id})
 }
 

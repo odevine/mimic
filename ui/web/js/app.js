@@ -11,11 +11,12 @@ import { popoverOpen } from "./components/popover.js";
 import { initSingle, single } from "./flows/single.js";
 import { initList, list } from "./flows/list.js";
 import { initRun } from "./flows/run.js";
+import { initTemplates } from "./flows/templates.js";
 
 // Entry point: loads what every mode shares, wires the shell, and routes
 // between modes. Switching modes changes the workspace and nothing else
 
-const MODES = ["single", "list", "art", "overrides", "run"];
+const MODES = ["single", "list", "art", "templates", "run"];
 
 async function loadCapabilities() {
   try {
@@ -170,6 +171,7 @@ async function boot() {
   initSingle();
   initList();
   initRun();
+  initTemplates();
   initKeyboard();
   initSplitters(document.querySelector("#mode-single .regions"), (app.settings.peek().splits || {}).single, (w) =>
     persistSplits("single", w),

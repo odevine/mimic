@@ -1,4 +1,9 @@
-package main
+// Package carddata keeps a local copy of Scryfall's bulk data, so resolving a
+// list reads from disk instead of queueing behind the API's rate limit. The
+// store keeps one trimmed record per printing in cards.jsonl and an index of
+// names, printings and each card's default printing in index.gob, which loads
+// into memory at startup
+package carddata
 
 import (
 	"bufio"
@@ -20,23 +25,18 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
-// A local copy of Scryfall's bulk data, so resolving a list reads from disk
-// instead of queueing behind the API's rate limit. The store keeps one trimmed
-// record per printing in cards.jsonl and an index of names, printings and each
-// card's default printing in index.gob, which loads into memory at startup
-
 // localCardFormat versions the files the store writes. A copy in an older
 // format is ignored, and the settings panel offers a fresh download. Format 2
 // records carry each card's layout and faces, which template support reads,
 // and format 3 adds the frame effects and color indicators a frame draws from
 const localCardFormat = 3
 
-// The store's states as the settings panel shows them
+// The store's states as the settings panel shows them, in Status.State
 const (
-	cardDataNone    = "none"
-	cardDataLoading = "loading"
-	cardDataReady   = "ready"
-	cardDataError   = "error"
+	StateNone    = "none"
+	StateLoading = "loading"
+	StateReady   = "ready"
+	StateError   = "error"
 )
 
 // Entry flags
@@ -47,8 +47,8 @@ const (
 	flagDefault
 )
 
-// localMeta describes an installed copy
-type localMeta struct {
+// Meta describes an installed copy
+type Meta struct {
 	Format    int       `json:"format"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	BuiltAt   time.Time `json:"builtAt"`
@@ -89,16 +89,16 @@ type nameRef struct {
 	rank   int32
 }
 
-// localStore is the installed copy and its state. Reads take the read lock for
+// Store is the installed copy and its state. Reads take the read lock for
 // the length of a record read, so installing a new copy never closes a file
 // under a reader
-type localStore struct {
+type Store struct {
 	dir string
 
 	mu    sync.RWMutex
 	state string
 	err   string
-	meta  localMeta
+	meta  Meta
 	idx   *localIndex
 	file  *os.File
 
@@ -106,30 +106,26 @@ type localStore struct {
 	jobID string
 }
 
-func newLocalStore(dir string) *localStore {
-	return &localStore{dir: dir, state: cardDataNone}
+// New returns a store that keeps its files in dir. An empty dir means there is
+// nowhere to keep a copy, so the store stays empty
+func New(dir string) *Store {
+	return &Store{dir: dir, state: StateNone}
 }
 
-// localCardDir is where the store keeps its files, beside the template cache
-func localCardDir() (string, error) {
-	base, err := userConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "mimic", "scryfall"), nil
-}
+// Dir is the folder the store keeps its files in, empty when there is none
+func (s *Store) Dir() string { return s.dir }
 
-func (s *localStore) current() string { return filepath.Join(s.dir, "current") }
+func (s *Store) current() string { return filepath.Join(s.dir, "current") }
 
-// load opens the installed copy, if there is one, and builds its lookup maps. It
+// Load opens the installed copy, if there is one, and builds its lookup maps. It
 // runs in the background at startup, since reading the index takes a moment
-func (s *localStore) load() {
+func (s *Store) Load() {
 	s.mu.Lock()
 	if s.dir == "" {
 		s.mu.Unlock()
 		return
 	}
-	s.state = cardDataLoading
+	s.state = StateLoading
 	s.mu.Unlock()
 
 	meta, idx, f, err := openLocalCards(s.current())
@@ -137,20 +133,20 @@ func (s *localStore) load() {
 	defer s.mu.Unlock()
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		s.state = cardDataNone
+		s.state = StateNone
 	case err != nil:
-		s.state, s.err = cardDataError, err.Error()
+		s.state, s.err = StateError, err.Error()
 	default:
 		if s.file != nil {
 			s.file.Close()
 		}
-		s.state, s.err, s.meta, s.idx, s.file = cardDataReady, "", meta, idx, f
+		s.state, s.err, s.meta, s.idx, s.file = StateReady, "", meta, idx, f
 	}
 }
 
 // openLocalCards reads an installed copy from dir
-func openLocalCards(dir string) (localMeta, *localIndex, *os.File, error) {
-	var meta localMeta
+func openLocalCards(dir string) (Meta, *localIndex, *os.File, error) {
+	var meta Meta
 	raw, err := os.ReadFile(filepath.Join(dir, "meta.json"))
 	if err != nil {
 		return meta, nil, nil, err
@@ -207,8 +203,8 @@ func (x *localIndex) build() {
 	}
 }
 
-// localStatus is what GET /api/carddata reports about the installed copy
-type localStatus struct {
+// Status is what the settings panel shows about the installed copy
+type Status struct {
 	State     string    `json:"state"`
 	Error     string    `json:"error,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitzero"`
@@ -217,24 +213,26 @@ type localStatus struct {
 	JobID     string    `json:"jobId,omitempty"`
 }
 
-func (s *localStore) status() localStatus {
+// Status reports the store's state and, when ready, the installed copy
+func (s *Store) Status() Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	st := localStatus{State: s.state, Error: s.err, JobID: s.jobID}
-	if s.state == cardDataReady {
+	st := Status{State: s.state, Error: s.err, JobID: s.jobID}
+	if s.state == StateReady {
 		st.UpdatedAt, st.Printings, st.Bytes = s.meta.UpdatedAt, s.meta.Printings, s.meta.Bytes
 	}
 	return st
 }
 
-func (s *localStore) ready() bool {
+// Ready reports whether a copy is loaded and can answer lookups
+func (s *Store) Ready() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.state == cardDataReady
+	return s.state == StateReady
 }
 
-// remove deletes the installed copy
-func (s *localStore) remove() error {
+// Remove deletes the installed copy
+func (s *Store) Remove() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.jobID != "" {
@@ -243,13 +241,13 @@ func (s *localStore) remove() error {
 	if s.file != nil {
 		s.file.Close()
 	}
-	s.state, s.err, s.meta, s.idx, s.file = cardDataNone, "", localMeta{}, nil, nil
+	s.state, s.err, s.meta, s.idx, s.file = StateNone, "", Meta{}, nil, nil
 	return os.RemoveAll(s.current())
 }
 
 // record reads one printing's card by its position in x. A copy installed since
 // x was read has different positions, so reading from it is refused
-func (s *localStore) record(x *localIndex, i int32) (*card.Data, error) {
+func (s *Store) record(x *localIndex, i int32) (*card.Data, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.idx == nil || s.idx != x {
@@ -268,7 +266,7 @@ func (s *localStore) record(x *localIndex, i int32) (*card.Data, error) {
 }
 
 // index returns the loaded index, or nil before one is loaded
-func (s *localStore) index() *localIndex {
+func (s *Store) index() *localIndex {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.idx
@@ -340,8 +338,8 @@ func (x *localIndex) pick(cands []int32) (int32, bool) {
 	return best, true
 }
 
-// exact is the card with this exact name at its default printing, or nil
-func (s *localStore) exact(name string) (*card.Data, error) {
+// Exact is the card with this exact name at its default printing, or nil
+func (s *Store) Exact(name string) (*card.Data, error) {
 	x := s.index()
 	if x == nil {
 		return nil, nil
@@ -354,9 +352,9 @@ func (s *localStore) exact(name string) (*card.Data, error) {
 	return s.record(x, i)
 }
 
-// printing is the named card's printing in a set, and at a collector number
+// Printing is the named card's printing in a set, and at a collector number
 // when one is given, or nil when the copy has no such printing
-func (s *localStore) printing(name, set, number string) (*card.Data, error) {
+func (s *Store) Printing(name, set, number string) (*card.Data, error) {
 	x := s.index()
 	if x == nil {
 		return nil, nil
@@ -386,8 +384,8 @@ func (s *localStore) printing(name, set, number string) (*card.Data, error) {
 	return s.record(x, i)
 }
 
-// printings lists every printing of the named card, newest first
-func (s *localStore) printings(name string) ([]*card.Data, error) {
+// Printings lists every printing of the named card, newest first
+func (s *Store) Printings(name string) ([]*card.Data, error) {
 	x := s.index()
 	if x == nil {
 		return nil, nil
@@ -409,9 +407,9 @@ func (s *localStore) printings(name string) ([]*card.Data, error) {
 	return out, nil
 }
 
-// similar lists up to n cards whose names contain every word of name, most
+// Similar lists up to n cards whose names contain every word of name, most
 // played first, each at its default printing
-func (s *localStore) similar(name string, n int) ([]*card.Data, error) {
+func (s *Store) Similar(name string, n int) ([]*card.Data, error) {
 	x := s.index()
 	if x == nil {
 		return nil, nil
@@ -461,9 +459,9 @@ func (s *localStore) similar(name string, n int) ([]*card.Data, error) {
 	return out, nil
 }
 
-// fuzzy is the card whose name is closest to a mistyped one, allowing about one
+// Fuzzy is the card whose name is closest to a mistyped one, allowing about one
 // edit for every four letters, or nil when nothing is that close
-func (s *localStore) fuzzy(name string) (*card.Data, error) {
+func (s *Store) Fuzzy(name string) (*card.Data, error) {
 	x := s.index()
 	if x == nil {
 		return nil, nil
@@ -574,11 +572,11 @@ func (b bulkCard) oracle() string {
 	return b.OracleID
 }
 
-// buildLocalCards writes a store into dir from Scryfall's oracle_cards and
+// Build writes a store into dir from Scryfall's oracle_cards and
 // default_cards bulk files, both already decompressed. oracle only marks which
-// printing Scryfall picks for each card. progress, when set, is told how many
-// printings have been read
-func buildLocalCards(ctx context.Context, dir string, oracle, cards io.Reader, updatedAt time.Time, progress func(printings int)) (localMeta, error) {
+// Printing Scryfall picks for each card. progress, when set, is told how many
+// Printings have been read
+func Build(ctx context.Context, dir string, oracle, cards io.Reader, updatedAt time.Time, progress func(printings int)) (Meta, error) {
 	defaults := make(map[string]bool)
 	err := eachLine(ctx, oracle, func(line []byte) error {
 		var b bulkCard
@@ -589,15 +587,15 @@ func buildLocalCards(ctx context.Context, dir string, oracle, cards io.Reader, u
 		return nil
 	})
 	if err != nil {
-		return localMeta{}, fmt.Errorf("reading oracle cards: %w", err)
+		return Meta{}, fmt.Errorf("reading oracle cards: %w", err)
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	f, err := os.Create(filepath.Join(dir, "cards.jsonl"))
 	if err != nil {
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	defer f.Close()
 	w := bufio.NewWriterSize(f, 1<<20)
@@ -659,33 +657,33 @@ func buildLocalCards(ctx context.Context, dir string, oracle, cards io.Reader, u
 		return nil
 	})
 	if err != nil {
-		return localMeta{}, fmt.Errorf("reading default cards: %w", err)
+		return Meta{}, fmt.Errorf("reading default cards: %w", err)
 	}
 	if err := w.Flush(); err != nil {
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	if len(idx.Entries) == 0 {
-		return localMeta{}, errors.New("the card data file held no cards")
+		return Meta{}, errors.New("the card data file held no cards")
 	}
 
 	ix, err := os.Create(filepath.Join(dir, "index.gob"))
 	if err != nil {
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	bw := bufio.NewWriter(ix)
 	if err := gob.NewEncoder(bw).Encode(&idx); err != nil {
 		ix.Close()
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	if err := bw.Flush(); err != nil {
 		ix.Close()
-		return localMeta{}, err
+		return Meta{}, err
 	}
 	if err := ix.Close(); err != nil {
-		return localMeta{}, err
+		return Meta{}, err
 	}
 
-	meta := localMeta{Format: localCardFormat, UpdatedAt: updatedAt, BuiltAt: time.Now(), Printings: len(idx.Entries), Bytes: off}
+	meta := Meta{Format: localCardFormat, UpdatedAt: updatedAt, BuiltAt: time.Now(), Printings: len(idx.Entries), Bytes: off}
 	raw, _ := json.MarshalIndent(meta, "", "  ")
 	return meta, os.WriteFile(filepath.Join(dir, "meta.json"), raw, 0o644)
 }
@@ -711,14 +709,4 @@ func eachLine(ctx context.Context, r io.Reader, fn func([]byte) error) error {
 		}
 	}
 	return sc.Err()
-}
-
-// cardDir is the store's folder, or "" when there is no config directory, in
-// which case local card data is simply unavailable
-func cardDir() string {
-	dir, err := localCardDir()
-	if err != nil {
-		return ""
-	}
-	return dir
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/scryfall"
@@ -77,7 +78,7 @@ type server struct {
 	runSeq uint64
 
 	// cards is the local copy of Scryfall bulk data, empty until downloaded
-	cards *localStore
+	cards *carddata.Store
 	// scryfall is the paced HTTP client the card client uses, shared with the
 	// bulk data download
 	scryfall *http.Client
@@ -105,11 +106,11 @@ func newServer() *server {
 		activeName:    at.name,
 		activeVersion: at.version,
 		recents:       prefs.NewRecents(p.RecentSearches()),
-		cards:         newLocalStore(cardDir()),
+		cards:         carddata.New(cardDir()),
 		scryfall:      httpc,
 	}
 	s.routes()
-	go s.cards.load()
+	go s.cards.Load()
 
 	// Keep the default template up to date in the background so launch never
 	// blocks on a large download. A loose developer directory and an explicitly
@@ -147,6 +148,17 @@ func loadPrefs() *prefs.Store {
 		return prefs.Load("")
 	}
 	return prefs.Load(filepath.Join(base, "mimic", "prefs.json"))
+}
+
+// cardDir is where the local card data lives, beside the template cache, or ""
+// when there is no config directory, in which case local card data is simply
+// unavailable
+func cardDir() string {
+	base, err := userConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mimic", "scryfall")
 }
 
 // startupTemplate builds the template to render at launch. It restores the

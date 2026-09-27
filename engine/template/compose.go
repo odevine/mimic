@@ -27,6 +27,28 @@ func LoadLayer(p AssetProvider, path string, w, h int, s Scale) (*raster.Buffer,
 	return canvas.Place(w, h, buf, 0, 0), nil
 }
 
+// Mirror flips buf left to right about its vertical center within region, a
+// rectangle on the left half whose pixels each trade places with their mirror
+// image. The empty rectangle flips the whole buffer. A region reaching past
+// the center stops there, so no pixel is swapped twice
+func Mirror(buf *raster.Buffer, region image.Rectangle) {
+	half := image.Rect(0, 0, buf.Width/2, buf.Height)
+	if region.Empty() {
+		region = half
+	}
+	region = region.Intersect(half)
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		row := y * buf.Width
+		for x := region.Min.X; x < region.Max.X; x++ {
+			a := (row + x) * 4
+			b := (row + buf.Width - 1 - x) * 4
+			for c := 0; c < 4; c++ {
+				buf.Pix[a+c], buf.Pix[b+c] = buf.Pix[b+c], buf.Pix[a+c]
+			}
+		}
+	}
+}
+
 // Divider builds a floating divider graphic, such as the rule between a
 // creature's rules and flavor text. The divider asset bakes a thin graphic into
 // an otherwise transparent full-document image, so this crops that strip to its

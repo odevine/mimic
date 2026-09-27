@@ -152,3 +152,54 @@ func TestRenderPlacesArtAfterASkippedLayer(t *testing.T) {
 		t.Errorf("art region on the front = %v, want the art %v", got, magenta)
 	}
 }
+
+func TestRenderMirrorsALayerOnItsCondition(t *testing.T) {
+	// The corner mark sits on the left, and a triangle back flips the top
+	// band so it lands on the right while the lower mark stays put
+	colors := map[string]color.NRGBA{"mark": {0xE0, 0x20, 0x20, 0xFF}}
+	fills := map[string]image.Rectangle{"mark": image.Rect(0, 0, 40, 40)}
+	low := image.Rect(0, 900, 40, 940)
+	dir := writeFaceAssets(t, fills, colors, []template.LayerSpec{
+		{
+			Name: "mark", ColorVariants: map[string]template.LayerAsset{"any": {Path: "mark.png"}},
+			Mirror: &template.LayerMirror{Condition: "icon_right", Width: 100, Height: 100},
+		},
+	})
+	lowPath := filepath.Join(dir, "low.png")
+	if err := writeFlat(lowPath, low, colors["mark"]); err != nil {
+		t.Fatal(err)
+	}
+	p := template.NewFSAssetProvider(dir)
+	m, err := p.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Layers = append(m.Layers, template.LayerSpec{
+		Name: "low", ColorVariants: map[string]template.LayerAsset{"any": {Path: "low.png"}},
+		Mirror: &template.LayerMirror{Condition: "icon_right", Width: 100, Height: 100},
+	})
+	raw, _ := json.Marshal(m)
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &card.Data{Name: "A", TypeLine: "Creature", Layout: "transform", Faces: []card.Face{{Name: "A", TypeLine: "Creature"}, {Name: "B", TypeLine: "Creature"}}}
+	alpha := func(face, x, y int) uint8 {
+		t.Helper()
+		buf, err := New("test").Render(context.Background(), template.RenderRequest{Card: d, Face: face, Assets: template.NewFSAssetProvider(dir)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return color.NRGBAModel.Convert(buf.ToImage(8).At(x, y)).(color.NRGBA).A
+	}
+	right := placeholderWidth - 10
+	if alpha(0, 10, 10) == 0 || alpha(0, right, 10) != 0 {
+		t.Error("the front mirrored its mark")
+	}
+	if alpha(1, 10, 10) != 0 || alpha(1, right, 10) == 0 {
+		t.Error("the back did not mirror its mark into the right corner")
+	}
+	if alpha(1, 10, 920) == 0 {
+		t.Error("the back mirrored a mark outside the region")
+	}
+}

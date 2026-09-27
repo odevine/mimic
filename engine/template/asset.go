@@ -49,6 +49,30 @@ type LayerSpec struct {
 	// "any" is the color-invariant fallback
 	ColorVariants map[string]LayerAsset `json:"colorVariants"`
 	Blend         string                `json:"blend,omitempty"` // blend.Mode name, default "normal"
+	// Mirror flips part of the layer left to right when its condition holds,
+	// so one cut can draw a frame whose icon sits on either end of the title bar
+	Mirror *LayerMirror `json:"mirror,omitempty"`
+}
+
+// LayerMirror is a left to right flip of a layer about the canvas's vertical
+// center. The region is given on the left half in document coordinates, and
+// each pixel in it trades places with its mirror image on the right, so the
+// rest of the layer keeps its own art. A zero width or height flips the whole
+// layer
+type LayerMirror struct {
+	Condition string `json:"condition,omitempty"`
+	X         int    `json:"x,omitempty"`
+	Y         int    `json:"y,omitempty"`
+	Width     int    `json:"width,omitempty"`
+	Height    int    `json:"height,omitempty"`
+}
+
+// Region is the mirror's rectangle, or the empty rectangle for the whole layer
+func (m LayerMirror) Region() image.Rectangle {
+	if m.Width <= 0 || m.Height <= 0 {
+		return image.Rectangle{}
+	}
+	return image.Rect(m.X, m.Y, m.X+m.Width, m.Y+m.Height)
 }
 
 // LayerAsset points at one PNG within the provider's root

@@ -231,6 +231,9 @@ func layerNode(req template.RenderRequest, m *template.Manifest, layer template.
 	if err != nil {
 		return nil, err
 	}
+	if layer.Mirror != nil && f.ConditionMet(layer.Mirror.Condition) {
+		template.Mirror(placed, scale.Rect(layer.Mirror.Region()))
+	}
 	mode, err := template.BlendMode(layer.Blend)
 	if err != nil {
 		return nil, err

@@ -12,14 +12,8 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
-
-// templateChoice names one template and version, the value a face preference
-// holds. An empty Version means the newest installed one
-type templateChoice struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-}
 
 // shapeKey is how a shape is keyed in prefs and on the wire, as in
 // "transform_front/standard"
@@ -66,21 +60,21 @@ func installedTemplates() []template.Registration {
 // it: the face's own preference when that template is installed and supports
 // it, then the active template when it supports it, then the first installed
 // template that does. It reports false when none does
-func (p *renderPipeline) choose(sh template.Shape) (templateChoice, bool) {
+func (p *renderPipeline) choose(sh template.Shape) (prefs.TemplateChoice, bool) {
 	if sh != primaryShape && p.preferences != nil {
 		if c, ok := p.preferences()[shapeKey(sh)]; ok && supportsOf(c.Name).Allows(sh) && installed(c.Name) {
 			return c, true
 		}
 	}
 	if at := p.active.Load(); supportsOf(at.name).Allows(sh) {
-		return templateChoice{Name: at.name, Version: at.version}, true
+		return prefs.TemplateChoice{Name: at.name, Version: at.version}, true
 	}
 	for _, r := range installedTemplates() {
 		if r.Supports.Allows(sh) {
-			return templateChoice{Name: r.Name}, true
+			return prefs.TemplateChoice{Name: r.Name}, true
 		}
 	}
-	return templateChoice{}, false
+	return prefs.TemplateChoice{}, false
 }
 
 // templateFor loads the template that renders a face of shape sh, or returns a
@@ -97,7 +91,7 @@ func (p *renderPipeline) templateFor(sh template.Shape) (*activeTemplate, error)
 // earlier. A template is loaded once per name through the same network-free
 // chain as the startup template, or from the exact version c names when that
 // is installed, and stays open until shutdown
-func (p *renderPipeline) load(c templateChoice) (*activeTemplate, error) {
+func (p *renderPipeline) load(c prefs.TemplateChoice) (*activeTemplate, error) {
 	matches := func(at *activeTemplate) bool {
 		return at != nil && at.name == c.Name && (c.Version == "" || at.version == c.Version)
 	}
@@ -210,12 +204,12 @@ type faceOption struct {
 // faceRow is one face shape in the settings list: the installed templates
 // that render it, the saved preference if any, and the template in use now
 type faceRow struct {
-	Key     string          `json:"key"`
-	Role    template.Role   `json:"role"`
-	Kind    template.Kind   `json:"kind"`
-	Options []faceOption    `json:"options"`
-	Chosen  *templateChoice `json:"chosen,omitempty"`
-	Using   string          `json:"using"`
+	Key     string                `json:"key"`
+	Role    template.Role         `json:"role"`
+	Kind    template.Kind         `json:"kind"`
+	Options []faceOption          `json:"options"`
+	Chosen  *prefs.TemplateChoice `json:"chosen,omitempty"`
+	Using   string                `json:"using"`
 	// Primary marks the standard single card row, whose choice is the active
 	// template the top bar shows rather than a saved preference
 	Primary bool `json:"primary,omitempty"`
@@ -226,15 +220,15 @@ type faceRow struct {
 // the settings list stays as short as what is installed
 func (p *renderPipeline) faceRows() []faceRow {
 	regs := installedTemplates()
-	var prefs map[string]templateChoice
+	var saved map[string]prefs.TemplateChoice
 	if p.preferences != nil {
-		prefs = p.preferences()
+		saved = p.preferences()
 	}
 	active := p.active.Load()
 	primary := faceRow{
 		Key: shapeKey(primaryShape), Role: primaryShape.Role, Kind: primaryShape.Kind, Primary: true,
 		Options: faceOptions(regs, primaryShape),
-		Chosen:  &templateChoice{Name: active.name, Version: active.version},
+		Chosen:  &prefs.TemplateChoice{Name: active.name, Version: active.version},
 		Using:   templateDisplay(active.name, active.version),
 	}
 	rows := []faceRow{primary}
@@ -243,7 +237,7 @@ func (p *renderPipeline) faceRows() []faceRow {
 			continue
 		}
 		row := faceRow{Key: shapeKey(sh), Role: sh.Role, Kind: sh.Kind, Options: faceOptions(regs, sh)}
-		if c, ok := prefs[row.Key]; ok {
+		if c, ok := saved[row.Key]; ok {
 			row.Chosen = &c
 		}
 		if c, ok := p.choose(sh); ok {
@@ -322,7 +316,7 @@ func (s *server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.pipe.faceRows())
 		return
 	}
-	s.prefs.setFaceTemplate(body.Key, templateChoice{Name: body.Name, Version: body.Version})
+	s.prefs.SetFaceTemplate(body.Key, prefs.TemplateChoice{Name: body.Name, Version: body.Version})
 	writeJSON(w, s.pipe.faceRows())
 }
 

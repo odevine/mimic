@@ -115,7 +115,7 @@ type cardDataView struct {
 }
 
 func (s *server) handleCardData(w http.ResponseWriter, r *http.Request) {
-	v := cardDataView{Source: s.prefs.settings().CardData, Local: s.cards.status()}
+	v := cardDataView{Source: s.prefs.Settings().CardData, Local: s.cards.status()}
 	if v.Source == "" {
 		v.Source = cardDataAPI
 	}

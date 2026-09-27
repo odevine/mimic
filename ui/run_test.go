@@ -21,7 +21,7 @@ func runServer(t *testing.T) *server {
 	t.Helper()
 	s := resolutionServer(t)
 	s.jobs = make(map[string]*job)
-	s.prefs.setResolution(defaultPreviewDPI, 30)
+	s.prefs.SetResolution(defaultPreviewDPI, 30)
 	return s
 }
 

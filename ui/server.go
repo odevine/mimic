@@ -6,11 +6,13 @@ import (
 	"image"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // netTimeout bounds a search or an art fetch, matching the rendercard CLI
@@ -37,7 +39,7 @@ const jobTTL = 10 * time.Minute
 // guarded by its own mutex or an atomic inside the pipeline
 type server struct {
 	pipe  *renderPipeline
-	prefs *prefs
+	prefs *prefs.Store
 	mux   *http.ServeMux
 
 	// artCache reuses a card's fetched art across edits, keyed by ArtworkURL, so
@@ -58,7 +60,7 @@ type server struct {
 	// recents is the search-box suggestion list, seeded from prefs and persisted
 	// back on every change. Guarded by its own mutex
 	recentsMu sync.Mutex
-	recents   *recents
+	recents   *prefs.Recents
 
 	// resolveCancel abandons the list resolve in flight when a new one starts,
 	// and resolved caches lookups for the session
@@ -87,7 +89,7 @@ type server struct {
 func newServer() *server {
 	httpc := scryfallHTTPClient()
 	p := loadPrefs()
-	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc)), preferences: p.faceTemplates}
+	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc)), preferences: p.FaceTemplates}
 
 	at, source := startupTemplate(p)
 	pipe.install(at)
@@ -99,7 +101,7 @@ func newServer() *server {
 		jobs:          make(map[string]*job),
 		activeName:    at.name,
 		activeVersion: at.version,
-		recents:       newRecents(p.recentSearches()),
+		recents:       prefs.NewRecents(p.RecentSearches()),
 		cards:         newLocalStore(cardDir()),
 		scryfall:      httpc,
 	}
@@ -115,12 +117,23 @@ func newServer() *server {
 	return s
 }
 
+// loadPrefs reads prefs.json beside the bundle cache under the per-OS user
+// config directory. It goes through userConfigDir so a test can redirect it the
+// same way the cache does, and a missing config directory just disables saving
+func loadPrefs() *prefs.Store {
+	base, err := userConfigDir()
+	if err != nil {
+		return prefs.Load("")
+	}
+	return prefs.Load(filepath.Join(base, "mimic", "prefs.json"))
+}
+
 // startupTemplate builds the template to render at launch. It restores the
 // persisted selection only when it needs no download (a loose dir or an
 // already-cached bundle), so launch is never blocked, and otherwise falls back
 // to the default network-free chain for normal
-func startupTemplate(p *prefs) (*activeTemplate, assetSource) {
-	name, ver := p.template()
+func startupTemplate(p *prefs.Store) (*activeTemplate, assetSource) {
+	name, ver := p.Template()
 	restorable := name != "" && ((ver == localVersion && looseDir(name) != "") || isVersionCached(name, ver))
 	if restorable {
 		if at, err := activeFromVersion(context.Background(), name, ver, nil); err == nil {
@@ -157,24 +170,24 @@ func (s *server) setActiveTemplate(at *activeTemplate) {
 	s.activeName = at.name
 	s.activeVersion = at.version
 	s.activeMu.Unlock()
-	s.prefs.setTemplate(at.name, at.version)
+	s.prefs.SetTemplate(at.name, at.version)
 }
 
 // rememberQuery records a successful search and persists the updated list, so
 // the search box suggests it next time
 func (s *server) rememberQuery(query string) {
 	s.recentsMu.Lock()
-	s.recents.add(query)
-	list := s.recents.list()
+	s.recents.Add(query)
+	list := s.recents.List()
 	s.recentsMu.Unlock()
-	s.prefs.setRecentSearches(list)
+	s.prefs.SetRecentSearches(list)
 }
 
 // recentQueries returns the suggestion list, newest first
 func (s *server) recentQueries() []string {
 	s.recentsMu.Lock()
 	defer s.recentsMu.Unlock()
-	return append([]string(nil), s.recents.list()...)
+	return append([]string(nil), s.recents.List()...)
 }
 
 // active returns the current template name and version for the indicator

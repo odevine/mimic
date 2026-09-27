@@ -18,6 +18,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // The states a card moves through in a run. Skipped is a card a Stop reached
@@ -248,7 +249,7 @@ func (s *server) startRun(w http.ResponseWriter, rows []runRow, outDir, label st
 		template:    name,
 		version:     version,
 		dpi:         dpi,
-		concurrency: concurrencyOf(s.prefs.settings()),
+		concurrency: concurrencyOf(s.prefs.Settings()),
 		started:     time.Now(),
 		rows:        rows,
 		files:       outputNames(rows),
@@ -514,7 +515,7 @@ func countCards(cards []runCard) map[string]int {
 
 // concurrencyOf reads the render concurrency setting, filling in the default
 // and keeping it in a range the memory of one machine can hold
-func concurrencyOf(s uiSettings) int {
+func concurrencyOf(s prefs.Settings) int {
 	if s.Concurrency <= 0 {
 		return defaultConcurrency
 	}

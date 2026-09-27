@@ -208,7 +208,7 @@ func (s *server) handleSetResolution(w http.ResponseWriter, r *http.Request) {
 	}
 	// Clamping before the store keeps a dpi the active template cannot reach
 	// from sitting in prefs and surprising a later, larger template
-	s.prefs.setResolution(m.ClampDPI(previewOrDefault(body.PreviewDPI)), clampOutputDPI(m, body.OutputDPI))
+	s.prefs.SetResolution(m.ClampDPI(previewOrDefault(body.PreviewDPI)), clampOutputDPI(m, body.OutputDPI))
 	s.handleResolution(w, r)
 }
 

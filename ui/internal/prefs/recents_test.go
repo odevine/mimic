@@ -1,4 +1,4 @@
-package main
+package prefs
 
 import (
 	"strings"
@@ -6,21 +6,21 @@ import (
 )
 
 func TestRecentsAddNewestFirst(t *testing.T) {
-	r := &recents{}
-	r.add("bolt")
-	r.add("delver")
-	got := strings.Join(r.list(), ",")
+	r := &Recents{}
+	r.Add("bolt")
+	r.Add("delver")
+	got := strings.Join(r.List(), ",")
 	if got != "delver,bolt" {
 		t.Errorf("list = %q, want delver,bolt", got)
 	}
 }
 
 func TestRecentsDeduplicatesCaseInsensitive(t *testing.T) {
-	r := &recents{}
-	r.add("Lightning Bolt")
-	r.add("delver")
-	r.add("lightning bolt")
-	got := r.list()
+	r := &Recents{}
+	r.Add("Lightning Bolt")
+	r.Add("delver")
+	r.Add("lightning bolt")
+	got := r.List()
 	if len(got) != 2 {
 		t.Fatalf("list = %v, want 2 entries", got)
 	}
@@ -31,28 +31,28 @@ func TestRecentsDeduplicatesCaseInsensitive(t *testing.T) {
 }
 
 func TestRecentsCapsAtMax(t *testing.T) {
-	r := &recents{}
+	r := &Recents{}
 	for i := 0; i < maxRecent+5; i++ {
-		r.add(string(rune('a' + i)))
+		r.Add(string(rune('a' + i)))
 	}
-	if len(r.list()) != maxRecent {
-		t.Errorf("len = %d, want %d", len(r.list()), maxRecent)
+	if len(r.List()) != maxRecent {
+		t.Errorf("len = %d, want %d", len(r.List()), maxRecent)
 	}
 }
 
 func TestRecentsIgnoresBlank(t *testing.T) {
-	r := &recents{}
-	r.add("   ")
-	r.add("")
-	if len(r.list()) != 0 {
-		t.Errorf("list = %v, want empty", r.list())
+	r := &Recents{}
+	r.Add("   ")
+	r.Add("")
+	if len(r.List()) != 0 {
+		t.Errorf("list = %v, want empty", r.List())
 	}
 }
 
 func TestNewRecentsPreservesOrderAndTrims(t *testing.T) {
 	// Stored newest-first should round-trip to the same order
-	r := newRecents([]string{"delver", "bolt", "delver"})
-	got := r.list()
+	r := NewRecents([]string{"delver", "bolt", "delver"})
+	got := r.List()
 	if len(got) != 2 || got[0] != "delver" || got[1] != "bolt" {
 		t.Errorf("list = %v, want [delver bolt]", got)
 	}

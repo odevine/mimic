@@ -12,6 +12,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // facesServer is a run server with transform installed as a loose developer
@@ -19,7 +20,7 @@ import (
 func facesServer(t *testing.T) *server {
 	t.Helper()
 	s := runServer(t)
-	s.pipe.preferences = s.prefs.faceTemplates
+	s.pipe.preferences = s.prefs.FaceTemplates
 	assets := filepath.Join(t.TempDir(), "assets")
 	if err := writePlaceholders(filepath.Join(assets, "transform"), "transform"); err != nil {
 		t.Fatal(err)
@@ -50,7 +51,7 @@ func TestChooseTemplatePerFace(t *testing.T) {
 		t.Error("a planeswalker back has no template, but one was chosen")
 	}
 	// A preference for a template that does not render the shape is ignored
-	s.prefs.setFaceTemplate(shapeKey(front), templateChoice{Name: "normal"})
+	s.prefs.SetFaceTemplate(shapeKey(front), prefs.TemplateChoice{Name: "normal"})
 	if c, _ := s.pipe.choose(front); c.Name != "transform" {
 		t.Errorf("an unusable preference chose %+v", c)
 	}
@@ -127,7 +128,7 @@ func TestSetFaceTemplate(t *testing.T) {
 	if rec := put(faceChoiceBody{Key: "transform_front/standard", Name: "transform", Version: localVersion}); rec.Code != http.StatusOK {
 		t.Errorf("setting transform = %d %s", rec.Code, rec.Body)
 	}
-	if got := s.prefs.faceTemplates()["transform_front/standard"]; got.Name != "transform" {
+	if got := s.prefs.FaceTemplates()["transform_front/standard"]; got.Name != "transform" {
 		t.Errorf("saved %+v", got)
 	}
 	if rec := put(faceChoiceBody{Key: "transform_front/standard", Name: "normal"}); rec.Code != http.StatusBadRequest {
@@ -136,8 +137,8 @@ func TestSetFaceTemplate(t *testing.T) {
 	if rec := put(faceChoiceBody{Key: "single/planeswalker", Name: "transform"}); rec.Code != http.StatusBadRequest {
 		t.Errorf("a face no template renders = %d", rec.Code)
 	}
-	if rec := put(faceChoiceBody{Key: "transform_front/standard"}); rec.Code != http.StatusOK || len(s.prefs.faceTemplates()) != 0 {
-		t.Errorf("clearing = %d, prefs %v", rec.Code, s.prefs.faceTemplates())
+	if rec := put(faceChoiceBody{Key: "transform_front/standard"}); rec.Code != http.StatusOK || len(s.prefs.FaceTemplates()) != 0 {
+		t.Errorf("clearing = %d, prefs %v", rec.Code, s.prefs.FaceTemplates())
 	}
 }
 
@@ -166,8 +167,8 @@ func TestSetStandardTemplateSwitchesActive(t *testing.T) {
 	if name, version := s.active(); name != "normal" || version != localVersion {
 		t.Errorf("active = %s %s, want normal local", name, version)
 	}
-	if len(s.prefs.faceTemplates()) != 0 {
-		t.Errorf("the standard choice was saved as a face preference: %v", s.prefs.faceTemplates())
+	if len(s.prefs.FaceTemplates()) != 0 {
+		t.Errorf("the standard choice was saved as a face preference: %v", s.prefs.FaceTemplates())
 	}
 }
 

@@ -70,7 +70,7 @@ func TestResolutionsDefault(t *testing.T) {
 func TestRenderDPIByTarget(t *testing.T) {
 	s := resolutionServer(t)
 	native := nativeDPI(t, s)
-	s.prefs.setResolution(96, 0)
+	s.prefs.SetResolution(96, 0)
 
 	if got := s.renderDPI(targetPreview); got != 96 {
 		t.Errorf("preview dpi = %d, want 96", got)
@@ -116,7 +116,7 @@ func TestSetResolutionClampsAndPersists(t *testing.T) {
 
 	// An output at or past native is stored as zero, so it follows a later
 	// template rather than pinning this one's number
-	if _, output := s.prefs.resolution(); output != 0 {
+	if _, output := s.prefs.Resolution(); output != 0 {
 		t.Errorf("stored output dpi = %d, want 0", output)
 	}
 }

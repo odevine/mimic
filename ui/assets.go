@@ -131,6 +131,10 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*acti
 	}, nil
 }
 
+// writePlaceholders writes a template's stand-in assets into a directory. Tests
+// swap in a copy of assets generated once, since encoding them is slow
+var writePlaceholders = render.WritePlaceholderAssets
+
 // placeholderActive generates stand-in assets for a template that has no loose
 // directory and no cached bundle
 func placeholderActive(name string, tmpl template.Template) (*activeTemplate, error) {
@@ -138,7 +142,7 @@ func placeholderActive(name string, tmpl template.Template) (*activeTemplate, er
 	if err != nil {
 		return nil, err
 	}
-	if err := render.WritePlaceholderAssets(tmp, name); err != nil {
+	if err := writePlaceholders(tmp, name); err != nil {
 		os.RemoveAll(tmp)
 		return nil, err
 	}

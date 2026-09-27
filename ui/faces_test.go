@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
-	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -22,7 +21,7 @@ func facesServer(t *testing.T) *server {
 	s := runServer(t)
 	s.pipe.preferences = s.prefs.faceTemplates
 	assets := filepath.Join(t.TempDir(), "assets")
-	if err := render.WritePlaceholderAssets(filepath.Join(assets, "transform"), "transform"); err != nil {
+	if err := writePlaceholders(filepath.Join(assets, "transform"), "transform"); err != nil {
 		t.Fatal(err)
 	}
 	looseDirBases = []string{assets}
@@ -145,7 +144,7 @@ func TestSetFaceTemplate(t *testing.T) {
 func TestSetStandardTemplateSwitchesActive(t *testing.T) {
 	s := facesServer(t)
 	// A second loose template that renders standard cards to switch to
-	if err := render.WritePlaceholderAssets(filepath.Join(looseDirBases[0], "normal"), "normal"); err != nil {
+	if err := writePlaceholders(filepath.Join(looseDirBases[0], "normal"), "normal"); err != nil {
 		t.Fatal(err)
 	}
 	put := func(body faceChoiceBody) *httptest.ResponseRecorder {

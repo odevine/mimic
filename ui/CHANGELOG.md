@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.0](https://github.com/odevine/mimic/compare/ui/v0.7.0...ui/v0.8.0) (2026-09-27)
+
+
+### Features
+
+* **ui:** choose the standard template in settings and redraw the gear ([3878e4e](https://github.com/odevine/mimic/commit/3878e4e54ab57354c2115a4a146e3e82af219635))
+* **ui:** manage templates in their own mode ([badbb6d](https://github.com/odevine/mimic/commit/badbb6d5f55d8886f9841b7d1f5cc358a32cddea))
+* **ui:** mark the pane splitters with a grab handle ([5fac8bd](https://github.com/odevine/mimic/commit/5fac8bdc89794c6eb61e44341bb0045cf553cabe))
+* **ui:** render every face through the template chosen for it ([44e27cc](https://github.com/odevine/mimic/commit/44e27ccf5199117ea85c4a7a6369e3db06b5c4c4))
+
+
+### Bug Fixes
+
+* **ui:** keep dragged panes from widening the page ([8de3da9](https://github.com/odevine/mimic/commit/8de3da90a8db288394e333ccf44e7dd65543c377))
+* **ui:** keep the run preview inside its own section ([a18c7ee](https://github.com/odevine/mimic/commit/a18c7ee05e820a0d03fcd8381433c2e9512d20bd))
+* **ui:** keep the single-card panes and preview within their bounds ([6898748](https://github.com/odevine/mimic/commit/689874874c42a99df11da9f3b31b9ebd54870bff))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.10.0 ([8354ca4](https://github.com/odevine/mimic/commit/8354ca42b28ee583f7f880d0c7c4fde0a03c0644))
+* **ui:** depend on the released engine v0.7.0 ([8650aa0](https://github.com/odevine/mimic/commit/8650aa00449365d2680b719abab018548a5d65c3))
+
 ## [0.7.0](https://github.com/odevine/mimic/compare/ui/v0.6.0...ui/v0.7.0) (2026-09-26)
 
 

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -28,7 +28,7 @@ func withEmptyAssetChain(t *testing.T) string {
 
 // resolutionServer builds a server over placeholder assets with prefs in a
 // temp dir, which is enough for everything the resolution endpoints touch
-func resolutionServer(t *testing.T) *server {
+func resolutionServer(t *testing.T) *Server {
 	t.Helper()
 	withEmptyAssetChain(t)
 
@@ -41,13 +41,13 @@ func resolutionServer(t *testing.T) *server {
 	p := loadPrefs()
 	pipe := pipeline.New(nil, p.FaceTemplates)
 	pipe.Install(at)
-	s := &server{pipe: pipe, prefs: p}
+	s := &Server{pipe: pipe, prefs: p}
 	s.routes()
 	return s
 }
 
 // nativeDPI is what the active template reports as its authored resolution
-func nativeDPI(t *testing.T, s *server) int {
+func nativeDPI(t *testing.T, s *Server) int {
 	t.Helper()
 	m, err := s.pipe.Manifest()
 	if err != nil {

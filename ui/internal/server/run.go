@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -21,14 +21,14 @@ type runBody struct {
 
 // currentRun returns the latest run, which may have finished, and the job its
 // events stream through
-func (s *server) currentRun() (*batch.Run, *job) {
+func (s *Server) currentRun() (*batch.Run, *job) {
 	s.runMu.Lock()
 	defer s.runMu.Unlock()
 	return s.run, s.runJob
 }
 
 // runActive reports whether a batch is rendering now
-func (s *server) runActive() bool {
+func (s *Server) runActive() bool {
 	r, _ := s.currentRun()
 	return r != nil && r.Active()
 }
@@ -36,7 +36,7 @@ func (s *server) runActive() bool {
 // handleRun starts a batch. It is refused while another is running, since two
 // runs writing into overlapping folders is a class of bug better designed out
 // than handled
-func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	var body runBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad run request: "+err.Error(), http.StatusBadRequest)
@@ -51,7 +51,7 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 
 // handleRetryRun starts a fresh run from the cards that failed in the latest
 // one, into the same folder, which is the usual fix after a network blip
-func (s *server) handleRetryRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRetryRun(w http.ResponseWriter, r *http.Request) {
 	prev, _, ok := s.runByID(w, r)
 	if !ok {
 		return
@@ -64,7 +64,7 @@ func (s *server) handleRetryRun(w http.ResponseWriter, r *http.Request) {
 }
 
 // startRun validates a run and starts it, answering with its first snapshot
-func (s *server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label string) {
+func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label string) {
 	if len(rows) == 0 {
 		http.Error(w, "the run has no cards", http.StatusBadRequest)
 		return
@@ -111,7 +111,7 @@ func (s *server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label
 }
 
 // handleLatestRun returns the latest run, or 204 when there has been none
-func (s *server) handleLatestRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLatestRun(w http.ResponseWriter, r *http.Request) {
 	run, _ := s.currentRun()
 	if run == nil {
 		w.WriteHeader(http.StatusNoContent)
@@ -122,7 +122,7 @@ func (s *server) handleLatestRun(w http.ResponseWriter, r *http.Request) {
 
 // runByID returns the latest run and its job when id names it. Earlier runs are
 // gone
-func (s *server) runByID(w http.ResponseWriter, r *http.Request) (*batch.Run, *job, bool) {
+func (s *Server) runByID(w http.ResponseWriter, r *http.Request) (*batch.Run, *job, bool) {
 	run, j := s.currentRun()
 	if run == nil || run.ID() != r.PathValue("id") {
 		http.NotFound(w, r)
@@ -131,7 +131,7 @@ func (s *server) runByID(w http.ResponseWriter, r *http.Request) (*batch.Run, *j
 	return run, j, true
 }
 
-func (s *server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
 	if _, j, ok := s.runByID(w, r); ok {
 		streamJob(w, r, j)
 	}
@@ -139,7 +139,7 @@ func (s *server) handleRunEvents(w http.ResponseWriter, r *http.Request) {
 
 // handleRunImage serves one finished card from the file the run wrote, so a
 // run of hundreds of cards holds none of them in memory
-func (s *server) handleRunImage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRunImage(w http.ResponseWriter, r *http.Request) {
 	run, _, ok := s.runByID(w, r)
 	if !ok {
 		return
@@ -158,7 +158,7 @@ func (s *server) handleRunImage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
-func (s *server) handleStopRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 	run, _, ok := s.runByID(w, r)
 	if !ok {
 		return
@@ -169,12 +169,12 @@ func (s *server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 
 // handleOpenRunFolder opens the run's output folder in the system file browser.
 // It opens only a folder a run wrote to, never a path the request names
-func (s *server) handleOpenRunFolder(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleOpenRunFolder(w http.ResponseWriter, r *http.Request) {
 	run, _, ok := s.runByID(w, r)
 	if !ok {
 		return
 	}
-	if err := openBrowser(run.OutDir()); err != nil {
+	if err := s.open(run.OutDir()); err != nil {
 		http.Error(w, "opening the folder: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

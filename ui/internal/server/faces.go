@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
-func (s *server) handleFaceTemplates(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleFaceTemplates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.pipe.FaceRows())
 }
 
@@ -27,7 +27,7 @@ type faceChoiceBody struct {
 // for standard single cards switches the active template, the same choice the
 // top bar makes. It waits for a run to finish, so every face of a run renders
 // through the templates it started with
-func (s *server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
 	var body faceChoiceBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad face template request: "+err.Error(), http.StatusBadRequest)
@@ -69,7 +69,7 @@ func (s *server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
 // switchActive makes an installed template the active one, as choosing it in
 // the top bar would. An empty version is the newest installed. It never
 // downloads, since the settings list offers only installed versions
-func (s *server) switchActive(name, version string) error {
+func (s *Server) switchActive(name, version string) error {
 	if name == "" {
 		return fmt.Errorf("standard cards need a template")
 	}

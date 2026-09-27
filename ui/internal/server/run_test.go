@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ import (
 
 // runServer is a placeholder-template server that renders small, so a batch
 // test finishes quickly with no network
-func runServer(t *testing.T) *server {
+func runServer(t *testing.T) *Server {
 	t.Helper()
 	s := resolutionServer(t)
 	s.jobs = make(map[string]*job)
@@ -26,7 +26,7 @@ func runServer(t *testing.T) *server {
 	return s
 }
 
-func postRun(t *testing.T, s *server, body runBody) (*httptest.ResponseRecorder, batch.View) {
+func postRun(t *testing.T, s *Server, body runBody) (*httptest.ResponseRecorder, batch.View) {
 	t.Helper()
 	raw, _ := json.Marshal(body)
 	rec := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func postRun(t *testing.T, s *server, body runBody) (*httptest.ResponseRecorder,
 }
 
 // waitRun blocks until the latest run finishes
-func waitRun(t *testing.T, s *server) batch.View {
+func waitRun(t *testing.T, s *Server) batch.View {
 	t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for s.runActive() {

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"github.com/odevine/mimic/engine/template"
@@ -34,7 +34,7 @@ type resolutionSettings struct {
 // template. A template authored below a stored resolution clamps it rather than
 // upscaling, so switching templates never leaves a preference that renders
 // something the assets cannot support
-func (s *server) resolutions() (resolutionSettings, error) {
+func (s *Server) resolutions() (resolutionSettings, error) {
 	m, err := s.pipe.Manifest()
 	if err != nil {
 		return resolutionSettings{}, err
@@ -53,7 +53,7 @@ func (s *server) resolutions() (resolutionSettings, error) {
 // it is given against the template that is actually loaded, so this passes the
 // stored preference straight through: a stored output of zero means the
 // template's own resolution, which is what a save wants
-func (s *server) renderDPI(target string) int {
+func (s *Server) renderDPI(target string) int {
 	preview, output := s.prefs.Resolution()
 	if target == targetOutput {
 		return output

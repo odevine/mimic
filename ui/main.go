@@ -16,6 +16,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/odevine/mimic/ui/internal/server"
 )
 
 func main() {
@@ -23,8 +25,8 @@ func main() {
 	noOpen := flag.Bool("no-open", false, "do not open the browser at startup")
 	flag.Parse()
 
-	s := newServer()
-	defer s.pipe.Close()
+	s := server.New(server.Options{Static: staticFS(), Open: openBrowser})
+	defer s.Close()
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
@@ -33,7 +35,7 @@ func main() {
 	url := "http://" + ln.Addr().String()
 	fmt.Println(url)
 
-	srv := &http.Server{Handler: guard(s.mux)}
+	srv := &http.Server{Handler: s.Handler()}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("mimic: serving: %v", err)

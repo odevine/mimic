@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -16,17 +16,17 @@ const maxRecentOutputDirs = 6
 
 // handleCapabilities returns the gate map the frontend applies to every
 // feature-keyed control
-func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, capabilities())
 }
 
 // handleSettings returns the interface settings
-func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.prefs.Settings())
 }
 
 // handlePutSettings replaces the interface settings and returns what was kept
-func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var body prefs.Settings
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad settings request: "+err.Error(), http.StatusBadRequest)

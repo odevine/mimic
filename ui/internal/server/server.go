@@ -1,9 +1,13 @@
-package main
+// Package server is the local HTTP API behind the web frontend. It wires the
+// catalog, card data, list resolution, rendering and batch runs to routes, and
+// serves the frontend files beside them
+package server
 
 import (
 	"context"
 	"fmt"
 	"image"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -39,15 +43,18 @@ const artCacheMax = 24
 // read its events and image before it is reaped
 const jobTTL = 10 * time.Minute
 
-// server holds the shared, concurrency-safe pieces behind the HTTP API. It
-// replaces the Fyne ui struct. The browser is the single driver of UI state, so
+// Server holds the shared, concurrency-safe pieces behind the HTTP API. The browser is the single driver of UI state, so
 // the server keeps only what must be shared: the render pipeline, the art cache,
 // persisted prefs, the in-flight jobs, and the active-template labels. Each is
 // guarded by its own mutex or an atomic inside the pipeline
-type server struct {
+type Server struct {
 	pipe  *pipeline.Pipeline
 	prefs *prefs.Store
 	mux   *http.ServeMux
+	// static is the frontend served at the site root, and open shows a folder in
+	// the system file browser
+	static fs.FS
+	open   func(path string) error
 
 	// artCache reuses a card's fetched art across edits, keyed by ArtworkURL, so
 	// any render whose card carries an already-seen URL skips the network. order
@@ -90,11 +97,19 @@ type server struct {
 	remoteCards remoteCache
 }
 
-// newServer builds the server: it resolves the startup template without
+// Options is what the server needs from the binary around it
+type Options struct {
+	// Static is the frontend served at the site root
+	Static fs.FS
+	// Open shows a path in the system file browser
+	Open func(path string) error
+}
+
+// New builds the server: it resolves the startup template without
 // blocking, installs it, and wires the routes. When the startup template came
 // from a bundle or a placeholder it kicks off the background default-template
 // auto-update, matching the desktop app
-func newServer() *server {
+func New(o Options) *Server {
 	httpc := scryfall.NewHTTPClient(netTimeout)
 	p := loadPrefs()
 	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
@@ -102,7 +117,7 @@ func newServer() *server {
 	at, source := startupTemplate(p)
 	pipe.Install(at)
 
-	s := &server{
+	s := &Server{
 		pipe:          pipe,
 		prefs:         p,
 		artCache:      make(map[string]image.Image),
@@ -112,6 +127,8 @@ func newServer() *server {
 		recents:       prefs.NewRecents(p.RecentSearches()),
 		cards:         carddata.New(cardDir()),
 		scryfall:      httpc,
+		static:        o.Static,
+		open:          o.Open,
 	}
 	s.routes()
 	go s.cards.Load()
@@ -186,11 +203,17 @@ func startupTemplate(p *prefs.Store) (*pipeline.Template, pipeline.Source) {
 	return at, source
 }
 
+// Handler is the server's routes behind the loopback host guard
+func (s *Server) Handler() http.Handler { return guard(s.mux) }
+
+// Close releases every template the server installed. Call it once at shutdown
+func (s *Server) Close() { s.pipe.Close() }
+
 // updateTemplateBackground downloads the latest compatible version of a template
 // and swaps it in. It runs at startup, so any failure is logged and the server
 // keeps rendering from whatever it resolved to. The browser picks up the new
 // active template on its next poll, and its next render uses it
-func (s *server) updateTemplateBackground(name string) {
+func (s *Server) updateTemplateBackground(name string) {
 	at, err := pipeline.Latest(context.Background(), name)
 	if err != nil {
 		log.Printf("mimic: template update skipped: %v", err)
@@ -201,7 +224,7 @@ func (s *server) updateTemplateBackground(name string) {
 
 // setActiveTemplate installs a new template, records it for the indicator, and
 // persists the choice so the next launch restores it
-func (s *server) setActiveTemplate(at *pipeline.Template) {
+func (s *Server) setActiveTemplate(at *pipeline.Template) {
 	s.pipe.Install(at)
 	s.activeMu.Lock()
 	s.activeName = at.Name
@@ -212,7 +235,7 @@ func (s *server) setActiveTemplate(at *pipeline.Template) {
 
 // rememberQuery records a successful search and persists the updated list, so
 // the search box suggests it next time
-func (s *server) rememberQuery(query string) {
+func (s *Server) rememberQuery(query string) {
 	s.recentsMu.Lock()
 	s.recents.Add(query)
 	list := s.recents.List()
@@ -221,14 +244,14 @@ func (s *server) rememberQuery(query string) {
 }
 
 // recentQueries returns the suggestion list, newest first
-func (s *server) recentQueries() []string {
+func (s *Server) recentQueries() []string {
 	s.recentsMu.Lock()
 	defer s.recentsMu.Unlock()
 	return append([]string(nil), s.recents.List()...)
 }
 
 // active returns the current template name and version for the indicator
-func (s *server) active() (name, version string) {
+func (s *Server) active() (name, version string) {
 	s.activeMu.Lock()
 	defer s.activeMu.Unlock()
 	return s.activeName, s.activeVersion
@@ -238,7 +261,7 @@ func (s *server) active() (name, version string) {
 // cache on later renders. A card with no artwork URL is not an error. A fetch
 // failure returns a nil image and the error, so the render still proceeds and
 // the caller can report art as unavailable
-func (s *server) artFor(ctx context.Context, d *card.Data) (image.Image, error) {
+func (s *Server) artFor(ctx context.Context, d *card.Data) (image.Image, error) {
 	if d.ArtworkURL == "" {
 		return nil, nil
 	}
@@ -258,7 +281,7 @@ func (s *server) artFor(ctx context.Context, d *card.Data) (image.Image, error) 
 }
 
 // cacheArt stores an art crop, evicting the oldest entry when the cache is full
-func (s *server) cacheArt(url string, img image.Image) {
+func (s *Server) cacheArt(url string, img image.Image) {
 	s.artMu.Lock()
 	defer s.artMu.Unlock()
 	if _, ok := s.artCache[url]; ok {
@@ -275,7 +298,7 @@ func (s *server) cacheArt(url string, img image.Image) {
 
 // newJob creates and registers a job, reaping any finished jobs past their TTL
 // so the jobs map does not grow unbounded
-func (s *server) newJob() (string, *job) {
+func (s *Server) newJob() (string, *job) {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 	now := time.Now()
@@ -295,7 +318,7 @@ func (s *server) newJob() (string, *job) {
 }
 
 // lookupJob returns the job with the given id
-func (s *server) lookupJob(id string) (*job, bool) {
+func (s *Server) lookupJob(id string) (*job, bool) {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 	j, ok := s.jobs[id]
@@ -305,7 +328,7 @@ func (s *server) lookupJob(id string) (*job, bool) {
 // doRender fetches the face's art (once per URL) and renders that face through
 // the template chosen for it at dpi, streaming progress to the job and ending with a done event
 // carrying whether art was missing
-func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
+func (s *Server) doRender(j *job, d *card.Data, face, dpi int) {
 	artCtx, cancelArt := context.WithTimeout(context.Background(), netTimeout)
 	art, artErr := s.artFor(artCtx, d.Face(face))
 	cancelArt()
@@ -329,7 +352,7 @@ func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 // doSelectTemplate switches the active template to (name, version), downloading
 // first when the version is not cached and streaming download progress to the
 // job. With install set it only downloads, and the active template stays
-func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
+func (s *Server) doSelectTemplate(j *job, name, version string, install bool) {
 	var progress func(done, total int64)
 	if !catalog.IsCached(name, version) && version != pipeline.LocalVersion {
 		progress = throttleBytes(func(step string, frac float64) {

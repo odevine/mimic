@@ -111,7 +111,8 @@ Features that are designed but not built still appear, dimmed with a lock, and
 hovering or focusing one says why. The server decides this: `GET
 /api/capabilities` returns every feature key with a state of `live`, `planned`,
 `needs-engine` or `needs-template` and a reason, and the page renders what it is
-told. Lifting a gate is a change to the table in `capabilities.go`.
+told. Lifting a gate is a change to the table in
+`internal/server/capabilities.go`.
 
 ## Settings
 

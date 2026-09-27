@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 
 // facesServer is a run server with transform installed as a loose developer
 // folder of placeholder assets beside the active normal template
-func facesServer(t *testing.T) *server {
+func facesServer(t *testing.T) *Server {
 	t.Helper()
 	s := runServer(t)
 	assets := filepath.Join(t.TempDir(), "assets")

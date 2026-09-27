@@ -13,6 +13,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/ui/internal/prefs"
+	"github.com/odevine/mimic/ui/internal/scryfall"
 )
 
 // netTimeout bounds a search or an art fetch, matching the rendercard CLI
@@ -87,7 +88,7 @@ type server struct {
 // from a bundle or a placeholder it kicks off the background default-template
 // auto-update, matching the desktop app
 func newServer() *server {
-	httpc := scryfallHTTPClient()
+	httpc := scryfall.NewHTTPClient(netTimeout)
 	p := loadPrefs()
 	pipe := &renderPipeline{client: card.NewClient(card.WithHTTPClient(httpc)), preferences: p.FaceTemplates}
 

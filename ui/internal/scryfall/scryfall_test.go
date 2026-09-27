@@ -1,4 +1,4 @@
-package main
+package scryfall
 
 import (
 	"context"
@@ -97,7 +97,7 @@ func TestPacedTransportHonorsCancel(t *testing.T) {
 func TestPacedTransportSkipsOtherHosts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
-	c := &http.Client{Transport: newPacedTransport(http.DefaultTransport, scryfallAPIHost, time.Hour)}
+	c := &http.Client{Transport: newPacedTransport(http.DefaultTransport, apiHost, time.Hour)}
 	for range 3 {
 		resp, err := c.Get(srv.URL)
 		if err != nil {
@@ -109,9 +109,9 @@ func TestPacedTransportSkipsOtherHosts(t *testing.T) {
 
 func TestRetryAfter(t *testing.T) {
 	cases := map[string]time.Duration{
-		"":       scryfallPenalty,
-		"junk":   scryfallPenalty,
-		"-3":     scryfallPenalty,
+		"":       penalty,
+		"junk":   penalty,
+		"-3":     penalty,
 		"0":      0,
 		"2":      2 * time.Second,
 		"999999": maxRetryAfter,

@@ -24,18 +24,27 @@ type Keys struct {
 	Twins      string // name and type boxes: mono/gold/artifact/colorless/land (never dual)
 	PTBox      string // twins plus a vehicle variant
 	Crown      string // legendary crown: mono/dual/gold/artifact/colorless/land
+	// Indicator is the color indicator's key, its WUBRG colors lowercased in
+	// canonical order such as "u" or "ubr", or "" for a face with none
+	Indicator string
+	// TransformIcon names the icon a double-faced face prints in its corner,
+	// such as "sunmoondfc", or "" for a single-faced card
+	TransformIcon string
 
 	Land      bool
 	Legendary bool
 	Creature  bool // has printed power and toughness, which covers Vehicles
 	Nyx       bool // enchantment, so the nyx frame stands in for the background
+	// Front and Back mark which face of a double-faced card is rendering. A
+	// single-faced card is neither
+	Front, Back bool
 }
 
 // Slot returns the color key for one of these keys' named slots: background,
-// pinlines, twins, ptBox, or crown. It reports "" for any other name,
-// including a layer's empty ColorSlot, so an any-only layer's lookup misses
-// and falls back to its "any" variant the same way a slot with no key for
-// this card would
+// pinlines, twins, ptBox, crown, indicator, or transform_icon. It reports ""
+// for any other name, including a layer's empty ColorSlot, so an any-only
+// layer's lookup misses and falls back to its "any" variant the same way a
+// slot with no key for this card would
 func (k Keys) Slot(name string) string {
 	switch name {
 	case "background":
@@ -48,18 +57,31 @@ func (k Keys) Slot(name string) string {
 		return k.PTBox
 	case "crown":
 		return k.Crown
+	case "indicator":
+		return k.Indicator
+	case "transform_icon":
+		return k.TransformIcon
 	default:
 		return ""
 	}
 }
 
-// ConditionMet reports whether a layer's condition, drawn from the engine's
-// fixed condition vocabulary, holds for the card these keys were derived from.
-// Every WUBRG frame template shares this vocabulary rather than defining its
-// own, the same way it shares the slot keys. Conditions the engine does not
-// yet drive (nyx, companion, hollow_crown, fullart, color_indicator, divider,
-// pt_dark) render off through the default case
+// ConditionMet reports whether a layer's or text box's condition, drawn from
+// the engine's fixed condition vocabulary, holds for the card these keys were
+// derived from. Every WUBRG frame template shares this vocabulary rather than
+// defining its own, the same way it shares the slot keys. A comma-separated
+// list, such as "back,land", holds when every entry does. Conditions the engine
+// does not yet drive (nyx, companion, hollow_crown, fullart, divider, pt_dark)
+// render off through the default case
 func (k Keys) ConditionMet(condition string) bool {
+	if strings.Contains(condition, ",") {
+		for _, c := range strings.Split(condition, ",") {
+			if !k.ConditionMet(strings.TrimSpace(c)) {
+				return false
+			}
+		}
+		return true
+	}
 	switch condition {
 	case "":
 		return true
@@ -73,14 +95,35 @@ func (k Keys) ConditionMet(condition string) bool {
 		return !k.Legendary
 	case "creature":
 		return k.Creature
+	case "color_indicator":
+		return k.Indicator != ""
+	case "front":
+		return k.Front
+	case "back":
+		return k.Back
 	default:
 		return false
 	}
 }
 
-// Derive reads a card once into the keys and signals a template's render loop
-// needs
-func Derive(d *card.Data) Keys {
+// Side is which face of a card is rendering, which a double-faced frame reads
+// to pick its front or back art
+type Side int
+
+const (
+	Single Side = iota
+	Front
+	Back
+)
+
+// Derive reads a single-faced card once into the keys and signals a
+// template's render loop needs
+func Derive(d *card.Data) Keys { return DeriveFace(d, Single) }
+
+// DeriveFace reads the face d prints into the keys a template's render loop
+// needs, with side marking whether it is the front or back of a double-faced
+// card
+func DeriveFace(d *card.Data, side Side) Keys {
 	tl := strings.ToLower(d.TypeLine)
 	isLand := strings.Contains(tl, "land")
 	isVehicle := strings.Contains(tl, "vehicle")
@@ -89,17 +132,54 @@ func Derive(d *card.Data) Keys {
 	colors := frameColors(d, isLand)
 	pureHybrid := len(colors) == 2 && allHybrid(d.ManaCost)
 
-	return Keys{
+	k := Keys{
 		Background: backgroundKey(isLand, isVehicle, isArtifact, colors, pureHybrid),
 		Pinlines:   pinlineKey(isLand, isArtifact, colors),
 		Twins:      twinsKey(isLand, isVehicle, isArtifact, colors, pureHybrid, false),
 		PTBox:      twinsKey(isLand, isVehicle, isArtifact, colors, pureHybrid, true),
 		Crown:      crownKey(isLand, isArtifact, colors),
+		Indicator:  indicatorKey(d.ColorIndicator),
 		Land:       isLand,
 		Legendary:  strings.Contains(tl, "legendary"),
 		Creature:   d.Power != "" && d.Toughness != "",
 		Nyx:        strings.Contains(tl, "enchantment"),
+		Front:      side == Front,
+		Back:       side == Back,
 	}
+	if side != Single {
+		k.TransformIcon = transformIcon(d.FrameEffects)
+	}
+	return k
+}
+
+// indicatorKey is the key a color indicator's art is filed under, its colors
+// lowercased in WUBRG order, so a blue-black indicator is "ub"
+func indicatorKey(colors []card.Color) string {
+	return dualKey(wubrgOnly(colors))
+}
+
+// transformIcons are the Scryfall frame effects that name a double-faced
+// card's corner icon, each the name of that icon's art
+var transformIcons = map[string]bool{
+	"sunmoondfc": true, "compasslanddfc": true, "originpwdfc": true,
+	"mooneldrazidfc": true, "convertdfc": true, "upsidedowndfc": true,
+	"fandfc": true,
+}
+
+// defaultTransformIcon stands in for a card whose frame effects name no icon
+// there is art for, such as waxingandwaningmoondfc, which prints much the same
+// sun and moon
+const defaultTransformIcon = "sunmoondfc"
+
+// transformIcon picks the first frame effect naming an icon, since a card can
+// list it beside unrelated effects such as legendary
+func transformIcon(effects []string) string {
+	for _, e := range effects {
+		if transformIcons[e] {
+			return e
+		}
+	}
+	return defaultTransformIcon
 }
 
 // frameColors is the WUBRG set that drives the colored slots: a land's produced

@@ -29,6 +29,8 @@ type scryfallCard struct {
 	ImageURIs       imageURIs `json:"image_uris"`
 	CardFaces       []face    `json:"card_faces"`
 	Layout          string    `json:"layout"`
+	FrameEffects    []string  `json:"frame_effects"`
+	ColorIndicator  []string  `json:"color_indicator"`
 }
 
 // scryfallList is the subset of Scryfall's list response the search endpoint
@@ -44,17 +46,18 @@ type imageURIs struct {
 // face is one entry of a double-faced card's card_faces array. It carries the
 // per-face fields that live at the top level on a single-faced card
 type face struct {
-	Name       string    `json:"name"`
-	ManaCost   string    `json:"mana_cost"`
-	TypeLine   string    `json:"type_line"`
-	OracleText string    `json:"oracle_text"`
-	FlavorText string    `json:"flavor_text"`
-	Power      string    `json:"power"`
-	Toughness  string    `json:"toughness"`
-	Loyalty    string    `json:"loyalty"`
-	Colors     []string  `json:"colors"`
-	Artist     string    `json:"artist"`
-	ImageURIs  imageURIs `json:"image_uris"`
+	Name           string    `json:"name"`
+	ManaCost       string    `json:"mana_cost"`
+	TypeLine       string    `json:"type_line"`
+	OracleText     string    `json:"oracle_text"`
+	FlavorText     string    `json:"flavor_text"`
+	Power          string    `json:"power"`
+	Toughness      string    `json:"toughness"`
+	Loyalty        string    `json:"loyalty"`
+	Colors         []string  `json:"colors"`
+	ColorIndicator []string  `json:"color_indicator"`
+	Artist         string    `json:"artist"`
+	ImageURIs      imageURIs `json:"image_uris"`
 }
 
 // doubleFacedLayouts are the Scryfall layouts printed on two physical faces.
@@ -96,20 +99,23 @@ func (sc *scryfallCard) toData() *Data {
 		Artist:          sc.Artist,
 		ArtworkURL:      sc.ImageURIs.ArtCrop,
 		Layout:          sc.Layout,
+		FrameEffects:    sc.FrameEffects,
+		ColorIndicator:  toColors(sc.ColorIndicator),
 	}
 	for _, f := range sc.CardFaces {
 		d.Faces = append(d.Faces, Face{
-			Name:       f.Name,
-			ManaCost:   f.ManaCost,
-			TypeLine:   f.TypeLine,
-			OracleText: f.OracleText,
-			FlavorText: f.FlavorText,
-			Power:      f.Power,
-			Toughness:  f.Toughness,
-			Loyalty:    f.Loyalty,
-			Colors:     toColors(f.Colors),
-			Artist:     f.Artist,
-			ArtworkURL: f.ImageURIs.ArtCrop,
+			Name:           f.Name,
+			ManaCost:       f.ManaCost,
+			TypeLine:       f.TypeLine,
+			OracleText:     f.OracleText,
+			FlavorText:     f.FlavorText,
+			Power:          f.Power,
+			Toughness:      f.Toughness,
+			Loyalty:        f.Loyalty,
+			Colors:         toColors(f.Colors),
+			ColorIndicator: toColors(f.ColorIndicator),
+			Artist:         f.Artist,
+			ArtworkURL:     f.ImageURIs.ArtCrop,
 		})
 	}
 
@@ -128,6 +134,7 @@ func (sc *scryfallCard) toData() *Data {
 		d.Toughness = f.Toughness
 		d.Loyalty = f.Loyalty
 		d.Colors = toColors(f.Colors)
+		d.ColorIndicator = toColors(f.ColorIndicator)
 		d.Artist = f.Artist
 		d.ArtworkURL = f.ImageURIs.ArtCrop
 	}

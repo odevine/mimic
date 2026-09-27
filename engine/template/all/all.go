@@ -8,4 +8,5 @@ package all
 
 import (
 	_ "github.com/odevine/mimic/engine/template/normal"
+	_ "github.com/odevine/mimic/engine/template/transform"
 )

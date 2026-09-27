@@ -3,6 +3,8 @@ package template
 import (
 	"math"
 	"testing"
+
+	"github.com/odevine/mimic/engine/frame"
 )
 
 func TestClearOf(t *testing.T) {
@@ -66,5 +68,45 @@ func TestMoveToRow(t *testing.T) {
 	same := MoveToRow(box, m, "missing")
 	if same != box {
 		t.Errorf("MoveToRow with an absent row = %+v, want box unchanged %+v", same, box)
+	}
+}
+
+func TestResolveTextBoxes(t *testing.T) {
+	boxes := map[string]TextBoxSpec{
+		"title":           {X: 1, Condition: "front"},
+		"title_back":      {X: 2, Box: "title", Condition: "back"},
+		"type":            {X: 3},
+		"type_shift":      {X: 4, Box: "type", Condition: "color_indicator"},
+		"type_back":       {X: 5, Box: "type", Condition: "back"},
+		"type_back_shift": {X: 6, Box: "type", Condition: "back,color_indicator"},
+	}
+	cases := []struct {
+		name        string
+		keys        frame.Keys
+		title, typ  int
+		wantTitleOK bool
+	}{
+		{"front", frame.Keys{Front: true}, 1, 3, true},
+		{"back", frame.Keys{Back: true}, 2, 5, true},
+		{"back with an indicator takes the most specific match", frame.Keys{Back: true, Indicator: "u"}, 2, 6, true},
+		{"front with an indicator", frame.Keys{Front: true, Indicator: "u"}, 1, 4, true},
+		{"single has no title here", frame.Keys{}, 0, 3, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := ResolveTextBoxes(boxes, c.keys)
+			title, ok := got["title"]
+			if ok != c.wantTitleOK || title.X != c.title {
+				t.Errorf("title = %+v (present %v), want X %d", title, ok, c.title)
+			}
+			if got["type"].X != c.typ {
+				t.Errorf("type X = %d, want %d", got["type"].X, c.typ)
+			}
+			for _, alias := range []string{"title_back", "type_shift", "type_back", "type_back_shift"} {
+				if _, ok := got[alias]; ok {
+					t.Errorf("resolved boxes kept the spec key %q", alias)
+				}
+			}
+		})
 	}
 }

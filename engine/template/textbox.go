@@ -1,6 +1,12 @@
 package template
 
-import "math"
+import (
+	"math"
+	"sort"
+	"strings"
+
+	"github.com/odevine/mimic/engine/frame"
+)
 
 // ClearOf narrows box so it stops short of span, the way a card's name gives
 // way to its mana cost. box.ClearGap sets the gap as a fraction of box's own
@@ -35,4 +41,46 @@ func MoveToRow(box TextBoxSpec, m *Manifest, name string) TextBoxSpec {
 		box.Y = other.Y
 	}
 	return box
+}
+
+// ResolveTextBoxes picks, for each logical box the manifest's specs fill, the
+// first spec whose Condition holds for this card, and returns them keyed by
+// logical box name. Specs naming more conditions are tried first, then by
+// sorted key, so "back,color_indicator" beats "back", and an unconditional
+// spec is the fallback its overrides replace. A spec's logical box is its Box,
+// or its own key when Box is empty, so a manifest with no Box or Condition
+// resolves to itself
+func ResolveTextBoxes(boxes map[string]TextBoxSpec, f frame.Keys) map[string]TextBoxSpec {
+	keys := make([]string, 0, len(boxes))
+	for k := range boxes {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ci, cj := conditionCount(boxes[keys[i]].Condition), conditionCount(boxes[keys[j]].Condition)
+		if ci != cj {
+			return ci > cj
+		}
+		return keys[i] < keys[j]
+	})
+	out := make(map[string]TextBoxSpec, len(boxes))
+	for _, k := range keys {
+		spec := boxes[k]
+		name := spec.Box
+		if name == "" {
+			name = k
+		}
+		if _, taken := out[name]; taken || !f.ConditionMet(spec.Condition) {
+			continue
+		}
+		out[name] = spec
+	}
+	return out
+}
+
+// conditionCount is how many conditions a comma-separated condition names
+func conditionCount(condition string) int {
+	if strings.TrimSpace(condition) == "" {
+		return 0
+	}
+	return strings.Count(condition, ",") + 1
 }

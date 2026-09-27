@@ -7,7 +7,7 @@ import (
 )
 
 // TextFor returns the printed text for a named card-anatomy box: title, mana,
-// type, pt, artist, collector, or set. It is the standard vocabulary a WUBRG
+// type, pt, flipside_pt, artist, collector, or set. It is the standard vocabulary a WUBRG
 // frame's boxes draw from, shared by any template rather than reimplemented
 // per frame. Unknown names return empty so a manifest can define boxes this
 // mapping does not fill.
@@ -34,6 +34,8 @@ func TextFor(name string, d *Data) string {
 		default:
 			return ""
 		}
+	case "flipside_pt":
+		return flipsidePT(d)
 	case "artist":
 		return d.Artist
 	case "collector":
@@ -123,4 +125,18 @@ func CopyrightLine(override string, d *Data) string {
 		return copyrightMarks + " " + year + " " + copyrightHolder
 	}
 	return copyrightMarks + " " + copyrightHolder
+}
+
+// flipsidePT is the back face's power and toughness, which a double-faced
+// card's front prints small in its corner. It is empty for any other face and
+// for a back face with no power and toughness
+func flipsidePT(d *Data) string {
+	if !doubleFacedLayouts[d.Layout] || d.FaceIndex != 0 || len(d.Faces) < 2 {
+		return ""
+	}
+	back := d.Faces[1]
+	if back.Power == "" && back.Toughness == "" {
+		return ""
+	}
+	return back.Power + "/" + back.Toughness
 }

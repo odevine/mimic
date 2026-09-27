@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/frame"
 )
 
 // Role is where a face sits on the physical card. A template frame is drawn for
@@ -213,4 +214,27 @@ func (r RenderRequest) FaceCard() *card.Data {
 		return r.Card
 	}
 	return r.Card.Face(r.Face)
+}
+
+// Side reports which face of a double-faced card a shape is, from its role. A
+// face on one side of the card, such as a single, split, or adventure card, is
+// frame.Single
+func (s Shape) Side() frame.Side {
+	switch {
+	case strings.HasSuffix(string(s.Role), "_front"):
+		return frame.Front
+	case strings.HasSuffix(string(s.Role), "_back"):
+		return frame.Back
+	}
+	return frame.Single
+}
+
+// FaceSide is the side of the card the requested face prints on, which a
+// double-faced frame reads through frame.DeriveFace
+func (r RenderRequest) FaceSide() frame.Side {
+	shapes := Classify(r.Card)
+	if r.Face < 0 || r.Face >= len(shapes) {
+		return frame.Single
+	}
+	return shapes[r.Face].Side()
 }

@@ -89,3 +89,24 @@ func TestCopyrightLineCarriesThePrintingsYear(t *testing.T) {
 		}
 	}
 }
+
+func TestFlipsidePT(t *testing.T) {
+	militia := &Data{Layout: "transform", Faces: []Face{
+		{Name: "Hanweir Militia Captain", Power: "2", Toughness: "3"},
+		{Name: "Westvale Cult Leader", Power: "*", Toughness: "*"},
+	}}
+	if got := TextFor("flipside_pt", militia); got != "*/*" {
+		t.Errorf("front flipside_pt = %q, want */*", got)
+	}
+	if got := TextFor("flipside_pt", militia.Face(1)); got != "" {
+		t.Errorf("back flipside_pt = %q, want empty", got)
+	}
+	azcanta := &Data{Layout: "transform", Faces: []Face{{Name: "Search for Azcanta"}, {Name: "Azcanta, the Sunken Ruin"}}}
+	if got := TextFor("flipside_pt", azcanta); got != "" {
+		t.Errorf("flipside_pt with a noncreature back = %q, want empty", got)
+	}
+	adventure := &Data{Layout: "adventure", Faces: []Face{{Name: "Giant", Power: "4", Toughness: "3"}, {Name: "Stomp", Power: "1", Toughness: "1"}}}
+	if got := TextFor("flipside_pt", adventure); got != "" {
+		t.Errorf("flipside_pt on a one-faced layout = %q, want empty", got)
+	}
+}

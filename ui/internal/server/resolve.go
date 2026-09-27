@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type resolveBody struct {
 // with the parsed rows, so the table can draw every line before any lookup
 // returns, and the job streams one event per resolved row. Starting a resolve
 // abandons any earlier one still running
-func (s *server) handleResolve(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	var body resolveBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad resolve request: "+err.Error(), http.StatusBadRequest)
@@ -76,7 +76,7 @@ func resolveRows(ctx context.Context, j *job, rv cardlist.Resolver, cache *cardl
 
 // resolver picks the lookup source for a new resolve. The local copy is used
 // when it is chosen in settings and loaded, and the API otherwise
-func (s *server) resolver() cardlist.Resolver {
+func (s *Server) resolver() cardlist.Resolver {
 	if s.useLocalCards() {
 		return cardlist.LocalResolver(s.cards, s.pipe.Client())
 	}
@@ -84,6 +84,6 @@ func (s *server) resolver() cardlist.Resolver {
 }
 
 // useLocalCards reports whether lookups should read the local copy
-func (s *server) useLocalCards() bool {
+func (s *Server) useLocalCards() bool {
 	return s.cards != nil && s.prefs.Settings().CardData == cardDataLocal && s.cards.Ready()
 }

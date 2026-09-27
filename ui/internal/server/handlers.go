@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 
 // routes registers every handler. API routes live under /api; everything else
 // serves the embedded static frontend
-func (s *server) routes() {
+func (s *Server) routes() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/search", s.handleSearch)
 	mux.HandleFunc("GET /api/recents", s.handleRecents)
@@ -52,7 +52,9 @@ func (s *server) routes() {
 	mux.HandleFunc("POST /api/carddata/download", s.handleCardDataDownload)
 	mux.HandleFunc("GET /api/carddata/{id}/events", s.handleJobEvents)
 	mux.HandleFunc("DELETE /api/carddata", s.handleCardDataDelete)
-	mux.Handle("/", http.FileServerFS(staticFS()))
+	if s.static != nil {
+		mux.Handle("/", http.FileServerFS(s.static))
+	}
 	s.mux = mux
 }
 
@@ -65,7 +67,7 @@ type searchResult struct {
 
 // handleSearch runs a Scryfall search and returns the matches. A successful
 // search is remembered for the suggestion list
-func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
 		writeJSON(w, []searchResult{})
@@ -101,7 +103,7 @@ func printingsQuery(name string) string {
 // picker. It reads the local copy when that is in use, and otherwise goes
 // through Search rather than a set-and-number fetch, so it needs nothing the
 // card client does not already do
-func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	if name == "" {
 		writeJSON(w, []*card.Data{})
@@ -133,7 +135,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRecents returns the recent-search suggestions, newest first
-func (s *server) handleRecents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRecents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.recentQueries())
 }
 
@@ -155,7 +157,7 @@ type renderBody struct {
 // handleRender starts a render job and returns its id. The render runs in a
 // goroutine that streams progress; the client watches the events stream and then
 // fetches the image
-func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	var body renderBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad render request: "+err.Error(), http.StatusBadRequest)
@@ -179,7 +181,7 @@ func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
 // handleResolution returns the preview and output resolutions, the presets a
 // picker offers, and the bounds a custom dpi stays inside, all resolved against
 // the active template
-func (s *server) handleResolution(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleResolution(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.resolutions()
 	if err != nil {
 		http.Error(w, "reading template manifest: "+err.Error(), http.StatusInternalServerError)
@@ -198,7 +200,7 @@ type resolutionBody struct {
 // handleSetResolution stores the two resolutions and returns them resolved the
 // way the GET does, so the client renders back what was actually kept rather
 // than what it asked for
-func (s *server) handleSetResolution(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSetResolution(w http.ResponseWriter, r *http.Request) {
 	var body resolutionBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad resolution request: "+err.Error(), http.StatusBadRequest)
@@ -228,7 +230,7 @@ func clampOutputDPI(m *template.Manifest, dpi int) int {
 // handleRenderImage writes a finished render's PNG. With a download query it
 // sets an attachment disposition and the card-name filename, so the Save link
 // downloads; otherwise it serves inline for the preview image
-func (s *server) handleRenderImage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRenderImage(w http.ResponseWriter, r *http.Request) {
 	j, ok := s.lookupJob(r.PathValue("id"))
 	if !ok {
 		http.NotFound(w, r)
@@ -250,7 +252,7 @@ func (s *server) handleRenderImage(w http.ResponseWriter, r *http.Request) {
 
 // handleJobEvents streams a job from the job map. It serves render, template
 // download and list resolve jobs
-func (s *server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 	j, ok := s.lookupJob(r.PathValue("id"))
 	if !ok {
 		http.NotFound(w, r)
@@ -321,7 +323,7 @@ type templateView struct {
 // handleTemplates fetches the catalog (falling back to the cached copy offline)
 // and returns the manager rows, with each version's display label, active flag,
 // and trailing action resolved server-side so the frontend just renders them
-func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 	idx, err := catalog.FetchIndex(r.Context())
 	if err != nil {
 		// No live catalog and no cache: still show local/registered rows
@@ -362,7 +364,7 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 // bar, and the faces it supports. faces maps every face shape some installed
 // template renders to the template chosen for it, which the list review and
 // the editor check cards against
-func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 	name, version := s.active()
 	writeJSON(w, map[string]any{
 		"name":     name,
@@ -401,7 +403,7 @@ type selectBody struct {
 // handleSelectTemplate starts a template switch job and returns its id. The
 // switch runs in a goroutine that streams download progress when a fetch is
 // needed and ends with a done event
-func (s *server) handleSelectTemplate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSelectTemplate(w http.ResponseWriter, r *http.Request) {
 	var body selectBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad select request: "+err.Error(), http.StatusBadRequest)

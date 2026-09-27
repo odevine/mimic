@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"image"
@@ -21,7 +21,7 @@ var symbols = sync.OnceValue(func() *mana.Symbols { return mana.NewSymbols("") }
 
 // handleSymbol draws one braced code as a PNG pip, answering 404 for a code the
 // engine does not know, which is how the editor flags an unknown symbol
-func (s *server) handleSymbol(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSymbol(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	px, err := strconv.Atoi(r.URL.Query().Get("px"))
 	if err != nil || px < 8 {

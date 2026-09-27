@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func TestPutSettingsSanitizesTheme(t *testing.T) {
 	userConfigDir = func() (string, error) { return filepath.Join(tmp, "config"), nil }
 	t.Cleanup(func() { userConfigDir = oldCfg })
 
-	s := &server{prefs: loadPrefs()}
+	s := &Server{prefs: loadPrefs()}
 	body, _ := json.Marshal(prefs.Settings{Theme: "neon", ExpandPrintings: true, Splits: map[string][]float64{"single": {300, 420}}})
 	rec := httptest.NewRecorder()
 	s.handlePutSettings(rec, httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body)))

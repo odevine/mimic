@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type remoteCache struct {
 }
 
 // remote returns the bulk index, from the cache when it is fresh
-func (s *server) remote(ctx context.Context) (*carddata.Remote, error) {
+func (s *Server) remote(ctx context.Context) (*carddata.Remote, error) {
 	s.remoteCards.mu.Lock()
 	defer s.remoteCards.mu.Unlock()
 	if s.remoteCards.info != nil && time.Since(s.remoteCards.at) < remoteTTL {
@@ -44,7 +44,7 @@ type cardDataView struct {
 	Remote *carddata.Remote `json:"remote,omitempty"`
 }
 
-func (s *server) handleCardData(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCardData(w http.ResponseWriter, r *http.Request) {
 	v := cardDataView{Source: s.prefs.Settings().CardData, Local: s.cards.Status()}
 	if v.Source == "" {
 		v.Source = cardDataAPI
@@ -59,7 +59,7 @@ func (s *server) handleCardData(w http.ResponseWriter, r *http.Request) {
 
 // handleCardDataDownload starts a download of the local copy, replacing any
 // installed one once the new one is complete
-func (s *server) handleCardDataDownload(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCardDataDownload(w http.ResponseWriter, r *http.Request) {
 	if s.cards.Dir() == "" {
 		http.Error(w, "there is no config folder to keep card data in", http.StatusInternalServerError)
 		return
@@ -73,7 +73,7 @@ func (s *server) handleCardDataDownload(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, map[string]string{"jobId": id})
 }
 
-func (s *server) handleCardDataDelete(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCardDataDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.cards.Remove(); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
@@ -82,7 +82,7 @@ func (s *server) handleCardDataDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadCards fetches a fresh copy and installs it, reporting progress on j
-func (s *server) downloadCards(j *job) {
+func (s *Server) downloadCards(j *job) {
 	// Each ending clears the download before its last event, so a page that
 	// refreshes on that event never sees it still running
 	defer s.cards.EndDownload()

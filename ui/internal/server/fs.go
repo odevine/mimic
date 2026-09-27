@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"net/http"
@@ -23,7 +23,7 @@ type fsListing struct {
 // empty, for the output folder picker. The browser cannot hand the server a real
 // path, so the picker browses from here. Only folder names are returned, and
 // hidden folders are left out
-func (s *server) handleFSList(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 	home, _ := os.UserHomeDir()
 	p := r.URL.Query().Get("path")
 	if strings.TrimSpace(p) == "" {

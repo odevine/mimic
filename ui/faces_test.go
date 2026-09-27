@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/render"
@@ -168,5 +169,39 @@ func TestSetStandardTemplateSwitchesActive(t *testing.T) {
 	}
 	if len(s.prefs.faceTemplates()) != 0 {
 		t.Errorf("the standard choice was saved as a face preference: %v", s.prefs.faceTemplates())
+	}
+}
+
+func TestInstallOnlyLeavesTheActiveTemplate(t *testing.T) {
+	s := facesServer(t)
+	selectAndWait := func(body selectBody) {
+		t.Helper()
+		raw, _ := json.Marshal(body)
+		rec := httptest.NewRecorder()
+		s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/template/select", bytes.NewReader(raw)))
+		var got struct{ JobID string }
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got.JobID == "" {
+			t.Fatalf("select = %d %s", rec.Code, rec.Body)
+		}
+		j, _ := s.lookupJob(got.JobID)
+		for range 500 {
+			j.mu.Lock()
+			done := j.finished
+			j.mu.Unlock()
+			if done {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("select job did not finish")
+	}
+
+	selectAndWait(selectBody{Name: "transform", Version: localVersion, Install: true})
+	if name := s.pipe.active.Load().name; name != "normal" {
+		t.Errorf("installing transform made %s active", name)
+	}
+	selectAndWait(selectBody{Name: "transform", Version: localVersion})
+	if name := s.pipe.active.Load().name; name != "transform" {
+		t.Errorf("selecting transform left %s active", name)
 	}
 }

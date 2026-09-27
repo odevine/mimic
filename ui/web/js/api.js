@@ -68,7 +68,7 @@ export const api = {
 
   templates: () => get("/api/templates"),
   activeTemplate: () => get("/api/template/active"),
-  selectTemplate: (name, version) => send("POST", "/api/template/select", { name, version }),
+  selectTemplate: (name, version, install = false) => send("POST", "/api/template/select", { name, version, install }),
   selectEvents: (jobId, onStep) => watchJob(`/api/template/select/${jobId}/events`, onStep),
   faceTemplates: () => get("/api/template/faces"),
   setFaceTemplate: (key, name, version) => send("PUT", "/api/template/faces", { key, name, version }),

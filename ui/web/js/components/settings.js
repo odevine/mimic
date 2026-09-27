@@ -1,10 +1,8 @@
 import { api } from "../api.js";
-import { $, h } from "../dom.js";
+import { $ } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
-import { loadActiveTemplate } from "./templatePicker.js";
-import { describeShape } from "../supports.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
 // them against the active template, and the interface settings go through
@@ -87,7 +85,8 @@ async function open() {
   $("output-dir-input").value = s.outputDir || "";
   openCardData(s.cardData);
   $("settings-dialog").showModal();
-  await Promise.all([loadResolution().then(fillResolution), fillFaceTemplates()]);
+  await loadResolution();
+  fillResolution();
 }
 
 async function save() {
@@ -112,15 +111,10 @@ async function save() {
       cardData: cardDataChoice(),
     };
     app.settings.value = await api.saveSettings(next);
-    const facesChanged = await saveFaceTemplates();
     applyTheme(app.settings.peek().theme);
     $("settings-dialog").close();
     toast("Settings saved", "ok");
     if (resChanged) document.dispatchEvent(new CustomEvent("mimic:resolution-changed"));
-    if (facesChanged) {
-      await loadActiveTemplate();
-      document.dispatchEvent(new CustomEvent("mimic:template-changed"));
-    }
   } catch (err) {
     $("settings-status").textContent = `Failed: ${err.message}`;
   } finally {
@@ -143,66 +137,4 @@ export function initSettings() {
     });
     $(`${which}-dpi`).addEventListener("input", () => syncRow(which));
   }
-}
-
-// --- face templates ---
-
-// faceRows holds the list the dialog opened with, so save sends only the
-// shapes whose choice changed
-let faceRows = [];
-
-// shapeLabel names a face shape for its row, as in "Transform front faces"
-function shapeLabel(row) {
-  const text = describeShape({ role: row.role, kind: row.kind });
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-const choiceValue = (c) => (c ? `${c.name}@${c.version || ""}` : "");
-
-async function fillFaceTemplates() {
-  const box = $("face-templates");
-  try {
-    faceRows = await api.faceTemplates();
-  } catch (err) {
-    faceRows = [];
-    box.replaceChildren(h("p", { class: "desc" }, `Could not read the installed templates: ${err.message}`));
-    return;
-  }
-  if (!faceRows.length) {
-    box.replaceChildren(h("p", { class: "desc" }, "No installed template renders anything beyond standard cards."));
-    return;
-  }
-  box.replaceChildren(
-    ...faceRows.map((row) => {
-      const id = `face-${row.key.replace(/[^a-z0-9]/gi, "-")}`;
-      const select = h("select", { id, "data-key": row.key });
-      // Standard cards always render with the active template, so their row
-      // offers exact versions and no automatic choice
-      if (!row.primary) select.append(new Option(`Automatic · ${row.using || "none"}`, ""));
-      for (const o of row.options) {
-        if (!row.primary) select.append(new Option(`${o.name} · newest installed`, `${o.name}@`));
-        for (const v of o.versions) select.append(new Option(`${o.name} · ${v === "local" ? "local" : v}`, `${o.name}@${v}`));
-      }
-      const current = choiceValue(row.chosen);
-      // An active template with nothing installed, such as placeholders, still
-      // shows as the current choice
-      if (row.primary && ![...select.options].some((o) => o.value === current)) select.prepend(new Option(row.using, current));
-      select.value = current;
-      return h("div", { class: "setting" }, h("label", { for: id }, shapeLabel(row)), select);
-    }),
-  );
-}
-
-// saveFaceTemplates sends each changed choice and reports whether any was
-// changed, so the caller can refresh what the page knows about templates
-async function saveFaceTemplates() {
-  let changed = false;
-  for (const row of faceRows) {
-    const select = document.querySelector(`#face-templates select[data-key="${row.key}"]`);
-    if (!select || select.value === choiceValue(row.chosen)) continue;
-    const [name, version] = select.value ? select.value.split("@") : ["", ""];
-    await api.setFaceTemplate(row.key, name, version);
-    changed = true;
-  }
-  return changed;
 }

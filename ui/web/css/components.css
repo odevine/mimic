@@ -784,12 +784,6 @@ dialog.dialog::backdrop {
   font-size: 12px;
 }
 
-.settings-group > .desc {
-  margin: 0 0 6px;
-  color: var(--text-faint);
-  font-size: 12px;
-}
-
 .setting .inline {
   display: flex;
   gap: 8px;

@@ -44,9 +44,8 @@
     <header class="topbar">
       <div class="wordmark"><span class="mark" aria-hidden="true"></span>mimic</div>
 
-      <button id="template-trigger" class="btn subtle dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false">
-        <span id="template-label" class="mono">…</span>
-        <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
+      <button id="template-trigger" class="btn subtle" type="button" data-tip="Manage templates">
+        <svg class="icon"><use href="icons.svg#i-layers"/></svg><span id="template-label" class="mono">…</span>
       </button>
 
       <button id="overrides-chip" class="chip overrides-chip" type="button" hidden>
@@ -78,8 +77,8 @@
         <svg class="icon"><use href="icons.svg#i-image"/></svg><span class="rail-label">Art</span>
       </button>
       <div class="rail-rule" role="separator"></div>
-      <button class="rail-item" type="button" data-mode="overrides" data-feature-indicator="overrides">
-        <svg class="icon"><use href="icons.svg#i-sliders"/></svg><span class="rail-label">Overrides</span>
+      <button class="rail-item" type="button" data-mode="templates" data-tip="Templates (⌘4)">
+        <svg class="icon"><use href="icons.svg#i-layers"/></svg><span class="rail-label">Templates</span>
         <span id="rail-overrides-dot" class="rail-dot warn" hidden></span>
       </button>
       <button class="rail-item" type="button" data-mode="run" data-feature-indicator="flow.run">
@@ -337,59 +336,82 @@ Sideboard
         </div>
       </section>
 
-      <!-- Overrides: template and global scopes -->
-      <section id="mode-overrides" class="mode" data-mode-panel="overrides" aria-label="Overrides" hidden>
+      <!-- Templates: the library, which template renders each face, and overrides -->
+      <section id="mode-templates" class="mode" data-mode-panel="templates" aria-label="Templates" hidden>
         <div class="mode-header">
-          <h2 class="section-heading">Overrides</h2>
-          <button id="scope-template" class="chip" type="button" aria-pressed="true">Template</button>
-          <button id="scope-global" class="chip" type="button" aria-pressed="false">Global</button>
-          <span class="spacer" style="flex:1"></span>
-          <button class="btn subtle" type="button" data-feature="overrides">Disable all</button>
-          <button class="btn dropdown-trigger" type="button" data-feature="presets"><span class="dim">Preset</span> house-style<svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg></button>
+          <h2 class="section-heading">Templates</h2>
+          <button id="tm-tab-library" class="chip" type="button" aria-pressed="true" data-tab="library">Library</button>
+          <button id="tm-tab-defaults" class="chip" type="button" aria-pressed="false" data-tab="defaults">Defaults</button>
+          <button id="tm-tab-overrides" class="chip" type="button" aria-pressed="false" data-tab="overrides" data-feature-indicator="overrides">Overrides</button>
         </div>
-        <div id="scope-template-panel" class="gated-section" data-feature-section="overrides.layers" style="flex:1; display:flex">
-          <div class="gated-content mode-body" style="flex:1">
-            <div class="overrides-tree">
-              <div style="padding:10px 12px"><input tabindex="-1" placeholder="Filter layers…"></div>
-              <div class="tree-group">
-                <div class="section-heading" style="margin-bottom:4px">Layers <span class="faint">16</span></div>
-                <div class="tree-row"><span class="name">background</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                <div class="tree-row"><span class="name">pinlines_textbox</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                <div class="tree-row"><span class="name">legendary_crown</span><select class="tri" tabindex="-1"><option>off</option></select></div>
-                <div class="tree-row"><span class="name">pt_box</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                <div class="tree-row"><span class="name">divider</span><select class="tri" tabindex="-1"><option>on</option></select></div>
-              </div>
-              <div class="tree-group">
-                <div class="section-heading" style="margin-bottom:4px">Text boxes <span class="faint">5</span></div>
-                <div class="tree-row"><span class="name">name</span></div>
-                <div class="tree-row"><span class="name">mana cost</span></div>
-                <div class="tree-row"><span class="name">oracle</span></div>
-                <div class="tree-row" style="padding-left:28px"><span class="name dim">Font size</span><input style="width:64px;height:24px;min-height:0" tabindex="-1" value="92"><span class="faint">150</span></div>
-              </div>
-            </div>
-            <div class="console-side" style="flex:1; width:auto; border-left:0">
-              <div class="placeholder-card" style="width:min(60%,300px)"></div>
-              <p class="dim" style="text-align:center">Sample <strong>Cryptic Command</strong> · Compare manifest and override</p>
-            </div>
+
+        <div id="tm-library" class="tm-page" data-tab-panel="library">
+          <div class="tm-column">
+            <p class="tm-lede dim">Every template in the catalog, and any installed from a local folder. Download a version to install it, and select one to make it the active template for standard cards.</p>
+            <div id="tm-library-list" class="template-library"><p class="dim tm-empty">Loading catalog…</p></div>
+            <div id="tm-library-foot" class="tp-foot" hidden></div>
           </div>
         </div>
-        <div id="scope-global-panel" class="gated-section" data-feature-section="overrides.global" style="flex:1; display:flex" hidden>
-          <div class="gated-content" style="flex:1; background:var(--bg)">
-            <div class="rule-card">
-              <div class="line"><span class="kw">When</span><span class="tok">Type line</span><span class="tok">contains</span><span class="tok">Creature</span></div>
-              <div class="line"><span class="kw">Then</span><span class="tok">Set</span><span class="tok">Colors</span><span class="tok">B</span></div>
-              <div class="line"><span class="kw"></span><span class="pill ok">matches 47 of 112</span></div>
+
+        <div id="tm-defaults" class="tm-page" data-tab-panel="defaults" hidden>
+          <div class="tm-column">
+            <p class="tm-lede dim">Standard cards render with the active template, the same one the top bar shows. Each other kind of face renders with the template chosen here, or the first installed one that supports it. Only installed templates are listed.</p>
+            <div id="face-templates" class="tm-defaults"></div>
+          </div>
+        </div>
+
+        <div id="tm-overrides" class="tm-overrides" data-tab-panel="overrides" hidden>
+          <div class="mode-header tm-subheader">
+            <button id="scope-template" class="chip" type="button" aria-pressed="true">Template</button>
+            <button id="scope-global" class="chip" type="button" aria-pressed="false">Global</button>
+            <span class="spacer" style="flex:1"></span>
+            <button class="btn subtle" type="button" data-feature="overrides">Disable all</button>
+            <button class="btn dropdown-trigger" type="button" data-feature="presets"><span class="dim">Preset</span> house-style<svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg></button>
+          </div>
+          <div id="scope-template-panel" class="gated-section" data-feature-section="overrides.layers" style="flex:1; display:flex">
+            <div class="gated-content mode-body" style="flex:1">
+              <div class="overrides-tree">
+                <div style="padding:10px 12px"><input tabindex="-1" placeholder="Filter layers…"></div>
+                <div class="tree-group">
+                  <div class="section-heading" style="margin-bottom:4px">Layers <span class="faint">16</span></div>
+                  <div class="tree-row"><span class="name">background</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
+                  <div class="tree-row"><span class="name">pinlines_textbox</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
+                  <div class="tree-row"><span class="name">legendary_crown</span><select class="tri" tabindex="-1"><option>off</option></select></div>
+                  <div class="tree-row"><span class="name">pt_box</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
+                  <div class="tree-row"><span class="name">divider</span><select class="tri" tabindex="-1"><option>on</option></select></div>
+                </div>
+                <div class="tree-group">
+                  <div class="section-heading" style="margin-bottom:4px">Text boxes <span class="faint">5</span></div>
+                  <div class="tree-row"><span class="name">name</span></div>
+                  <div class="tree-row"><span class="name">mana cost</span></div>
+                  <div class="tree-row"><span class="name">oracle</span></div>
+                  <div class="tree-row" style="padding-left:28px"><span class="name dim">Font size</span><input style="width:64px;height:24px;min-height:0" tabindex="-1" value="92"><span class="faint">150</span></div>
+                </div>
+              </div>
+              <div class="console-side" style="flex:1; width:auto; border-left:0">
+                <div class="placeholder-card" style="width:min(60%,300px)"></div>
+                <p class="dim" style="text-align:center">Sample <strong>Cryptic Command</strong> · Compare manifest and override</p>
+              </div>
             </div>
-            <div class="rule-card">
-              <div class="line"><span class="kw">When</span><span class="tok">Type line</span><span class="tok">contains</span><span class="tok">Creature</span></div>
-              <div class="line"><span class="kw">Then</span><span class="tok">Set</span><span class="tok">Power</span><span class="tok">4</span></div>
-              <div class="line"><span class="kw">and</span><span class="tok">Set</span><span class="tok">Toughness</span><span class="tok">4</span></div>
-              <div class="line"><span class="kw"></span><span class="pill ok">matches 47 of 112</span></div>
-            </div>
-            <div class="rule-card">
-              <div class="line"><span class="kw">When</span><span class="tok">Always</span></div>
-              <div class="line"><span class="kw">Then</span><span class="tok">Clear</span><span class="tok">Flavor text</span></div>
-              <div class="line"><span class="kw"></span><span class="pill idle">disabled</span></div>
+          </div>
+          <div id="scope-global-panel" class="gated-section" data-feature-section="overrides.global" style="flex:1; display:flex" hidden>
+            <div class="gated-content" style="flex:1; background:var(--bg)">
+              <div class="rule-card">
+                <div class="line"><span class="kw">When</span><span class="tok">Type line</span><span class="tok">contains</span><span class="tok">Creature</span></div>
+                <div class="line"><span class="kw">Then</span><span class="tok">Set</span><span class="tok">Colors</span><span class="tok">B</span></div>
+                <div class="line"><span class="kw"></span><span class="pill ok">matches 47 of 112</span></div>
+              </div>
+              <div class="rule-card">
+                <div class="line"><span class="kw">When</span><span class="tok">Type line</span><span class="tok">contains</span><span class="tok">Creature</span></div>
+                <div class="line"><span class="kw">Then</span><span class="tok">Set</span><span class="tok">Power</span><span class="tok">4</span></div>
+                <div class="line"><span class="kw">and</span><span class="tok">Set</span><span class="tok">Toughness</span><span class="tok">4</span></div>
+                <div class="line"><span class="kw"></span><span class="pill ok">matches 47 of 112</span></div>
+              </div>
+              <div class="rule-card">
+                <div class="line"><span class="kw">When</span><span class="tok">Always</span></div>
+                <div class="line"><span class="kw">Then</span><span class="tok">Clear</span><span class="tok">Flavor text</span></div>
+                <div class="line"><span class="kw"></span><span class="pill idle">disabled</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -509,12 +531,6 @@ Sideboard
           <span class="label" data-feature="settings.concurrency">Render concurrency</span>
           <span class="inline"><input id="concurrency-input" type="number" min="1" max="6" placeholder="2" data-feature="settings.concurrency" aria-label="Render concurrency"><span class="dim">cards at once</span></span>
         </div>
-      </section>
-
-      <section class="settings-group">
-        <h3 class="section-heading">Templates</h3>
-        <p class="desc">Standard cards render with the active template, the same one the top bar shows. Each other kind of face renders with the template chosen here, or the first installed one that supports it.</p>
-        <div id="face-templates"></div>
       </section>
 
       <section class="settings-group">

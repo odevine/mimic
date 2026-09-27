@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.1](https://github.com/odevine/mimic/compare/ui/v0.8.0...ui/v0.8.1) (2026-09-27)
+
+
+### Code Refactoring
+
+* **ui:** move list parsing and row resolution into internal/cardlist ([21873de](https://github.com/odevine/mimic/commit/21873ded04089c65a3786e7f9c32c5aa0455ad6f))
+* **ui:** move prefs and recents into internal/prefs ([357145a](https://github.com/odevine/mimic/commit/357145af8dd6cb5bd7223d2d3e97048db79caa00))
+* **ui:** move templates and rendering into internal/pipeline ([5a0b9ce](https://github.com/odevine/mimic/commit/5a0b9cebaa7789230cf749711816e82a16de8a43))
+* **ui:** move the batch run executor into internal/batch ([4398de1](https://github.com/odevine/mimic/commit/4398de12792da85e6ecb80076177a5ad255b357e))
+* **ui:** move the HTTP server into internal/server ([db07a9b](https://github.com/odevine/mimic/commit/db07a9b586214a7d4da14dff5c270551f01b5b29))
+* **ui:** move the local card data store into internal/carddata ([158ea28](https://github.com/odevine/mimic/commit/158ea28e4f0ecad981e106d0e52c62c513c37dac))
+* **ui:** move the paced Scryfall client into internal/scryfall ([e744901](https://github.com/odevine/mimic/commit/e74490132ccfde764e59c1f643527a609fef4479))
+* **ui:** move the template catalog and bundle cache into internal/catalog ([9b6b09e](https://github.com/odevine/mimic/commit/9b6b09ee83ffc0b14e5df54d7ee5e854d4bff3a9))
+
 ## [0.8.0](https://github.com/odevine/mimic/compare/ui/v0.7.0...ui/v0.8.0) (2026-09-27)
 
 

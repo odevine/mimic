@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 func TestFeaturesAreWellFormed(t *testing.T) {
@@ -57,14 +59,14 @@ func TestPutSettingsSanitizesTheme(t *testing.T) {
 	t.Cleanup(func() { userConfigDir = oldCfg })
 
 	s := &server{prefs: loadPrefs()}
-	body, _ := json.Marshal(uiSettings{Theme: "neon", ExpandPrintings: true, Splits: map[string][]float64{"single": {300, 420}}})
+	body, _ := json.Marshal(prefs.Settings{Theme: "neon", ExpandPrintings: true, Splits: map[string][]float64{"single": {300, 420}}})
 	rec := httptest.NewRecorder()
 	s.handlePutSettings(rec, httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 
-	got := loadPrefs().settings()
+	got := loadPrefs().Settings()
 	if got.Theme != "" {
 		t.Errorf("theme %q persisted, want an unknown theme dropped", got.Theme)
 	}

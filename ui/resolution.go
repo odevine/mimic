@@ -39,7 +39,7 @@ func (s *server) resolutions() (resolutionSettings, error) {
 	if err != nil {
 		return resolutionSettings{}, err
 	}
-	preview, output := s.prefs.resolution()
+	preview, output := s.prefs.Resolution()
 	return resolutionSettings{
 		Preview: m.Resolution(previewOrDefault(preview)),
 		Output:  m.Resolution(output),
@@ -54,7 +54,7 @@ func (s *server) resolutions() (resolutionSettings, error) {
 // stored preference straight through: a stored output of zero means the
 // template's own resolution, which is what a save wants
 func (s *server) renderDPI(target string) int {
-	preview, output := s.prefs.resolution()
+	preview, output := s.prefs.Resolution()
 	if target == targetOutput {
 		return output
 	}

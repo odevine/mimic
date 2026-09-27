@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // The themes a settings write may carry. Anything else is stored as the default
@@ -19,12 +21,12 @@ func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 
 // handleSettings returns the interface settings
 func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.prefs.settings())
+	writeJSON(w, s.prefs.Settings())
 }
 
 // handlePutSettings replaces the interface settings and returns what was kept
 func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	var body uiSettings
+	var body prefs.Settings
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad settings request: "+err.Error(), http.StatusBadRequest)
 		return
@@ -41,6 +43,6 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if len(body.RecentOutputDirs) > maxRecentOutputDirs {
 		body.RecentOutputDirs = body.RecentOutputDirs[:maxRecentOutputDirs]
 	}
-	s.prefs.setSettings(body)
-	writeJSON(w, s.prefs.settings())
+	s.prefs.SetSettings(body)
+	writeJSON(w, s.prefs.Settings())
 }

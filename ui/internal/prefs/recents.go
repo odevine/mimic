@@ -1,31 +1,31 @@
-package main
+package prefs
 
 import "strings"
 
 // maxRecent bounds how many past queries the search box remembers
 const maxRecent = 10
 
-// recents is a most-recent-first, de-duplicated, bounded list of search
+// Recents is a most-recent-first, de-duplicated, bounded list of search
 // queries. Matching is case-insensitive on the trimmed text but the stored
 // entry keeps the casing of the newest use
-type recents struct {
+type Recents struct {
 	items []string
 }
 
-// newRecents builds a list from stored entries, applying the same trimming,
-// de-duplication, and cap that add enforces so a hand-edited store stays valid
-func newRecents(stored []string) *recents {
-	r := &recents{}
+// NewRecents builds a list from stored entries, applying the same trimming,
+// de-duplication, and cap that Add enforces so a hand-edited store stays valid
+func NewRecents(stored []string) *Recents {
+	r := &Recents{}
 	// Replay oldest-first so the newest stored entry ends up at the front
 	for i := len(stored) - 1; i >= 0; i-- {
-		r.add(stored[i])
+		r.Add(stored[i])
 	}
 	return r
 }
 
-// add records a query at the front, dropping any earlier case-insensitive
+// Add records a query at the front, dropping any earlier case-insensitive
 // duplicate and trimming the list to maxRecent. A blank query is ignored
-func (r *recents) add(query string) {
+func (r *Recents) Add(query string) {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return
@@ -44,5 +44,5 @@ func (r *recents) add(query string) {
 	r.items = kept
 }
 
-// list returns the queries newest-first. The caller must not mutate the result
-func (r *recents) list() []string { return r.items }
+// List returns the queries newest-first. The caller must not mutate the result
+func (r *Recents) List() []string { return r.items }

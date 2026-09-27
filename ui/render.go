@@ -9,6 +9,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // activeTemplate is the template the app renders with and the assets it draws
@@ -48,7 +49,7 @@ type renderPipeline struct {
 	loaded map[string]*activeTemplate
 	// preferences returns the preferred template for each face shape, keyed by
 	// shapeKey. Nil means no preferences
-	preferences func() map[string]templateChoice
+	preferences func() map[string]prefs.TemplateChoice
 }
 
 // install makes at the template for later renders. The previous one is left open

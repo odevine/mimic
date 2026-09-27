@@ -123,5 +123,5 @@ func (s *server) resolver() resolver {
 
 // useLocalCards reports whether lookups should read the local copy
 func (s *server) useLocalCards() bool {
-	return s.cards != nil && s.prefs.settings().CardData == cardDataLocal && s.cards.ready()
+	return s.cards != nil && s.prefs.Settings().CardData == cardDataLocal && s.cards.ready()
 }

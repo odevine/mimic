@@ -1,4 +1,7 @@
-package main
+// Package pipelinetest generates each template's placeholder assets once per
+// test binary, since encoding the full-size PNGs dominates test time under the
+// race detector
+package pipelinetest
 
 import (
 	"fmt"
@@ -11,8 +14,7 @@ import (
 )
 
 // placeholderCache generates each template's placeholder assets once and copies
-// them into every directory a test asks for, since encoding the full-size PNGs
-// dominates test time under the race detector
+// them into every directory a test asks for
 type placeholderCache struct {
 	root string
 	mu   sync.Mutex
@@ -33,14 +35,17 @@ func (c *placeholderCache) write(dir, name string) error {
 	return os.CopyFS(dir, os.DirFS(src))
 }
 
-func TestMain(m *testing.M) {
+// Run runs a package's tests with *write pointed at a shared placeholder cache,
+// then exits. Call it from TestMain with the address of the package's
+// placeholder writer
+func Run(m *testing.M, write *func(dir, name string) error) {
 	root, err := os.MkdirTemp("", "mimic-placeholder-cache-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "creating placeholder cache:", err)
 		os.Exit(1)
 	}
 	cache := &placeholderCache{root: root, done: map[string]bool{}}
-	writePlaceholders = cache.write
+	*write = cache.write
 	code := m.Run()
 	os.RemoveAll(root)
 	os.Exit(code)

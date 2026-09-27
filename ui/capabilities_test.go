@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -86,7 +87,7 @@ func TestTemplateSource(t *testing.T) {
 	if got := templateSource("normal", ""); got != "placeholder" {
 		t.Errorf("empty version: %q, want placeholder", got)
 	}
-	if got := templateSource("normal", localVersion); got != "local" {
+	if got := templateSource("normal", pipeline.LocalVersion); got != "local" {
 		t.Errorf("local version: %q, want local", got)
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 )
 
 // oneTemplate builds a one-template index for the row tests
@@ -88,7 +89,7 @@ func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
 	if !ok {
 		t.Fatal("normal row missing")
 	}
-	if len(row.versions) == 0 || row.versions[0].version != localVersion {
+	if len(row.versions) == 0 || row.versions[0].version != pipeline.LocalVersion {
 		t.Fatalf("first version = %+v, want the synthetic local row", row.versions)
 	}
 	if !row.versions[0].selectable {
@@ -103,7 +104,7 @@ func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
 		func(n, v string) bool { return false })
 
 	row, ok := findRow(rows, "normal")
-	if !ok || len(row.versions) != 1 || row.versions[0].version != localVersion {
+	if !ok || len(row.versions) != 1 || row.versions[0].version != pipeline.LocalVersion {
 		t.Fatalf("local-only row = %+v, want a single local version", row)
 	}
 }

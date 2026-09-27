@@ -32,16 +32,3 @@ func pngFilename(name string) string {
 	}, name)
 	return cleaned + ".png"
 }
-
-// templateDisplay names a template and version for the indicator. An empty
-// version is the placeholder fallback
-func templateDisplay(name, version string) string {
-	switch version {
-	case "":
-		return name + " (placeholder)"
-	case localVersion:
-		return name + " · local"
-	default:
-		return name + " · " + version
-	}
-}

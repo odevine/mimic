@@ -6,6 +6,7 @@ import (
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/version"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 )
 
 // defaultVersionSatisfied is the production engine-compatibility check
@@ -82,7 +83,7 @@ func buildTemplateRows(idx *catalog.Index, registered []template.Registration, h
 
 // localRow is the synthetic loose-directory version
 func localRow(renderable bool) versionRow {
-	r := versionRow{version: localVersion, cached: true, selectable: renderable}
+	r := versionRow{version: pipeline.LocalVersion, cached: true, selectable: renderable}
 	if !renderable {
 		r.reason = unsupportedReason
 	}
@@ -109,7 +110,7 @@ var templateVersionSatisfied = defaultVersionSatisfied
 
 // versionLabel renders a version for display, naming the synthetic local one
 func versionLabel(version string) string {
-	if version == localVersion {
+	if version == pipeline.LocalVersion {
 		return "local (developer assets)"
 	}
 	return version

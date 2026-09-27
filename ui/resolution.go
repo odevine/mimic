@@ -35,7 +35,7 @@ type resolutionSettings struct {
 // upscaling, so switching templates never leaves a preference that renders
 // something the assets cannot support
 func (s *server) resolutions() (resolutionSettings, error) {
-	m, err := s.pipe.manifest()
+	m, err := s.pipe.Manifest()
 	if err != nil {
 		return resolutionSettings{}, err
 	}

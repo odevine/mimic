@@ -13,6 +13,7 @@ import (
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 )
 
 // routes registers every handler. API routes live under /api; everything else
@@ -73,7 +74,7 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), netTimeout)
 	defer cancel()
 
-	cards, err := s.pipe.client.Search(ctx, query)
+	cards, err := s.pipe.Client().Search(ctx, query)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
@@ -117,7 +118,7 @@ func (s *server) handlePrintings(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), netTimeout)
 	defer cancel()
 
-	cards, err := s.pipe.client.Search(ctx, printingsQuery(name))
+	cards, err := s.pipe.Client().Search(ctx, printingsQuery(name))
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
@@ -166,7 +167,7 @@ func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
 	// the job keeps the number reported back the one actually rendered, even if
 	// the setting changes while this render is in flight
 	dpi := s.renderDPI(body.Target)
-	if m, err := s.pipe.manifest(); err == nil {
+	if m, err := s.pipe.Manifest(); err == nil {
 		dpi = m.ClampDPI(dpi)
 	}
 
@@ -203,7 +204,7 @@ func (s *server) handleSetResolution(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad resolution request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	m, err := s.pipe.manifest()
+	m, err := s.pipe.Manifest()
 	if err != nil {
 		http.Error(w, "reading template manifest: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -327,11 +328,11 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 		idx = nil
 	}
 	activeName, activeVersion := s.active()
-	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return looseDir(n) != "" }, catalog.IsCached)
+	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return pipeline.LooseDir(n) != "" }, catalog.IsCached)
 
 	views := make([]templateView, 0, len(rows))
 	for _, row := range rows {
-		tv := templateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason, Standard: supportsOf(row.name).Allows(primaryShape)}
+		tv := templateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason, Standard: pipeline.SupportsOf(row.name).Allows(pipeline.PrimaryShape)}
 		for _, v := range row.versions {
 			vv := versionView{
 				Version:    v.version,
@@ -366,10 +367,10 @@ func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"name":     name,
 		"version":  version,
-		"label":    templateDisplay(name, version),
+		"label":    pipeline.Display(name, version),
 		"source":   templateSource(name, version),
-		"supports": s.pipe.supports(),
-		"faces":    s.pipe.faceTemplates(),
+		"supports": s.pipe.Supports(),
+		"faces":    s.pipe.FaceTemplates(),
 	})
 }
 
@@ -379,7 +380,7 @@ func templateSource(name, version string) string {
 	switch {
 	case version == "":
 		return "placeholder"
-	case version == localVersion:
+	case version == pipeline.LocalVersion:
 		return "local"
 	case catalog.IsCached(name, version):
 		return "cached"

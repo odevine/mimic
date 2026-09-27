@@ -4,12 +4,27 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 )
+
+// withEmptyAssetChain points the loose-dir roots at nothing and the config
+// directory at a fresh temp dir, so a test drives the fallback tiers
+// deterministically and never touches the real prefs or cache
+func withEmptyAssetChain(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+	oldBases, oldCfg := pipeline.LooseDirBases, userConfigDir
+	pipeline.LooseDirBases = []string{filepath.Join(tmp, "no-such-assets")}
+	userConfigDir = func() (string, error) { return filepath.Join(tmp, "config"), nil }
+	t.Cleanup(func() { pipeline.LooseDirBases, userConfigDir = oldBases, oldCfg })
+	return tmp
+}
 
 // resolutionServer builds a server over placeholder assets with prefs in a
 // temp dir, which is enough for everything the resolution endpoints touch
@@ -17,15 +32,16 @@ func resolutionServer(t *testing.T) *server {
 	t.Helper()
 	withEmptyAssetChain(t)
 
-	at, _, err := resolveActiveTemplate("normal")
+	at, _, err := pipeline.Resolve("normal")
 	if err != nil {
-		t.Fatalf("resolveActiveTemplate: %v", err)
+		t.Fatalf("pipeline.Resolve: %v", err)
 	}
-	t.Cleanup(at.cleanup)
+	t.Cleanup(at.Close)
 
-	pipe := &renderPipeline{}
-	pipe.install(at)
-	s := &server{pipe: pipe, prefs: loadPrefs()}
+	p := loadPrefs()
+	pipe := pipeline.New(nil, p.FaceTemplates)
+	pipe.Install(at)
+	s := &server{pipe: pipe, prefs: p}
 	s.routes()
 	return s
 }
@@ -33,7 +49,7 @@ func resolutionServer(t *testing.T) *server {
 // nativeDPI is what the active template reports as its authored resolution
 func nativeDPI(t *testing.T, s *server) int {
 	t.Helper()
-	m, err := s.pipe.manifest()
+	m, err := s.pipe.Manifest()
 	if err != nil {
 		t.Fatalf("manifest: %v", err)
 	}
@@ -80,7 +96,7 @@ func TestRenderDPIByTarget(t *testing.T) {
 	if got := s.renderDPI(targetOutput); got != 0 {
 		t.Errorf("output dpi = %d, want 0 for the template's own", got)
 	}
-	m, err := s.pipe.manifest()
+	m, err := s.pipe.Manifest()
 	if err != nil {
 		t.Fatalf("manifest: %v", err)
 	}

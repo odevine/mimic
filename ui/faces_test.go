@@ -12,6 +12,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -20,13 +21,12 @@ import (
 func facesServer(t *testing.T) *server {
 	t.Helper()
 	s := runServer(t)
-	s.pipe.preferences = s.prefs.FaceTemplates
 	assets := filepath.Join(t.TempDir(), "assets")
-	if err := writePlaceholders(filepath.Join(assets, "transform"), "transform"); err != nil {
+	if err := pipeline.WritePlaceholders(filepath.Join(assets, "transform"), "transform"); err != nil {
 		t.Fatal(err)
 	}
-	looseDirBases = []string{assets}
-	t.Cleanup(s.pipe.close)
+	pipeline.LooseDirBases = []string{assets}
+	t.Cleanup(s.pipe.Close)
 	return s
 }
 
@@ -40,23 +40,23 @@ func transformRow(front, back card.Face) runRow {
 func TestChooseTemplatePerFace(t *testing.T) {
 	s := facesServer(t)
 	front := template.Shape{Role: template.RoleTransformFront, Kind: template.KindStandard}
-	if c, ok := s.pipe.choose(primaryShape); !ok || c.Name != "normal" {
+	if c, ok := s.pipe.Choose(pipeline.PrimaryShape); !ok || c.Name != "normal" {
 		t.Errorf("single standard chose %+v, %v, want the active normal", c, ok)
 	}
-	if c, ok := s.pipe.choose(front); !ok || c.Name != "transform" {
+	if c, ok := s.pipe.Choose(front); !ok || c.Name != "transform" {
 		t.Errorf("transform front chose %+v, %v, want transform", c, ok)
 	}
 	walker := template.Shape{Role: template.RoleTransformBack, Kind: template.KindPlaneswalker}
-	if _, ok := s.pipe.choose(walker); ok {
+	if _, ok := s.pipe.Choose(walker); ok {
 		t.Error("a planeswalker back has no template, but one was chosen")
 	}
 	// A preference for a template that does not render the shape is ignored
-	s.prefs.SetFaceTemplate(shapeKey(front), prefs.TemplateChoice{Name: "normal"})
-	if c, _ := s.pipe.choose(front); c.Name != "transform" {
+	s.prefs.SetFaceTemplate(pipeline.ShapeKey(front), prefs.TemplateChoice{Name: "normal"})
+	if c, _ := s.pipe.Choose(front); c.Name != "transform" {
 		t.Errorf("an unusable preference chose %+v", c)
 	}
 
-	faces := s.pipe.faceTemplates()
+	faces := s.pipe.FaceTemplates()
 	if faces["transform_back/standard"] != "transform" || faces["single/standard"] != "normal" {
 		t.Errorf("faceTemplates = %v", faces)
 	}
@@ -117,7 +117,7 @@ func TestSetFaceTemplate(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/template/faces", nil))
-	var rows []faceRow
+	var rows []pipeline.FaceRow
 	if err := json.Unmarshal(rec.Body.Bytes(), &rows); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestSetFaceTemplate(t *testing.T) {
 		t.Errorf("face rows = %s", rec.Body)
 	}
 
-	if rec := put(faceChoiceBody{Key: "transform_front/standard", Name: "transform", Version: localVersion}); rec.Code != http.StatusOK {
+	if rec := put(faceChoiceBody{Key: "transform_front/standard", Name: "transform", Version: pipeline.LocalVersion}); rec.Code != http.StatusOK {
 		t.Errorf("setting transform = %d %s", rec.Code, rec.Body)
 	}
 	if got := s.prefs.FaceTemplates()["transform_front/standard"]; got.Name != "transform" {
@@ -145,7 +145,7 @@ func TestSetFaceTemplate(t *testing.T) {
 func TestSetStandardTemplateSwitchesActive(t *testing.T) {
 	s := facesServer(t)
 	// A second loose template that renders standard cards to switch to
-	if err := writePlaceholders(filepath.Join(looseDirBases[0], "normal"), "normal"); err != nil {
+	if err := pipeline.WritePlaceholders(filepath.Join(pipeline.LooseDirBases[0], "normal"), "normal"); err != nil {
 		t.Fatal(err)
 	}
 	put := func(body faceChoiceBody) *httptest.ResponseRecorder {
@@ -164,7 +164,7 @@ func TestSetStandardTemplateSwitchesActive(t *testing.T) {
 	if rec := put(faceChoiceBody{Key: "single/standard", Name: "normal"}); rec.Code != http.StatusOK {
 		t.Fatalf("switching to normal = %d %s", rec.Code, rec.Body)
 	}
-	if name, version := s.active(); name != "normal" || version != localVersion {
+	if name, version := s.active(); name != "normal" || version != pipeline.LocalVersion {
 		t.Errorf("active = %s %s, want normal local", name, version)
 	}
 	if len(s.prefs.FaceTemplates()) != 0 {
@@ -196,12 +196,12 @@ func TestInstallOnlyLeavesTheActiveTemplate(t *testing.T) {
 		t.Fatal("select job did not finish")
 	}
 
-	selectAndWait(selectBody{Name: "transform", Version: localVersion, Install: true})
-	if name := s.pipe.active.Load().name; name != "normal" {
+	selectAndWait(selectBody{Name: "transform", Version: pipeline.LocalVersion, Install: true})
+	if name := s.pipe.Active().Name; name != "normal" {
 		t.Errorf("installing transform made %s active", name)
 	}
-	selectAndWait(selectBody{Name: "transform", Version: localVersion})
-	if name := s.pipe.active.Load().name; name != "transform" {
+	selectAndWait(selectBody{Name: "transform", Version: pipeline.LocalVersion})
+	if name := s.pipe.Active().Name; name != "transform" {
 		t.Errorf("selecting transform left %s active", name)
 	}
 }

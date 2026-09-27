@@ -216,28 +216,33 @@ type faceRow struct {
 	Options []faceOption    `json:"options"`
 	Chosen  *templateChoice `json:"chosen,omitempty"`
 	Using   string          `json:"using"`
+	// Primary marks the standard single card row, whose choice is the active
+	// template the top bar shows rather than a saved preference
+	Primary bool `json:"primary,omitempty"`
 }
 
-// faceRows lists each face shape some installed template renders, other than
-// the standard single card the top-bar picker chooses for, so the settings
-// list stays as short as what is installed
+// faceRows lists the standard single card first, chosen by the active
+// template, then each other face shape some installed template renders, so
+// the settings list stays as short as what is installed
 func (p *renderPipeline) faceRows() []faceRow {
 	regs := installedTemplates()
 	var prefs map[string]templateChoice
 	if p.preferences != nil {
 		prefs = p.preferences()
 	}
-	var rows []faceRow
+	active := p.active.Load()
+	primary := faceRow{
+		Key: shapeKey(primaryShape), Role: primaryShape.Role, Kind: primaryShape.Kind, Primary: true,
+		Options: faceOptions(regs, primaryShape),
+		Chosen:  &templateChoice{Name: active.name, Version: active.version},
+		Using:   templateDisplay(active.name, active.version),
+	}
+	rows := []faceRow{primary}
 	for _, sh := range shapesOf(regs) {
 		if sh == primaryShape {
 			continue
 		}
-		row := faceRow{Key: shapeKey(sh), Role: sh.Role, Kind: sh.Kind}
-		for _, r := range regs {
-			if r.Supports.Allows(sh) {
-				row.Options = append(row.Options, faceOption{Name: r.Name, Versions: installedVersions(r.Name)})
-			}
-		}
+		row := faceRow{Key: shapeKey(sh), Role: sh.Role, Kind: sh.Kind, Options: faceOptions(regs, sh)}
 		if c, ok := prefs[row.Key]; ok {
 			row.Chosen = &c
 		}
@@ -278,9 +283,10 @@ type faceChoiceBody struct {
 	Version string `json:"version"`
 }
 
-// handleSetFaceTemplate saves the preferred template for one face shape. Like
-// switching the active template, it waits for a run to finish, so every face
-// of a run renders through the templates it started with
+// handleSetFaceTemplate saves the preferred template for one face shape, or
+// for standard single cards switches the active template, the same choice the
+// top bar makes. It waits for a run to finish, so every face of a run renders
+// through the templates it started with
 func (s *server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
 	var body faceChoiceBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -308,6 +314,48 @@ func (s *server) handleSetFaceTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("%s %s is not an installed template for %s", body.Name, body.Version, body.Key), http.StatusBadRequest)
 		return
 	}
+	if row.Primary {
+		if err := s.switchActive(body.Name, body.Version); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, s.pipe.faceRows())
+		return
+	}
 	s.prefs.setFaceTemplate(body.Key, templateChoice{Name: body.Name, Version: body.Version})
 	writeJSON(w, s.pipe.faceRows())
+}
+
+// faceOptions lists the installed templates that render sh, with their
+// installed versions
+func faceOptions(regs []template.Registration, sh template.Shape) []faceOption {
+	var out []faceOption
+	for _, r := range regs {
+		if r.Supports.Allows(sh) {
+			out = append(out, faceOption{Name: r.Name, Versions: installedVersions(r.Name)})
+		}
+	}
+	return out
+}
+
+// switchActive makes an installed template the active one, as choosing it in
+// the top bar would. An empty version is the newest installed. It never
+// downloads, since the settings list offers only installed versions
+func (s *server) switchActive(name, version string) error {
+	if name == "" {
+		return fmt.Errorf("standard cards need a template")
+	}
+	if version == "" {
+		v := installedVersions(name)
+		if len(v) == 0 {
+			return fmt.Errorf("%s is not installed", name)
+		}
+		version = v[0]
+	}
+	at, err := activeFromVersion(context.Background(), name, version, nil)
+	if err != nil {
+		return err
+	}
+	s.setActiveTemplate(at)
+	return nil
 }

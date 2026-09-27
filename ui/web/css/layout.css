@@ -992,6 +992,12 @@ body.resizing * {
     max-height: 60vh;
   }
 
+  /* The run preview needs a height of its own to size the card against, or
+     the card grows to its full size and covers the page */
+  .run-body .console-side {
+    height: 60vh;
+  }
+
   .splitter {
     display: none;
   }

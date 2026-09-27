@@ -28,6 +28,8 @@ func (s *server) routes() {
 	mux.HandleFunc("GET /api/template/active", s.handleActiveTemplate)
 	mux.HandleFunc("POST /api/template/select", s.handleSelectTemplate)
 	mux.HandleFunc("GET /api/template/select/{id}/events", s.handleJobEvents)
+	mux.HandleFunc("GET /api/template/faces", s.handleFaceTemplates)
+	mux.HandleFunc("PUT /api/template/faces", s.handleSetFaceTemplate)
 	mux.HandleFunc("GET /api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("GET /api/settings", s.handleSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
@@ -142,6 +144,9 @@ type renderBody struct {
 	// Target picks which resolution to render at: "output" for the full-size
 	// render behind Save, anything else for the preview
 	Target string `json:"target,omitempty"`
+	// Face picks which of the card's images to render, 0 for the front and 1
+	// for a double-faced card's back. The edits apply to the front face
+	Face int `json:"face,omitempty"`
 }
 
 // handleRender starts a render job and returns its id. The render runs in a
@@ -164,7 +169,7 @@ func (s *server) handleRender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, j := s.newJob()
-	go s.doRender(j, d, dpi)
+	go s.doRender(j, d, body.Face, dpi)
 	writeJSON(w, map[string]any{"jobId": id, "dpi": dpi})
 }
 
@@ -347,7 +352,9 @@ func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 
 // handleActiveTemplate returns the active template's name, version, the display
 // label for the top-bar indicator, where its assets come from for the status
-// bar, and the faces it supports for the list review
+// bar, and the faces it supports. faces maps every face shape some installed
+// template renders to the template chosen for it, which the list review and
+// the editor check cards against
 func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 	name, version := s.active()
 	writeJSON(w, map[string]any{
@@ -356,6 +363,7 @@ func (s *server) handleActiveTemplate(w http.ResponseWriter, r *http.Request) {
 		"label":    templateDisplay(name, version),
 		"source":   templateSource(name, version),
 		"supports": s.pipe.supports(),
+		"faces":    s.pipe.faceTemplates(),
 	})
 }
 

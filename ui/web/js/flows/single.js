@@ -4,7 +4,7 @@ import { app, signal, effect, batch } from "../state.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { renderPips, symbolPalette, insertAtCursor } from "../components/symbols.js";
 import { setZoom } from "../components/preview.js";
-import { unsupportedBy } from "../supports.js";
+import { faceUnsupportedBy } from "../supports.js";
 
 // Flow 1: search a card, adjust anything about it, render, download. The
 // browser holds the fetched card as the base and the form values as edits, so
@@ -60,12 +60,24 @@ const store = {
   rendered: signal(null), // the edits JSON the preview on screen was rendered from
   printings: signal(null), // null while loading, [] when none
   activity: signal({ state: "idle", title: "", step: "", frac: 0 }),
+  face: signal(0), // which of the card's images the preview shows, 0 for the front
 };
 
 let searchAbort = null;
 let printingsAbort = null;
 let renderJob = null;
-let preview = null; // { jobId, dpi } of the preview on screen
+let preview = null; // { jobId, dpi, face } of the preview on screen
+
+const faceCount = (card) => (card && card.shapes ? card.shapes.length : 1);
+
+// faceTitle is the name the shown face prints. The form edits the front, so a
+// back face shows its own name as fetched
+function faceTitle() {
+  const face = store.face.peek();
+  const base = store.base.peek();
+  if (face > 0 && base && base.Faces && base.Faces[face]) return base.Faces[face].Name || "card";
+  return store.edits.peek().name || "card";
+}
 let saving = false;
 
 const baseValues = () => (store.base.peek() ? valuesOf(store.base.peek()) : {});
@@ -216,6 +228,7 @@ function selectResult(i) {
     store.selected.value = i;
     store.base.value = card;
     store.edits.value = valuesOf(card);
+    store.face.value = 0;
   });
   loadPrintings(card.Name, g.cards.length > 1 ? g.cards : null);
   renderIfSupported();
@@ -316,6 +329,7 @@ function choosePrinting(card) {
   batch(() => {
     store.base.value = card;
     store.edits.value = merged;
+    if (store.face.peek() >= faceCount(card)) store.face.value = 0;
   });
   renderIfSupported();
 }
@@ -535,12 +549,13 @@ async function render() {
   if (!base || saving) return;
   if (renderJob) renderJob.close();
   preview = null;
-  const name = store.edits.peek().name || "card";
+  const name = faceTitle();
+  const face = store.face.peek();
   const snap = snapshot();
   const res = app.resolution.peek();
   begin(`Rendering ${name}`, compactSize(res && res.preview));
   try {
-    const { jobId, dpi } = await api.render(base, store.edits.peek(), "preview");
+    const { jobId, dpi } = await api.render(base, store.edits.peek(), "preview", face);
     const job = (renderJob = api.renderEvents(jobId, (step, frac) => {
       if (renderJob === job) progress(step, frac);
     }));
@@ -551,7 +566,7 @@ async function render() {
     img.src = api.renderImageURL(jobId);
     img.hidden = false;
     $("stage-placeholder").hidden = true;
-    preview = { jobId, dpi };
+    preview = { jobId, dpi, face };
     store.rendered.value = snap;
     if (done.artMissing) finish("warn", `Rendered ${name}`, "The art could not be fetched, so the frame is empty");
     else finish("done", `Rendered ${name}`, "");
@@ -561,12 +576,12 @@ async function render() {
   }
 }
 
-// renderIfSupported draws a newly picked card, or for one the active template
-// cannot render, clears the preview and leaves the strip idle so it shows the
-// warning. Render stays available, since an edited type line can make the card
-// one the template renders
+// renderIfSupported draws a newly picked card or face, or for one no installed
+// template renders, clears the preview and leaves the strip idle so it shows
+// the warning. Render stays available, since an edited type line can make the
+// card one a template renders
 function renderIfSupported() {
-  if (!unsupportedBy(store.base.peek())) {
+  if (!faceUnsupportedBy(store.base.peek(), store.face.peek())) {
     render();
     return;
   }
@@ -595,10 +610,11 @@ function download(jobId) {
 async function save() {
   const base = store.base.peek();
   if (!base || saving) return;
-  const name = store.edits.peek().name || "card";
+  const name = faceTitle();
+  const face = store.face.peek();
   const res = app.resolution.peek();
   const size = compactSize(res && res.output);
-  if (preview && preview.dpi === outputDPI() && store.rendered.peek() === snapshot()) {
+  if (preview && preview.dpi === outputDPI() && preview.face === face && store.rendered.peek() === snapshot()) {
     download(preview.jobId);
     finish("done", `Saved ${name}.png`, "Handed to the browser as a download", size);
     return;
@@ -610,7 +626,7 @@ async function save() {
   $("render-btn").disabled = true;
   begin(`Saving ${name}.png`, size);
   try {
-    const { jobId } = await api.render(base, store.edits.peek(), "output");
+    const { jobId } = await api.render(base, store.edits.peek(), "output", face);
     await api.renderEvents(jobId, progress);
     download(jobId);
     finish("done", `Saved ${name}.png`, "Handed to the browser as a download");
@@ -705,6 +721,22 @@ export function initSingle() {
     $("editor-title").textContent = e ? e.name || "Untitled card" : "";
   });
 
+  // A double-faced card previews one face at a time. The fields always edit
+  // the front, which the note says while the back is showing
+  effect(() => {
+    const faces = faceCount(store.base.value);
+    const face = store.face.value;
+    $("face-toggle").hidden = faces < 2;
+    $("face-toggle-label").textContent = face > 0 ? "Front face" : "Back face";
+    $("face-note").hidden = face === 0;
+  });
+  $("face-toggle").addEventListener("click", () => {
+    const faces = faceCount(store.base.peek());
+    if (faces < 2) return;
+    store.face.value = (store.face.peek() + 1) % faces;
+    renderIfSupported();
+  });
+
   effect(() => {
     const b = store.base.value;
     const list = store.printings.value;
@@ -729,7 +761,7 @@ export function initSingle() {
     const a = store.activity.value;
     const has = !!store.base.value;
     app.template.value;
-    const why = has ? unsupportedBy(store.base.value) : "";
+    const why = has ? faceUnsupportedBy(store.base.value, store.face.value) : "";
     let { state, title, step } = a;
     let meta = "";
 
@@ -740,7 +772,7 @@ export function initSingle() {
     } else if (state === "idle" && why) {
       state = "warn";
       title = why;
-      step = "Pick a template that does from the template menu, or edit the type line and press Render";
+      step = "Install a template that does from the template menu, or edit the type line and press Render";
     } else if (state === "working") {
       meta = `${Math.round(a.frac * 100)}% · ${seconds((performance.now() - a.started) / 1000)}`;
     } else if (state === "done" && stale()) {

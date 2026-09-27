@@ -58,7 +58,7 @@ export const api = {
 
   // render starts a job for one target, "preview" or "output", and resolves to
   // { jobId, dpi }
-  render: (base, edits, target) => send("POST", "/api/render", { base, edits, target }),
+  render: (base, edits, target, face) => send("POST", "/api/render", { base, edits, target, face }),
   renderEvents: (jobId, onStep) => watchJob(`/api/render/${jobId}/events`, onStep),
   renderImageURL: (jobId, download) =>
     `/api/render/${jobId}/image${download ? "?download=1" : `?ts=${Date.now()}`}`,
@@ -70,6 +70,8 @@ export const api = {
   activeTemplate: () => get("/api/template/active"),
   selectTemplate: (name, version) => send("POST", "/api/template/select", { name, version }),
   selectEvents: (jobId, onStep) => watchJob(`/api/template/select/${jobId}/events`, onStep),
+  faceTemplates: () => get("/api/template/faces"),
+  setFaceTemplate: (key, name, version) => send("PUT", "/api/template/faces", { key, name, version }),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

@@ -29,7 +29,8 @@ type activeTemplate struct {
 }
 
 // renderPipeline holds the pieces reused across every render: the client that
-// fetches art and the active template. They are safe to share across concurrent
+// fetches art, the active template the top-bar picker chose, and any other
+// template a face renders through. They are safe to share across concurrent
 // Render calls, so one pipeline serves the whole app. The active template is
 // held behind an atomic pointer so a background download or a manual switch can
 // swap it in without a lock on the render path
@@ -42,6 +43,12 @@ type renderPipeline struct {
 	// be reading it; all cleanups run once at shutdown instead
 	mu       sync.Mutex
 	cleanups []func()
+	// loaded holds the templates other than the active one that some face
+	// renders through, one per name, loaded on first use. Guarded by mu
+	loaded map[string]*activeTemplate
+	// preferences returns the preferred template for each face shape, keyed by
+	// shapeKey. Nil means no preferences
+	preferences func() map[string]templateChoice
 }
 
 // install makes at the template for later renders. The previous one is left open
@@ -83,16 +90,24 @@ func (p *renderPipeline) fetchArt(ctx context.Context, d *card.Data) (image.Imag
 	return p.client.FetchArt(ctx, d)
 }
 
-// render composes the card and art into a finished image through the template,
-// at dpi. Art may be nil, which renders a frame with no artwork. A dpi past what
+// render composes face of the card and its art into a finished image through
+// the template that renders that face, at dpi. Art may be nil, which renders a frame with no artwork. A dpi past what
 // the template was authored at renders at the authored size, so a caller can
 // pass a saved preference through without checking it first. progress, when set,
 // receives step updates: the engine's own steps scaled into the first 90% of the
 // bar, then a final downscale step. progress may be nil
-func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Image, dpi int, progress func(step string, frac float64)) (image.Image, error) {
-	at := p.active.Load()
+func (p *renderPipeline) render(ctx context.Context, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (image.Image, error) {
+	shapes := template.Classify(d)
+	if face < 0 || face >= len(shapes) {
+		return nil, fmt.Errorf("face %d out of range, %q renders %d", face, d.Name, len(shapes))
+	}
+	at, err := p.templateFor(shapes[face])
+	if err != nil {
+		return nil, err
+	}
 	req := template.RenderRequest{
 		Card:    d,
+		Face:    face,
 		Art:     art,
 		Assets:  at.provider,
 		FontDir: at.fontDir,
@@ -105,7 +120,7 @@ func (p *renderPipeline) render(ctx context.Context, d *card.Data, art image.Ima
 	}
 	buf, err := at.template.Render(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("rendering %q: %w", d.Name, err)
+		return nil, fmt.Errorf("rendering %q: %w", faceName(d, face), err)
 	}
 	if progress != nil {
 		progress("Encoding image", 0.92)

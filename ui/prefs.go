@@ -18,6 +18,10 @@ type prefsData struct {
 	TemplateVersion string   `json:"templateVersion"`
 	PreviewDPI      int      `json:"previewDpi,omitempty"`
 	OutputDPI       int      `json:"outputDpi,omitempty"`
+	// FaceTemplates is the preferred template for each face shape other than
+	// a standard single card, which TemplateName holds, keyed like
+	// "transform_front/standard"
+	FaceTemplates map[string]templateChoice `json:"faceTemplates,omitempty"`
 	uiSettings
 }
 
@@ -153,5 +157,33 @@ func (p *prefs) setSettings(u uiSettings) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.data.uiSettings = u
+	p.save()
+}
+
+// faceTemplates returns a copy of the per-shape template preferences
+func (p *prefs) faceTemplates() map[string]templateChoice {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make(map[string]templateChoice, len(p.data.FaceTemplates))
+	for k, v := range p.data.FaceTemplates {
+		out[k] = v
+	}
+	return out
+}
+
+// setFaceTemplate stores the preferred template for one shape and persists
+// it. An empty choice clears the preference, so the first installed template
+// that supports the shape is used again
+func (p *prefs) setFaceTemplate(key string, c templateChoice) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if c.Name == "" {
+		delete(p.data.FaceTemplates, key)
+	} else {
+		if p.data.FaceTemplates == nil {
+			p.data.FaceTemplates = map[string]templateChoice{}
+		}
+		p.data.FaceTemplates[key] = c
+	}
 	p.save()
 }

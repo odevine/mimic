@@ -42,7 +42,7 @@ var features = []feature{
 	{key: "single.zoom", state: gateLive},
 	{key: "single.compare", state: gatePlanned, reason: "Comparing against the Scryfall scan is coming in v1.0"},
 	{key: "single.artDrop", state: gateNeedsEngine, reason: "Needs engine support for art override"},
-	{key: "single.dfc", state: gateNeedsEngine, reason: "Engine renders the front face only"},
+	{key: "single.dfc", state: gateLive},
 
 	{key: "overrides", state: gatePlanned, reason: "Overrides are coming in v1.0"},
 	{key: "overrides.global", state: gatePlanned, reason: "Global overrides are coming in v1.0"},

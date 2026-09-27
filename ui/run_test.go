@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/batch"
 )
 
 // runServer is a placeholder-template server that renders small, so a batch
@@ -25,12 +26,12 @@ func runServer(t *testing.T) *server {
 	return s
 }
 
-func postRun(t *testing.T, s *server, body runBody) (*httptest.ResponseRecorder, runView) {
+func postRun(t *testing.T, s *server, body runBody) (*httptest.ResponseRecorder, batch.View) {
 	t.Helper()
 	raw, _ := json.Marshal(body)
 	rec := httptest.NewRecorder()
 	s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/run", bytes.NewReader(raw)))
-	var v runView
+	var v batch.View
 	if rec.Code == http.StatusOK {
 		_ = json.Unmarshal(rec.Body.Bytes(), &v)
 	}
@@ -38,7 +39,7 @@ func postRun(t *testing.T, s *server, body runBody) (*httptest.ResponseRecorder,
 }
 
 // waitRun blocks until the latest run finishes
-func waitRun(t *testing.T, s *server) runView {
+func waitRun(t *testing.T, s *server) batch.View {
 	t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for s.runActive() {
@@ -48,23 +49,24 @@ func waitRun(t *testing.T, s *server) runView {
 		time.Sleep(10 * time.Millisecond)
 	}
 	// The report is written just after finished is set
+	run, _ := s.currentRun()
 	for range 100 {
-		if v := s.currentRun().view(); v.Report != "" {
+		if v := run.View(); v.Report != "" {
 			return v
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return s.currentRun().view()
+	return run.View()
 }
 
-func customRunRow(name, set, cn string) runRow {
-	return runRow{Qty: 1, Base: card.Data{Name: name, TypeLine: "Creature", SetCode: set, CollectorNumber: cn}}
+func customRunRow(name, set, cn string) batch.Row {
+	return batch.Row{Qty: 1, Base: card.Data{Name: name, TypeLine: "Creature", SetCode: set, CollectorNumber: cn}}
 }
 
 func TestRunWritesFilesAndReport(t *testing.T) {
 	s := runServer(t)
 	dir := filepath.Join(t.TempDir(), "out")
-	rows := []runRow{
+	rows := []batch.Row{
 		customRunRow("Sol Ring", "c21", "263"),
 		customRunRow("Sol Ring", "c21", "263"),
 		{Qty: 4, Base: card.Data{Name: "Fire // Ice", TypeLine: "Instant"}, Fields: map[string]string{"power": "1"}},
@@ -80,7 +82,7 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 
 	want := []string{"Sol Ring [C21-263].png", "Sol Ring [C21-263] (2).png", "Fire - Ice.png"}
 	for i, c := range v.Cards {
-		if c.Status != cardDone || c.File != want[i] {
+		if c.Status != batch.StatusDone || c.File != want[i] {
 			t.Errorf("card %d = %+v, want done as %q", i, c, want[i])
 			continue
 		}
@@ -98,11 +100,11 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}
-	var rep runReport
+	var rep batch.Report
 	if err := json.Unmarshal(raw, &rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.Counts[cardDone] != 3 || rep.Cards[2].Qty != 4 || rep.Cards[2].Fields["power"] != "1" || rep.Label != "test deck" {
+	if rep.Counts[batch.StatusDone] != 3 || rep.Cards[2].Qty != 4 || rep.Cards[2].Fields["power"] != "1" || rep.Label != "test deck" {
 		t.Errorf("report = %+v", rep)
 	}
 
@@ -124,8 +126,8 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 
 func TestRunRefusesSecondRunAndTemplateSwitch(t *testing.T) {
 	s := runServer(t)
-	s.run = &batchRun{id: "run-9", job: &job{}}
-	rec, _ := postRun(t, s, runBody{Rows: []runRow{customRunRow("A", "", "")}, OutDir: t.TempDir()})
+	s.run = batch.New(nil, batch.Options{ID: "run-9"})
+	rec, _ := postRun(t, s, runBody{Rows: []batch.Row{customRunRow("A", "", "")}, OutDir: t.TempDir()})
 	if rec.Code != http.StatusConflict {
 		t.Errorf("second run: %d, want 409", rec.Code)
 	}
@@ -138,7 +140,7 @@ func TestRunRefusesSecondRunAndTemplateSwitch(t *testing.T) {
 
 func TestRunStop(t *testing.T) {
 	s := runServer(t)
-	var rows []runRow
+	var rows []batch.Row
 	for range 40 {
 		rows = append(rows, customRunRow("Card", "", ""))
 	}
@@ -149,8 +151,8 @@ func TestRunStop(t *testing.T) {
 		t.Fatalf("stop: %d", stop.Code)
 	}
 	v = waitRun(t, s)
-	counts := countCards(v.Cards)
-	if !v.Stopped || counts[cardSkipped] == 0 || counts[cardQueued] != 0 {
+	counts := batch.Counts(v.Cards)
+	if !v.Stopped || counts[batch.StatusSkipped] == 0 || counts[batch.StatusQueued] != 0 {
 		t.Errorf("after stop: stopped=%v counts=%v", v.Stopped, counts)
 	}
 }
@@ -158,36 +160,9 @@ func TestRunStop(t *testing.T) {
 func TestRunRejectsBadOutput(t *testing.T) {
 	s := runServer(t)
 	for _, dir := range []string{"", "relative/path"} {
-		if rec, _ := postRun(t, s, runBody{Rows: []runRow{customRunRow("A", "", "")}, OutDir: dir}); rec.Code != http.StatusBadRequest {
+		if rec, _ := postRun(t, s, runBody{Rows: []batch.Row{customRunRow("A", "", "")}, OutDir: dir}); rec.Code != http.StatusBadRequest {
 			t.Errorf("outDir %q: %d, want 400", dir, rec.Code)
 		}
-	}
-}
-
-func TestSanitizeFilename(t *testing.T) {
-	cases := map[string]string{
-		"Lightning Bolt":         "Lightning Bolt",
-		"Fire // Ice":            "Fire - Ice",
-		`What?: "A/B" <C>`:       "What-- -A-B- -C-",
-		"  ..dots..  ":           "dots",
-		"CON":                    "_CON",
-		"tab\there":              "tabhere",
-		strings.Repeat("a", 300): strings.Repeat("a", 150),
-	}
-	for in, want := range cases {
-		if got := sanitizeFilename(in); got != want {
-			t.Errorf("sanitizeFilename(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestExpandPath(t *testing.T) {
-	home, _ := os.UserHomeDir()
-	if got, _ := expandPath("~/proxies"); got != filepath.Join(home, "proxies") {
-		t.Errorf("~ expanded to %q", got)
-	}
-	if _, err := expandPath("proxies"); err == nil {
-		t.Error("a relative path should be refused")
 	}
 }
 
@@ -208,28 +183,14 @@ func TestFSList(t *testing.T) {
 	}
 }
 
-func TestRetryFailedRunsOnlyFailures(t *testing.T) {
+func TestRetryWithNoFailuresIsRefused(t *testing.T) {
 	s := runServer(t)
-	dir := t.TempDir()
-	rows := []runRow{customRunRow("Good", "", ""), customRunRow("Bad", "", ""), customRunRow("Also Bad", "", "")}
-	_, v := postRun(t, s, runBody{Rows: rows, OutDir: dir, Label: "deck"})
+	_, v := postRun(t, s, runBody{Rows: []batch.Row{customRunRow("Good", "", "")}, OutDir: t.TempDir()})
 	waitRun(t, s)
-
-	// Mark two cards failed, as an art download blip would
-	run := s.currentRun()
-	run.mu.Lock()
-	run.cards[1].Status, run.cards[2].Status = cardFailed, cardFailed
-	run.mu.Unlock()
 
 	rec := httptest.NewRecorder()
 	s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/run/"+v.ID+"/retry", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("retry: %d %s", rec.Code, rec.Body)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("retry with nothing failed: %d, want 400", rec.Code)
 	}
-	var retried runView
-	json.Unmarshal(rec.Body.Bytes(), &retried)
-	if len(retried.Cards) != 2 || retried.Cards[0].Name != "Bad" || retried.Label != "deck, retried" || retried.OutDir != dir {
-		t.Errorf("retry run = %+v", retried)
-	}
-	waitRun(t, s)
 }

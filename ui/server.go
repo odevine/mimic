@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
@@ -76,7 +77,8 @@ type server struct {
 
 	// run is the latest batch run, kept after it finishes until the next starts
 	runMu  sync.Mutex
-	run    *batchRun
+	run    *batch.Run
+	runJob *job
 	runSeq uint64
 
 	// cards is the local copy of Scryfall bulk data, empty until downloaded

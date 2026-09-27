@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 )
 
@@ -20,7 +21,7 @@ type jobEvent struct {
 	ArtMissing bool               `json:"artMissing,omitempty"`
 	Err        string             `json:"error,omitempty"`
 	Row        *cardlist.Resolved `json:"row,omitempty"`
-	Card       *runCard           `json:"card,omitempty"`
+	Card       *batch.Card        `json:"card,omitempty"`
 	Log        string             `json:"log,omitempty"`
 }
 

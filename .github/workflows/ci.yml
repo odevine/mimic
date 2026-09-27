@@ -34,8 +34,14 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # render runs on one goroutine and hands its pixel work to impasto, where
+      # the race detector multiplies the cost many times over. The ui job's race
+      # run still covers render and impasto, since it instruments every package
+      # ui builds
       - name: Test
-        run: go test -race ./...
+        run: |
+          go test ./render
+          go test -race $(go list ./... | grep -v '/render$')
 
   ui:
     runs-on: ubuntu-latest

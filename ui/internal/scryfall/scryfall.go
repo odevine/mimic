@@ -1,4 +1,7 @@
-package main
+// Package scryfall is the HTTP layer the UI uses to reach Scryfall: a client
+// that paces requests to the published rate limits and the headers Scryfall
+// asks every client to send
+package scryfall
 
 import (
 	"context"
@@ -10,39 +13,39 @@ import (
 	"time"
 )
 
-// scryfallAPIHost is the only host the pacer slows. Scryfall's image hosts carry
-// no rate limit, so art downloads skip the queue
-const scryfallAPIHost = "api.scryfall.com"
+// apiHost is the only host the pacer slows. Scryfall's image hosts carry no
+// rate limit, so art downloads skip the queue
+const apiHost = "api.scryfall.com"
 
 // Scryfall's published limits: search, named, random and collection allow two
 // requests a second, and every other API method ten. Each has its own queue, so
 // a burst of searches never holds back a cheaper call. The limits are listed at
 // https://scryfall.com/docs/api/rate-limits
 const (
-	scryfallInterval     = 100 * time.Millisecond
-	scryfallSlowInterval = 500 * time.Millisecond
+	defaultInterval = 100 * time.Millisecond
+	slowInterval    = 500 * time.Millisecond
 )
 
-var scryfallSlowPaths = []string{"/cards/search", "/cards/named", "/cards/random", "/cards/collection"}
+var slowPaths = []string{"/cards/search", "/cards/named", "/cards/random", "/cards/collection"}
 
-// scryfallPenalty is how long Scryfall limits access after a 429, and what a
-// 429 without a Retry-After header is taken to mean
-const scryfallPenalty = 30 * time.Second
+// penalty is how long Scryfall limits access after a 429, and what a 429
+// without a Retry-After header is taken to mean
+const penalty = 30 * time.Second
 
 // maxRetryAfter caps how long a 429 can hold every later request back, so a
 // malformed or hostile Retry-After cannot stall the app
-const maxRetryAfter = 2 * scryfallPenalty
+const maxRetryAfter = 2 * penalty
 
-// scryfallHTTPClient is the HTTP client the card client uses. Pacing happens
-// inside the transport, so every search, lookup and printings call shares one
-// set of queues. The network timeout applies to each request once it leaves
-// the queue, since time spent waiting its turn is not the network being slow
-func scryfallHTTPClient() *http.Client {
+// NewHTTPClient returns the HTTP client the card client uses. Pacing happens inside
+// the transport, so every search, lookup and printings call shares one set of
+// queues. The timeout applies to each request once it leaves the queue, since
+// time spent waiting its turn is not the network being slow
+func NewHTTPClient(timeout time.Duration) *http.Client {
 	base := http.DefaultTransport.(*http.Transport).Clone()
-	base.ResponseHeaderTimeout = netTimeout
-	t := newPacedTransport(base, scryfallAPIHost, scryfallInterval)
-	for _, p := range scryfallSlowPaths {
-		t.slow[p] = scryfallSlowInterval
+	base.ResponseHeaderTimeout = timeout
+	t := newPacedTransport(base, apiHost, defaultInterval)
+	for _, p := range slowPaths {
+		t.slow[p] = slowInterval
 	}
 	return &http.Client{Transport: t}
 }
@@ -155,7 +158,13 @@ func keys(m map[string]time.Duration) []string {
 func retryAfter(v string) time.Duration {
 	secs, err := strconv.Atoi(v)
 	if err != nil || secs < 0 {
-		return scryfallPenalty
+		return penalty
 	}
 	return min(time.Duration(secs)*time.Second, maxRetryAfter)
+}
+
+// SetHeaders sets the headers Scryfall asks every client to send
+func SetHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", "mimic (+https://github.com/odevine/mimic)")
+	req.Header.Set("Accept", "application/json")
 }

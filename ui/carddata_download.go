@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/odevine/mimic/ui/internal/scryfall"
 )
 
 // bulkListURL is Scryfall's index of bulk data files. A test points it at a
@@ -53,7 +55,7 @@ func fetchRemoteCards(ctx context.Context, client *http.Client) (*remoteCards, e
 	if err != nil {
 		return nil, err
 	}
-	setScryfallHeaders(req)
+	scryfall.SetHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("reading Scryfall's bulk data list: %w", err)
@@ -83,12 +85,6 @@ func fetchRemoteCards(ctx context.Context, client *http.Client) (*remoteCards, e
 	out.UpdatedAt = out.cards.UpdatedAt
 	out.Size = out.oracle.Size + out.cards.Size
 	return out, nil
-}
-
-// setScryfallHeaders sets the headers Scryfall asks every client to send
-func setScryfallHeaders(req *http.Request) {
-	req.Header.Set("User-Agent", "mimic (+https://github.com/odevine/mimic)")
-	req.Header.Set("Accept", "application/json")
 }
 
 // remote returns the bulk index, from the cache when it is fresh
@@ -220,7 +216,7 @@ func (s *server) openBulk(ctx context.Context, uri string) (io.ReadCloser, error
 	if err != nil {
 		return nil, err
 	}
-	setScryfallHeaders(req)
+	scryfall.SetHeaders(req)
 	resp, err := s.scryfall.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("downloading card data: %w", err)

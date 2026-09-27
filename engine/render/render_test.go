@@ -2,22 +2,39 @@ package render
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"image/color"
+	"os"
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
 )
 
+// placeholderDir holds one set of placeholder assets that every test reads,
+// since encoding their full-size PNGs is slow under the race detector
+var placeholderDir string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "render-test-")
+	if err == nil {
+		err = WritePlaceholderAssets(dir, "test")
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "writing placeholder assets:", err)
+		os.Exit(1)
+	}
+	placeholderDir = dir
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 // renderBolt renders a synthetic Lightning Bolt against generated placeholder
 // assets, with no network involved.
 func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 	t.Helper()
-	dir := t.TempDir()
-	if err := WritePlaceholderAssets(dir, "test"); err != nil {
-		t.Fatalf("WritePlaceholderAssets: %v", err)
-	}
 	return &template.RenderRequest{
 		Card: &card.Data{
 			Name:          "Lightning Bolt",
@@ -28,8 +45,21 @@ func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 			ColorIdentity: []card.Color{card.Red},
 		},
 		Art:    art,
-		Assets: template.NewFSAssetProvider(dir),
+		Assets: template.NewFSAssetProvider(placeholderDir),
 	}
+}
+
+// atMinDPI sets req to render at the smallest resolution a template allows, for
+// tests that sample pixels rather than check size, and returns the scale that
+// maps a native coordinate into the smaller render
+func atMinDPI(t *testing.T, req *template.RenderRequest) template.Scale {
+	t.Helper()
+	m, err := req.Assets.Manifest()
+	if err != nil {
+		t.Fatalf("Manifest: %v", err)
+	}
+	req.DPI = template.MinDPI
+	return m.ScaleForDPI(req.DPI)
 }
 
 func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
@@ -47,6 +77,7 @@ func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
 
 func TestRenderReportsProgress(t *testing.T) {
 	req := renderBolt(t, nil)
+	atMinDPI(t, req)
 	var steps []string
 	last := -1.0
 	req.Progress = func(step string, frac float64) {
@@ -88,12 +119,13 @@ func TestRenderPicksColorKeyedBackground(t *testing.T) {
 	// The top-left pixel is bare background, so a red card must show the red
 	// background fill there rather than another color's.
 	req := renderBolt(t, nil)
+	s := atMinDPI(t, req)
 	buf, err := New("test").Render(context.Background(), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	img := buf.ToImage(8)
-	got := color.NRGBAModel.Convert(img.At(4, 4)).(color.NRGBA)
+	got := color.NRGBAModel.Convert(img.At(s.Px(4), s.Px(4))).(color.NRGBA)
 	want := placeholderColors["r"]
 	if !closeColor(got, want) {
 		t.Errorf("background at (4,4) = %v, want red key %v", got, want)
@@ -110,13 +142,14 @@ func TestRenderPlacesArt(t *testing.T) {
 		}
 	}
 	req := renderBolt(t, art)
+	s := atMinDPI(t, req)
 	buf, err := New("test").Render(context.Background(), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	img := buf.ToImage(8)
 	// Art slot origin is (60,132); sample well inside it.
-	got := color.NRGBAModel.Convert(img.At(200, 300)).(color.NRGBA)
+	got := color.NRGBAModel.Convert(img.At(s.Px(200), s.Px(300))).(color.NRGBA)
 	if !closeColor(got, magenta) {
 		t.Errorf("art region = %v, want magenta %v", got, magenta)
 	}
@@ -124,6 +157,7 @@ func TestRenderPlacesArt(t *testing.T) {
 
 func TestRenderCancelledContext(t *testing.T) {
 	req := renderBolt(t, nil)
+	atMinDPI(t, req)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := New("test").Render(ctx, *req); err == nil {

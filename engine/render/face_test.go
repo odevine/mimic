@@ -83,15 +83,29 @@ func TestRenderChoosesEachFacesLayers(t *testing.T) {
 			{Name: "Back Face", TypeLine: "Land", ColorIndicator: []card.Color{card.Blue}},
 		},
 	}
+	p := template.NewFSAssetProvider(dir)
+	m, err := p.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each face renders once at the smallest resolution, and every case samples
+	// that render at its native coordinate scaled down
+	s := m.ScaleForDPI(template.MinDPI)
+	renders := map[int]image.Image{}
 	at := func(face int, x, y int) color.NRGBA {
 		t.Helper()
-		buf, err := New("test").Render(context.Background(), template.RenderRequest{
-			Card: d, Face: face, Assets: template.NewFSAssetProvider(dir),
-		})
-		if err != nil {
-			t.Fatalf("Render face %d: %v", face, err)
+		img, ok := renders[face]
+		if !ok {
+			buf, err := New("test").Render(context.Background(), template.RenderRequest{
+				Card: d, Face: face, Assets: p, DPI: template.MinDPI,
+			})
+			if err != nil {
+				t.Fatalf("Render face %d: %v", face, err)
+			}
+			img = buf.ToImage(8)
+			renders[face] = img
 		}
-		return color.NRGBAModel.Convert(buf.ToImage(8).At(x, y)).(color.NRGBA)
+		return color.NRGBAModel.Convert(img.At(s.Px(x), s.Px(y))).(color.NRGBA)
 	}
 
 	cases := []struct {
@@ -144,11 +158,12 @@ func TestRenderPlacesArtAfterASkippedLayer(t *testing.T) {
 		}
 	}
 	d := &card.Data{Name: "A", TypeLine: "Creature", Layout: "transform", Faces: []card.Face{{Name: "A", TypeLine: "Creature"}, {Name: "B", TypeLine: "Creature"}}}
-	buf, err := New("test").Render(context.Background(), template.RenderRequest{Card: d, Art: art, Assets: template.NewFSAssetProvider(dir)})
+	s := m.ScaleForDPI(template.MinDPI)
+	buf, err := New("test").Render(context.Background(), template.RenderRequest{Card: d, Art: art, Assets: template.NewFSAssetProvider(dir), DPI: template.MinDPI})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := color.NRGBAModel.Convert(buf.ToImage(8).At(300, 300)).(color.NRGBA); !closeColor(got, magenta) {
+	if got := color.NRGBAModel.Convert(buf.ToImage(8).At(s.Px(300), s.Px(300))).(color.NRGBA); !closeColor(got, magenta) {
 		t.Errorf("art region on the front = %v, want the art %v", got, magenta)
 	}
 }
@@ -184,13 +199,20 @@ func TestRenderMirrorsALayerOnItsCondition(t *testing.T) {
 	}
 
 	d := &card.Data{Name: "A", TypeLine: "Creature", Layout: "transform", Faces: []card.Face{{Name: "A", TypeLine: "Creature"}, {Name: "B", TypeLine: "Creature"}}}
+	// Each face renders once and every check samples that render
+	renders := map[int]image.Image{}
 	alpha := func(face, x, y int) uint8 {
 		t.Helper()
-		buf, err := New("test").Render(context.Background(), template.RenderRequest{Card: d, Face: face, Assets: template.NewFSAssetProvider(dir)})
-		if err != nil {
-			t.Fatal(err)
+		img, ok := renders[face]
+		if !ok {
+			buf, err := New("test").Render(context.Background(), template.RenderRequest{Card: d, Face: face, Assets: template.NewFSAssetProvider(dir)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			img = buf.ToImage(8)
+			renders[face] = img
 		}
-		return color.NRGBAModel.Convert(buf.ToImage(8).At(x, y)).(color.NRGBA).A
+		return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA).A
 	}
 	right := placeholderWidth - 10
 	if alpha(0, 10, 10) == 0 || alpha(0, right, 10) != 0 {

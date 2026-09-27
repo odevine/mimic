@@ -391,6 +391,16 @@ body.resizing * {
   color: var(--text-faint);
 }
 
+/* The editor keeps a usable width, and the regions scroll sideways instead of
+   crushing it when the window is narrow */
+#mode-single .regions {
+  overflow-x: auto;
+}
+
+#mode-single [data-region="1"] {
+  min-width: 360px;
+}
+
 /* Single: editor */
 .editor-header {
   display: flex;
@@ -431,9 +441,22 @@ body.resizing * {
 
 .printing-trigger {
   max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  overflow: hidden;
 }
 
+.printing-trigger > * {
+  flex: none;
+}
+
+/* The printing's set and number give way first, so a long one ends in an
+   ellipsis inside the button instead of spilling past its edges */
 .printing-trigger .mono {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text);
 }
 
@@ -1000,6 +1023,25 @@ body.resizing * {
 
   .splitter {
     display: none;
+  }
+
+  /* Stacked, the preview sizes to the card plus the stage's padding, capped so
+     the card, activity strip, and toolbar fit on one screen, and it never
+     crops the card */
+  #mode-single .region.preview-region {
+    max-height: none;
+    container-type: inline-size;
+  }
+
+  #mode-single .stage {
+    --stage-h: min(calc((100cqw - 40px) * 88 / 63 + 40px), calc(100vh - var(--topbar-h) - var(--statusbar-h) - 120px));
+    flex: none;
+    height: var(--stage-h);
+    min-height: 240px;
+  }
+
+  #mode-single .stage.fit img.card {
+    max-height: calc(var(--stage-h) - 40px);
   }
 
   .stage {

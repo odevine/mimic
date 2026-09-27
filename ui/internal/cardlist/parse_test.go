@@ -1,4 +1,4 @@
-package main
+package cardlist
 
 import (
 	"reflect"
@@ -27,14 +27,14 @@ func TestSniffFormat(t *testing.T) {
 
 func TestParseLines(t *testing.T) {
 	text := "About\nName My Deck\n\nDeck\n4 Lightning Bolt (2X2) 117\n1x Cryptic Command\n// a comment\nOpt (XLN) 65 *F*\n\nSideboard:\n2 Rest in Peace\n?t:goblin c:r\n"
-	rows, format, err := parseList(text, "")
+	rows, format, err := Parse(text, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if format != formatArena {
 		t.Errorf("format = %q, want arena", format)
 	}
-	want := []listRow{
+	want := []Row{
 		{Line: 5, Text: "4 Lightning Bolt (2X2) 117", Qty: 4, Name: "Lightning Bolt", Set: "2x2", Number: "117", Group: "Deck"},
 		{Line: 6, Text: "1x Cryptic Command", Qty: 1, Name: "Cryptic Command", Group: "Deck"},
 		{Line: 8, Text: "Opt (XLN) 65 *F*", Qty: 1, Name: "Opt", Set: "xln", Number: "65", Group: "Deck"},
@@ -47,24 +47,24 @@ func TestParseLines(t *testing.T) {
 }
 
 func TestParseFormatOverride(t *testing.T) {
-	rows, _, err := parseList("1996 World Champion", formatNames)
+	rows, _, err := Parse("1996 World Champion", formatNames)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rows[0].Name != "1996 World Champion" || rows[0].Qty != 1 {
 		t.Errorf("names format read %+v", rows[0])
 	}
-	rows, _, _ = parseList("4 Lightning Bolt (2X2) 117", formatQuantity)
+	rows, _, _ = Parse("4 Lightning Bolt (2X2) 117", formatQuantity)
 	if rows[0].Name != "Lightning Bolt (2X2) 117" || rows[0].Set != "" {
 		t.Errorf("quantity format should keep the printing in the name, got %+v", rows[0])
 	}
-	if _, _, err := parseList("x", "yaml"); err == nil {
+	if _, _, err := Parse("x", "yaml"); err == nil {
 		t.Error("unknown format should fail")
 	}
 }
 
 func TestParseQuantityBounds(t *testing.T) {
-	rows, _, _ := parseList("0 Island\n5000 Forest", "")
+	rows, _, _ := Parse("0 Island\n5000 Forest", "")
 	if rows[0].Qty != 1 || rows[1].Qty != maxQuantity {
 		t.Errorf("quantities = %d, %d", rows[0].Qty, rows[1].Qty)
 	}
@@ -76,7 +76,7 @@ func TestParseCSV(t *testing.T) {
 		"Big Dragon,1,Creature — Dragon,9,9,yes,\n" +
 		"Grizzly Bears,2,,3,3,,\n" +
 		",,,,,,\n"
-	rows, format, err := parseList(text, "")
+	rows, format, err := Parse(text, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,17 +98,17 @@ func TestParseCSV(t *testing.T) {
 }
 
 func TestParseCSVNeedsKnownColumn(t *testing.T) {
-	if _, _, err := parseList("foo,bar\n1,2", formatCSV); err == nil {
+	if _, _, err := Parse("foo,bar\n1,2", formatCSV); err == nil {
 		t.Error("a header with no known column should fail")
 	}
 }
 
 func TestParseRowLimit(t *testing.T) {
 	text := ""
-	for range maxListRows + 1 {
+	for range MaxRows + 1 {
 		text += "Island\n"
 	}
-	if _, _, err := parseList(text, ""); err == nil {
+	if _, _, err := Parse(text, ""); err == nil {
 		t.Error("a list past the row limit should fail")
 	}
 }

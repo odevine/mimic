@@ -14,6 +14,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/ui/internal/carddata"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/scryfall"
@@ -70,7 +71,7 @@ type server struct {
 	// and resolved caches lookups for the session
 	resolveMu     sync.Mutex
 	resolveCancel context.CancelFunc
-	resolved      resolveCache
+	resolved      cardlist.Cache
 
 	// run is the latest batch run, kept after it finishes until the next starts
 	runMu  sync.Mutex

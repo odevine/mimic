@@ -18,6 +18,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -195,8 +196,8 @@ func (s *server) handleRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad run request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if len(body.Rows) > maxListRows {
-		http.Error(w, fmt.Sprintf("a run takes at most %d cards", maxListRows), http.StatusBadRequest)
+	if len(body.Rows) > cardlist.MaxRows {
+		http.Error(w, fmt.Sprintf("a run takes at most %d cards", cardlist.MaxRows), http.StatusBadRequest)
 		return
 	}
 	s.startRun(w, expandFaces(body.Rows), body.OutDir, body.Label)
@@ -440,7 +441,7 @@ func (s *server) renderRunCard(ctx context.Context, run *batchRun, i int) {
 		})
 	}
 
-	d := overlayFields(&row.Base, row.Fields)
+	d := cardlist.Overlay(&row.Base, row.Fields)
 	// Checked before the art download, which would be wasted on a face no
 	// template renders
 	if err := s.pipe.unsupported(d, row.Face); err != nil {
@@ -734,7 +735,7 @@ func expandFaces(rows []runRow) []runRow {
 	for _, row := range rows {
 		row.Face = 0
 		out = append(out, row)
-		n := len(template.Classify(overlayFields(&row.Base, row.Fields)))
+		n := len(template.Classify(cardlist.Overlay(&row.Base, row.Fields)))
 		for f := 1; f < n; f++ {
 			back := row
 			back.Face = f

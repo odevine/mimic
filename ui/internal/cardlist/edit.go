@@ -1,4 +1,4 @@
-package main
+package cardlist
 
 import (
 	"encoding/json"
@@ -7,10 +7,10 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
-// editFields is the editable half of a card: every field the center-pane form
+// Edits is the editable half of a card: every field the center-pane form
 // exposes, all as strings the way the form carries them. Colors is the raw
 // WUBRG letters; parseColors turns it into the card's color slice
-type editFields struct {
+type Edits struct {
 	Name      string `json:"name"`
 	ManaCost  string `json:"manaCost"`
 	Colors    string `json:"colors"`
@@ -28,10 +28,10 @@ type editFields struct {
 	Language  string `json:"language"`
 }
 
-// applyEdits returns a copy of base with the edited fields overlaid. base is
+// ApplyEdits returns a copy of base with the edited fields overlaid. base is
 // left untouched so the client can reset to it. The art is carried separately,
 // so the copied ArtworkURL is only a record and never refetched on a re-render
-func applyEdits(base *card.Data, e editFields) *card.Data {
+func ApplyEdits(base *card.Data, e Edits) *card.Data {
 	d := *base
 	d.Name = e.Name
 	d.ManaCost = e.ManaCost
@@ -51,13 +51,13 @@ func applyEdits(base *card.Data, e editFields) *card.Data {
 	return &d
 }
 
-// editsOf reads a card back into its editable fields, the inverse of applyEdits
-func editsOf(d *card.Data) editFields {
+// editsOf reads a card back into its editable fields, the inverse of ApplyEdits
+func editsOf(d *card.Data) Edits {
 	var colors strings.Builder
 	for _, c := range d.Colors {
 		colors.WriteString(string(c))
 	}
-	return editFields{
+	return Edits{
 		Name:      d.Name,
 		ManaCost:  d.ManaCost,
 		Colors:    colors.String(),
@@ -76,10 +76,10 @@ func editsOf(d *card.Data) editFields {
 	}
 }
 
-// overlayFields returns a copy of base with the named edit fields replaced, keyed
-// the way editFields marshals. Keys it does not know are ignored, so a partial
+// Overlay returns a copy of base with the named edit fields replaced, keyed
+// the way Edits marshals. Keys it does not know are ignored, so a partial
 // set from a CSV row or the review table changes only what it names
-func overlayFields(base *card.Data, fields map[string]string) *card.Data {
+func Overlay(base *card.Data, fields map[string]string) *card.Data {
 	if len(fields) == 0 {
 		d := *base
 		return &d
@@ -93,7 +93,7 @@ func overlayFields(base *card.Data, fields map[string]string) *card.Data {
 		}
 	}
 	raw, _ = json.Marshal(m)
-	var e editFields
+	var e Edits
 	_ = json.Unmarshal(raw, &e)
-	return applyEdits(base, e)
+	return ApplyEdits(base, e)
 }

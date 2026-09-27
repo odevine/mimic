@@ -1,4 +1,4 @@
-package main
+package cardlist
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type lookupBackend interface {
 
 // apiBackend answers from Scryfall's API through the card client
 type apiBackend struct {
-	src cardSource
+	src CardSource
 }
 
 func (b apiBackend) query(ctx context.Context, q string) ([]*card.Data, error) {
@@ -97,32 +97,23 @@ func (b localBackend) similar(ctx context.Context, name string) ([]*card.Data, e
 	return b.store.Similar(name, maxCandidates)
 }
 
-// resolver is how a resolve looks rows up: a primary backend, and a fallback
+// Resolver is how a resolve looks rows up: a primary backend, and a fallback
 // for a line the primary knows nothing about. Mode keys the session cache, so a
 // result from one source is not served as the other's
-type resolver struct {
+type Resolver struct {
 	mode     string
 	primary  lookupBackend
 	fallback lookupBackend
 }
 
-// Card data sources, as the settings store them
-const (
-	cardDataAPI   = "api"
-	cardDataLocal = "local"
-)
-
-// resolver picks the lookup source for a new resolve. The local copy is used
-// when it is chosen in settings and loaded, and the API otherwise
-func (s *server) resolver() resolver {
-	api := apiBackend{src: s.pipe.client}
-	if s.useLocalCards() {
-		return resolver{mode: cardDataLocal, primary: localBackend{store: s.cards, api: api}, fallback: api}
-	}
-	return resolver{mode: cardDataAPI, primary: api}
+// APIResolver looks every row up through Scryfall's API
+func APIResolver(src CardSource) Resolver {
+	return Resolver{mode: "api", primary: apiBackend{src: src}}
 }
 
-// useLocalCards reports whether lookups should read the local copy
-func (s *server) useLocalCards() bool {
-	return s.cards != nil && s.prefs.Settings().CardData == cardDataLocal && s.cards.Ready()
+// LocalResolver looks rows up in the local copy first, and asks the API about a
+// line the copy knows nothing about, such as a card newer than the download
+func LocalResolver(store *carddata.Store, src CardSource) Resolver {
+	api := apiBackend{src: src}
+	return Resolver{mode: "local", primary: localBackend{store: store, api: api}, fallback: api}
 }

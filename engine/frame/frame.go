@@ -101,9 +101,19 @@ func (k Keys) ConditionMet(condition string) bool {
 		return k.Front
 	case "back":
 		return k.Back
+	case "icon_left":
+		return k.TransformIcon != "" && !k.iconRight()
+	case "icon_right":
+		return k.iconRight()
 	default:
 		return false
 	}
+}
+
+// iconRight reports whether the transform icon sits at the right end of the
+// title bar, which a triangle back face prints in place of the left corner
+func (k Keys) iconRight() bool {
+	return k.Back && k.TransformIcon == triangleIcon
 }
 
 // Side is which face of a card is rendering, which a double-faced frame reads
@@ -158,28 +168,29 @@ func indicatorKey(colors []card.Color) string {
 	return dualKey(wubrgOnly(colors))
 }
 
-// transformIcons are the Scryfall frame effects that name a double-faced
-// card's corner icon, each the name of that icon's art
-var transformIcons = map[string]bool{
-	"sunmoondfc": true, "compasslanddfc": true, "originpwdfc": true,
-	"mooneldrazidfc": true, "convertdfc": true, "upsidedowndfc": true,
-	"fandfc": true,
+// transformIcons maps the Scryfall frame effects that name a double-faced
+// card's corner icon to the name of that icon's art. waxingandwaningmoondfc
+// prints much the same sun and moon, so it shares that art
+var transformIcons = map[string]string{
+	"sunmoondfc": "sunmoondfc", "compasslanddfc": "compasslanddfc", "originpwdfc": "originpwdfc",
+	"mooneldrazidfc": "mooneldrazidfc", "convertdfc": "convertdfc", "upsidedowndfc": "upsidedowndfc",
+	"fandfc": "fandfc", "waxingandwaningmoondfc": "sunmoondfc",
 }
 
-// defaultTransformIcon stands in for a card whose frame effects name no icon
-// there is art for, such as waxingandwaningmoondfc, which prints much the same
-// sun and moon
-const defaultTransformIcon = "sunmoondfc"
+// triangleIcon is the up and down triangle, filed under convertdfc. It stands
+// in for a card whose frame effects name no icon, since Scryfall lists none
+// for the transform cards printed since March of the Machine, which all print it
+const triangleIcon = "convertdfc"
 
 // transformIcon picks the first frame effect naming an icon, since a card can
 // list it beside unrelated effects such as legendary
 func transformIcon(effects []string) string {
 	for _, e := range effects {
-		if transformIcons[e] {
-			return e
+		if icon, ok := transformIcons[e]; ok {
+			return icon
 		}
 	}
-	return defaultTransformIcon
+	return triangleIcon
 }
 
 // frameColors is the WUBRG set that drives the colored slots: a land's produced

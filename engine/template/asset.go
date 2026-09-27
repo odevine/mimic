@@ -34,7 +34,8 @@ type LayerSpec struct {
 	Name string `json:"name"`
 	// Condition is one of the engine's fixed vocabulary: "", "legendary",
 	// "nonlegendary", "land", "nonland", "creature", "color_indicator",
-	// "front", "back", or a value the engine does not yet drive (nyx,
+	// "front", "back", "icon_left", "icon_right" (which side of the title bar
+	// the transform icon sits on), or a value the engine does not yet drive (nyx,
 	// companion, hollow_crown, fullart, divider, pt_dark), which renders the
 	// layer off. A comma-separated list such as "back,land" holds when every
 	// entry does

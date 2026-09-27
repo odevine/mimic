@@ -248,7 +248,8 @@ func TestTransformIconSlot(t *testing.T) {
 		effects []string
 		want    string
 	}{
-		{nil, "sunmoondfc"},
+		{nil, "convertdfc"},
+		{[]string{"legendary"}, "convertdfc"},
 		{[]string{"compasslanddfc"}, "compasslanddfc"},
 		{[]string{"legendary", "originpwdfc"}, "originpwdfc"},
 		{[]string{"waxingandwaningmoondfc"}, "sunmoondfc"},
@@ -261,5 +262,29 @@ func TestTransformIconSlot(t *testing.T) {
 	}
 	if got := Derive(&card.Data{FrameEffects: []string{"sunmoondfc"}}).Slot("transform_icon"); got != "" {
 		t.Errorf("single-faced icon = %q, want empty", got)
+	}
+}
+
+func TestTransformIconSide(t *testing.T) {
+	cases := []struct {
+		effects     []string
+		side        Side
+		left, right bool
+	}{
+		{nil, Front, true, false},
+		{nil, Back, false, true},
+		{[]string{"convertdfc"}, Back, false, true},
+		{[]string{"sunmoondfc"}, Back, true, false},
+		{[]string{"fandfc"}, Back, true, false},
+		{nil, Single, false, false},
+	}
+	for _, c := range cases {
+		k := DeriveFace(&card.Data{TypeLine: "Creature", FrameEffects: c.effects}, c.side)
+		if got := k.ConditionMet("icon_left"); got != c.left {
+			t.Errorf("icon_left for %v on side %d = %v, want %v", c.effects, c.side, got, c.left)
+		}
+		if got := k.ConditionMet("icon_right"); got != c.right {
+			t.Errorf("icon_right for %v on side %d = %v, want %v", c.effects, c.side, got, c.right)
+		}
 	}
 }

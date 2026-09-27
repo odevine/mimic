@@ -11,6 +11,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
 // routes registers every handler. API routes live under /api; everything else
@@ -319,13 +320,13 @@ type templateView struct {
 // and returns the manager rows, with each version's display label, active flag,
 // and trailing action resolved server-side so the frontend just renders them
 func (s *server) handleTemplates(w http.ResponseWriter, r *http.Request) {
-	idx, err := fetchIndex(r.Context())
+	idx, err := catalog.FetchIndex(r.Context())
 	if err != nil {
 		// No live catalog and no cache: still show local/registered rows
 		idx = nil
 	}
 	activeName, activeVersion := s.active()
-	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return looseDir(n) != "" }, isVersionCached)
+	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return looseDir(n) != "" }, catalog.IsCached)
 
 	views := make([]templateView, 0, len(rows))
 	for _, row := range rows {
@@ -379,7 +380,7 @@ func templateSource(name, version string) string {
 		return "placeholder"
 	case version == localVersion:
 		return "local"
-	case isVersionCached(name, version):
+	case catalog.IsCached(name, version):
 		return "cached"
 	default:
 		return "bundle"

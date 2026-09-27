@@ -1,4 +1,4 @@
-package main
+package catalog
 
 import (
 	"context"
@@ -21,22 +21,22 @@ import (
 // normal is about 199 MB), so this is generous
 const bundleDownloadTimeout = 15 * time.Minute
 
-// bundlePath is where a template version's bundle is cached. Versions sit side
+// BundlePath is where a template version's bundle is cached. Versions sit side
 // by side, so an update never overwrites a working bundle and a downgrade stays
 // possible. The version is in the filename, so the app never opens a bundle to
 // learn what it is
-func bundlePath(name, ver string) (string, error) {
-	dir, err := cacheDir()
+func BundlePath(name, ver string) (string, error) {
+	dir, err := Dir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, name, ver+".mimic"), nil
 }
 
-// cachedVersions lists the versions of a template already in the cache, newest
+// CachedVersions lists the versions of a template already in the cache, newest
 // first. Names come from the filenames, never from opening a bundle
-func cachedVersions(name string) ([]string, error) {
-	dir, err := cacheDir()
+func CachedVersions(name string) ([]string, error) {
+	dir, err := Dir()
 	if err != nil {
 		return nil, err
 	}
@@ -61,26 +61,26 @@ func cachedVersions(name string) ([]string, error) {
 // newestCachedBundle returns the path to the newest cached bundle of a template,
 // or ok=false when none is cached
 func newestCachedBundle(name string) (string, bool) {
-	versions, err := cachedVersions(name)
+	versions, err := CachedVersions(name)
 	if err != nil || len(versions) == 0 {
 		return "", false
 	}
-	path, err := bundlePath(name, versions[0])
+	path, err := BundlePath(name, versions[0])
 	if err != nil {
 		return "", false
 	}
 	return path, true
 }
 
-// pickCompatible returns the newest version of a template the running engine can
+// PickCompatible returns the newest version of a template the running engine can
 // render. Versions are newest first, so the first compatible one wins
-func pickCompatible(t catalogTemplate) (catalogVersion, bool) {
+func PickCompatible(t Template) (Version, bool) {
 	for _, v := range t.Versions {
 		if version.Satisfies(v.MinEngine) {
 			return v, true
 		}
 	}
-	return catalogVersion{}, false
+	return Version{}, false
 }
 
 // ensureTemplate makes sure the latest compatible version of a template is in
@@ -89,19 +89,19 @@ func pickCompatible(t catalogTemplate) (catalogVersion, bool) {
 // downloads and verifies one. Errors are returned, not fatal: the caller falls
 // back to whatever it already has
 func ensureTemplate(ctx context.Context, name string) (string, error) {
-	idx, err := fetchIndex(ctx)
+	idx, err := FetchIndex(ctx)
 	if err != nil {
 		return "", err
 	}
-	t, ok := idx.findTemplate(name)
+	t, ok := idx.Find(name)
 	if !ok {
 		return "", fmt.Errorf("template %q not in catalog", name)
 	}
-	v, ok := pickCompatible(t)
+	v, ok := PickCompatible(t)
 	if !ok {
 		return "", fmt.Errorf("no version of %q is compatible with engine %s", name, version.Version)
 	}
-	path, err := bundlePath(name, v.Version)
+	path, err := BundlePath(name, v.Version)
 	if err != nil {
 		return "", err
 	}
@@ -111,18 +111,18 @@ func ensureTemplate(ctx context.Context, name string) (string, error) {
 	return download(ctx, name, v, nil)
 }
 
-// ensureVersion makes sure one specific version of a template is in the cache
+// EnsureVersion makes sure one specific version of a template is in the cache
 // and returns its path. A cached copy is used as is; otherwise the catalog entry
 // for that exact version is downloaded and verified. progress may be nil
-func ensureVersion(ctx context.Context, name, version string, progress func(done, total int64)) (string, error) {
-	if isVersionCached(name, version) {
-		return bundlePath(name, version)
+func EnsureVersion(ctx context.Context, name, version string, progress func(done, total int64)) (string, error) {
+	if IsCached(name, version) {
+		return BundlePath(name, version)
 	}
-	idx, err := fetchIndex(ctx)
+	idx, err := FetchIndex(ctx)
 	if err != nil {
 		return "", err
 	}
-	t, ok := idx.findTemplate(name)
+	t, ok := idx.Find(name)
 	if !ok {
 		return "", fmt.Errorf("template %q not in catalog", name)
 	}
@@ -134,18 +134,18 @@ func ensureVersion(ctx context.Context, name, version string, progress func(done
 }
 
 // findVersion returns the catalog entry for one exact version of a template
-func findVersion(t catalogTemplate, version string) (catalogVersion, bool) {
+func findVersion(t Template, version string) (Version, bool) {
 	for _, v := range t.Versions {
 		if v.Version == version {
 			return v, true
 		}
 	}
-	return catalogVersion{}, false
+	return Version{}, false
 }
 
-// isVersionCached reports whether a specific version is already in the cache
-func isVersionCached(name, version string) bool {
-	path, err := bundlePath(name, version)
+// IsCached reports whether a specific version is already in the cache
+func IsCached(name, version string) bool {
+	path, err := BundlePath(name, version)
 	if err != nil {
 		return false
 	}
@@ -153,10 +153,10 @@ func isVersionCached(name, version string) bool {
 	return err == nil
 }
 
-// newestCachedVersion returns the newest cached version of a template, or
+// NewestCachedVersion returns the newest cached version of a template, or
 // ok=false when none is cached
-func newestCachedVersion(name string) (string, bool) {
-	versions, err := cachedVersions(name)
+func NewestCachedVersion(name string) (string, bool) {
+	versions, err := CachedVersions(name)
 	if err != nil || len(versions) == 0 {
 		return "", false
 	}
@@ -183,8 +183,8 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 // reaches the cache. The download streams through the hash, so a large bundle
 // never sits fully in memory. progress, when non-nil, is called with the bytes
 // received so far and the total, for a progress bar
-func download(ctx context.Context, name string, v catalogVersion, progress func(done, total int64)) (string, error) {
-	dst, err := bundlePath(name, v.Version)
+func download(ctx context.Context, name string, v Version, progress func(done, total int64)) (string, error) {
+	dst, err := BundlePath(name, v.Version)
 	if err != nil {
 		return "", err
 	}

@@ -46,6 +46,9 @@
   --topbar-h: 40px;
   --statusbar-h: 28px;
   --rail-w: 76px;
+  /* The narrowest the single-card editor is laid out at, which the splitters
+     leave room for */
+  --editor-min-w: 360px;
 
   --r-control: 6px;
   --r-panel: 8px;

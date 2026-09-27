@@ -12,19 +12,57 @@ function fixedNeighbor(splitter) {
   return { region: next, sign: -1 };
 }
 
-function clampWidth(regions, w) {
-  const max = Math.max(MIN, regions.clientWidth * 0.55);
-  return Math.round(Math.min(Math.max(w, MIN), max));
+// regionMin is the narrowest a fixed region may go: MIN, or its CSS min-width
+// when that is larger, such as a preview whose toolbar needs the room
+function regionMin(region) {
+  return Math.max(MIN, parseFloat(getComputedStyle(region).minWidth) || 0);
+}
+
+// clampWidth keeps a fixed region between its minimum and the room the rest of
+// the row leaves it: the other fixed regions, the splitters, and the grow
+// region's own minimum, read from its --grow-min. So a drag never pushes the
+// row past the window, and the regions never scroll sideways as one strip
+function clampWidth(regions, region, w) {
+  let others = 0;
+  let growMin = MIN;
+  for (const el of regions.children) {
+    if (el === region) continue;
+    if (el.classList.contains("grow")) {
+      growMin = parseFloat(getComputedStyle(el).getPropertyValue("--grow-min")) || MIN;
+    } else {
+      others += el.getBoundingClientRect().width;
+    }
+  }
+  const min = regionMin(region);
+  const room = regions.clientWidth - others - growMin;
+  const max = Math.max(min, Math.min(regions.clientWidth * 0.55, room));
+  return Math.round(Math.min(Math.max(w, min), max));
 }
 
 // initSplitters wires every splitter in regions. widths is the persisted list
 // of fixed-region widths in document order, and onChange receives the new list
 export function initSplitters(regions, widths, onChange) {
   const fixed = [...regions.querySelectorAll(":scope > .region.fixed")];
-  (widths || []).forEach((w, i) => {
-    if (fixed[i] && w > 0) fixed[i].style.width = `${clampWidth(regions, w)}px`;
-  });
-  const report = () => onChange(fixed.map((r) => r.getBoundingClientRect().width));
+  // preferred holds the width each region was last set to, so a window that
+  // narrows and widens again gives the regions back the room they had
+  const preferred = fixed.map((r, i) => ((widths || [])[i] > 0 ? widths[i] : r.getBoundingClientRect().width));
+
+  // fit sets every fixed region to its preferred width, then clamps each to
+  // what the row has room for now
+  const fit = () => {
+    fixed.forEach((r, i) => (r.style.width = `${Math.max(preferred[i], regionMin(r))}px`));
+    fixed.forEach((r) => (r.style.width = `${clampWidth(regions, r, r.getBoundingClientRect().width)}px`));
+  };
+  fit();
+  // Watching the row rather than the window fits after layout has settled,
+  // including a switch between the stacked and side by side layouts
+  new ResizeObserver(fit).observe(regions);
+
+  // settle records a region's new width as its preference and persists them all
+  const settle = (region) => {
+    preferred[fixed.indexOf(region)] = region.getBoundingClientRect().width;
+    onChange(preferred.map(Math.round));
+  };
 
   for (const s of regions.querySelectorAll(":scope > .splitter")) {
     const { region, sign } = fixedNeighbor(s);
@@ -39,14 +77,14 @@ export function initSplitters(regions, widths, onChange) {
       document.body.classList.add("resizing");
 
       const move = (ev) => {
-        region.style.width = `${clampWidth(regions, startW + sign * (ev.clientX - startX))}px`;
+        region.style.width = `${clampWidth(regions, region, startW + sign * (ev.clientX - startX))}px`;
       };
       const up = () => {
         s.removeEventListener("pointermove", move);
         s.removeEventListener("pointerup", up);
         s.classList.remove("dragging");
         document.body.classList.remove("resizing");
-        report();
+        settle(region);
       };
       s.addEventListener("pointermove", move);
       s.addEventListener("pointerup", up);
@@ -56,8 +94,8 @@ export function initSplitters(regions, widths, onChange) {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
       const d = (e.key === "ArrowRight" ? STEP : -STEP) * sign;
-      region.style.width = `${clampWidth(regions, region.getBoundingClientRect().width + d)}px`;
-      report();
+      region.style.width = `${clampWidth(regions, region, region.getBoundingClientRect().width + d)}px`;
+      settle(region);
     });
   }
 }

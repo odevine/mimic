@@ -391,13 +391,20 @@ body.resizing * {
   color: var(--text-faint);
 }
 
-/* The editor keeps a usable width, and the regions scroll sideways instead of
-   crushing it when the window is narrow */
-#mode-single .regions {
+/* The editor keeps a usable width. When the window is too narrow for it, the
+   middle pane scrolls sideways on its own and the other panes stay put */
+#mode-single [data-region="1"] {
   overflow-x: auto;
+  --grow-min: var(--editor-min-w);
 }
 
-#mode-single [data-region="1"] {
+#mode-single [data-region="1"] > * {
+  min-width: var(--editor-min-w);
+}
+
+/* The preview never narrows past its toolbar, which would otherwise spill out
+   and widen the page */
+#mode-single .preview-region {
   min-width: 360px;
 }
 
@@ -1030,6 +1037,7 @@ body.resizing * {
      crops the card */
   #mode-single .region.preview-region {
     max-height: none;
+    min-width: 0;
     container-type: inline-size;
   }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/version"
+	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
 // defaultVersionSatisfied is the production engine-compatibility check
@@ -42,7 +43,7 @@ const unsupportedReason = "not supported by this build"
 // satisfies its minEngine. A loose developer directory contributes a
 // synthetic local version, and a registered template with local assets but
 // no catalog entry still appears, so an offline developer sees it
-func buildTemplateRows(idx *index, registered []template.Registration, hasLocal func(name string) bool, isCached func(name, ver string) bool) []templateRow {
+func buildTemplateRows(idx *catalog.Index, registered []template.Registration, hasLocal func(name string) bool, isCached func(name, ver string) bool) []templateRow {
 	descriptions := make(map[string]string, len(registered))
 	for _, r := range registered {
 		descriptions[r.Name] = r.Description
@@ -89,7 +90,7 @@ func localRow(renderable bool) versionRow {
 }
 
 // catalogRow turns a catalog version into a model row, deciding selectability
-func catalogRow(v catalogVersion, renderable, cached bool) versionRow {
+func catalogRow(v catalog.Version, renderable, cached bool) versionRow {
 	r := versionRow{version: v.Version, cached: cached}
 	switch {
 	case !renderable:

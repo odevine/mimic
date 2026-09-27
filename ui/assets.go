@@ -11,6 +11,7 @@ import (
 	"github.com/odevine/mimic/engine/template"
 	_ "github.com/odevine/mimic/engine/template/all" // registers every template
 	"github.com/odevine/mimic/engine/version"
+	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
 // looseDirBases are the roots under which a template's loose developer assets
@@ -57,7 +58,7 @@ func resolveActiveTemplate(name string) (*activeTemplate, assetSource, error) {
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, sourceLoose, nil
 	}
-	if ver, ok := newestCachedVersion(name); ok {
+	if ver, ok := catalog.NewestCachedVersion(name); ok {
 		if at, err := activeFromCachedBundle(name, ver, tmpl); err == nil {
 			return at, sourceBundle, nil
 		} else {
@@ -90,7 +91,7 @@ func activeFromVersion(ctx context.Context, name, version string, progress func(
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, nil
 	}
-	if _, err := ensureVersion(ctx, name, version, progress); err != nil {
+	if _, err := catalog.EnsureVersion(ctx, name, version, progress); err != nil {
 		return nil, err
 	}
 	return activeFromCachedBundle(name, version, tmpl)
@@ -100,15 +101,15 @@ func activeFromVersion(ctx context.Context, name, version string, progress func(
 // can render, downloading it when needed. It is the background-update path, so a
 // missing catalog or no compatible version is a returned error the caller logs
 func autoLatestActive(ctx context.Context, name string) (*activeTemplate, error) {
-	idx, err := fetchIndex(ctx)
+	idx, err := catalog.FetchIndex(ctx)
 	if err != nil {
 		return nil, err
 	}
-	t, ok := idx.findTemplate(name)
+	t, ok := idx.Find(name)
 	if !ok {
 		return nil, fmt.Errorf("template %q not in catalog", name)
 	}
-	v, ok := pickCompatible(t)
+	v, ok := catalog.PickCompatible(t)
 	if !ok {
 		return nil, fmt.Errorf("no version of %q is compatible with engine %s", name, version.Version)
 	}
@@ -117,7 +118,7 @@ func autoLatestActive(ctx context.Context, name string) (*activeTemplate, error)
 
 // activeFromCachedBundle opens a cached bundle and pairs it with a template
 func activeFromCachedBundle(name, version string, tmpl template.Template) (*activeTemplate, error) {
-	path, err := bundlePath(name, version)
+	path, err := catalog.BundlePath(name, version)
 	if err != nil {
 		return nil, err
 	}

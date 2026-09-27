@@ -6,12 +6,14 @@ import (
 	"image"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/scryfall"
 )
@@ -118,6 +120,24 @@ func newServer() *server {
 	return s
 }
 
+// userConfigDir locates the per-OS user config directory that prefs, the
+// template cache and card data all sit under. It is a var so a test can
+// redirect them to a temporary directory, since os.UserConfigDir does not honor
+// an override on every OS
+var userConfigDir = os.UserConfigDir
+
+// init places the template cache under userConfigDir, read at call time so a
+// test that redirects the config directory redirects the cache too
+func init() {
+	catalog.Dir = func() (string, error) {
+		base, err := userConfigDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(base, "mimic", "templates"), nil
+	}
+}
+
 // loadPrefs reads prefs.json beside the bundle cache under the per-OS user
 // config directory. It goes through userConfigDir so a test can redirect it the
 // same way the cache does, and a missing config directory just disables saving
@@ -135,7 +155,7 @@ func loadPrefs() *prefs.Store {
 // to the default network-free chain for normal
 func startupTemplate(p *prefs.Store) (*activeTemplate, assetSource) {
 	name, ver := p.Template()
-	restorable := name != "" && ((ver == localVersion && looseDir(name) != "") || isVersionCached(name, ver))
+	restorable := name != "" && ((ver == localVersion && looseDir(name) != "") || catalog.IsCached(name, ver))
 	if restorable {
 		if at, err := activeFromVersion(context.Background(), name, ver, nil); err == nil {
 			return at, sourceExplicit
@@ -295,7 +315,7 @@ func (s *server) doRender(j *job, d *card.Data, face, dpi int) {
 // job. With install set it only downloads, and the active template stays
 func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
 	var progress func(done, total int64)
-	if !isVersionCached(name, version) && version != localVersion {
+	if !catalog.IsCached(name, version) && version != localVersion {
 		progress = throttleBytes(func(step string, frac float64) {
 			j.emit(jobEvent{Step: step, Frac: frac})
 		})
@@ -305,7 +325,7 @@ func (s *server) doSelectTemplate(j *job, name, version string, install bool) {
 			j.emit(jobEvent{Done: true})
 			return
 		}
-		if _, err := ensureVersion(context.Background(), name, version, progress); err != nil {
+		if _, err := catalog.EnsureVersion(context.Background(), name, version, progress); err != nil {
 			j.emit(jobEvent{Done: true, Err: err.Error()})
 			return
 		}

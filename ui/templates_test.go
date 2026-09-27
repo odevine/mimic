@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
-// catalog builds a one-template index for the row tests
-func catalog(name string, versions ...catalogVersion) *index {
-	return &index{Schema: 1, Templates: []catalogTemplate{{
+// oneTemplate builds a one-template index for the row tests
+func oneTemplate(name string, versions ...catalog.Version) *catalog.Index {
+	return &catalog.Index{Schema: 1, Templates: []catalog.Template{{
 		Name:     name,
 		Latest:   versions[0].Version,
 		Versions: versions,
@@ -39,12 +40,12 @@ func TestBuildTemplateRows(t *testing.T) {
 	templateVersionSatisfied = func(minEngine string) bool { return minEngine != "0.4.0" }
 	defer func() { templateVersionSatisfied = old }()
 
-	idx := &index{Schema: 1, Templates: []catalogTemplate{
-		{Name: "normal", Latest: "0.2.0", Versions: []catalogVersion{
+	idx := &catalog.Index{Schema: 1, Templates: []catalog.Template{
+		{Name: "normal", Latest: "0.2.0", Versions: []catalog.Version{
 			{Version: "0.2.0", MinEngine: "0.4.0"}, // incompatible
 			{Version: "0.1.0", MinEngine: "0.3.0"}, // compatible
 		}},
-		{Name: "future", Latest: "1.0.0", Versions: []catalogVersion{
+		{Name: "future", Latest: "1.0.0", Versions: []catalog.Version{
 			{Version: "1.0.0", MinEngine: "0.3.0"}, // compatible engine but unregistered
 		}},
 	}}
@@ -78,7 +79,7 @@ func TestBuildTemplateRows(t *testing.T) {
 }
 
 func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
-	idx := catalog("normal", catalogVersion{Version: "0.1.0", MinEngine: "0.3.0"})
+	idx := oneTemplate("normal", catalog.Version{Version: "0.1.0", MinEngine: "0.3.0"})
 	rows := buildTemplateRows(idx, []template.Registration{{Name: "normal", Description: "a test template"}},
 		func(n string) bool { return n == "normal" },
 		func(n, v string) bool { return false })

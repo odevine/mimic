@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/catalog/catalogtest"
 )
 
 // withEmptyAssetChain points the loose-dir roots at nothing and the cache at a
@@ -39,8 +43,8 @@ func TestResolvePrefersCachedBundle(t *testing.T) {
 	withEmptyAssetChain(t)
 
 	// Seed the cache with a valid bundle so the middle tier wins
-	bundle, _ := tinyBundle(t)
-	dst, err := bundlePath("normal", "0.1.0")
+	bundle, _ := catalogtest.Bundle(t)
+	dst, err := catalog.BundlePath("normal", "0.1.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,5 +95,37 @@ func TestResolvePrefersLooseDir(t *testing.T) {
 	}
 	if at.version != localVersion {
 		t.Errorf("version = %q, want %q", at.version, localVersion)
+	}
+}
+
+func TestActiveFromVersionDownloadsAndBuilds(t *testing.T) {
+	withEmptyAssetChain(t)
+	srv := catalogtest.Serve(t)
+	oldURL := catalog.IndexURL
+	catalog.IndexURL = srv.IndexURL
+	t.Cleanup(func() { catalog.IndexURL = oldURL })
+
+	var sawProgress bool
+	progress := func(done, total int64) { sawProgress = true }
+
+	at, err := activeFromVersion(context.Background(), "normal", "0.1.0", progress)
+	if err != nil {
+		t.Fatalf("activeFromVersion: %v", err)
+	}
+	defer at.cleanup()
+	if at.name != "normal" || at.version != "0.1.0" {
+		t.Errorf("active = %s %s, want normal 0.1.0", at.name, at.version)
+	}
+	if at.template == nil {
+		t.Fatal("active template is nil")
+	}
+	if _, err := at.provider.Manifest(); err != nil {
+		t.Fatalf("provider Manifest: %v", err)
+	}
+	if !sawProgress {
+		t.Error("progress callback was never called during a download")
+	}
+	if !catalog.IsCached("normal", "0.1.0") {
+		t.Error("version not cached after activeFromVersion")
 	}
 }

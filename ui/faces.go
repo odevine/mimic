@@ -12,6 +12,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
@@ -40,7 +41,7 @@ func installed(name string) bool {
 	if looseDir(name) != "" {
 		return true
 	}
-	_, ok := newestCachedVersion(name)
+	_, ok := catalog.NewestCachedVersion(name)
 	return ok
 }
 
@@ -105,7 +106,7 @@ func (p *renderPipeline) load(c prefs.TemplateChoice) (*activeTemplate, error) {
 	}
 	var at *activeTemplate
 	var err error
-	if c.Version != "" && (isVersionCached(c.Name, c.Version) || (c.Version == localVersion && looseDir(c.Name) != "")) {
+	if c.Version != "" && (catalog.IsCached(c.Name, c.Version) || (c.Version == localVersion && looseDir(c.Name) != "")) {
 		at, err = activeFromVersion(context.Background(), c.Name, c.Version, nil)
 	} else {
 		at, _, err = resolveActiveTemplate(c.Name)
@@ -261,7 +262,7 @@ func installedVersions(name string) []string {
 	if looseDir(name) != "" {
 		out = append(out, localVersion)
 	}
-	cached, _ := cachedVersions(name)
+	cached, _ := catalog.CachedVersions(name)
 	return append(out, cached...)
 }
 

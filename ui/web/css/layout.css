@@ -261,8 +261,31 @@
   z-index: 2;
 }
 
+/* The grab handle, a short pill centered on the bar. It only marks where to
+   grab, and the whole bar stays draggable through the hit area above */
+.splitter::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 32px;
+  border-radius: 3px;
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+  transition: background-color var(--t-hover);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .splitter:hover,
 .splitter.dragging {
+  background: var(--accent);
+}
+
+.splitter:hover::before,
+.splitter.dragging::before,
+.splitter:focus-visible::before {
   background: var(--accent);
 }
 

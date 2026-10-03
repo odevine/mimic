@@ -78,7 +78,8 @@ export const api = {
   resolve: (text, format) => send("POST", "/api/resolve", { text, format }),
   resolveEvents: (jobId, onStep) => watchJob(`/api/resolve/${jobId}/events`, onStep),
 
-  run: (rows, outDir, label) => send("POST", "/api/run", { rows, outDir, label }),
+  // run starts a batch. mpc, { stock, foil }, makes it an MPC Autofill project
+  run: (rows, outDir, label, mpc) => send("POST", "/api/run", { rows, outDir, label, mpc }),
   latestRun: () => fetch("/api/run").then((r) => (r.status === 204 ? null : json(r))),
   runEvents: (id, onStep) => watchJob(`/api/run/${id}/events`, onStep),
   runImageURL: (id, n) => `/api/run/${id}/image/${n}`,
@@ -87,6 +88,10 @@ export const api = {
   openRunFolder: (id) => fetch(`/api/run/${id}/open`, { method: "POST" }),
 
   listDir: (path) => get(`/api/fs/list?path=${encodeURIComponent(path || "")}`),
+
+  mpc: () => get("/api/mpc"),
+  putCardback: (file) => fetch(`/api/mpc/cardback?name=${encodeURIComponent(file.name)}`, { method: "PUT", body: file }).then(json),
+  cardbackURL: () => `/api/mpc/cardback?ts=${Date.now()}`,
 
   // cardData reports the local copy of Scryfall bulk data and what a download
   // would fetch, and downloadCardData starts a download job

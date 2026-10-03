@@ -71,6 +71,7 @@ var features = []feature{
 	{key: "settings.filenameRegex", state: gatePlanned, reason: "Arrives with rendering from your art in v1.0"},
 	{key: "settings.density", state: gatePlanned, reason: "Coming in v1.0"},
 	{key: "settings.restoreSession", state: gatePlanned, reason: "Coming in v1.0"},
+	{key: "output.mpc", state: gateLive},
 	{key: "output.pdf", state: gatePlanned, reason: "Print sheets are planned after v1.0"},
 }
 

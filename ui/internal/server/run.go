@@ -12,11 +12,12 @@ import (
 	"github.com/odevine/mimic/ui/internal/cardlist"
 )
 
-// runBody is the POST /api/run payload
+// runBody is the POST /api/run payload. MPC makes it an MPC Autofill project
 type runBody struct {
 	Rows   []batch.Row `json:"rows"`
 	OutDir string      `json:"outDir"`
 	Label  string      `json:"label"`
+	MPC    *mpcOptions `json:"mpc,omitempty"`
 }
 
 // currentRun returns the latest run, which may have finished, and the job its
@@ -46,11 +47,21 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("a run takes at most %d cards", cardlist.MaxRows), http.StatusBadRequest)
 		return
 	}
-	s.startRun(w, batch.ExpandFaces(body.Rows), body.OutDir, body.Label)
+	rows := batch.ExpandFaces(body.Rows)
+	var project *batch.Project
+	if body.MPC != nil && len(rows) > 0 {
+		var err error
+		if project, err = s.planProject(rows, *body.MPC); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	s.startRun(w, rows, body.OutDir, body.Label, project)
 }
 
 // handleRetryRun starts a fresh run from the cards that failed in the latest
-// one, into the same folder, which is the usual fix after a network blip
+// one, into the same folder, which is the usual fix after a network blip. A
+// retried project keeps its layout, so it can finish the order file
 func (s *Server) handleRetryRun(w http.ResponseWriter, r *http.Request) {
 	prev, _, ok := s.runByID(w, r)
 	if !ok {
@@ -60,11 +71,12 @@ func (s *Server) handleRetryRun(w http.ResponseWriter, r *http.Request) {
 	if label != "" {
 		label += ", retried"
 	}
-	s.startRun(w, prev.Failed(), prev.OutDir(), label)
+	rows, project := prev.Retry()
+	s.startRun(w, rows, prev.OutDir(), label, project)
 }
 
 // startRun validates a run and starts it, answering with its first snapshot
-func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label string) {
+func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label string, project *batch.Project) {
 	if len(rows) == 0 {
 		http.Error(w, "the run has no cards", http.StatusBadRequest)
 		return
@@ -74,7 +86,6 @@ func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	dpi := s.renderDPI(targetOutput)
 	if m, err := s.pipe.Manifest(); err == nil {
 		dpi = m.ClampDPI(dpi)
@@ -88,6 +99,14 @@ func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label
 		http.Error(w, "a run is already in progress", http.StatusConflict)
 		return
 	}
+	// Only once no other run is writing, since it clears the old order file
+	if project != nil {
+		if err := project.Prepare(dir); err != nil {
+			s.runMu.Unlock()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	s.runSeq++
 	run := batch.New(rows, batch.Options{
 		ID:            "run-" + strconv.FormatUint(s.runSeq, 10),
@@ -99,6 +118,7 @@ func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label
 		Concurrency:   batch.Concurrency(s.prefs.Settings().Concurrency),
 		ArtTimeout:    netTimeout,
 		RenderTimeout: renderTimeout,
+		Project:       project,
 		Emit: func(e batch.Event) {
 			j.emit(jobEvent{Step: e.Step, Frac: e.Frac, Card: e.Card, Log: e.Log, Done: e.Done})
 		},

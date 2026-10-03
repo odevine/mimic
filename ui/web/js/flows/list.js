@@ -4,6 +4,7 @@ import { app, signal, effect, batch } from "../state.js";
 import { keyedRows } from "../components/keyed.js";
 import { syncChips } from "../components/chips.js";
 import { openFolderPicker } from "../components/folderPicker.js";
+import { openPopover, closePopover } from "../components/popover.js";
 import { toast } from "../components/toast.js";
 import { unsupportedBy, partlyUnsupportedBy, faceSupport } from "../supports.js";
 
@@ -190,6 +191,9 @@ function counts() {
   // unsupportedIncluded is what the skip note counts, since an unticked row is
   // skipped for its own reason
   c.unsupportedIncluded = 0;
+  // partialIncluded counts renderable cards with a face no template renders,
+  // which an MPC Autofill project cannot take
+  c.partialIncluded = 0;
   for (const row of store.rows.peek()) {
     const s = row.state.peek();
     const status = effectiveStatus(s);
@@ -199,6 +203,7 @@ function counts() {
     if (needsAttention(s)) c.attention++;
     if (renderable(s)) {
       c.render++;
+      if (status === "partial") c.partialIncluded++;
       // A run renders each face of a double-faced card as its own card
       c.faces += faceSupport(s.card).renderable;
       c.cards += row.qty;
@@ -451,9 +456,23 @@ async function render() {
     if (!renderable(s)) continue;
     rows.push({ name: s.card.Name, qty: row.qty, group: row.group, base: s.card, fields: row.fields || undefined });
   }
+  let mpcOpts;
+  if (mpcMode()) {
+    // A double-faced card prints its own back, so only single faces need one.
+    // A card sent without shapes is left to the server, which knows its faces
+    if (!mpc.peek()) await loadMPC();
+    const info = mpc.peek();
+    const needsBack = rows.some((r) => r.base.shapes?.length === 1);
+    if (!info || (needsBack && !info.cardback)) {
+      toast("Choose a cardback for the MPC Autofill project first", "err");
+      openMPCOptions();
+      return;
+    }
+    mpcOpts = { stock: mpcStock(), foil: mpcFoil() };
+  }
   $("list-render").disabled = true;
   try {
-    const run = await api.run(rows, dir, store.source.peek());
+    const run = await api.run(rows, dir, store.source.peek(), mpcOpts);
     rememberOutputDir(dir);
     document.dispatchEvent(new CustomEvent("mimic:run-started", { detail: run }));
   } catch (err) {
@@ -470,6 +489,124 @@ function pickFolder() {
     recent: s.recentOutputDirs || [],
     onChoose: (dir) => rememberOutputDir(dir),
   });
+}
+
+// --- MPC Autofill project ---
+
+const mpc = signal(null); // GET /api/mpc: { stocks, maxCards, cardback }
+
+// loadMPC reads the project options, and is tried again wherever they are
+// needed, so one failed load at startup does not stick
+async function loadMPC() {
+  try {
+    mpc.value = await api.mpc();
+  } catch {
+    // The server checks every project it is sent, so this only costs the options
+  }
+}
+
+const mpcMode = () => app.settings.value.outputFormat === "mpc";
+
+function mpcStock() {
+  const stocks = mpc.value?.stocks || [];
+  const s = app.settings.value.mpcStock;
+  return stocks.includes(s) ? s : stocks[0] || "";
+}
+
+// P10 plastic has no foil, so its foil setting is ignored rather than cleared
+const mpcFoil = () => !!app.settings.value.mpcFoil && !mpcStock().startsWith("(P10)");
+
+// stockCode is the short form of a stock, S30 for "(S30) Standard Smooth"
+const stockCode = (stock) => stock.match(/^\((\w+)\)/)?.[1] || stock;
+
+function saveSetting(patch) {
+  app.settings.value = { ...app.settings.peek(), ...patch };
+  api.saveSettings(app.settings.peek()).catch(() => {});
+}
+
+// mpcOptions builds the options a project takes. It is one builder so the
+// options can move out of the popover into the footer without a rewrite
+function mpcOptions(onChange) {
+  const info = mpc.peek();
+  if (!info) return h("p", { class: "dim" }, "Could not read the MPC Autofill options.");
+
+  const stock = h("select", {
+    "aria-label": "Cardstock",
+    onChange: (e) => {
+      saveSetting({ mpcStock: e.target.value });
+      onChange();
+    },
+  });
+  for (const s of info.stocks) stock.append(new Option(s, s));
+  stock.value = mpcStock();
+
+  const plastic = mpcStock().startsWith("(P10)");
+  const foil = h("input", {
+    type: "checkbox",
+    checked: mpcFoil(),
+    disabled: plastic,
+    onChange: (e) => {
+      saveSetting({ mpcFoil: e.target.checked });
+      onChange();
+    },
+  });
+
+  const file = h("input", {
+    type: "file",
+    accept: "image/png,image/jpeg",
+    hidden: true,
+    onChange: async (e) => {
+      const f = e.target.files[0];
+      e.target.value = "";
+      if (!f) return;
+      try {
+        mpc.value = await api.putCardback(f);
+        onChange();
+      } catch (err) {
+        toast(err.message, "err", 6000);
+      }
+    },
+  });
+  const cb = info.cardback;
+  const cardback = h(
+    "div",
+    { class: "mpc-cardback" },
+    cb ? h("img", { class: "mpc-thumb", src: api.cardbackURL(), alt: "" }) : null,
+    h(
+      "div",
+      { class: "control" },
+      cb ? h("span", { class: "truncate" }, cb.name) : h("span", { class: "faint" }, "None chosen"),
+      cb ? h("span", { class: "note tabular" }, `${cb.width} × ${cb.height} px · ${cb.dpi} dpi`) : null,
+      h("button", { class: "btn subtle", type: "button", onClick: () => file.click() }, icon("upload"), cb ? "Change…" : "Choose image…"),
+      file,
+    ),
+  );
+
+  return h(
+    "div",
+    { class: "mpc-options" },
+    h("div", { class: "field" }, h("label", {}, "Stock"), h("div", { class: "control" }, stock)),
+    h(
+      "div",
+      { class: "field" },
+      h("span", { class: "label" }, "Foil"),
+      h("div", { class: "control" }, h("label", { class: "control-row mpc-check" }, foil, h("span", { class: plastic ? "faint" : "" }, plastic ? "Plastic has no foil" : "Foil finish"))),
+    ),
+    h("div", { class: "field" }, h("span", { class: "label" }, "Cardback"), cardback),
+    h(
+      "p",
+      { class: "note dim" },
+      `Up to ${info.maxCards} cards. Open the folder in MPC Autofill as a local folder, then import cards.xml, or point its desktop tool at the folder.`,
+    ),
+  );
+}
+
+async function openMPCOptions() {
+  if (!mpc.peek()) await loadMPC();
+  const anchor = $("list-mpc");
+  let el;
+  const refresh = () => el && el.replaceChildren(mpcOptions(refresh));
+  el = openPopover(anchor, mpcOptions(refresh), { align: "start", cls: "mpc-popover", focus: false });
 }
 
 // --- source ---
@@ -544,6 +681,11 @@ function initReview() {
     bump();
   });
   $("list-output").addEventListener("click", pickFolder);
+  $("list-out-format").addEventListener("change", (e) => {
+    closePopover();
+    saveSetting({ outputFormat: e.target.value });
+  });
+  $("list-mpc").addEventListener("click", openMPCOptions);
   $("list-render").addEventListener("click", render);
 
   $("list-review").addEventListener("keydown", (e) => {
@@ -604,7 +746,22 @@ function initReview() {
 
     const skipped = c.total - c.render - store.rows.peek().filter((r) => r.state.peek().excluded).length;
     $("list-render-label").textContent = c.faces ? `Render ${c.faces} ${c.faces === 1 ? "card" : "cards"}` : "Render";
-    $("list-render").disabled = !!res || !c.render;
+    // An MPC Autofill project counts copies, and needs every face of a card,
+    // so the server refuses a project too big or with a face no template renders
+    const max = mpcMode() && mpc.value ? mpc.value.maxCards : 0;
+    const over = max > 0 && c.cards > max;
+    const partial = max > 0 ? c.partialIncluded : 0;
+    const count = $("list-mpc-count");
+    count.hidden = !max;
+    // Over the limit is named first, since unticking cards can fix both
+    count.textContent = partial && !over ? `${partial} partly unsupported` : `${c.cards} of ${max} cards`;
+    count.classList.toggle("err-text", over || partial > 0);
+    count.dataset.tip = over
+      ? "An MPC Autofill project holds at most this many cards, so split the list"
+      : partial
+        ? "A project needs both faces of a double-faced card, so untick these or install a template for their other face"
+        : "";
+    $("list-render").disabled = !!res || !c.render || over || partial > 0;
     const attention = skipped - c.unsupportedIncluded;
     const reasons = [];
     if (attention > 0) reasons.push(`${attention} ${attention === 1 ? "row needs" : "rows need"} attention`);
@@ -627,6 +784,19 @@ function initReview() {
   });
 
   effect(() => {
+    const on = mpcMode();
+    const info = mpc.value;
+    $("list-out-format").value = on ? "mpc" : "";
+    $("list-mpc").hidden = !on;
+    if (!on) return;
+    const parts = [stockCode(mpcStock())];
+    if (mpcFoil()) parts.push("foil");
+    parts.push(info?.cardback ? info.cardback.name : "no cardback");
+    $("list-mpc-label").textContent = parts.join(" · ");
+    $("list-mpc").dataset.tip = "Change MPC cardstock type";
+  });
+
+  effect(() => {
     const dir = outputDir();
     $("list-output-label").textContent = dir || "Choose a folder…";
     $("list-output-label").classList.toggle("faint", !dir);
@@ -643,4 +813,5 @@ export const list = {
 export function initList() {
   initSource();
   initReview();
+  loadMPC();
 }

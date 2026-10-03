@@ -93,6 +93,8 @@ type Options struct {
 	// ArtTimeout bounds one art download and RenderTimeout one card's render
 	ArtTimeout    time.Duration
 	RenderTimeout time.Duration
+	// Project makes the run an MPC Autofill project, from PlanProject
+	Project *Project
 	// Emit receives every progress event. It is called from several goroutines
 	Emit func(Event)
 }
@@ -113,6 +115,7 @@ type Run struct {
 	finished time.Time
 	stopped  bool
 	report   string
+	order    string
 }
 
 // New prepares a run of rows, with every card queued. Nothing renders until
@@ -128,8 +131,12 @@ func New(rows []Row, o Options) *Run {
 		cancel:  cancel,
 		started: time.Now(),
 		rows:    rows,
-		files:   outputNames(rows),
 		cards:   make([]Card, len(rows)),
+	}
+	if o.Project != nil {
+		r.files = o.Project.files
+	} else {
+		r.files = outputNames(rows)
 	}
 	for i, row := range rows {
 		r.cards[i] = Card{Index: i, Name: row.displayName(), Face: row.Face, Status: StatusQueued}
@@ -156,6 +163,8 @@ type View struct {
 	Finished    time.Time `json:"finished,omitzero"`
 	Stopped     bool      `json:"stopped,omitempty"`
 	Report      string    `json:"report,omitempty"`
+	MPC         bool      `json:"mpc,omitempty"`
+	Order       string    `json:"order,omitempty"`
 	Cards       []Card    `json:"cards"`
 }
 
@@ -174,6 +183,8 @@ func (r *Run) View() View {
 		Finished:    r.finished,
 		Stopped:     r.stopped,
 		Report:      r.report,
+		MPC:         r.opts.Project != nil,
+		Order:       r.order,
 		Cards:       append([]Card(nil), r.cards...),
 	}
 }
@@ -210,17 +221,24 @@ func (r *Run) File(n int) (string, bool) {
 	return filepath.Join(r.opts.OutDir, c.File), true
 }
 
-// Failed returns the rows whose cards failed, which is what a retry renders
-func (r *Run) Failed() []Row {
+// Retry returns the rows whose cards failed, which is what a retry renders,
+// and for a project the same project narrowed to them, so the retry can
+// finish its order file
+func (r *Run) Retry() ([]Row, *Project) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var rows []Row
+	var idx []int
 	for i, c := range r.cards {
 		if c.Status == StatusFailed {
 			rows = append(rows, r.rows[i])
+			idx = append(idx, i)
 		}
 	}
-	return rows
+	if r.opts.Project == nil {
+		return rows, nil
+	}
+	return rows, r.opts.Project.retry(idx)
 }
 
 // Label is the run's own label
@@ -295,6 +313,9 @@ func (r *Run) Execute(p *pipeline.Pipeline) {
 		r.update(i, "", func(c *Card) { c.Status = StatusSkipped })
 	}
 
+	if r.opts.Project != nil {
+		r.opts.Project.finish(r)
+	}
 	r.mu.Lock()
 	r.finished = time.Now()
 	r.mu.Unlock()
@@ -381,7 +402,7 @@ func (r *Run) renderCard(ctx context.Context, p *pipeline.Pipeline, i int) {
 
 	r.update(i, "", func(c *Card) { c.Status = StatusWriting })
 	file := r.files[i]
-	if err := writePNG(filepath.Join(r.opts.OutDir, file), img); err != nil {
+	if err := WritePNG(filepath.Join(r.opts.OutDir, file), img); err != nil {
 		fail("write", err)
 		return
 	}

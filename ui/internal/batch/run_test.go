@@ -16,16 +16,16 @@ func TestExpandFacesKeepsOneRowForOneFace(t *testing.T) {
 	}
 }
 
-func TestFailedReturnsOnlyFailures(t *testing.T) {
+func TestRetryTakesOnlyFailures(t *testing.T) {
 	rows := []Row{{Name: "Good"}, {Name: "Bad"}, {Name: "Also Bad"}}
 	r := New(rows, Options{ID: "run-1", OutDir: t.TempDir(), Label: "deck"})
 	r.cards[0].Status = StatusDone
 	// Two cards failed, as an art download blip would leave them
 	r.cards[1].Status, r.cards[2].Status = StatusFailed, StatusFailed
 
-	failed := r.Failed()
-	if len(failed) != 2 || failed[0].Name != "Bad" || failed[1].Name != "Also Bad" {
-		t.Errorf("failed = %+v", failed)
+	failed, project := r.Retry()
+	if len(failed) != 2 || failed[0].Name != "Bad" || failed[1].Name != "Also Bad" || project != nil {
+		t.Errorf("failed = %+v, project = %v", failed, project)
 	}
 	if _, ok := r.File(1); ok {
 		t.Error("a failed card has a file")

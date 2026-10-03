@@ -252,6 +252,81 @@
   display: none;
 }
 
+/* MPC Autofill options. The folder path truncates before these do, and the
+footer wraps once even a short path no longer fits */
+#list-review .mode-footer {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding-block: 8px;
+}
+
+#list-review .folder-trigger {
+  flex: 1 1 140px;
+  min-width: 140px;
+}
+
+#list-skip-note,
+#list-render {
+  margin-left: auto;
+}
+
+#list-out-format,
+#list-mpc-count {
+  flex: none;
+  width: auto;
+  white-space: nowrap;
+}
+
+#list-mpc {
+  flex: none;
+  max-width: 300px;
+}
+
+.mpc-check {
+  align-items: center;
+  min-height: var(--control-h);
+}
+
+.field .mpc-check > input {
+  flex: none;
+}
+
+.mpc-popover {
+  width: 360px;
+}
+
+.mpc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.mpc-options > .note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.mpc-cardback {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.mpc-cardback .control {
+  align-items: flex-start;
+}
+
+.mpc-thumb {
+  width: 56px;
+  aspect-ratio: 63 / 88;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  object-fit: cover;
+}
+
 /* Run Console */
 .run-body {
   display: flex;
@@ -405,7 +480,8 @@
     flex-wrap: wrap;
   }
 
-  .folder-popover {
+  .folder-popover,
+  .mpc-popover {
     width: calc(100vw - 32px);
   }
 }

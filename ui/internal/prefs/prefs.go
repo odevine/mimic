@@ -25,6 +25,9 @@ type data struct {
 	// a standard single card, which TemplateName holds, keyed like
 	// "transform_front/standard"
 	FaceTemplates map[string]TemplateChoice `json:"faceTemplates,omitempty"`
+	// CardbackName names the uploaded MPC Autofill cardback, which is kept
+	// beside this file
+	CardbackName string `json:"cardbackName,omitempty"`
 	Settings
 }
 
@@ -54,6 +57,11 @@ type Settings struct {
 	// CardData is where lookups read cards from, "api" or "local". Empty reads
 	// as the API
 	CardData string `json:"cardData,omitempty"`
+	// OutputFormat is "mpc" for an MPC Autofill project, anything else for
+	// loose PNGs. MPCStock and MPCFoil are the project's last chosen options
+	OutputFormat string `json:"outputFormat,omitempty"`
+	MPCStock     string `json:"mpcStock,omitempty"`
+	MPCFoil      bool   `json:"mpcFoil,omitempty"`
 }
 
 // Store persists a little user state to a JSON file, guarded by a mutex. Reads
@@ -181,5 +189,20 @@ func (s *Store) SetFaceTemplate(key string, c TemplateChoice) {
 		}
 		s.data.FaceTemplates[key] = c
 	}
+	s.save()
+}
+
+// CardbackName returns the uploaded cardback's name
+func (s *Store) CardbackName() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.CardbackName
+}
+
+// SetCardbackName stores the uploaded cardback's name and persists it
+func (s *Store) SetCardbackName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.CardbackName = name
 	s.save()
 }

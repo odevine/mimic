@@ -82,6 +82,10 @@ type Server struct {
 	resolveCancel context.CancelFunc
 	resolved      cardlist.Cache
 
+	// cardbackMu keeps two cardback uploads from mixing one's image with the
+	// other's name
+	cardbackMu sync.Mutex
+
 	// run is the latest batch run, kept after it finishes until the next starts
 	runMu  sync.Mutex
 	run    *batch.Run

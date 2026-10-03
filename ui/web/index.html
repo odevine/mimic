@@ -279,8 +279,17 @@ Sideboard
                   <svg class="icon"><use href="icons.svg#i-folder"/></svg><span id="list-output-label" class="mono truncate"></span>
                   <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
                 </button>
+                <select id="list-out-format" aria-label="Output format" data-feature="output.mpc">
+                  <option value="">PNGs</option>
+                  <option value="mpc">MPC Autofill project</option>
+                </select>
+                <button id="list-mpc" class="btn subtle folder-trigger" type="button" aria-haspopup="true" aria-expanded="false" hidden>
+                  <svg class="icon"><use href="icons.svg#i-gear"/></svg><span id="list-mpc-label" class="truncate"></span>
+                  <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
+                </button>
                 <span class="spacer"></span>
                 <span id="list-skip-note" class="dim"></span>
+                <span id="list-mpc-count" class="dim tabular" hidden></span>
                 <button id="list-render" class="btn primary" type="button" disabled>
                   <svg class="icon"><use href="icons.svg#i-play"/></svg><span id="list-render-label">Render</span>
                 </button>

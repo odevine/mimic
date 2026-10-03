@@ -95,6 +95,21 @@ supports is marked unsupported while the other face still renders. The
 single-card editor previews either face with Back face, and its fields edit the
 front.
 
+The format beside the folder switches Render to an
+[MPC Autofill](https://github.com/chilli-axe/mpc-autofill) project instead,
+laid out by the engine's `mpcfill` package: fronts in `fronts/`, the backs of
+double-faced cards in `backs/`, the shared cardback in `cardback/`, and a
+`cards.xml` order file beside them. Its options set the cardstock, foil, and
+the cardback, an uploaded PNG or JPEG kept beside `prefs.json`. A project holds
+at most 612 cards, counting copies, and needs every face of a double-faced
+card, so the footer flags a list too big or with a face no installed template
+renders. `cards.xml` is written only once every card has rendered in this
+project, never on the strength of a file an earlier render left in the folder.
+After failures, Retry failed finishes the project, and after a Stop the list
+renders again. MPC Autofill's website then takes the folder as a local folder,
+followed by an import of `cards.xml`, and its desktop tool takes the folder
+with `-d`.
+
 Run shows the batch as it goes: overall progress with an estimate, a line per
 card with its time or its own progress, and the finished render of whichever
 card is picked. A failed card opens to its error and the stage it failed at.
@@ -177,6 +192,8 @@ have no limit, so they skip the queue.
 | `POST /api/run/{id}/retry`         | Start a new run from the failed cards                |
 | `POST /api/run/{id}/open`          | Open the run's folder in the file browser            |
 | `GET /api/fs/list?path=`           | Subfolders of a folder, for the folder picker        |
+| `GET /api/mpc`                     | MPC Autofill stocks, card limit, and the cardback    |
+| `GET, PUT /api/mpc/cardback`       | The cardback image, `?name=` names an upload         |
 | `GET /api/carddata`                | The local card data, and what a download would fetch |
 | `POST /api/carddata/download`      | Download and install the local card data             |
 | `GET /api/carddata/{id}/events`    | Card data download progress                          |

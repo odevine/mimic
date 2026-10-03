@@ -41,6 +41,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if body.Concurrency < 0 || body.Concurrency > batch.MaxConcurrency {
 		body.Concurrency = 0
 	}
+	if body.OutputFormat != "mpc" {
+		body.OutputFormat = ""
+	}
 	if len(body.RecentOutputDirs) > maxRecentOutputDirs {
 		body.RecentOutputDirs = body.RecentOutputDirs[:maxRecentOutputDirs]
 	}

@@ -331,7 +331,8 @@ function initView() {
       if (c.unsupported) parts.push(`${c.unsupported} unsupported`);
       summary.textContent = `${parts.join(" · ")} in ${duration(elapsed)}`;
     }
-    $("run-meta").textContent = [r.id, r.template, `${r.dpi} dpi`, r.report].filter(Boolean).join(" · ");
+    const order = r.mpc && !live ? (r.order ? `${r.order} written` : "no cards.xml yet") : "";
+    $("run-meta").textContent = [r.id, r.template, `${r.dpi} dpi`, r.report, order].filter(Boolean).join(" · ");
     $("run-out").textContent = r.outDir;
     $("run-out").title = r.outDir;
 

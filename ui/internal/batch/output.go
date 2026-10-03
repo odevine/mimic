@@ -121,9 +121,9 @@ func sanitizeFilename(s string) string {
 	return out
 }
 
-// writePNG encodes img to path through a temporary file in the same folder, so
+// WritePNG encodes img to path through a temporary file in the same folder, so
 // a crash or a Stop never leaves a half-written PNG under the real name
-func writePNG(path string, img image.Image) error {
+func WritePNG(path string, img image.Image) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".mimic-*.png")
 	if err != nil {
 		return err
@@ -160,6 +160,7 @@ type Report struct {
 	DPI         int            `json:"dpi"`
 	Concurrency int            `json:"concurrency"`
 	Counts      map[string]int `json:"counts"`
+	Order       string         `json:"order,omitempty"`
 	Cards       []ReportCard   `json:"cards"`
 }
 
@@ -192,6 +193,7 @@ func writeReport(r *Run) (string, error) {
 		DPI:         v.DPI,
 		Concurrency: v.Concurrency,
 		Counts:      Counts(v.Cards),
+		Order:       v.Order,
 	}
 	for i, c := range v.Cards {
 		row := r.rows[i]

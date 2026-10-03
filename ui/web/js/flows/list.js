@@ -763,12 +763,15 @@ function initReview() {
         : "";
     $("list-render").disabled = !!res || !c.render || over || partial > 0;
     const attention = skipped - c.unsupportedIncluded;
-    const reasons = [];
-    if (attention > 0) reasons.push(`${attention} ${attention === 1 ? "row needs" : "rows need"} attention`);
-    if (c.unsupportedIncluded > 0) {
-      reasons.push(`${c.unsupportedIncluded} ${c.unsupportedIncluded === 1 ? "has" : "have"} no installed template`);
-    }
-    $("list-skip-note").textContent = !res && reasons.length ? `${reasons.join(" and ")}, so ${skipped === 1 ? "it" : "they"} will be skipped` : "";
+    const unsupported = c.unsupportedIncluded;
+    const needs = attention > 0 ? `${attention} ${attention === 1 ? "row needs" : "rows need"} attention` : "";
+    const lacks = unsupported > 0 ? `${unsupported} ${unsupported === 1 ? "card" : "cards"} unsupported` : "";
+    let note = "";
+    if (!res && lacks) note = `${needs ? `${needs} and ` : ""}${lacks}; skipped`;
+    else if (!res && needs) note = `${needs}, so ${attention === 1 ? "it" : "they"} will be skipped`;
+    $("list-skip-note").textContent = note;
+    // Render is disabled with nothing left once the skipped rows are set aside
+    $("list-render").dataset.tip = !res && !c.render && skipped > 0 ? "No compatible cards" : "";
   });
 
   // The selected row's detail line reads the filter, so a filter change

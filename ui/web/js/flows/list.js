@@ -469,6 +469,7 @@ async function render() {
       return;
     }
     mpcOpts = { stock: mpcStock(), foil: mpcFoil() };
+    if (!(await confirmOverwrite(dir))) return;
   }
   $("list-render").disabled = true;
   try {
@@ -521,7 +522,38 @@ const stockCode = (stock) => stock.match(/^\((\w+)\)/)?.[1] || stock;
 
 function saveSetting(patch) {
   app.settings.value = { ...app.settings.peek(), ...patch };
-  api.saveSettings(app.settings.peek()).catch(() => {});
+  api.saveSettings(app.settings.peek()).catch((err) => toast(`Could not save the setting: ${err.message}`, "err", 6000));
+}
+
+// confirmOverwrite asks before a project renders into a folder an earlier one
+// left files in, and resolves to whether to go ahead. A failed check goes ahead,
+// as rendering always did
+async function confirmOverwrite(dir) {
+  let existing = 0;
+  try {
+    ({ existing } = await api.mpcFolder(dir));
+  } catch {}
+  if (!existing) return true;
+  return new Promise((resolve) => {
+    const answer = (ok) => {
+      resolve(ok);
+      closePopover();
+    };
+    const files = existing === 1 ? "1 file" : `${existing} files`;
+    const body = h(
+      "div",
+      { class: "mpc-options" },
+      h("p", { class: "note" }, `This folder already holds ${files} from an MPC Autofill project. Rendering here replaces cards.xml and any card images with the same names.`),
+      h(
+        "div",
+        { class: "mpc-confirm" },
+        h("button", { class: "btn subtle", type: "button", onClick: () => answer(false) }, "Cancel"),
+        h("button", { class: "btn primary", type: "button", onClick: () => answer(true) }, "Render anyway"),
+      ),
+    );
+    const el = openPopover($("list-render"), body, { align: "end", cls: "mpc-popover", onClose: () => resolve(false) });
+    if (!el) resolve(false);
+  });
 }
 
 // mpcOptions builds the options a project takes. It is one builder so the

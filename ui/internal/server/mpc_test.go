@@ -2,11 +2,14 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"image"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +29,17 @@ func pngBytes(t *testing.T, w, h int) []byte {
 	return b.Bytes()
 }
 
+// pngHeader is a PNG of no pixels that claims to be w by h, which is all an
+// upload's size checks read
+func pngHeader(w, h int) []byte {
+	ihdr := binary.BigEndian.AppendUint32([]byte("IHDR"), uint32(w))
+	ihdr = binary.BigEndian.AppendUint32(ihdr, uint32(h))
+	ihdr = append(ihdr, 8, 0, 0, 0, 0)
+	b := binary.BigEndian.AppendUint32([]byte("\x89PNG\r\n\x1a\n"), uint32(len(ihdr)-4))
+	b = append(b, ihdr...)
+	return binary.BigEndian.AppendUint32(b, crc32.ChecksumIEEE(ihdr))
+}
+
 func putCardback(s *Server, name string, body []byte) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	s.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/mpc/cardback?name="+name, bytes.NewReader(body)))
@@ -37,8 +51,8 @@ func TestCardbackUpload(t *testing.T) {
 	if rec := putCardback(s, "x", []byte("not an image")); rec.Code != http.StatusBadRequest {
 		t.Errorf("non-image: %d, want 400", rec.Code)
 	}
-	if rec := putCardback(s, "x", pngBytes(t, 1, 5569)); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "1510 DPI") {
-		t.Errorf("over 1500 DPI: %d %s", rec.Code, rec.Body)
+	if rec := putCardback(s, "x", pngHeader(8000, 8001)); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "too large to scale") {
+		t.Errorf("too large to scale: %d %s", rec.Code, rec.Body)
 	}
 
 	if rec := putCardback(s, "x", pngBytes(t, 1200, 1100)); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "taller") {
@@ -58,11 +72,18 @@ func TestCardbackUpload(t *testing.T) {
 		t.Errorf("info = %+v", info)
 	}
 
+	// Over 1500 DPI is scaled down to it, since the website hides anything more
+	rec = putCardback(s, "Tall", pngBytes(t, 40, 5569))
+	json.Unmarshal(rec.Body.Bytes(), &info)
+	if rec.Code != http.StatusOK || info.Cardback == nil || info.Cardback.Height != maxCardbackHeight || info.Cardback.DPI != mpcfill.MaxDPI {
+		t.Errorf("over 1500 DPI: %d %+v", rec.Code, info.Cardback)
+	}
+
 	// A refused upload keeps the stored cardback
 	putCardback(s, "x", []byte("junk"))
 	img := httptest.NewRecorder()
 	s.mux.ServeHTTP(img, httptest.NewRequest(http.MethodGet, "/api/mpc/cardback", nil))
-	if cfg, err := png.DecodeConfig(img.Body); img.Code != http.StatusOK || err != nil || cfg.Height != 1110 {
+	if cfg, err := png.DecodeConfig(img.Body); img.Code != http.StatusOK || err != nil || cfg.Height != maxCardbackHeight {
 		t.Errorf("stored cardback: %d %v %+v", img.Code, err, cfg)
 	}
 }
@@ -108,6 +129,13 @@ func TestMPCRunWritesProject(t *testing.T) {
 	s.mux.ServeHTTP(img, httptest.NewRequest(http.MethodGet, "/api/run/"+v.ID+"/image/1", nil))
 	if img.Code != http.StatusOK {
 		t.Errorf("image from a subfolder: %d", img.Code)
+	}
+
+	// Three fronts, the cardback and cards.xml are there to warn about
+	folder := httptest.NewRecorder()
+	s.mux.ServeHTTP(folder, httptest.NewRequest(http.MethodGet, "/api/mpc/folder?path="+url.QueryEscape(dir), nil))
+	if got := strings.TrimSpace(folder.Body.String()); folder.Code != http.StatusOK || got != `{"existing":5}` {
+		t.Errorf("folder: %d %s", folder.Code, got)
 	}
 }
 

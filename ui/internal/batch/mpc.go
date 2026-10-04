@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/odevine/mimic/engine/mpcfill"
@@ -108,6 +109,25 @@ func (p *Project) Prepare(dir string) error {
 		return fmt.Errorf("reading the cardback: %w", err)
 	}
 	return os.WriteFile(filepath.Join(dir, filepath.FromSlash(p.layout.Cardback)), raw, 0o644)
+}
+
+// ExistingFiles counts what an earlier project left in dir: its order file and
+// the images in its subfolders. A render there replaces the order file and any
+// image of the same name
+func ExistingFiles(dir string) int {
+	n := 0
+	if _, err := os.Stat(filepath.Join(dir, mpcfill.OrderFile)); err == nil {
+		n++
+	}
+	for _, sub := range []string{mpcfill.FrontsDir, mpcfill.BacksDir, mpcfill.CardbackDir} {
+		entries, _ := os.ReadDir(filepath.Join(dir, sub))
+		for _, e := range entries {
+			if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // retry is the project for a run of just the given rows of this one, which

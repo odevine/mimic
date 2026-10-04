@@ -2,7 +2,8 @@ import { $ } from "../dom.js";
 
 // One shared tooltip, shown on hover or keyboard focus of anything carrying
 // data-tip or a gate reason. A gated control's tip names its gate level above
-// the one-sentence reason
+// the one-sentence reason. It is a manual popover so it shows in the top layer,
+// above a modal dialog, which nothing outside that layer can cover
 
 const LEVELS = {
   planned: "Planned",
@@ -33,7 +34,9 @@ function show(el) {
     box.append(lv);
   }
   box.append(tip.text);
-  box.hidden = false;
+  // Reopening moves it to the top of the top layer, above a dialog opened since
+  if (box.matches(":popover-open")) box.hidePopover();
+  box.showPopover();
 
   const r = el.getBoundingClientRect();
   const b = box.getBoundingClientRect();
@@ -48,7 +51,8 @@ function show(el) {
 
 export function hideTooltip() {
   clearTimeout(timer);
-  $("tooltip").hidden = true;
+  const box = $("tooltip");
+  if (box.matches(":popover-open")) box.hidePopover();
   current = null;
 }
 

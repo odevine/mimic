@@ -670,11 +670,12 @@ details.disclosure > .field-grid {
   from { opacity: 0; transform: translateY(6px); }
 }
 
-/* Tooltip, one sentence of reason on hover or focus */
+/* Tooltip, one sentence of reason on hover or focus. It is a popover, so the UA's centering inset and margin are reset for the position show() sets */
 .tooltip {
   position: fixed;
-  z-index: 70;
+  inset: auto;
   max-width: 280px;
+  margin: 0;
   padding: 6px 9px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-control);

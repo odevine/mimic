@@ -3,6 +3,7 @@ import { $ } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
+import { openFonts, initFonts } from "./fonts.js";
 import { tintFavicon } from "./favicon.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
@@ -86,6 +87,7 @@ async function open() {
   $("concurrency-input").value = s.concurrency ? String(s.concurrency) : "";
   $("output-dir-input").value = s.outputDir || "";
   openCardData(s.cardData);
+  openFonts();
   $("settings-dialog").showModal();
   await loadResolution();
   fillResolution();
@@ -126,6 +128,7 @@ async function save() {
 
 export function initSettings() {
   initCardData();
+  initFonts();
   $("settings-btn").addEventListener("click", open);
   $("settings-save").addEventListener("click", save);
   // Previewing the theme as it is picked, reverted on cancel

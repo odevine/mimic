@@ -56,6 +56,10 @@ func (s *Server) routes() {
 	mux.HandleFunc("POST /api/carddata/download", s.handleCardDataDownload)
 	mux.HandleFunc("GET /api/carddata/{id}/events", s.handleJobEvents)
 	mux.HandleFunc("DELETE /api/carddata", s.handleCardDataDelete)
+	mux.HandleFunc("GET /api/fonts", s.handleFonts)
+	mux.HandleFunc("PUT /api/fonts/{folder}", s.handlePutFont)
+	mux.HandleFunc("DELETE /api/fonts/{folder}", s.handleDeleteFont)
+	mux.HandleFunc("POST /api/fonts/open", s.handleOpenFonts)
 	if s.static != nil {
 		mux.Handle("/", http.FileServerFS(s.static))
 	}

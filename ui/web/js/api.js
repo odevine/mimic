@@ -101,4 +101,15 @@ export const api = {
   downloadCardData: () => send("POST", "/api/carddata/download", {}),
   cardDataEvents: (jobId, onStep) => watchJob(`/api/carddata/${jobId}/events`, onStep),
   removeCardData: () => send("DELETE", "/api/carddata", {}),
+
+  // fonts reports which font each role draws with, and addFont and removeFont
+  // change the app's own fonts folder, each answering with the new status
+  fonts: () => get("/api/fonts"),
+  addFont: (folder, file) => {
+    const body = new FormData();
+    body.append("file", file);
+    return get(`/api/fonts/${encodeURIComponent(folder)}`, { method: "PUT", body });
+  },
+  removeFont: (folder) => get(`/api/fonts/${encodeURIComponent(folder)}`, { method: "DELETE" }),
+  openFonts: () => fetch("/api/fonts/open", { method: "POST" }),
 };

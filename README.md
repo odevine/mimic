@@ -72,9 +72,28 @@ list what is available and downloads a bundle when you select it.
 
 The engine embeds open-license fonts, so it renders without anything extra. The
 fonts printed on real cards are copyrighted and not redistributed here. If you
-have them, drop them into `local-fonts/` as its [README](local-fonts/README.md)
-describes, and both the app and `rendercard` pick them up when run from a
-checkout.
+have them, add them in the app under Settings, Fonts. Each font goes to one
+role, and a font added to the wrong role draws in the wrong place, so match the
+file to the role in this table.
+
+| Role           | Folder         | Draws                         | Real cards use          | Default when empty   |
+| -------------- | -------------- | ----------------------------- | ----------------------- | -------------------- |
+| Title          | `title/`       | card name, type line, P/T     | Beleren Bold            | Big Shoulders Bold   |
+| Rules          | `body/`        | rules text, copyright line    | MPlantin                | Merriweather Regular |
+| Flavor         | `body-italic/` | flavor text                   | MPlantin Italic         | Merriweather Italic  |
+| Mana           | `mana/`        | mana and other card symbols   | Mana, already included  | Mana                 |
+| Artist         | `type/`        | artist credit, in small caps  | Beleren Small Caps Bold | the Title default    |
+| Collector info | `info/`        | collector number and set code | Gotham Medium           | the Rules default    |
+
+The app keeps added fonts in a `fonts` folder under the per-OS user config
+directory, one subfolder per role as named above, and Open folder in the same
+setting shows it. Copying files into those subfolders by hand works too. Only
+`.ttf` and `.otf` files are read, and only the first one in a folder is used.
+
+Two other sources take priority over that folder. The `-fonts <dir>` flag points
+the app at any folder laid out the same way, and a run from a checkout uses
+`local-fonts/` as its [README](local-fonts/README.md) describes. Either one is
+read-only from the app.
 
 Layer compositing is handled by [impasto](https://github.com/odevine/impasto), a
 pure-Go library for Photoshop-style layered images.

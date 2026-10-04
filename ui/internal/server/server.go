@@ -21,6 +21,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/fontdir"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/scryfall"
@@ -99,6 +100,12 @@ type Server struct {
 	scryfall *http.Client
 	// remoteCards caches Scryfall's bulk data index for the settings panel
 	remoteCards remoteCache
+
+	// fonts is the font override directory every render uses, fixed at startup
+	fonts fontdir.Dir
+	// pips is the mana symbol renderer the editor's pips draw with, rebuilt
+	// when the mana font changes
+	pips pipCache
 }
 
 // Options is what the server needs from the binary around it
@@ -107,6 +114,9 @@ type Options struct {
 	Static fs.FS
 	// Open shows a path in the system file browser
 	Open func(path string) error
+	// FontDir is the -fonts flag, a font override directory that wins over
+	// every other source. Empty means the usual lookup
+	FontDir string
 }
 
 // New builds the server: it resolves the startup template without
@@ -117,6 +127,8 @@ func New(o Options) *Server {
 	httpc := scryfall.NewHTTPClient(netTimeout)
 	p := loadPrefs()
 	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
+	fd := fontdir.Resolve(o.FontDir, managedFontsDir())
+	pipe.SetFontDir(fd.Path)
 
 	at, source := startupTemplate(p)
 	pipe.Install(at)
@@ -133,6 +145,7 @@ func New(o Options) *Server {
 		scryfall:      httpc,
 		static:        o.Static,
 		open:          o.Open,
+		fonts:         fd,
 	}
 	s.routes()
 	go s.cards.Load()

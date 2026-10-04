@@ -17,12 +17,8 @@ import (
 // LooseDirBases are the roots under which a template's loose developer assets
 // live as assets/<name>, relative to both a repo-root run and a ui-subdir run.
 // Loose assets are developer-local, so a checkout without them falls back to a
-// cached bundle or generated placeholders. fontCandidates is the same idea for
-// font overrides
-var (
-	LooseDirBases  = []string{"assets", filepath.Join("..", "assets")}
-	fontCandidates = []string{"local-fonts", filepath.Join("..", "local-fonts")}
-)
+// cached bundle or generated placeholders
+var LooseDirBases = []string{"assets", filepath.Join("..", "assets")}
 
 // LocalVersion is the synthetic version label for a template rendered from its
 // loose developer directory rather than a downloaded bundle
@@ -54,7 +50,7 @@ func Resolve(name string) (*Template, Source, error) {
 	}
 	if dir := LooseDir(name); dir != "" {
 		return &Template{
-			Name: name, Version: LocalVersion, template: tmpl, fontDir: resolveFontDir(),
+			Name: name, Version: LocalVersion, template: tmpl,
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, SourceLoose, nil
 	}
@@ -87,7 +83,7 @@ func FromVersion(ctx context.Context, name, version string, progress func(done, 
 			return nil, fmt.Errorf("no local assets for %q", name)
 		}
 		return &Template{
-			Name: name, Version: LocalVersion, template: tmpl, fontDir: resolveFontDir(),
+			Name: name, Version: LocalVersion, template: tmpl,
 			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
 		}, nil
 	}
@@ -127,7 +123,7 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*Temp
 		return nil, err
 	}
 	return &Template{
-		Name: name, Version: version, template: tmpl, fontDir: resolveFontDir(),
+		Name: name, Version: version, template: tmpl,
 		provider: p, cleanup: func() { p.Close() },
 	}, nil
 }
@@ -148,7 +144,7 @@ func placeholderActive(name string, tmpl template.Template) (*Template, error) {
 		return nil, err
 	}
 	return &Template{
-		Name: name, Version: "", template: tmpl, fontDir: resolveFontDir(),
+		Name: name, Version: "", template: tmpl,
 		provider: template.NewFSAssetProvider(tmp), cleanup: func() { os.RemoveAll(tmp) },
 	}, nil
 }
@@ -158,17 +154,6 @@ func placeholderActive(name string, tmpl template.Template) (*Template, error) {
 func LooseDir(name string) string {
 	for _, base := range LooseDirBases {
 		cand := filepath.Join(base, name)
-		if info, err := os.Stat(cand); err == nil && info.IsDir() {
-			return cand
-		}
-	}
-	return ""
-}
-
-// resolveFontDir returns the first font-override directory that exists, or ""
-// to use the engine's embedded default fonts
-func resolveFontDir() string {
-	for _, cand := range fontCandidates {
 		if info, err := os.Stat(cand); err == nil && info.IsDir() {
 			return cand
 		}

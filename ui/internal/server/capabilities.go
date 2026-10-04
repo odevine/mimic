@@ -66,6 +66,7 @@ var features = []feature{
 	{key: "settings.runReport", state: gatePlanned, reason: "Every run writes its report, and turning that off is coming in v1.0"},
 	{key: "settings.scryfallRate", state: gatePlanned, reason: "Scryfall calls follow its published rate limits, and changing that is coming in v1.0"},
 	{key: "settings.localData", state: gateLive},
+	{key: "settings.fonts", state: gateLive},
 	{key: "settings.preferNonPromo", state: gatePlanned, reason: "Coming in v1.0"},
 	{key: "settings.language", state: gatePlanned, reason: "Coming in v1.0"},
 	{key: "settings.filenameRegex", state: gatePlanned, reason: "Arrives with rendering from your art in v1.0"},

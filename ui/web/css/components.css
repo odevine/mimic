@@ -956,3 +956,61 @@ input.gated {
 .card-data-actions:not(:has(> :not([hidden]))) {
   display: none;
 }
+
+/* The Fonts setting spans the dialog's full width under its label, since the role table needs the room */
+.fonts {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.fonts-roles {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto auto;
+  gap: 4px 12px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fonts-role {
+  display: contents;
+}
+
+.fonts-role-name {
+  color: var(--text);
+}
+
+.fonts-role-font {
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fonts-role-source.user {
+  color: var(--ok);
+}
+
+.fonts-role-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.fonts-note {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+}
+
+.fonts-note.warn {
+  color: var(--warn);
+}
+
+.fonts-note.err {
+  color: var(--err);
+}

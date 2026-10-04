@@ -584,6 +584,20 @@ Sideboard
           </div>
         </div>
         <div class="setting">
+          <span class="label" data-feature="settings.fonts">Fonts</span>
+          <div id="fonts" class="fonts" role="status" aria-live="polite">
+            <p id="fonts-source"></p>
+            <ul id="fonts-roles" class="fonts-roles"></ul>
+            <div class="card-data-actions">
+              <button id="fonts-open" class="btn" type="button" hidden>
+                <svg class="icon"><use href="icons.svg#i-folder"/></svg><span>Open folder</span>
+              </button>
+              <button id="fonts-reset" class="btn subtle" type="button" hidden>Reset all</button>
+            </div>
+            <input id="fonts-file" type="file" accept=".ttf,.otf" hidden>
+          </div>
+        </div>
+        <div class="setting">
           <span class="label" data-feature="settings.scryfallRate">Scryfall requests per second</span>
           <span class="inline"><input type="number" value="10" data-feature="settings.scryfallRate" aria-label="Scryfall rate"></span>
         </div>

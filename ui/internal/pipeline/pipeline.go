@@ -25,11 +25,7 @@ type Template struct {
 	Version  string
 	template template.Template
 	provider template.AssetProvider
-	// fontDir is the font-override directory resolved at construction time, if
-	// any, applied to every render request rather than stored on the template
-	// itself, since it is caller configuration rather than the template's own
-	fontDir string
-	cleanup func()
+	cleanup  func()
 }
 
 // Pipeline holds the pieces reused across every render: the client that
@@ -53,12 +49,32 @@ type Pipeline struct {
 	// preferences returns the preferred template for each face shape, keyed by
 	// ShapeKey. Nil means no preferences
 	preferences func() map[string]prefs.TemplateChoice
+	// fontDir is the font override directory every render uses, "" for the
+	// engine's embedded defaults. It is caller configuration rather than part of
+	// any template, so it is shared by all of them
+	fontDir string
 }
 
 // New returns a pipeline that fetches art through client. preferences returns
 // the preferred template for each face shape, and may be nil
 func New(client *card.Client, preferences func() map[string]prefs.TemplateChoice) *Pipeline {
 	return &Pipeline{client: client, preferences: preferences}
+}
+
+// SetFontDir sets the font override directory for later renders. The engine
+// reads the folder on each render, so fonts added to it later apply without
+// calling this again
+func (p *Pipeline) SetFontDir(dir string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.fontDir = dir
+}
+
+// FontDir is the font override directory renders use
+func (p *Pipeline) FontDir() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.fontDir
 }
 
 // Client is the card client the pipeline fetches art through, shared with
@@ -135,7 +151,7 @@ func (p *Pipeline) Render(ctx context.Context, d *card.Data, face int, art image
 		Face:    face,
 		Art:     art,
 		Assets:  at.provider,
-		FontDir: at.fontDir,
+		FontDir: p.FontDir(),
 		DPI:     dpi,
 	}
 	if progress != nil {

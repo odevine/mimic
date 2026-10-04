@@ -23,6 +23,8 @@ Flags:
 - `-addr` binds a specific address instead of the default loopback ephemeral
   port, for example `-addr 127.0.0.1:8080`.
 - `-no-open` prints the URL but does not open a browser.
+- `-fonts <dir>` renders with the font overrides in dir, laid out one subfolder
+  per role, ahead of every other font source.
 
 ## Using it
 
@@ -152,6 +154,15 @@ syntax. Art comes from Scryfall's image host either way. Scryfall refreshes the
 files daily, and the panel offers an update once a copy is a week old or a
 newer one is out.
 
+Fonts, also in Sources, lists each font role with the font it draws with and
+whether that is yours or a default. A role whose file could not be read says
+why and stays on its default. Add or Replace stores a `.ttf` or `.otf` for that
+role in a `fonts` folder beside `prefs.json`, and Remove returns the role to
+its default. These write at once rather than on Save, and the next render uses
+them. When `-fonts` or a checkout's `local-fonts/` is in use instead, the panel
+shows that folder read-only. The role folders and the fonts real cards use are
+listed in the [top-level README](../README.md#templates-and-fonts).
+
 ## HTTP API
 
 The page drives the server entirely through a small JSON API on the loopback
@@ -204,3 +215,7 @@ have no limit, so they skip the queue.
 | `POST /api/carddata/download`      | Download and install the local card data             |
 | `GET /api/carddata/{id}/events`    | Card data download progress                          |
 | `DELETE /api/carddata`             | Remove the local card data                           |
+| `GET /api/fonts`                   | The fonts folder in use and each role's font         |
+| `PUT /api/fonts/{folder}`          | Add a font to a role, as a multipart `file` field    |
+| `DELETE /api/fonts/{folder}`       | Remove a role's font, returning it to its default    |
+| `POST /api/fonts/open`             | Open the fonts folder in the file browser            |

@@ -23,9 +23,10 @@ import (
 func main() {
 	addr := flag.String("addr", "127.0.0.1:0", "address to bind, loopback with an ephemeral port by default")
 	noOpen := flag.Bool("no-open", false, "do not open the browser at startup")
+	fontDir := flag.String("fonts", "", "folder of font overrides, one subfolder per role, used ahead of the app's own fonts folder")
 	flag.Parse()
 
-	s := server.New(server.Options{Static: staticFS(), Open: openBrowser})
+	s := server.New(server.Options{Static: staticFS(), Open: openBrowser, FontDir: *fontDir})
 	defer s.Close()
 
 	ln, err := net.Listen("tcp", *addr)

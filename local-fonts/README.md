@@ -16,21 +16,19 @@ first `.ttf` or `.otf` in that folder is used, so the file keeps whatever name
 it came with. Nothing needs renaming, and a file left loose at the top level is
 ignored.
 
-| folder        | role                       | status         |
-|---------------|----------------------------|----------------|
-| `title/`      | card name, type line, P/T  | used           |
-| `body/`       | rules text                 | used           |
-| `body-italic/`| flavor text                | used           |
-| `mana/`       | mana symbols               | used           |
-| `type/`       | small-caps type line       | not wired yet  |
-| `info/`       | collector, set, copyright  | not wired yet  |
-| `glyphs/`     | non-mana glyphs            | not wired yet  |
+| folder         | draws                          | real cards use          | default when empty   |
+|----------------|--------------------------------|-------------------------|----------------------|
+| `title/`       | card name, type line, P/T      | Beleren Bold            | Big Shoulders Bold   |
+| `body/`        | rules text, copyright line     | MPlantin                | Merriweather Regular |
+| `body-italic/` | flavor text                    | MPlantin Italic         | Merriweather Italic  |
+| `mana/`        | mana and other card symbols    | Mana (already embedded) | Mana                 |
+| `type/`        | artist credit, in small caps   | Beleren Small Caps Bold | the `title/` default |
+| `info/`        | collector number and set code  | Gotham Medium           | the `body/` default  |
 
 The `mana/` role already resolves to an embedded Mana font, so drop a file there
 only to override it. Rules and flavor share no folder: keep the italic Plantin
 in `body-italic/` and the roman one in `body/`.
 
-The bottom three folders hold fonts the engine does not render yet. The type
-line currently draws with the `title/` font, and the collector, set, and
-copyright lines and non-mana glyphs are not drawn at all, so files in `type/`,
-`info/`, and `glyphs/` sit staged until those roles are wired.
+A file that fails to load leaves its role on the default, so a render that
+looks unchanged after dropping a font usually means the file was not a valid
+`.ttf` or `.otf`.

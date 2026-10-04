@@ -12,6 +12,7 @@ package fonts
 
 import (
 	"embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,17 @@ var embeddedPath = map[Role]string{
 	Mana:       "embedded/mana/mana.ttf",
 }
 
+// embeddedNames is the family and style each embedded default presents as. The
+// files are static instances cut from variable fonts, and their name tables
+// still carry the source instance's names, such as Big Shoulders Thin for the
+// bold cut
+var embeddedNames = map[string][2]string{
+	"embedded/title/BigShoulders-Bold.ttf":   {"Big Shoulders", "Bold"},
+	"embedded/body/Merriweather-Regular.ttf": {"Merriweather", "Regular"},
+	"embedded/body/Merriweather-Italic.ttf":  {"Merriweather", "Italic"},
+	"embedded/mana/mana.ttf":                 {"Mana", "Regular"},
+}
+
 // roleDir maps a role to its subfolder under the user font directory. A user
 // drops a font into the folder for its role, so no file needs a matching name.
 // A role without an entry has no override folder and always uses its default
@@ -99,6 +111,9 @@ var fallbackRole = map[Role]Role{
 var (
 	cacheMu   sync.Mutex
 	fontCache = map[string]*opentype.Font{}
+	// fileKeys maps a user font's path to its current cache key, so a replaced
+	// file's stale parse can be evicted
+	fileKeys = map[string]string{}
 )
 
 // Sizer holds a role's resolved font so faces can be built at any point size
@@ -115,17 +130,39 @@ type Sizer struct {
 // skips the override step. It never fails: an unresolvable role yields a Sizer
 // whose Face returns the fallback
 func ResolveFont(role Role, userDir string) *Sizer {
+	f, _ := resolve(role, userDir)
+	if f == nil {
+		return &Sizer{fallback: true}
+	}
+	return &Sizer{font: f}
+}
+
+// resolve walks the resolution chain for role and returns the parsed font, nil
+// for the basicfont fallback, beside a Resolution describing where it came from
+func resolve(role Role, userDir string) (*opentype.Font, Resolution) {
+	res := Resolution{Role: role, Source: SourceFallback}
 	if userDir != "" {
-		if path := findUserFont(role, userDir); path != "" {
-			if f, err := fontFromFile(path); err == nil {
-				return &Sizer{font: f}
+		files := userFonts(role, userDir)
+		if len(files) > 0 {
+			res.Ignored = files[1:]
+			f, err := fontFromFile(files[0])
+			if err == nil {
+				res.Source, res.Path = SourceUser, files[0]
+				res.Family, res.Style = names(f)
+				return f, res
 			}
+			res.Rejected, res.Err = files[0], err
 		}
 	}
 	for r := role; ; {
 		if path, ok := embeddedPath[r]; ok {
 			if f, err := fontFromEmbedded(path); err == nil {
-				return &Sizer{font: f}
+				res.Source, res.Path = SourceDefault, path
+				if r != role {
+					res.Source = SourceBorrowed
+				}
+				res.Family, res.Style = embeddedNames[path][0], embeddedNames[path][1]
+				return f, res
 			}
 		}
 		next, ok := fallbackRole[r]
@@ -134,7 +171,7 @@ func ResolveFont(role Role, userDir string) *Sizer {
 		}
 		r = next
 	}
-	return &Sizer{fallback: true}
+	return nil, res
 }
 
 // Fallback reports whether Face returns basicfont.Face7x13, so a caller can
@@ -161,8 +198,15 @@ func Resolve(role Role, userDir string, size float64) (font.Face, bool, error) {
 	return face, s.fallback, err
 }
 
+// fontFromFile parses a user font, caching it under its path, size, and
+// modification time so a file replaced under the same name is read again. The
+// entry for an older version of the same path is dropped when a newer one lands
 func fontFromFile(path string) (*opentype.Font, error) {
-	key := "file:" + path
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	key := fmt.Sprintf("file:%s:%d:%d", path, info.Size(), info.ModTime().UnixNano())
 	if f := cachedFont(key); f != nil {
 		return f, nil
 	}
@@ -170,7 +214,17 @@ func fontFromFile(path string) (*opentype.Font, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parse(key, raw)
+	f, err := parse(key, raw)
+	if err != nil {
+		return nil, err
+	}
+	cacheMu.Lock()
+	if old, ok := fileKeys[path]; ok && old != key {
+		delete(fontCache, old)
+	}
+	fileKeys[path] = key
+	cacheMu.Unlock()
+	return f, nil
 }
 
 func fontFromEmbedded(path string) (*opentype.Font, error) {
@@ -225,22 +279,32 @@ func newFace(f *opentype.Font, size float64) (font.Face, error) {
 // when the folder is absent or holds no font. One folder per role means the
 // dropped file keeps its own name
 func findUserFont(role Role, dir string) string {
+	if files := userFonts(role, dir); len(files) > 0 {
+		return files[0]
+	}
+	return ""
+}
+
+// userFonts lists every .ttf or .otf in role's subfolder of dir in directory
+// order. The first is the one used, and the rest are reported as ignored
+func userFonts(role Role, dir string) []string {
 	sub, ok := roleDir[role]
 	if !ok {
-		return ""
+		return nil
 	}
 	folder := filepath.Join(dir, sub)
 	entries, err := os.ReadDir(folder)
 	if err != nil {
-		return ""
+		return nil
 	}
+	var out []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".ttf" || ext == ".otf" {
-			return filepath.Join(folder, e.Name())
+			out = append(out, filepath.Join(folder, e.Name()))
 		}
 	}
-	return ""
+	return out
 }

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.9.0](https://github.com/odevine/mimic/compare/ui/v0.8.1...ui/v0.9.0) (2026-10-04)
+
+
+### Features
+
+* **ui:** add a fonts folder and a Fonts setting ([57e6e2e](https://github.com/odevine/mimic/commit/57e6e2e535109c7a74d1e37ff64d99223c4353ec))
+* **ui:** add the mimic icon as the favicon and topbar mark ([e937a4f](https://github.com/odevine/mimic/commit/e937a4fb24a75aa7ebe39e0ec74c43f132905326))
+* **ui:** export a list as an MPC Autofill project ([e4d2132](https://github.com/odevine/mimic/commit/e4d213283d978b3c46d2908c8f80ccb180f15f50))
+* **ui:** shorten the unsupported skip note and explain an empty render ([bb78d81](https://github.com/odevine/mimic/commit/bb78d81f36561f581da573151d1c642810ef91ba))
+
+
+### Bug Fixes
+
+* **ui:** address review on the MPC Autofill export ([a6af008](https://github.com/odevine/mimic/commit/a6af00879c9e410bdd30da7620ef42a59e8a7252))
+* **ui:** show tooltips above the settings dialog ([9331293](https://github.com/odevine/mimic/commit/933129334e31f6d1e7a05e5a20aed2580b3453c8))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.11.0 ([#43](https://github.com/odevine/mimic/issues/43)) ([a90f9fc](https://github.com/odevine/mimic/commit/a90f9fc44eec8519618481a140007260c381e746))
+* **ui:** depend on the released engine v0.12.0 ([#48](https://github.com/odevine/mimic/issues/48)) ([c0f563a](https://github.com/odevine/mimic/commit/c0f563ad17f2b9bc80317f95ee66c484c51c5c24))
+
 ## [0.8.1](https://github.com/odevine/mimic/compare/ui/v0.8.0...ui/v0.8.1) (2026-09-27)
 
 

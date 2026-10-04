@@ -24,6 +24,10 @@ type glyphRun struct {
 	sym  string
 	metr SymbolMetrics
 	ren  SymbolRenderer
+	// redact keeps the run's room on the line but paints a marker bar over it
+	// in place of its text or symbol, so redacted words wrap where they would
+	// have printed
+	redact bool
 }
 
 // token is an unbreakable unit of one or more runs with no space between them.
@@ -495,7 +499,8 @@ func layoutText(box TextBoxSpec, text string, face font.Face) textLayout {
 // tokenize splits a paragraph into whitespace-delimited tokens. A word draws in
 // the style's face, or in its emph face when it falls inside parentheses or is
 // part of a leading ability word from emphLead, so reminder text and ability
-// words italicize
+// words italicize. A redaction opened with ~~ runs across words until the next
+// ~~ or the end of the paragraph
 func tokenize(para string, st partStyle) []token {
 	words := strings.Fields(para)
 	leadEnd := -1
@@ -503,7 +508,7 @@ func tokenize(para string, st partStyle) []token {
 		leadEnd = leadAbilityEnd(words, st.emphLead)
 	}
 	var toks []token
-	italic := false
+	italic, redacting := false, false
 	for i, word := range words {
 		f := st.face
 		if st.emph != nil && (italic || strings.Contains(word, "(") || i <= leadEnd) {
@@ -515,32 +520,42 @@ func tokenize(para string, st partStyle) []token {
 		if strings.Contains(word, ")") {
 			italic = false
 		}
-		toks = append(toks, buildToken(word, f, st))
+		var tk token
+		tk, redacting = buildToken(word, f, st, redacting)
+		// A bare ~~ only opens or closes a redaction and has nothing to draw
+		if len(tk.runs) > 0 {
+			toks = append(toks, tk)
+		}
 	}
 	return toks
 }
 
 // buildToken turns one word into a token, a symbol run for each braced code the
 // renderer draws and a text run for everything between them. A word with no
-// braces is the single text run it has always been
-func buildToken(word string, face font.Face, st partStyle) token {
+// braces is the single text run it has always been. redact is whether the word
+// opens inside a redaction, and the second result whether it closes inside one,
+// since a ~~ can open or close one anywhere in a word
+func buildToken(word string, face font.Face, st partStyle, redact bool) (token, bool) {
 	var tk token
-	for _, piece := range splitSymbols(word) {
-		if piece.code != "" && st.sym != nil {
-			if m, ok := st.sym.Symbol(piece.code, st.size); ok {
-				tk.runs = append(tk.runs, glyphRun{face: face, advance: m.Advance, sym: piece.code, metr: m, ren: st.sym})
-				tk.advance += m.Advance
-				continue
+	segs, redact := splitRedactions(word, redact)
+	for _, seg := range segs {
+		for _, piece := range splitSymbols(seg.text) {
+			if piece.code != "" && st.sym != nil {
+				if m, ok := st.sym.Symbol(piece.code, st.size); ok {
+					tk.runs = append(tk.runs, glyphRun{face: face, advance: m.Advance, sym: piece.code, metr: m, ren: st.sym, redact: seg.redact})
+					tk.advance += m.Advance
+					continue
+				}
 			}
+			adv := (&font.Drawer{Face: face}).MeasureString(piece.text)
+			if st.track != 0 {
+				adv += st.track * fixed.Int26_6(len([]rune(piece.text)))
+			}
+			tk.runs = append(tk.runs, glyphRun{text: piece.text, face: face, advance: adv, redact: seg.redact})
+			tk.advance += adv
 		}
-		adv := (&font.Drawer{Face: face}).MeasureString(piece.text)
-		if st.track != 0 {
-			adv += st.track * fixed.Int26_6(len([]rune(piece.text)))
-		}
-		tk.runs = append(tk.runs, glyphRun{text: piece.text, face: face, advance: adv})
-		tk.advance += adv
 	}
-	return tk
+	return tk, redact
 }
 
 // symbolPiece is one piece of a split word. code is the braced symbol's code
@@ -672,8 +687,17 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool, er
 			break
 		}
 		x := lineStartX(box, ln.width)
+		// bar collects consecutive redacted runs, and the spaces between them,
+		// into one stroke that paints when the redaction or the line ends
+		var bar redactBar
 		for _, tk := range ln.tokens {
 			for _, run := range tk.runs {
+				if run.redact {
+					bar.extend(run, x)
+					x += run.advance
+					continue
+				}
+				bar.paint(img, src, baseline, lineHeight)
 				next, err := drawRun(img, src, run, x, baseline, track)
 				if err != nil {
 					return 0, false, err
@@ -682,6 +706,7 @@ func drawLayout(img *image.RGBA, box TextBoxSpec, lay textLayout) (int, bool, er
 			}
 			x += space
 		}
+		bar.paint(img, src, baseline, lineHeight)
 		y += lineHeight
 	}
 	return dividerY, hasDivider, nil

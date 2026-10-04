@@ -51,6 +51,7 @@ func (s *Server) routes() {
 	mux.HandleFunc("GET /api/mpc", s.handleMPC)
 	mux.HandleFunc("GET /api/mpc/cardback", s.handleCardbackImage)
 	mux.HandleFunc("PUT /api/mpc/cardback", s.handlePutCardback)
+	mux.HandleFunc("GET /api/mpc/folder", s.handleMPCFolder)
 	mux.HandleFunc("GET /api/carddata", s.handleCardData)
 	mux.HandleFunc("POST /api/carddata/download", s.handleCardDataDownload)
 	mux.HandleFunc("GET /api/carddata/{id}/events", s.handleJobEvents)

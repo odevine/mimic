@@ -307,6 +307,12 @@ footer wraps once even a short path no longer fits */
   font-size: 12px;
 }
 
+.mpc-confirm {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .mpc-cardback {
   display: flex;
   gap: 10px;

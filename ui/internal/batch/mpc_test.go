@@ -179,3 +179,18 @@ func TestFinishAfterAStopSaysRenderAgain(t *testing.T) {
 		t.Errorf("after retrying the failure: order %q, log %q", rr.View().Order, lastLog(logs))
 	}
 }
+
+func TestExistingFiles(t *testing.T) {
+	dir := t.TempDir()
+	if n := ExistingFiles(filepath.Join(dir, "missing")); n != 0 {
+		t.Errorf("missing folder: %d", n)
+	}
+	for _, f := range []string{"notes.txt", mpcfill.OrderFile, "fronts/A.png", "fronts/.DS_Store", "backs/B.png", "cardback/C.png", "other/D.png"} {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644)
+	}
+	// Only the order file and the images in the project's own subfolders count
+	if n := ExistingFiles(dir); n != 4 {
+		t.Errorf("ExistingFiles = %d, want 4", n)
+	}
+}

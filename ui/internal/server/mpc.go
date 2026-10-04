@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/odevine/mimic/engine/mpcfill"
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 )
@@ -21,6 +22,14 @@ import (
 // maxCardbackUpload bounds a cardback upload. The stored PNG must still come in
 // under mpcfill.MaxImageBytes, but a JPEG can grow a lot when re-encoded
 const maxCardbackUpload = 64 << 20
+
+// maxCardbackHeight is the tallest cardback at mpcfill.MaxDPI, where DPI measures
+// a card 1110 pixels tall at 300. A taller upload is scaled down to it
+const maxCardbackHeight = mpcfill.MaxDPI * 1110 / 300
+
+// maxCardbackPixels bounds what an upload decodes before it is scaled down, which
+// is about 2500 DPI on a card
+const maxCardbackPixels = 64_000_000
 
 // mpcOptions is the MPC Autofill part of a run request. Its presence makes the
 // run write a project rather than loose PNGs
@@ -114,7 +123,7 @@ func (s *Server) handleCardbackImage(w http.ResponseWriter, r *http.Request) {
 
 // handlePutCardback stores an uploaded PNG or JPEG as the cardback, named by the
 // name query parameter. It is kept as a PNG, since the project names it .png,
-// and refused when the website would hide it
+// and scaled down or refused where the website would hide it
 func (s *Server) handlePutCardback(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	switch strings.ToLower(filepath.Ext(name)) {
@@ -141,19 +150,21 @@ func (s *Server) handlePutCardback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the cardback must be a PNG or JPEG image", http.StatusBadRequest)
 		return
 	}
-	if dpi := mpcfill.DPI(cfg.Height); dpi > mpcfill.MaxDPI {
-		http.Error(w, fmt.Sprintf("that image is %d DPI by MPC Autofill's measure, and its website hides anything over %d", dpi, mpcfill.MaxDPI), http.StatusBadRequest)
-		return
-	}
-	// A card is portrait, which also bounds the width the decode allocates
 	if cfg.Width > cfg.Height {
 		http.Error(w, fmt.Sprintf("the cardback is %d×%d, and a card is taller than it is wide", cfg.Width, cfg.Height), http.StatusBadRequest)
+		return
+	}
+	if cfg.Width*cfg.Height > maxCardbackPixels {
+		http.Error(w, fmt.Sprintf("the cardback is %d×%d, which is too large to scale down to MPC Autofill's %d DPI", cfg.Width, cfg.Height, mpcfill.MaxDPI), http.StatusBadRequest)
 		return
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		http.Error(w, "the cardback could not be read: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+	if mpcfill.DPI(cfg.Height) > mpcfill.MaxDPI {
+		img = template.Scale(float64(maxCardbackHeight) / float64(cfg.Height)).Image(img)
 	}
 	s.cardbackMu.Lock()
 	defer s.cardbackMu.Unlock()
@@ -182,4 +193,15 @@ func (s *Server) handlePutCardback(w http.ResponseWriter, r *http.Request) {
 	}
 	s.prefs.SetCardbackName(name)
 	s.handleMPC(w, r)
+}
+
+// handleMPCFolder reports how many files an earlier project left in the path
+// folder, so the list can warn before a render overwrites them
+func (s *Server) handleMPCFolder(w http.ResponseWriter, r *http.Request) {
+	dir, err := batch.ExpandPath(r.URL.Query().Get("path"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]int{"existing": batch.ExistingFiles(dir)})
 }

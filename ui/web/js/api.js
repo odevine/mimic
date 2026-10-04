@@ -92,6 +92,8 @@ export const api = {
   mpc: () => get("/api/mpc"),
   putCardback: (file) => fetch(`/api/mpc/cardback?name=${encodeURIComponent(file.name)}`, { method: "PUT", body: file }).then(json),
   cardbackURL: () => `/api/mpc/cardback?ts=${Date.now()}`,
+  // mpcFolder resolves to { existing }, the files an earlier project left in path
+  mpcFolder: (path) => get(`/api/mpc/folder?path=${encodeURIComponent(path)}`),
 
   // cardData reports the local copy of Scryfall bulk data and what a download
   // would fetch, and downloadCardData starts a download job

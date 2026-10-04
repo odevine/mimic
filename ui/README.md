@@ -47,7 +47,10 @@ between every printing of the card. Fields you have not edited follow the new
 printing, and edited ones keep your value. Each edited field carries a dot and
 a revert control. The mana cost and rules text show their braced codes as the
 engine's own pips as you type, with a code the engine does not draw flagged,
-and a palette inserts symbols for anyone who does not know the syntax.
+and a palette inserts symbols for anyone who does not know the syntax. Any text
+field can be redacted by wrapping words in `~~`, as in
+`You ~~can't lose the game~~.`, which draws a marker bar over the words in place
+of them. A span left open runs to the end of its paragraph.
 
 Render draws the current values into the preview, which zooms to fit, 100% and
 200% and pans by dragging. Save downloads the card at the output resolution.

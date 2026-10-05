@@ -15,8 +15,9 @@ For Scryfall data from elsewhere, such as a line of a bulk data file,
 `template` turns a `card.Data` and its art into a finished image. A `Template`
 reads its frame layers and geometry through an `AssetProvider`, lays out and
 draws the text, and returns a pixel buffer. `template/normal` is the modern
-frame, and `template/transform` is the same frame for both faces of a transform
-card. `RenderTextBox` handles wrapping, shrink-to-fit, and inline mana symbols.
+frame, `template/transform` is the same frame for both faces of a transform
+card, and `template/split` draws both halves of a split or fuse card into one
+frame, turned upright. `RenderTextBox` handles wrapping, shrink-to-fit, and inline mana symbols.
 
 A template only draws the cards its frame was made for. `template.Classify`
 gives each image a card renders to a role, where the face sits on the card

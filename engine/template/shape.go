@@ -16,6 +16,7 @@ type Role string
 const (
 	RoleSingle         Role = "single"
 	RoleSplit          Role = "split"
+	RoleAftermath      Role = "aftermath"
 	RoleAdventure      Role = "adventure"
 	RoleTransformFront Role = "transform_front"
 	RoleTransformBack  Role = "transform_back"
@@ -36,6 +37,7 @@ const (
 	KindSaga         Kind = "saga"
 	KindClass        Kind = "class"
 	KindCase         Kind = "case"
+	KindRoom         Kind = "room"
 	KindLeveler      Kind = "leveler"
 	KindMutate       Kind = "mutate"
 	KindPrototype    Kind = "prototype"
@@ -49,13 +51,13 @@ const (
 
 var (
 	knownRoles = map[Role]bool{
-		RoleSingle: true, RoleSplit: true, RoleAdventure: true,
+		RoleSingle: true, RoleSplit: true, RoleAftermath: true, RoleAdventure: true,
 		RoleTransformFront: true, RoleTransformBack: true,
 		RoleMDFCFront: true, RoleMDFCBack: true,
 	}
 	knownKinds = map[Kind]bool{
 		KindStandard: true, KindBasicLand: true, KindPlaneswalker: true,
-		KindSaga: true, KindClass: true, KindCase: true, KindLeveler: true,
+		KindSaga: true, KindClass: true, KindCase: true, KindRoom: true, KindLeveler: true,
 		KindMutate: true, KindPrototype: true, KindBattle: true,
 		KindToken: true, KindPlane: true,
 	}
@@ -136,7 +138,7 @@ func Classify(d *card.Data) []Shape {
 		}
 		return []Shape{{RoleSingle, kind}}
 	case "split":
-		return []Shape{{RoleSplit, KindStandard}}
+		return []Shape{splitShape(d)}
 	case "adventure":
 		return []Shape{{RoleAdventure, KindStandard}}
 	case "transform", "battle", "double_faced_token":
@@ -187,6 +189,8 @@ func typeLineKind(typeLine string) Kind {
 		return KindClass
 	case has(types, "enchantment") && has(subtypes, "case"):
 		return KindCase
+	case has(types, "enchantment") && has(subtypes, "room"):
+		return KindRoom
 	case has(types, "basic") && has(types, "land"):
 		return KindBasicLand
 	}
@@ -237,4 +241,20 @@ func (r RenderRequest) FaceSide() frame.Side {
 		return frame.Single
 	}
 	return shapes[r.Face].Side()
+}
+
+// splitShape tells apart the frames Scryfall files under its split layout. An
+// Aftermath card prints its second half turned the other way, and a Room is an
+// enchantment frame with a door on each half, so neither is a classic split or
+// fuse card
+func splitShape(d *card.Data) Shape {
+	for _, k := range d.Keywords {
+		if strings.EqualFold(k, "aftermath") {
+			return Shape{RoleAftermath, KindStandard}
+		}
+	}
+	if len(d.Faces) > 1 && strings.HasPrefix(d.Faces[1].OracleText, "Aftermath (") {
+		return Shape{RoleAftermath, KindStandard}
+	}
+	return Shape{RoleSplit, typeLineKind(d.TypeLine)}
 }

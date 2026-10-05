@@ -30,6 +30,7 @@ type scryfallCard struct {
 	CardFaces       []face    `json:"card_faces"`
 	Layout          string    `json:"layout"`
 	FrameEffects    []string  `json:"frame_effects"`
+	Keywords        []string  `json:"keywords"`
 	ColorIndicator  []string  `json:"color_indicator"`
 }
 
@@ -100,6 +101,7 @@ func (sc *scryfallCard) toData() *Data {
 		ArtworkURL:      sc.ImageURIs.ArtCrop,
 		Layout:          sc.Layout,
 		FrameEffects:    sc.FrameEffects,
+		Keywords:        sc.Keywords,
 		ColorIndicator:  toColors(sc.ColorIndicator),
 	}
 	for _, f := range sc.CardFaces {
@@ -117,6 +119,16 @@ func (sc *scryfallCard) toData() *Data {
 			Artist:         f.Artist,
 			ArtworkURL:     f.ImageURIs.ArtCrop,
 		})
+	}
+
+	// Scryfall gives the halves of a split card no colors of their own, so each
+	// half takes the colors its mana cost shows
+	if sc.Layout == "split" {
+		for i := range d.Faces {
+			if len(d.Faces[i].Colors) == 0 {
+				d.Faces[i].Colors = ColorsFromManaCost(d.Faces[i].ManaCost)
+			}
+		}
 	}
 
 	// An empty type line with faces present also marks per-face fields living

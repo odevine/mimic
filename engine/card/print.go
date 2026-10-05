@@ -36,6 +36,8 @@ func TextFor(name string, d *Data) string {
 		}
 	case "flipside_pt":
 		return flipsidePT(d)
+	case "fuse":
+		return d.FuseText()
 	case "artist":
 		return d.Artist
 	case "collector":

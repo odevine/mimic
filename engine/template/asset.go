@@ -24,7 +24,17 @@ type Manifest struct {
 	DPI       int                    `json:"dpi,omitempty"` // zero infers from width
 	Layers    []LayerSpec            `json:"layers"`        // bottom to top
 	TextBoxes map[string]TextBoxSpec `json:"textBoxes"`
-	Art       ArtSlot                `json:"art"`
+	// Art is the one art window of a single-faced frame. A manifest with Arts
+	// leaves it empty
+	Art ArtSlot `json:"art"`
+	// Arts is one art window per half of a split card, first half first. The
+	// card's one art image is cut in half, left then right, one half to each
+	Arts []ArtSlot `json:"arts,omitempty"`
+	// Rotate turns the finished composite this many degrees clockwise, a multiple
+	// of 90, so a frame authored on its side delivers upright. Everything above
+	// is laid out in the authored canvas, and only a TextBoxSpec with Space
+	// "output" is laid out after the turn
+	Rotate int `json:"rotate,omitempty"`
 }
 
 // LayerSpec is one frame layer. Layers are an ordered slice, not a map,
@@ -34,14 +44,14 @@ type LayerSpec struct {
 	Name string `json:"name"`
 	// Condition is one of the engine's fixed vocabulary: "", "legendary",
 	// "nonlegendary", "land", "nonland", "creature", "color_indicator",
-	// "front", "back", "icon_left", "icon_right" (which side of the title bar
+	// "front", "back", "fuse", "icon_left", "icon_right" (which side of the title bar
 	// the transform icon sits on), or a value the engine does not yet drive (nyx,
 	// companion, hollow_crown, fullart, divider, pt_dark), which renders the
 	// layer off. A comma-separated list such as "back,land" holds when every
 	// entry does
 	Condition string `json:"condition,omitempty"`
 	// ColorSlot names which of a WUBRG frame's slots (background, pinlines,
-	// twins, ptBox, crown, indicator, transform_icon) this layer's color key
+	// twins, ptBox, crown, indicator, transform_icon, fuse) this layer's color key
 	// comes from, see engine/frame. Empty means the layer carries only a
 	// color-invariant "any" variant, such as a border or a divider
 	ColorSlot string `json:"colorSlot,omitempty"`
@@ -52,6 +62,20 @@ type LayerSpec struct {
 	// Mirror flips part of the layer left to right when its condition holds,
 	// so one cut can draw a frame whose icon sits on either end of the title bar
 	Mirror *LayerMirror `json:"mirror,omitempty"`
+	// ColorBlend lets a layer whose color key is several color letters, such as
+	// "rw", draw each letter's own variant across the layer when no variant is
+	// keyed by the whole key. The colors follow one another from left to right in
+	// the authored canvas, blending where BlendStops puts the seams
+	ColorBlend bool `json:"colorBlend,omitempty"`
+	// Half scopes the layer to one half of a split card, 1 for the first and 2 for
+	// the second, so its condition and color slot read that half's own face. Zero
+	// is the whole card, which is every layer of a single-faced frame
+	Half int `json:"half,omitempty"`
+	// X and Y place the layer's PNG in the document, so one cut smaller than the
+	// document can draw at either half. Zero places it at the origin, where a
+	// document-sized PNG belongs
+	X int `json:"x,omitempty"`
+	Y int `json:"y,omitempty"`
 }
 
 // LayerMirror is a left to right flip of a layer about the canvas's vertical
@@ -160,6 +184,13 @@ type TextBoxSpec struct {
 	// conditions first and then in sorted key order, so a spec with no
 	// condition is the fallback when none of the others hold
 	Condition string `json:"condition,omitempty"`
+	// Half scopes the box to one half of a split card, as LayerSpec.Half does, so
+	// it draws that face's text and resolves its condition against that face
+	Half int `json:"half,omitempty"`
+	// Space is "output" for a box laid out after the manifest's Rotate, in the
+	// delivered canvas's own coordinates, such as a legal line that reads upright
+	// on a card turned from its authored side. Empty is the authored canvas
+	Space string `json:"space,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above
@@ -169,4 +200,16 @@ type ArtSlot struct {
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
 	After  string `json:"after"` // insert art directly above the LayerSpec with this Name
+}
+
+// SpaceOutput is the TextBoxSpec.Space of a box laid out after the rotation
+const SpaceOutput = "output"
+
+// ArtSlots is the art windows of the manifest in order, the single Art or each
+// of Arts
+func (m *Manifest) ArtSlots() []ArtSlot {
+	if len(m.Arts) > 0 {
+		return m.Arts
+	}
+	return []ArtSlot{m.Art}
 }

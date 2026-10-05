@@ -38,6 +38,14 @@ type Keys struct {
 	// Front and Back mark which face of a double-faced card is rendering. A
 	// single-faced card is neither
 	Front, Back bool
+	// Fuse marks a fuse split card, which prints a bar across both halves. The
+	// bar blends the halves' pinline colors, each half's letters in order, so a
+	// red half beside a white one is "rw". FuseKey colors its textbox, gold when
+	// the blend has more than three colors, and FusePinKey colors its pinline,
+	// which blends up to four. Both are empty for any other card
+	Fuse       bool
+	FuseKey    string
+	FusePinKey string
 }
 
 // Slot returns the color key for one of these keys' named slots: background,
@@ -61,6 +69,10 @@ func (k Keys) Slot(name string) string {
 		return k.Indicator
 	case "transform_icon":
 		return k.TransformIcon
+	case "fuse":
+		return k.FuseKey
+	case "fuse_pinlines":
+		return k.FusePinKey
 	default:
 		return ""
 	}
@@ -101,6 +113,8 @@ func (k Keys) ConditionMet(condition string) bool {
 		return k.Front
 	case "back":
 		return k.Back
+	case "fuse":
+		return k.Fuse
 	case "icon_left":
 		return k.TransformIcon != "" && !k.iconRight()
 	case "icon_right":
@@ -155,11 +169,65 @@ func DeriveFace(d *card.Data, side Side) Keys {
 		Nyx:        strings.Contains(tl, "enchantment"),
 		Front:      side == Front,
 		Back:       side == Back,
+		Fuse:       d.HasFuse(),
+	}
+	if k.Fuse {
+		k.FuseKey, k.FusePinKey = fuseKeys(d)
 	}
 	if side != Single {
 		k.TransformIcon = transformIcon(d.FrameEffects)
 	}
 	return k
+}
+
+// fuseKeys are the colors of a fuse bar, the pinline colors of the two halves in
+// order. A half with no pinline of letters, such as a colorless one, makes the
+// bar gold, and so does a textbox blend of more than three colors
+func fuseKeys(d *card.Data) (textbox, pinlines string) {
+	var merged string
+	for i := 0; i < 2; i++ {
+		h := d.Half(i)
+		tl := strings.ToLower(h.TypeLine)
+		key := pinlineKey(strings.Contains(tl, "land"), strings.Contains(tl, "artifact"), frameColors(h, strings.Contains(tl, "land")))
+		if !isColorLetters(key) {
+			return "gold", "gold"
+		}
+		key = runOrder(key)
+		if i == 0 || key != merged {
+			merged += key
+		}
+	}
+	if len(merged) > 4 {
+		return "gold", "gold"
+	}
+	if len(merged) > 3 {
+		return "gold", merged
+	}
+	return merged, merged
+}
+
+// runOrder is a dual's colors in the order its frame runs them from left to right,
+// which is WUBRG order except for the three the printed frames name the other
+// way round, green and white, red and white, and green and blue
+func runOrder(key string) string {
+	switch key {
+	case "wg":
+		return "gw"
+	case "wr":
+		return "rw"
+	case "ug":
+		return "gu"
+	}
+	return key
+}
+
+func isColorLetters(s string) bool {
+	for _, r := range s {
+		if !strings.ContainsRune("wubrg", r) {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // indicatorKey is the key a color indicator's art is filed under, its colors

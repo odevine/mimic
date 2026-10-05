@@ -288,3 +288,37 @@ func TestTransformIconSide(t *testing.T) {
 		}
 	}
 }
+
+func TestFuseKeys(t *testing.T) {
+	fuse := func(a, b string) card.Data {
+		return card.Data{Layout: "split", Keywords: []string{"Fuse"}, Faces: []card.Face{
+			{ManaCost: a, TypeLine: "Instant"}, {ManaCost: b, TypeLine: "Instant"},
+		}}
+	}
+	cases := []struct {
+		name         string
+		data         card.Data
+		fuse         bool
+		key, pinline string
+	}{
+		{"two single colors", fuse("{1}{R}", "{W}"), true, "rw", "rw"},
+		{"order follows the halves", fuse("{W}", "{1}{R}"), true, "wr", "wr"},
+		{"the same color twice", fuse("{1}{R}", "{R}{R}"), true, "r", "r"},
+		{"a dual half and a single", fuse("{B}{G}", "{R}"), true, "bgr", "bgr"},
+		{"a dual half twice", fuse("{B}{G}", "{B}{G}"), true, "bg", "bg"},
+		{"a hybrid half runs green to white", fuse("{G/W}{G/W}", "{R}"), true, "gwr", "gwr"},
+		{"red and white hybrid", fuse("{R/W}", "{U}"), true, "rwu", "rwu"},
+		{"four colors", fuse("{B}{G}", "{W}{U}"), true, "gold", "bgwu"},
+		{"a colorless half", fuse("{2}", "{R}"), true, "gold", "gold"},
+		{"no keyword", card.Data{Layout: "split", Faces: []card.Face{{ManaCost: "{R}"}, {ManaCost: "{W}"}}}, false, "", ""},
+	}
+	for _, c := range cases {
+		k := Derive(&c.data)
+		if k.Fuse != c.fuse || k.FuseKey != c.key || k.FusePinKey != c.pinline {
+			t.Errorf("%s: Fuse = %v, keys %q and %q, want %v, %q and %q", c.name, k.Fuse, k.FuseKey, k.FusePinKey, c.fuse, c.key, c.pinline)
+		}
+		if k.ConditionMet("fuse") != c.fuse || k.Slot("fuse") != c.key || k.Slot("fuse_pinlines") != c.pinline {
+			t.Errorf("%s: the fuse condition and slots do not follow the keys", c.name)
+		}
+	}
+}

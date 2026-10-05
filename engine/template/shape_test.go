@@ -32,6 +32,13 @@ func TestClassify(t *testing.T) {
 		{"token", card.Data{Layout: "token", TypeLine: "Token Creature — Goblin"}, []Shape{{RoleSingle, KindToken}}},
 		{"plane", card.Data{Layout: "planar", TypeLine: "Plane — Dominaria"}, []Shape{{RoleSingle, KindPlane}}},
 		{"split", card.Data{Layout: "split", Faces: faces("Instant", "Instant")}, []Shape{{RoleSplit, KindStandard}}},
+		{"fuse", card.Data{Layout: "split", Keywords: []string{"Fuse"}, Faces: faces("Instant", "Instant")}, []Shape{{RoleSplit, KindStandard}}},
+		{"aftermath by keyword", card.Data{Layout: "split", Keywords: []string{"Aftermath"}, Faces: faces("Sorcery", "Sorcery")}, []Shape{{RoleAftermath, KindStandard}}},
+		{
+			"aftermath by reminder", card.Data{Layout: "split", Faces: []card.Face{{TypeLine: "Sorcery"}, {TypeLine: "Sorcery", OracleText: "Aftermath (Cast this spell only from your graveyard.)"}}},
+			[]Shape{{RoleAftermath, KindStandard}},
+		},
+		{"room", card.Data{Layout: "split", TypeLine: "Enchantment — Room // Enchantment — Room", Faces: faces("Enchantment — Room", "Enchantment — Room")}, []Shape{{RoleSplit, KindRoom}}},
 		{"adventure", card.Data{Layout: "adventure", Faces: faces("Creature — Human", "Sorcery — Adventure")}, []Shape{{RoleAdventure, KindStandard}}},
 		{
 			"transform", card.Data{Layout: "transform", Faces: faces("Creature — Human Wizard", "Creature — Human Insect")},

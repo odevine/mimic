@@ -2,6 +2,7 @@ package cardlist
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/odevine/mimic/engine/card"
@@ -26,7 +27,40 @@ type Edits struct {
 	Rarity    string `json:"rarity"`
 	Released  string `json:"released"`
 	Language  string `json:"language"`
+
+	// The fields of each half of a split card, which prints its two halves from
+	// its faces. They mean nothing to a card that is not a split card, and the
+	// top-level name, cost, colors, type, rules, and flavor mean nothing to a
+	// split card, which draws only its halves
+	Half1Name     string `json:"half1Name"`
+	Half1ManaCost string `json:"half1ManaCost"`
+	Half1Colors   string `json:"half1Colors"`
+	Half1TypeLine string `json:"half1TypeLine"`
+	Half1Oracle   string `json:"half1Oracle"`
+	Half1Flavor   string `json:"half1Flavor"`
+	Half2Name     string `json:"half2Name"`
+	Half2ManaCost string `json:"half2ManaCost"`
+	Half2Colors   string `json:"half2Colors"`
+	Half2TypeLine string `json:"half2TypeLine"`
+	Half2Oracle   string `json:"half2Oracle"`
+	Half2Flavor   string `json:"half2Flavor"`
 }
+
+// halfFields are the editable fields of one half, as pointers into an Edits
+type halfFields struct {
+	name, manaCost, colors, typeLine, oracle, flavor *string
+}
+
+// half is the fields of half i of a split card, 0 for the first
+func (e *Edits) half(i int) halfFields {
+	if i == 0 {
+		return halfFields{&e.Half1Name, &e.Half1ManaCost, &e.Half1Colors, &e.Half1TypeLine, &e.Half1Oracle, &e.Half1Flavor}
+	}
+	return halfFields{&e.Half2Name, &e.Half2ManaCost, &e.Half2Colors, &e.Half2TypeLine, &e.Half2Oracle, &e.Half2Flavor}
+}
+
+// isSplit reports whether the card prints its two halves from its faces
+func isSplit(d *card.Data) bool { return d.Layout == "split" && len(d.Faces) >= 2 }
 
 // ApplyEdits returns a copy of base with the edited fields overlaid. base is
 // left untouched so the client can reset to it. The art is carried separately,
@@ -48,19 +82,32 @@ func ApplyEdits(base *card.Data, e Edits) *card.Data {
 	d.Rarity = e.Rarity
 	d.ReleasedAt = e.Released
 	d.Language = e.Language
+	if isSplit(base) {
+		d.Faces = slices.Clone(base.Faces)
+		for i := 0; i < 2; i++ {
+			h := e.half(i)
+			// An edit that names nothing of a half, as from a client that predates
+			// the half fields, leaves that half as fetched
+			if h.empty() {
+				continue
+			}
+			d.Faces[i].Name = *h.name
+			d.Faces[i].ManaCost = *h.manaCost
+			d.Faces[i].Colors = parseColors(*h.colors)
+			d.Faces[i].TypeLine = *h.typeLine
+			d.Faces[i].OracleText = *h.oracle
+			d.Faces[i].FlavorText = *h.flavor
+		}
+	}
 	return &d
 }
 
 // editsOf reads a card back into its editable fields, the inverse of ApplyEdits
 func editsOf(d *card.Data) Edits {
-	var colors strings.Builder
-	for _, c := range d.Colors {
-		colors.WriteString(string(c))
-	}
-	return Edits{
+	e := Edits{
 		Name:      d.Name,
 		ManaCost:  d.ManaCost,
-		Colors:    colors.String(),
+		Colors:    colorLetters(d.Colors),
 		TypeLine:  d.TypeLine,
 		Oracle:    d.OracleText,
 		Flavor:    d.FlavorText,
@@ -74,6 +121,15 @@ func editsOf(d *card.Data) Edits {
 		Released:  d.ReleasedAt,
 		Language:  d.Language,
 	}
+	if isSplit(d) {
+		for i := 0; i < 2; i++ {
+			f, h := d.Faces[i], e.half(i)
+			*h.name, *h.manaCost, *h.typeLine = f.Name, f.ManaCost, f.TypeLine
+			*h.oracle, *h.flavor = f.OracleText, f.FlavorText
+			*h.colors = colorLetters(d.Half(i).Colors)
+		}
+	}
+	return e
 }
 
 // Overlay returns a copy of base with the named edit fields replaced, keyed
@@ -96,4 +152,18 @@ func Overlay(base *card.Data, fields map[string]string) *card.Data {
 	var e Edits
 	_ = json.Unmarshal(raw, &e)
 	return ApplyEdits(base, e)
+}
+
+// colorLetters is the raw WUBRG letters Edits carries a color slice as
+func colorLetters(colors []card.Color) string {
+	var b strings.Builder
+	for _, c := range colors {
+		b.WriteString(string(c))
+	}
+	return b.String()
+}
+
+// empty reports whether none of the half's fields is set
+func (h halfFields) empty() bool {
+	return *h.name == "" && *h.manaCost == "" && *h.colors == "" && *h.typeLine == "" && *h.oracle == "" && *h.flavor == ""
 }

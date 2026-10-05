@@ -31,6 +31,25 @@ const FIELDS = [
   { f: "language", key: "Language", label: "Language", kind: "text", group: "details" },
 ];
 
+// HALF_FIELDS are the fields of each half of a split card, read from its faces
+// and edited under the same names the server's Edits carries. A split card
+// draws only its halves, so these stand in for the top-level face fields
+const HALF_FIELDS = [1, 2].flatMap((n) => [
+  { f: `half${n}Name`, key: "Name", half: n, label: "Name", kind: "text" },
+  { f: `half${n}ManaCost`, key: "ManaCost", half: n, label: "Cost", kind: "mana", placeholder: "{2}{U}{U}" },
+  { f: `half${n}Colors`, key: "Colors", half: n, label: "Colors", kind: "colors" },
+  { f: `half${n}TypeLine`, key: "TypeLine", half: n, label: "Type", kind: "text" },
+  { f: `half${n}Oracle`, key: "OracleText", half: n, label: "Rules", kind: "rules", rows: 5 },
+  { f: `half${n}Flavor`, key: "FlavorText", half: n, label: "Flavor", kind: "area", rows: 2 },
+]);
+const ALL_FIELDS = [...FIELDS, ...HALF_FIELDS];
+
+// FACE_FIELDS are the top-level fields a split card does not draw, which its
+// halves replace
+const FACE_FIELDS = new Set(["name", "manaCost", "colors", "typeLine", "oracle", "flavor", "power", "toughness", "loyalty"]);
+
+const isSplit = (card) => !!card && card.Layout === "split" && (card.Faces || []).length >= 2;
+
 const COLORS = [
   ["W", "White", "--mana-w"],
   ["U", "Blue", "--mana-u"],
@@ -43,10 +62,14 @@ const COLOR_ORDER = "WUBRGC";
 const normColors = (s) =>
   [...new Set((s || "").toUpperCase())].filter((c) => COLOR_ORDER.includes(c)).sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)).join("");
 
-// valuesOf reads a card into the form's string values
+// valuesOf reads a card into the form's string values. A half's fields read from
+// its face, and are empty for a card that is not split
 function valuesOf(card) {
   const out = {};
-  for (const { f, key } of FIELDS) out[f] = f === "colors" ? normColors((card.Colors || []).join("")) : card[key] || "";
+  for (const { f, key, half } of ALL_FIELDS) {
+    const src = half ? (isSplit(card) ? card.Faces[half - 1] : {}) : card;
+    out[f] = key === "Colors" ? normColors((src.Colors || []).join("")) : src[key] || "";
+  }
   return out;
 }
 
@@ -81,7 +104,8 @@ function faceTitle() {
 let saving = false;
 
 const baseValues = () => (store.base.peek() ? valuesOf(store.base.peek()) : {});
-const isDirty = (f, edits, base) => (f === "colors" ? normColors(edits[f]) !== normColors(base[f]) : edits[f] !== base[f]);
+const isColorField = (f) => f === "colors" || /^half\d+Colors$/.test(f);
+const isDirty = (f, edits, base) => (isColorField(f) ? normColors(edits[f]) !== normColors(base[f]) : edits[f] !== base[f]);
 
 function setEdit(f, value) {
   store.edits.value = { ...store.edits.peek(), [f]: value };
@@ -325,7 +349,7 @@ function choosePrinting(card) {
   const next = valuesOf(card);
   const edits = store.edits.peek();
   const merged = {};
-  for (const { f } of FIELDS) merged[f] = isDirty(f, edits, oldBase) ? edits[f] : next[f];
+  for (const { f } of ALL_FIELDS) merged[f] = isDirty(f, edits, oldBase) ? edits[f] : next[f];
   batch(() => {
     store.base.value = card;
     store.edits.value = merged;
@@ -336,7 +360,7 @@ function choosePrinting(card) {
 
 // --- editor ---
 
-function colorToggles() {
+function colorToggles(f) {
   const wrap = h("div", { class: "color-toggles", role: "group", "aria-label": "Colors" });
   const chips = {};
   for (const [c, name, tok] of COLORS) {
@@ -349,9 +373,9 @@ function colorToggles() {
         "aria-pressed": "false",
         "aria-label": name,
         onclick: () => {
-          let cur = normColors(store.edits.peek().colors).replace("C", "");
+          let cur = normColors(store.edits.peek()[f]).replace("C", "");
           cur = cur.includes(c) ? cur.replace(c, "") : cur + c;
-          setEdit("colors", normColors(cur));
+          setEdit(f, normColors(cur));
         },
       },
       h("span", { class: "swatch" }),
@@ -367,7 +391,7 @@ function colorToggles() {
       style: "--swatch: var(--mana-c)",
       "aria-pressed": "false",
       "aria-label": "Colorless",
-      onclick: () => setEdit("colors", normColors(store.edits.peek().colors) === "C" ? "" : "C"),
+      onclick: () => setEdit(f, normColors(store.edits.peek()[f]) === "C" ? "" : "C"),
     },
     h("span", { class: "swatch" }),
     "Colorless",
@@ -376,7 +400,7 @@ function colorToggles() {
   effect(() => {
     const e = store.edits.value;
     if (!e) return;
-    const v = normColors(e.colors);
+    const v = normColors(e[f]);
     for (const [c, el] of Object.entries(chips)) el.setAttribute("aria-pressed", String(v.includes(c)));
   });
   return [wrap, h("p", { class: "note" }, "Colors pick the frame. Lands take theirs from the mana they produce.")];
@@ -414,7 +438,7 @@ function buildField(spec) {
   const el = h("div", { class: "field", dataset: { field: spec.f } }, label, control);
 
   if (spec.kind === "colors") {
-    control.append(...colorToggles());
+    control.append(...colorToggles(spec.f));
     return el;
   }
 
@@ -474,7 +498,29 @@ function buildEditor() {
     h("summary", {}, icon("chevron-down"), "Printing details"),
     h("div", { class: "field-grid" }, ...details.map(buildField)),
   );
-  form.replaceChildren(grid, more);
+  // A split card draws its two halves, so their fields replace the face fields
+  // of the whole card, which would edit nothing it prints
+  const halves = [1, 2].map((n) => {
+    const title = h("h3", { class: "half-title" });
+    effect(() => {
+      const e = store.edits.value;
+      const name = e && e[`half${n}Name`];
+      title.textContent = `${n === 1 ? "First" : "Second"} half${name ? ` · ${name}` : ""}`;
+    });
+    return h(
+      "section",
+      { class: "half-fields", hidden: true, "aria-label": `${n === 1 ? "First" : "Second"} half` },
+      title,
+      h("div", { class: "field-grid" }, ...HALF_FIELDS.filter((s) => s.half === n).map(buildField)),
+    );
+  });
+  const faceEls = [...grid.children].filter((el) => el.classList.contains("field-pair") || FACE_FIELDS.has(el.dataset.field));
+  effect(() => {
+    const split = isSplit(store.base.value);
+    for (const el of faceEls) el.hidden = split;
+    for (const el of halves) el.hidden = !split;
+  });
+  form.replaceChildren(...halves, grid, more);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     render();

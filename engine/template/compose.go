@@ -16,6 +16,12 @@ import (
 // it at the document origin. Frame layers are authored document-sized, so the
 // origin placement leaves them where the artwork put them
 func LoadLayer(p AssetProvider, path string, w, h int, s Scale) (*raster.Buffer, error) {
+	return LoadLayerAt(p, path, w, h, s, 0, 0)
+}
+
+// LoadLayerAt is LoadLayer with the PNG placed at (x, y) in the scaled document,
+// for a cut smaller than the document, such as one half of a split card
+func LoadLayerAt(p AssetProvider, path string, w, h int, s Scale, x, y int) (*raster.Buffer, error) {
 	img, err := LoadImage(p, path)
 	if err != nil {
 		return nil, err
@@ -24,7 +30,7 @@ func LoadLayer(p AssetProvider, path string, w, h int, s Scale) (*raster.Buffer,
 	if err != nil {
 		return nil, fmt.Errorf("template: wrapping layer %q: %w", path, err)
 	}
-	return canvas.Place(w, h, buf, 0, 0), nil
+	return canvas.Place(w, h, buf, x, y), nil
 }
 
 // Mirror flips buf left to right about its vertical center within region, a
@@ -190,4 +196,150 @@ func BlendMode(name string) (blend.Mode, error) {
 	default:
 		return blend.Normal, fmt.Errorf("template: unknown blend mode %q", name)
 	}
+}
+
+// Rotate returns buf turned clockwise by degrees, a multiple of 90. A quarter
+// turn swaps the width and height. Zero returns buf itself
+func Rotate(buf *raster.Buffer, degrees int) *raster.Buffer {
+	turns := ((degrees/90)%4 + 4) % 4
+	if turns == 0 {
+		return buf
+	}
+	w, h := buf.Width, buf.Height
+	ow, oh := w, h
+	if turns%2 == 1 {
+		ow, oh = h, w
+	}
+	out := raster.MustNewBuffer(ow, oh)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			var dx, dy int
+			switch turns {
+			case 1:
+				dx, dy = h-1-y, x
+			case 2:
+				dx, dy = w-1-x, h-1-y
+			default:
+				dx, dy = y, w-1-x
+			}
+			si := (y*w + x) * 4
+			di := (dy*ow + dx) * 4
+			copy(out.Pix[di:di+4], buf.Pix[si:si+4])
+		}
+	}
+	return out
+}
+
+// HalfOfArt is the i-th of n equal vertical strips of an art image, counted from
+// the left. A split card's art crop holds both halves side by side, and each
+// half's art window takes its own strip
+func HalfOfArt(img image.Image, i, n int) image.Image {
+	b := img.Bounds()
+	if n <= 1 {
+		return img
+	}
+	x0 := b.Min.X + b.Dx()*i/n
+	x1 := b.Min.X + b.Dx()*(i+1)/n
+	sub, ok := img.(interface {
+		SubImage(image.Rectangle) image.Image
+	})
+	if !ok {
+		out := image.NewRGBA(image.Rect(0, 0, x1-x0, b.Dy()))
+		xdraw.Draw(out, out.Bounds(), img, image.Pt(x0, b.Min.Y), xdraw.Src)
+		return out
+	}
+	return sub.SubImage(image.Rect(x0, b.Min.Y, x1, b.Max.Y))
+}
+
+// BlendStops are the seams of a layer that blends n colors left to right, as
+// fractions of the document's width, each color's hold then the blend into the
+// next, such as a fuse bar whose halves run in different colors. The seams for
+// two and three colors are the printed card's, and four add the middle one
+func BlendStops(n int) []float64 {
+	switch n {
+	case 2:
+		return []float64{.50, .54}
+	case 3:
+		return []float64{.28, .33, .71, .76}
+	case 4:
+		return []float64{.28, .33, .50, .54, .71, .76}
+	}
+	return nil
+}
+
+// blendWeights is how much of each of n colors shows at a document fraction t,
+// where each color holds until its seam starts and fades into the next across it
+func blendWeights(stops []float64, n int, t float64, w []float64) {
+	for i := range w {
+		w[i] = 0
+	}
+	k := 0
+	for k < n-1 && t >= stops[2*k+1] {
+		k++
+	}
+	if k == n-1 || t < stops[2*k] {
+		w[k] = 1
+		return
+	}
+	mix := (t - stops[2*k]) / (stops[2*k+1] - stops[2*k])
+	w[k], w[k+1] = 1-mix, mix
+}
+
+// LoadBlendedLayer decodes several color variants of one layer and blends them
+// left to right at the seams BlendStops gives, placing the result at (x, y) in
+// the scaled document. The variants blend at their own size, so a bar costs the
+// size of the bar rather than of the document. They must be the same size
+func LoadBlendedLayer(p AssetProvider, paths []string, w, h int, s Scale, x, y int) (*raster.Buffer, error) {
+	stops := BlendStops(len(paths))
+	if stops == nil {
+		return nil, fmt.Errorf("template: cannot blend %d colors", len(paths))
+	}
+	var bufs []*raster.Buffer
+	for _, path := range paths {
+		img, err := LoadImage(p, path)
+		if err != nil {
+			return nil, err
+		}
+		buf, err := raster.FromImage(s.Image(img))
+		if err != nil {
+			return nil, fmt.Errorf("template: wrapping layer %q: %w", path, err)
+		}
+		if len(bufs) > 0 && !buf.SameSize(bufs[0]) {
+			return nil, fmt.Errorf("template: blended layers %q and %q differ in size", paths[0], path)
+		}
+		bufs = append(bufs, buf)
+	}
+	out := raster.MustNewBuffer(bufs[0].Width, bufs[0].Height)
+	weights := make([]float64, len(bufs))
+	for sx := 0; sx < out.Width; sx++ {
+		blendWeights(stops, len(bufs), (float64(x+sx)+0.5)/float64(w), weights)
+		for sy := 0; sy < out.Height; sy++ {
+			i := (sy*out.Width + sx) * 4
+			for c := 0; c < 4; c++ {
+				var v float64
+				for k, buf := range bufs {
+					v += weights[k] * float64(buf.Pix[i+c])
+				}
+				out.Pix[i+c] = float32(v)
+			}
+		}
+	}
+	return canvas.Place(w, h, out, x, y), nil
+}
+
+// BlendedPaths lists the variants a blended color key draws, one per letter, or
+// nil when the key is not several letters each with a variant of its own
+func BlendedPaths(variants map[string]LayerAsset, key string) []string {
+	if len(key) < 2 {
+		return nil
+	}
+	var paths []string
+	for _, r := range key {
+		v, ok := variants[string(r)]
+		if !ok {
+			return nil
+		}
+		paths = append(paths, v.Path)
+	}
+	return paths
 }

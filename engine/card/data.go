@@ -5,6 +5,8 @@
 // changing
 package card
 
+import "strings"
+
 // Color is a single WUBRG color as Scryfall spells it, plus Colorless, which
 // only appears in ProducedMana
 type Color string
@@ -44,6 +46,9 @@ type Data struct {
 	// "legendary" or "sunmoondfc", which name the transform icon a double-faced
 	// card prints
 	FrameEffects []string
+	// Keywords are Scryfall's keyword abilities for the whole card, such as Fuse
+	// or Aftermath, which a layout alone does not tell apart
+	Keywords []string
 	// ColorIndicator is the colored dot a card whose colors its mana cost does
 	// not show prints beside its type line, in WUBRG as Scryfall lists them. A
 	// double-faced card's is its front face's
@@ -76,6 +81,11 @@ func (d *Data) Face(i int) *Data {
 	if i <= 0 || i >= len(d.Faces) {
 		return d
 	}
+	return d.overlay(i)
+}
+
+// overlay is the card with face i's own fields laid over the shared ones
+func (d *Data) overlay(i int) *Data {
 	f := d.Faces[i]
 	out := *d
 	out.Name = f.Name
@@ -109,4 +119,81 @@ func (d *Data) Year() string {
 		}
 	}
 	return y
+}
+
+// Half returns the card as half i of a split card prints it. Face leaves index 0
+// as the whole card because a double-faced card's top level is its front, but a
+// split card's top level joins both halves, so every index reads from Faces. A
+// half Scryfall gives no colors takes them from its mana cost, and on a fuse
+// card the Fuse reminder is left out, since the card prints it once across both
+// halves. An index out of range returns d itself
+func (d *Data) Half(i int) *Data {
+	if i < 0 || i >= len(d.Faces) {
+		return d
+	}
+	out := d.overlay(i)
+	if len(out.Colors) == 0 {
+		out.Colors = ColorsFromManaCost(out.ManaCost)
+	}
+	if d.HasFuse() {
+		out.OracleText = stripFuse(out.OracleText)
+	}
+	return out
+}
+
+// HasFuse reports whether the card is a fuse split card, by its keywords or, for
+// a card with none, by a face's Fuse reminder line
+func (d *Data) HasFuse() bool {
+	for _, k := range d.Keywords {
+		if strings.EqualFold(k, "fuse") {
+			return true
+		}
+	}
+	return d.FuseText() != ""
+}
+
+// FuseText is the Fuse reminder line a fuse card prints once across its bottom,
+// or empty for a card without one
+func (d *Data) FuseText() string {
+	for _, f := range d.Faces {
+		for _, line := range strings.Split(f.OracleText, "\n") {
+			if strings.HasPrefix(line, fusePrefix) {
+				return line
+			}
+		}
+	}
+	return ""
+}
+
+const fusePrefix = "Fuse ("
+
+// stripFuse drops the Fuse reminder line from a face's rules text
+func stripFuse(oracle string) string {
+	var kept []string
+	for _, line := range strings.Split(oracle, "\n") {
+		if !strings.HasPrefix(line, fusePrefix) {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// ColorsFromManaCost reads the colors a mana cost shows, in WUBRG order. A
+// hybrid symbol counts toward both its colors and a Phyrexian one toward its
+// own, while generic, colorless, snow, and X costs add none
+func ColorsFromManaCost(cost string) []Color {
+	seen := map[Color]bool{}
+	for _, sym := range strings.Split(cost, "{") {
+		sym, _, _ = strings.Cut(sym, "}")
+		for _, part := range strings.Split(sym, "/") {
+			seen[Color(strings.ToUpper(part))] = true
+		}
+	}
+	var out []Color
+	for _, c := range []Color{White, Blue, Black, Red, Green} {
+		if seen[c] {
+			out = append(out, c)
+		}
+	}
+	return out
 }

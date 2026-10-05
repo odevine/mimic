@@ -59,6 +59,12 @@ func (t *Template) Name() string { return t.name }
 // single buffer. It returns an error rather than panicking on a missing
 // manifest, a missing layer PNG, or an invalid document, so one bad card does
 // not take down a batch render
+//
+// A split card is drawn from one manifest that scopes its layers and text boxes
+// to a half. Each half reads its own face, so the halves frame in their own
+// colors, and the card's one art image is cut in two for the art windows. The
+// frame is laid out in the manifest's authored canvas and turned by its Rotate,
+// after which a box in the output space is drawn upright in the delivered one
 func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*raster.Buffer, error) {
 	if req.Card == nil {
 		return nil, fmt.Errorf("render: request has no card")
@@ -79,12 +85,12 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 
 	d := req.FaceCard()
 	f := frame.DeriveFace(d, req.FaceSide())
+	halves := newHalves(d, f, m)
+
 	// Of the specs a manifest offers for one box, only the one whose condition
-	// holds for this face draws, and every lookup by box name below sees it.
-	// The copy keeps a provider's cached manifest untouched
-	resolved := *m
-	resolved.TextBoxes = template.ResolveTextBoxes(m.TextBoxes, f)
-	m = &resolved
+	// holds for the face it is scoped to draws, and every lookup by box name
+	// below sees it. Each half resolves its boxes against its own face
+	boxes := resolveBoxes(m.TextBoxes, halves)
 
 	layersByName := make(map[string]template.LayerSpec, len(m.Layers))
 	for _, l := range m.Layers {
@@ -92,12 +98,13 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 
 	var nodes []canvas.Node
+	artSlots := m.ArtSlots()
 	for i, layer := range m.Layers {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
-		node, err := layerNode(req, m, layer, layersByName, f, scale)
+		node, err := layerNode(req, m, layer, layersByName, halves.keys(layer.Half), scale)
 		if err != nil {
 			return nil, err
 		}
@@ -108,13 +115,23 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		// The art takes its place in the stack whether or not the layer it
 		// follows draws for this card, so a template with a background per face
 		// can name the last of them
-		if req.Art != nil && m.Art.After == layer.Name {
-			art := template.FitArt(req.Art, m.Art.Width, m.Art.Height)
+		if req.Art == nil {
+			continue
+		}
+		for slotIdx, slot := range artSlots {
+			if slot.After != layer.Name {
+				continue
+			}
+			src := req.Art
+			if len(m.Arts) > 0 {
+				src = template.HalfOfArt(req.Art, slotIdx, len(m.Arts))
+			}
+			art := template.FitArt(src, slot.Width, slot.Height)
 			artBuf, err := raster.FromImage(art)
 			if err != nil {
 				return nil, fmt.Errorf("render: wrapping art: %w", err)
 			}
-			placedArt := canvas.Place(m.Width, m.Height, artBuf, m.Art.X, m.Art.Y)
+			placedArt := canvas.Place(m.Width, m.Height, artBuf, slot.X, slot.Y)
 			nodes = append(nodes, &canvas.Layer{Content: placedArt, Mode: blend.Normal})
 		}
 	}
@@ -125,62 +142,30 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	var syms symbols
 	if ms := mana.NewSymbols(req.FontDir); ms != nil {
 		syms.mana = ms
-		if box, ok := m.TextBoxes["artist"]; ok {
+		if box, ok := boxes.whole()["artist"]; ok {
 			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.Color)}
 		}
 	}
 
-	boxNames := sortedKeys(m.TextBoxes)
-	for i, name := range boxNames {
-		req.Report(stepText, lerp(fracTextFrom, fracTextTo, i, len(boxNames)))
-		box := m.TextBoxes[name]
-		parts := textParts(name, box, d, syms, req.FontDir, req.Copyright)
-		if len(parts) == 0 {
-			continue
+	jobs := boxes.jobs()
+	var outNodes []canvas.Node
+	for i, job := range jobs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		if box.DuckLayer != "" && box.DuckRow != "" {
-			if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer, scale); ok {
-				box = template.MoveToRow(box, m, box.DuckRow)
-			}
+		req.Report(stepText, lerp(fracTextFrom, fracTextTo, i, len(jobs)))
+		docW, docH := m.Width, m.Height
+		if job.box.Space == template.SpaceOutput {
+			docW, docH = m.DeliveredWidth(), m.DeliveredHeight()
 		}
-		if box.ClearOf != "" {
-			if otherBox, ok := m.TextBoxes[box.ClearOf]; ok {
-				if otherParts := textParts(box.ClearOf, otherBox, d, syms, req.FontDir, req.Copyright); len(otherParts) > 0 {
-					span, err := template.MeasureTextSpan(otherBox, otherParts...)
-					if err != nil {
-						return nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
-					}
-					box = template.ClearOf(box, span)
-				}
-			}
-		}
-		if box.AvoidLayer != "" {
-			if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer, scale); ok {
-				box.Avoid = r
-			}
-		}
-		res, err := template.RenderTextBox(box, m.Width, m.Height, parts...)
+		got, err := t.drawBox(req, m, job, boxes, layersByName, halves, syms, scale, docW, docH)
 		if err != nil {
-			return nil, fmt.Errorf("render: rendering text box %q: %w", name, err)
+			return nil, err
 		}
-		buf, err := raster.FromImage(res.Image)
-		if err != nil {
-			return nil, fmt.Errorf("render: wrapping text box %q: %w", name, err)
-		}
-		text := &canvas.Layer{Content: buf, Mode: blend.Normal}
-		if box.Shadow != nil {
-			text.Effects = []effects.Effect{box.Shadow.Effect(box.FontSize)}
-		}
-		nodes = append(nodes, text)
-
-		if res.HasDivider {
-			div, err := template.Divider(req.Assets, m, res.DividerY, scale)
-			if err != nil {
-				return nil, err
-			}
-			if div != nil {
-				nodes = append(nodes, div)
-			}
+		if job.box.Space == template.SpaceOutput {
+			outNodes = append(outNodes, got...)
+		} else {
+			nodes = append(nodes, got...)
 		}
 	}
 
@@ -192,7 +177,179 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		Height: m.Height,
 		Root:   canvas.Group{PassThrough: true, Layers: nodes},
 	}
-	return canvas.Render(doc)
+	out, err := canvas.Render(doc)
+	if err != nil {
+		return nil, err
+	}
+	if m.Rotate == 0 {
+		return out, nil
+	}
+	out = template.Rotate(out, m.Rotate)
+	if len(outNodes) == 0 {
+		return out, nil
+	}
+	turned := &canvas.Document{
+		Width:  out.Width,
+		Height: out.Height,
+		Root: canvas.Group{PassThrough: true, Layers: append(
+			[]canvas.Node{&canvas.Layer{Content: out, Mode: blend.Normal}}, outNodes...)},
+	}
+	return canvas.Render(turned)
+}
+
+// drawBox lays one text box out and returns the nodes it draws, the text and a
+// flavor divider when the box carries one. docW and docH are the canvas the box
+// is laid out in, which is the delivered one for a box in the output space
+func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, job boxJob, boxes boxSet, layersByName map[string]template.LayerSpec, halves halfSet, syms symbols, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
+	name, box := job.name, job.box
+	d, f := halves.data(job.half), halves.keys(job.half)
+	group := boxes[job.half]
+	parts := textParts(name, box, d, syms, req.FontDir, req.Copyright)
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	if box.DuckLayer != "" && box.DuckRow != "" {
+		if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer, scale); ok {
+			box = template.MoveToRow(box, &template.Manifest{TextBoxes: group}, box.DuckRow)
+		}
+	}
+	if box.ClearOf != "" {
+		if otherBox, ok := group[box.ClearOf]; ok {
+			if otherParts := textParts(box.ClearOf, otherBox, d, syms, req.FontDir, req.Copyright); len(otherParts) > 0 {
+				span, err := template.MeasureTextSpan(otherBox, otherParts...)
+				if err != nil {
+					return nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
+				}
+				box = template.ClearOf(box, span)
+			}
+		}
+	}
+	if box.AvoidLayer != "" {
+		if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer, scale); ok {
+			box.Avoid = r
+		}
+	}
+	res, err := template.RenderTextBox(box, docW, docH, parts...)
+	if err != nil {
+		return nil, fmt.Errorf("render: rendering text box %q: %w", name, err)
+	}
+	buf, err := raster.FromImage(res.Image)
+	if err != nil {
+		return nil, fmt.Errorf("render: wrapping text box %q: %w", name, err)
+	}
+	text := &canvas.Layer{Content: buf, Mode: blend.Normal}
+	if box.Shadow != nil {
+		text.Effects = []effects.Effect{box.Shadow.Effect(box.FontSize)}
+	}
+	out := []canvas.Node{text}
+
+	if res.HasDivider {
+		div, err := template.Divider(req.Assets, m, res.DividerY, scale)
+		if err != nil {
+			return nil, err
+		}
+		if div != nil {
+			out = append(out, div)
+		}
+	}
+	return out, nil
+}
+
+// halfSet is what each half of a split card prints and frames from, beside the
+// whole card's own. A manifest with no half scoping never reads the halves
+type halfSet struct {
+	whole     *card.Data
+	wholeKeys frame.Keys
+	halfData  [2]*card.Data
+	halfKeys  [2]frame.Keys
+}
+
+// newHalves reads each half's face and keys, only when the manifest scopes
+// something to a half
+func newHalves(d *card.Data, f frame.Keys, m *template.Manifest) halfSet {
+	h := halfSet{whole: d, wholeKeys: f}
+	if !usesHalves(m) {
+		return h
+	}
+	for i := range h.halfData {
+		h.halfData[i] = d.Half(i)
+		h.halfKeys[i] = frame.DeriveFace(h.halfData[i], frame.Single)
+	}
+	return h
+}
+
+func usesHalves(m *template.Manifest) bool {
+	for _, l := range m.Layers {
+		if l.Half != 0 {
+			return true
+		}
+	}
+	for _, b := range m.TextBoxes {
+		if b.Half != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// data is the face half h prints, where 0 is the whole card
+func (h halfSet) data(half int) *card.Data {
+	if half <= 0 || half > len(h.halfData) || h.halfData[half-1] == nil {
+		return h.whole
+	}
+	return h.halfData[half-1]
+}
+
+// keys are the frame keys of half h, where 0 is the whole card
+func (h halfSet) keys(half int) frame.Keys {
+	if half <= 0 || half > len(h.halfKeys) || h.halfData[half-1] == nil {
+		return h.wholeKeys
+	}
+	return h.halfKeys[half-1]
+}
+
+// boxSet is a manifest's text boxes after resolution, one map per half, with
+// index 0 holding the boxes of the whole card. Each is keyed by logical box name
+type boxSet [3]map[string]template.TextBoxSpec
+
+// resolveBoxes picks each logical box's spec for every half it is scoped to
+func resolveBoxes(specs map[string]template.TextBoxSpec, halves halfSet) boxSet {
+	var groups [3]map[string]template.TextBoxSpec
+	for key, spec := range specs {
+		if groups[spec.Half] == nil {
+			groups[spec.Half] = map[string]template.TextBoxSpec{}
+		}
+		groups[spec.Half][key] = spec
+	}
+	var out boxSet
+	for h, group := range groups {
+		if len(group) > 0 {
+			out[h] = template.ResolveTextBoxes(group, halves.keys(h))
+		}
+	}
+	return out
+}
+
+// whole is the boxes of the whole card
+func (b boxSet) whole() map[string]template.TextBoxSpec { return b[0] }
+
+// boxJob is one resolved text box to draw
+type boxJob struct {
+	half int
+	name string
+	box  template.TextBoxSpec
+}
+
+// jobs lists every box in draw order, the whole card's first and then each
+// half's, each in sorted name order
+func (b boxSet) jobs() []boxJob {
+	var out []boxJob
+	for h, group := range b {
+		for _, name := range sortedKeys(group) {
+			out = append(out, boxJob{half: h, name: name, box: group[name]})
+		}
+	}
+	return out
 }
 
 // lerp reports the cumulative fraction at item i of n across a phase spanning
@@ -218,16 +375,24 @@ func layerNode(req template.RenderRequest, m *template.Manifest, layer template.
 			variants = nyx.ColorVariants
 		}
 	}
-	asset, ok := variants[f.Slot(layer.ColorSlot)]
-	if !ok {
-		asset, ok = variants["any"]
+	key := f.Slot(layer.ColorSlot)
+	x, y := scale.Px(layer.X), scale.Px(layer.Y)
+	var placed *raster.Buffer
+	var err error
+	if blend := blendedPaths(layer, variants, key); blend != nil {
+		placed, err = template.LoadBlendedLayer(req.Assets, blend, m.Width, m.Height, scale, x, y)
+	} else {
+		asset, ok := variants[key]
+		if !ok {
+			asset, ok = variants["any"]
+		}
+		if !ok {
+			// No variant applies to this color. Skipping rather than erroring
+			// lets a manifest leave a layer out where it does not apply
+			return nil, nil
+		}
+		placed, err = template.LoadLayerAt(req.Assets, asset.Path, m.Width, m.Height, scale, x, y)
 	}
-	if !ok {
-		// No variant applies to this color. Skipping rather than erroring
-		// lets a manifest leave a layer out where it does not apply
-		return nil, nil
-	}
-	placed, err := template.LoadLayer(req.Assets, asset.Path, m.Width, m.Height, scale)
 	if err != nil {
 		return nil, err
 	}
@@ -333,4 +498,17 @@ func sortedKeys(m map[string]template.TextBoxSpec) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// blendedPaths is the variants a layer blends for a color key of several
+// letters that has no variant of its own, or nil for a layer that does not blend
+// or a key that is not such a blend
+func blendedPaths(layer template.LayerSpec, variants map[string]template.LayerAsset, key string) []string {
+	if !layer.ColorBlend {
+		return nil
+	}
+	if _, whole := variants[key]; whole {
+		return nil
+	}
+	return template.BlendedPaths(variants, key)
 }

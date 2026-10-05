@@ -35,5 +35,5 @@ func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name 
 	if b.Empty() {
 		return image.Rectangle{}, false
 	}
-	return b, true
+	return b.Add(image.Pt(s.Px(spec.X), s.Px(spec.Y))), true
 }

@@ -125,6 +125,26 @@ func boxScale(src image.Image, w, h int) *image.RGBA {
 	return dst
 }
 
+// Turned reports whether the manifest's rotation swaps its width and height
+func (m *Manifest) Turned() bool { return m.Rotate == 90 || m.Rotate == 270 }
+
+// DeliveredWidth is the width of the finished image, which is the authored
+// height when the manifest rotates a quarter turn
+func (m *Manifest) DeliveredWidth() int {
+	if m.Turned() {
+		return m.Height
+	}
+	return m.Width
+}
+
+// DeliveredHeight is the height of the finished image
+func (m *Manifest) DeliveredHeight() int {
+	if m.Turned() {
+		return m.Width
+	}
+	return m.Height
+}
+
 // NativeDPI is the resolution a manifest's canvas was authored at. One that
 // states its own DPI reports that; one that does not infers it from its width
 // and the physical width of a card with bleed
@@ -132,7 +152,7 @@ func (m *Manifest) NativeDPI() int {
 	if m.DPI > 0 {
 		return m.DPI
 	}
-	return int(math.Round(float64(m.Width) / CardWidthInches))
+	return int(math.Round(float64(m.DeliveredWidth()) / CardWidthInches))
 }
 
 // ClampDPI holds dpi within the range m renders at: no less than MinDPI, and no
@@ -178,10 +198,11 @@ type Resolution struct {
 func (m *Manifest) Resolution(dpi int) Resolution {
 	dpi = m.ClampDPI(dpi)
 	s := m.ScaleForDPI(dpi)
+	scaled := m.Scaled(s)
 	return Resolution{
 		DPI:    dpi,
-		Width:  s.Px(m.Width),
-		Height: s.Px(m.Height),
+		Width:  scaled.DeliveredWidth(),
+		Height: scaled.DeliveredHeight(),
 		Native: dpi == m.NativeDPI(),
 	}
 }
@@ -203,8 +224,8 @@ func (m *Manifest) Presets() []Resolution {
 // Scaled returns a copy of m with every pixel measurement multiplied by s.
 // Measurements the manifest states as ratios, such as line spacing in ems or a
 // shadow distance in font sizes, are already resolution independent and carry
-// over untouched. The layer list is shared with m, since it holds asset paths
-// rather than geometry
+// over untouched. The layer list is shared with m, so a layer's X and Y
+// stay as authored and are scaled where the layer is placed
 func (m *Manifest) Scaled(s Scale) *Manifest {
 	if m == nil || s.Native() {
 		return m
@@ -214,6 +235,10 @@ func (m *Manifest) Scaled(s Scale) *Manifest {
 	out.DPI = int(math.Round(float64(m.NativeDPI()) * s.Factor()))
 	out.Art.X, out.Art.Y = s.Px(m.Art.X), s.Px(m.Art.Y)
 	out.Art.Width, out.Art.Height = s.Px(m.Art.Width), s.Px(m.Art.Height)
+	out.Arts = nil
+	for _, a := range m.Arts {
+		out.Arts = append(out.Arts, ArtSlot{X: s.Px(a.X), Y: s.Px(a.Y), Width: s.Px(a.Width), Height: s.Px(a.Height), After: a.After})
+	}
 	out.TextBoxes = make(map[string]TextBoxSpec, len(m.TextBoxes))
 	for name, box := range m.TextBoxes {
 		out.TextBoxes[name] = scaleBox(box, s)

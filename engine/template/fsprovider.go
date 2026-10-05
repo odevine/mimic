@@ -93,5 +93,21 @@ func validateManifest(m *Manifest) error {
 	if m.Width > maxDimension || m.Height > maxDimension {
 		return fmt.Errorf("template: manifest dimensions %dx%d exceed %d limit", m.Width, m.Height, maxDimension)
 	}
+	if m.Rotate%90 != 0 || m.Rotate < 0 || m.Rotate >= 360 {
+		return fmt.Errorf("template: manifest rotate %d is not 0, 90, 180, or 270", m.Rotate)
+	}
+	for _, l := range m.Layers {
+		if l.Half < 0 || l.Half > 2 {
+			return fmt.Errorf("template: layer %q has half %d, want 0, 1, or 2", l.Name, l.Half)
+		}
+	}
+	for name, b := range m.TextBoxes {
+		if b.Half < 0 || b.Half > 2 {
+			return fmt.Errorf("template: text box %q has half %d, want 0, 1, or 2", name, b.Half)
+		}
+		if b.Space != "" && b.Space != SpaceOutput {
+			return fmt.Errorf("template: text box %q has space %q, want \"\" or %q", name, b.Space, SpaceOutput)
+		}
+	}
 	return nil
 }

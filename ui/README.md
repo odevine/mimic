@@ -98,7 +98,10 @@ every other shape through the one picked under Templates, Defaults, or the
 first installed template that supports it. A face no installed template
 supports is marked unsupported while the other face still renders. The
 single-card editor previews either face with Back face, and its fields edit the
-front.
+front. A split or fuse card has no front to edit, since it prints two halves, so
+the editor shows each half's name, cost, colors, type, rules, and flavor in its
+own section. The same fields are the `half1` and `half2` columns of a CSV list,
+such as `half2Oracle`.
 
 The format beside the folder switches Render to an
 [MPC Autofill](https://github.com/chilli-axe/mpc-autofill) project instead,

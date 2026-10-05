@@ -1015,3 +1015,20 @@ input.gated {
 .fonts-note.err {
   color: var(--err);
 }
+
+/* One half of a split card, whose fields stand in for the top-level face fields */
+.half-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding-bottom: var(--section-gap);
+  margin-bottom: var(--section-gap);
+  border-bottom: 1px solid var(--border);
+}
+
+.half-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}

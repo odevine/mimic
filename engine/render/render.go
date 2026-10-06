@@ -150,7 +150,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 
 	if drawSymbol {
-		node, err := symbolNode(req.SetSymbol, symSpec, d.Rarity, m.Width, m.Height)
+		node, err := symbolNode(req.SetSymbol, symSpec, m.Width, m.Height)
 		if err != nil {
 			return nil, err
 		}

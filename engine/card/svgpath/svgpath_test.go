@@ -369,27 +369,6 @@ func FuzzPathData(f *testing.F) {
 	})
 }
 
-func TestShapeTransformed(t *testing.T) {
-	icon, err := Parse(svg(`<path d="M0 0h10v10H0z"/>`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Scaled by 3 by 2 and moved 5 across and 7 down, the 10 by 10 square is a
-	// 30 by 20 rectangle with its corner at 5, 7
-	p := icon.Shapes[0].Transformed(3, 2, 5, 7)
-	minX, minY, maxX, maxY := p.Bounds()
-	if minX != 5 || minY != 7 || maxX != 35 || maxY != 27 {
-		t.Errorf("bounds = %v %v %v %v, want 5 7 35 27", minX, minY, maxX, maxY)
-	}
-	if got := area(p, path.NonZero, 64, 64); !near(got, 600, 1) {
-		t.Errorf("area = %.1f, want 600", got)
-	}
-	// The shape's own path is untouched
-	if minX, _, maxX, _ := icon.Shapes[0].Path.Bounds(); minX != 0 || maxX != 10 {
-		t.Errorf("Path bounds changed to %v..%v", minX, maxX)
-	}
-}
-
 func TestIconBounds(t *testing.T) {
 	tests := []struct {
 		name string

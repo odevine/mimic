@@ -26,9 +26,11 @@ type RenderRequest struct {
 	Card *card.Data
 	// Face picks which of Classify(Card)'s images to render, 0 for the front.
 	// Only a double-faced card has more than one
-	Face   int
-	Art    image.Image // nil renders without art
-	Assets AssetProvider
+	Face int
+	Art  image.Image // nil renders without art
+	// SetSymbol is the card's set expansion symbol, nil to render without one
+	SetSymbol *card.SetSymbol
+	Assets    AssetProvider
 	// Progress, when set, receives step updates during the render. Nil disables
 	// reporting, which is the common case for a batch or a headless render
 	Progress ProgressFunc

@@ -36,6 +36,9 @@ type Client struct {
 	maxCardBytes int64
 	maxListBytes int64
 	maxArtBytes  int64
+
+	// symbols holds what FetchSetSymbol keeps between calls
+	symbols symbolState
 }
 
 // Option configures a Client

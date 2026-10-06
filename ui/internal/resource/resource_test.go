@@ -86,6 +86,12 @@ func TestRunBytesGrowsByOneRenderPerWorker(t *testing.T) {
 	}
 }
 
+func TestBaseHoldsTheLayerCache(t *testing.T) {
+	if BaseBytes() != baseBytes+CacheBytes {
+		t.Errorf("BaseBytes = %d, want the app's base plus the %d byte cache", BaseBytes(), uint64(CacheBytes))
+	}
+}
+
 func TestReadMemoryOnThisPlatform(t *testing.T) {
 	switch runtime.GOOS {
 	case "linux", "darwin", "windows":

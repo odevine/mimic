@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/catalog/catalogtest"
 )
@@ -95,6 +96,9 @@ func TestResolvePrefersLooseDir(t *testing.T) {
 	}
 	if at.Version != LocalVersion {
 		t.Errorf("version = %q, want %q", at.Version, LocalVersion)
+	}
+	if _, ok := at.provider.(*template.CachedAssets); !ok {
+		t.Errorf("provider is a %T, want the layer cache", at.provider)
 	}
 }
 

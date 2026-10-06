@@ -122,7 +122,8 @@ async function fillConcurrency(current) {
   select.value = String(Math.max(current, 0));
 
   const free = r.availableBytes > 0 ? `, about ${bytesLabel(r.availableBytes)} free` : "";
-  note.textContent = `Estimates are for output-size renders. This computer has ${bytesLabel(r.totalBytes)} of memory${free} and ${r.cpus} processors.`;
+  const cache = r.cacheBytes > 0 ? ` and include ${bytesLabel(r.cacheBytes)} for reusing frame layers between cards` : "";
+  note.textContent = `Estimates are for output-size renders${cache}. This computer has ${bytesLabel(r.totalBytes)} of memory${free} and ${r.cpus} processors.`;
 }
 
 // concurrencyChoice is the chosen count, zero for automatic. A list that never

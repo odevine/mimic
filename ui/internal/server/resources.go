@@ -44,7 +44,8 @@ func (s *Server) autoConcurrency() int {
 
 // resourcesView is what the resources endpoint returns: what this computer has,
 // what one render costs at the output resolution, and the counts the settings
-// offer. The browser multiplies BaseBytes plus RenderBytes by a count to show
+// offer. BaseBytes already holds CacheBytes, the room for frame layers shared
+// between cards. The browser adds RenderBytes times a count to BaseBytes to show
 // what that count is expected to use, so the estimate lives in one place
 type resourcesView struct {
 	CPUs           int    `json:"cpus"`
@@ -52,6 +53,7 @@ type resourcesView struct {
 	AvailableBytes uint64 `json:"availableBytes"`
 	BudgetBytes    uint64 `json:"budgetBytes"`
 	BaseBytes      uint64 `json:"baseBytes"`
+	CacheBytes     uint64 `json:"cacheBytes"`
 	RenderBytes    uint64 `json:"renderBytes"`
 	Auto           int    `json:"auto"`
 	Max            int    `json:"max"`
@@ -69,6 +71,7 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 		AvailableBytes: mem.Available,
 		BudgetBytes:    mem.Budget(),
 		BaseBytes:      resource.BaseBytes(),
+		CacheBytes:     resource.CacheBytes,
 		RenderBytes:    per,
 		Auto:           resource.Workers(mem, per, cpuCount()),
 		Max:            batch.MaxConcurrency,

@@ -4,7 +4,11 @@
 // has into a worker count
 package resource
 
-import "runtime"
+import (
+	"runtime"
+
+	"github.com/odevine/mimic/engine/template"
+)
 
 const (
 	// MaxWorkers is the most renders one run starts at once, however much the
@@ -22,6 +26,10 @@ const (
 	// decoders the first one loads. One, two and four native renders measured
 	// 1.9, 3.0 and 4.9 GB in all
 	baseBytes = 768 << 20
+
+	// CacheBytes is the most the decoded frame layers a run shares can hold. It
+	// is planned for in full, since a batch fills it
+	CacheBytes = template.DefaultImageCacheBytes
 
 	// fallbackWorkers is how many renders run at once when the computer's memory
 	// cannot be read, which is what the app did before it sized runs at all
@@ -62,12 +70,13 @@ func RenderBytes(width, height int) uint64 {
 	return renderFixed + uint64(width)*uint64(height)*bytesPerPixel
 }
 
-// BaseBytes is the memory a run needs before any render
-func BaseBytes() uint64 { return baseBytes }
+// BaseBytes is the memory a run needs before any render, the app's own and the
+// layer cache's
+func BaseBytes() uint64 { return baseBytes + CacheBytes }
 
 // RunBytes estimates the memory n renders of perRender bytes each use together
 func RunBytes(n int, perRender uint64) uint64 {
-	return baseBytes + uint64(max(n, 0))*perRender
+	return BaseBytes() + uint64(max(n, 0))*perRender
 }
 
 // Workers is how many renders of perRender bytes each to run at once on a
@@ -83,8 +92,8 @@ func Workers(m Memory, perRender uint64, cpus int) int {
 		return min(n, fallbackWorkers)
 	}
 	fit := 1
-	if budget > baseBytes && perRender > 0 {
-		fit = int((budget - baseBytes) / perRender)
+	if budget > BaseBytes() && perRender > 0 {
+		fit = int((budget - BaseBytes()) / perRender)
 	}
 	return max(min(n, fit), 1)
 }

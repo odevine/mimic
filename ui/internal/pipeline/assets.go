@@ -14,6 +14,19 @@ import (
 	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
+// cached wraps a provider so the frame layers a batch shares are decoded once.
+// Releasing the template releases the cache, and the provider with it when it
+// can be closed. after runs last, for whatever the provider's files need
+func cached(p template.AssetProvider, after func()) (template.AssetProvider, func()) {
+	c := template.NewCachedAssets(p, template.DefaultImageCacheBytes)
+	return c, func() {
+		c.Close()
+		if after != nil {
+			after()
+		}
+	}
+}
+
 // LooseDirBases are the roots under which a template's loose developer assets
 // live as assets/<name>, relative to both a repo-root run and a ui-subdir run.
 // Loose assets are developer-local, so a checkout without them falls back to a
@@ -49,9 +62,10 @@ func Resolve(name string) (*Template, Source, error) {
 		return nil, SourcePlaceholder, err
 	}
 	if dir := LooseDir(name); dir != "" {
+		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
 		return &Template{
 			Name: name, Version: LocalVersion, template: tmpl,
-			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+			provider: p, cleanup: cleanup,
 		}, SourceLoose, nil
 	}
 	if ver, ok := catalog.NewestCachedVersion(name); ok {
@@ -82,9 +96,10 @@ func FromVersion(ctx context.Context, name, version string, progress func(done, 
 		if dir == "" {
 			return nil, fmt.Errorf("no local assets for %q", name)
 		}
+		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
 		return &Template{
 			Name: name, Version: LocalVersion, template: tmpl,
-			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+			provider: p, cleanup: cleanup,
 		}, nil
 	}
 	if _, err := catalog.EnsureVersion(ctx, name, version, progress); err != nil {
@@ -118,13 +133,14 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*Temp
 	if err != nil {
 		return nil, err
 	}
-	p, err := template.NewZipAssetProvider(path)
+	zp, err := template.NewZipAssetProvider(path)
 	if err != nil {
 		return nil, err
 	}
+	p, cleanup := cached(zp, nil)
 	return &Template{
 		Name: name, Version: version, template: tmpl,
-		provider: p, cleanup: func() { p.Close() },
+		provider: p, cleanup: cleanup,
 	}, nil
 }
 
@@ -143,9 +159,10 @@ func placeholderActive(name string, tmpl template.Template) (*Template, error) {
 		os.RemoveAll(tmp)
 		return nil, err
 	}
+	p, cleanup := cached(template.NewFSAssetProvider(tmp), func() { os.RemoveAll(tmp) })
 	return &Template{
 		Name: name, Version: "", template: tmpl,
-		provider: template.NewFSAssetProvider(tmp), cleanup: func() { os.RemoveAll(tmp) },
+		provider: p, cleanup: cleanup,
 	}, nil
 }
 

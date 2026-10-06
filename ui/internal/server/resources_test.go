@@ -46,6 +46,9 @@ func TestResourcesReportsTheComputerAndWhatARenderCosts(t *testing.T) {
 	if want := uint64(14 * gib); v.BudgetBytes != want {
 		t.Errorf("budget = %d, want %d", v.BudgetBytes, want)
 	}
+	if v.CacheBytes == 0 || v.BaseBytes < v.CacheBytes {
+		t.Errorf("cache = %d, base = %d, want the base to hold the cache", v.CacheBytes, v.BaseBytes)
+	}
 	if v.RenderBytes == 0 || v.BaseBytes != resource.BaseBytes() {
 		t.Errorf("render = %d, base = %d", v.RenderBytes, v.BaseBytes)
 	}

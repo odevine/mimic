@@ -63,7 +63,7 @@ type CacheStats struct {
 }
 
 // NewCachedAssets wraps p with a cache of at most budget bytes of decoded
-// pixels. A budget of zero or less caches nothing
+// pixels. A budget of zero or less caches nothing. SetBudget changes it later
 func NewCachedAssets(p AssetProvider, budget int64) *CachedAssets {
 	return &CachedAssets{
 		AssetProvider: p,
@@ -77,10 +77,11 @@ func NewCachedAssets(p AssetProvider, budget int64) *CachedAssets {
 // LoadImage returns the decoded layer at relPath, decoding it only when no
 // other load has
 func (c *CachedAssets) LoadImage(relPath string) (image.Image, error) {
+	c.mu.Lock()
 	if c.budget <= 0 {
+		c.mu.Unlock()
 		return decodeImage(c.AssetProvider, relPath)
 	}
-	c.mu.Lock()
 	c.count(relPath)
 	if e, ok := c.resident[relPath]; ok {
 		c.hits++
@@ -137,16 +138,7 @@ func (c *CachedAssets) admit(path string, img image.Image) {
 		return
 	}
 	if need := c.used + size - c.budget; need > 0 {
-		order := make([]string, 0, len(c.resident))
-		for k := range c.resident {
-			order = append(order, k)
-		}
-		slices.SortFunc(order, func(a, b string) int {
-			if d := c.uses[a] - c.uses[b]; d != 0 {
-				return d
-			}
-			return int(int64(c.resident[a].last) - int64(c.resident[b].last))
-		})
+		order := c.coldFirst()
 		var freed int64
 		n := 0
 		for _, k := range order {
@@ -170,6 +162,42 @@ func (c *CachedAssets) admit(path string, img image.Image) {
 	c.tick++
 	c.resident[path] = &cachedImage{img: img, bytes: size, last: c.tick}
 	c.used += size
+}
+
+// coldFirst lists the resident layers from the least used to the most, with the
+// least recently loaded first among layers used equally
+func (c *CachedAssets) coldFirst() []string {
+	order := make([]string, 0, len(c.resident))
+	for k := range c.resident {
+		order = append(order, k)
+	}
+	slices.SortFunc(order, func(a, b string) int {
+		if d := c.uses[a] - c.uses[b]; d != 0 {
+			return d
+		}
+		return int(int64(c.resident[a].last) - int64(c.resident[b].last))
+	})
+	return order
+}
+
+// SetBudget changes how much decoded pixel data the cache may hold. A smaller
+// budget evicts the least used layers until what remains fits, and a budget of
+// zero or less empties the cache and stops caching. Images already returned to
+// callers stay valid
+func (c *CachedAssets) SetBudget(budget int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.budget = budget
+	if c.used <= budget {
+		return
+	}
+	for _, k := range c.coldFirst() {
+		c.used -= c.resident[k].bytes
+		delete(c.resident, k)
+		if c.used <= max(budget, 0) {
+			break
+		}
+	}
 }
 
 // Stats reports what the cache has served and holds

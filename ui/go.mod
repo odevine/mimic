@@ -3,7 +3,7 @@ module github.com/odevine/mimic/ui
 go 1.26.2
 
 require (
-	github.com/odevine/mimic/engine v0.16.1
+	github.com/odevine/mimic/engine v0.16.2
 	golang.org/x/sys v0.48.0
 )
 

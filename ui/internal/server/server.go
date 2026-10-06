@@ -24,6 +24,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/fontdir"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
+	"github.com/odevine/mimic/ui/internal/resource"
 	"github.com/odevine/mimic/ui/internal/scryfall"
 )
 
@@ -126,6 +127,7 @@ type Options struct {
 func New(o Options) *Server {
 	httpc := scryfall.NewHTTPClient(netTimeout)
 	p := loadPrefs()
+	pipeline.SetLayerCacheBytes(int64(resource.CacheBytes(p.Settings().LayerCache)))
 	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
 	fd := fontdir.Resolve(o.FontDir, managedFontsDir())
 	pipe.SetFontDir(fd.Path)

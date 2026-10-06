@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
@@ -14,16 +15,57 @@ import (
 	"github.com/odevine/mimic/ui/internal/catalog"
 )
 
+// layerCaches is the budget each template's layer cache gets and the caches
+// currently holding layers, so a change of size reaches templates already loaded
+var layerCaches = struct {
+	sync.Mutex
+	budget int64
+	live   map[*template.CachedAssets]struct{}
+}{budget: template.DefaultImageCacheBytes, live: map[*template.CachedAssets]struct{}{}}
+
+// SetLayerCacheBytes sets how many bytes of decoded frame layers each template
+// keeps in memory to share between cards. It resizes the caches of templates
+// already loaded, and applies to the ones loaded later
+func SetLayerCacheBytes(n int64) {
+	layerCaches.Lock()
+	defer layerCaches.Unlock()
+	layerCaches.budget = n
+	for c := range layerCaches.live {
+		c.SetBudget(n)
+	}
+}
+
 // cached wraps a provider so the frame layers a batch shares are decoded once.
 // Releasing the template releases the cache, and the provider with it when it
 // can be closed. after runs last, for whatever the provider's files need
 func cached(p template.AssetProvider, after func()) (template.AssetProvider, func()) {
-	c := template.NewCachedAssets(p, template.DefaultImageCacheBytes)
+	layerCaches.Lock()
+	c := template.NewCachedAssets(p, layerCaches.budget)
+	layerCaches.live[c] = struct{}{}
+	layerCaches.Unlock()
 	return c, func() {
+		forget(c)
 		c.Close()
 		if after != nil {
 			after()
 		}
+	}
+}
+
+// forget takes a cache out of the set that resizes with the setting
+func forget(c *template.CachedAssets) {
+	layerCaches.Lock()
+	delete(layerCaches.live, c)
+	layerCaches.Unlock()
+}
+
+// dropLayers empties a template's layer cache for good, for one that was swapped
+// out. A render still reading from it decodes as it goes, and the template's
+// files stay open until shutdown like before
+func (t *Template) dropLayers() {
+	if c, ok := t.provider.(*template.CachedAssets); ok {
+		forget(c)
+		c.SetBudget(0)
 	}
 }
 

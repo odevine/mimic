@@ -5,7 +5,9 @@ import (
 	"net/http"
 
 	"github.com/odevine/mimic/ui/internal/batch"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
+	"github.com/odevine/mimic/ui/internal/resource"
 )
 
 // The themes a settings write may carry. Anything else is stored as the default
@@ -41,6 +43,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if body.Concurrency < 0 || body.Concurrency > batch.MaxConcurrency {
 		body.Concurrency = 0
 	}
+	if !resource.ValidCacheSize(body.LayerCache) {
+		body.LayerCache = ""
+	}
 	if body.OutputFormat != "mpc" {
 		body.OutputFormat = ""
 	}
@@ -48,5 +53,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		body.RecentOutputDirs = body.RecentOutputDirs[:maxRecentOutputDirs]
 	}
 	s.prefs.SetSettings(body)
+	pipeline.SetLayerCacheBytes(int64(resource.CacheBytes(s.layerCacheName())))
 	writeJSON(w, s.prefs.Settings())
 }

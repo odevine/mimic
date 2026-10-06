@@ -52,7 +52,8 @@ export const api = {
   saveSettings: (s) => send("PUT", "/api/settings", s),
   // resources describes this computer's memory and what one output render costs,
   // for the concurrency setting
-  resources: () => get("/api/resources"),
+  // cache, when given, names a layer cache size to plan for in place of the saved one
+  resources: (cache) => get(cache ? `/api/resources?cache=${encodeURIComponent(cache)}` : "/api/resources"),
 
   search: (q, signal) => get(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
   recents: () => get("/api/recents"),

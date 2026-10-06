@@ -93,14 +93,17 @@ func (t *Template) Close() {
 }
 
 // Install makes at the template for later renders. The previous one is left open
-// until shutdown so an in-flight render is never reading a closed backing
+// until shutdown so an in-flight render is never reading a closed backing, but
+// its layer cache is emptied since nothing new will use it
 func (p *Pipeline) Install(at *Template) {
 	if at.cleanup != nil {
 		p.mu.Lock()
 		p.cleanups = append(p.cleanups, at.cleanup)
 		p.mu.Unlock()
 	}
-	p.active.Store(at)
+	if old := p.active.Swap(at); old != nil && old != at {
+		old.dropLayers()
+	}
 }
 
 // Close releases every provider the pipeline has installed. Called once at app

@@ -133,3 +133,109 @@ func TestActiveFromVersionDownloadsAndBuilds(t *testing.T) {
 		t.Error("version not cached after FromVersion")
 	}
 }
+
+// loadAnyLayer decodes the first layer asset a template has through its provider
+func loadAnyLayer(t *testing.T, at *Template) {
+	t.Helper()
+	m, err := at.provider.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range m.Layers {
+		for _, v := range l.ColorVariants {
+			if _, err := template.LoadImage(at.provider, v.Path); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatal("the manifest has no layers")
+}
+
+func layerStats(at *Template) template.CacheStats {
+	return at.provider.(*template.CachedAssets).Stats()
+}
+
+// resetLayerCache puts the budget back for the next test
+func resetLayerCache(t *testing.T) {
+	t.Cleanup(func() { SetLayerCacheBytes(template.DefaultImageCacheBytes) })
+}
+
+func TestSetLayerCacheBytesResizesLoadedTemplates(t *testing.T) {
+	withEmptyAssetChain(t)
+	resetLayerCache(t)
+	at, _, err := Resolve("normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer at.Close()
+
+	loadAnyLayer(t, at)
+	if layerStats(at).Layers != 1 {
+		t.Fatalf("stats = %+v, want the layer cached", layerStats(at))
+	}
+	SetLayerCacheBytes(0)
+	if s := layerStats(at); s.Layers != 0 || s.Bytes != 0 {
+		t.Errorf("stats after a zero budget = %+v, want empty", s)
+	}
+	loadAnyLayer(t, at)
+	if layerStats(at).Layers != 0 {
+		t.Error("a zero budget should keep nothing")
+	}
+	SetLayerCacheBytes(template.DefaultImageCacheBytes)
+	loadAnyLayer(t, at)
+	if layerStats(at).Layers != 1 {
+		t.Error("raising the budget should cache again")
+	}
+}
+
+func TestNewTemplatesStartWithTheChosenBudget(t *testing.T) {
+	withEmptyAssetChain(t)
+	resetLayerCache(t)
+	SetLayerCacheBytes(0)
+	at, _, err := Resolve("normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer at.Close()
+	loadAnyLayer(t, at)
+	if layerStats(at).Layers != 0 {
+		t.Error("a template loaded under a zero budget should cache nothing")
+	}
+}
+
+func TestInstallEmptiesTheSwappedOutLayerCache(t *testing.T) {
+	withEmptyAssetChain(t)
+	resetLayerCache(t)
+	first, _, err := Resolve("normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := Resolve("normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(nil, nil)
+	defer p.Close()
+	p.Install(first)
+	loadAnyLayer(t, first)
+	if layerStats(first).Layers != 1 {
+		t.Fatalf("stats = %+v, want the layer cached", layerStats(first))
+	}
+
+	p.Install(second)
+	if layerStats(first).Layers != 0 {
+		t.Error("the swapped-out template kept its layers")
+	}
+	// Later size changes must not bring the dead cache back
+	SetLayerCacheBytes(template.DefaultImageCacheBytes)
+	loadAnyLayer(t, first)
+	if layerStats(first).Layers != 0 {
+		t.Error("a resize revived the swapped-out template's cache")
+	}
+	p.Install(second)
+	loadAnyLayer(t, second)
+	if layerStats(second).Layers != 1 {
+		t.Error("reinstalling the active template should leave its cache alone")
+	}
+}

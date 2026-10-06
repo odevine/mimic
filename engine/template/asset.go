@@ -30,6 +30,9 @@ type Manifest struct {
 	// Arts is one art window per half of a split card, first half first. The
 	// card's one art image is cut in half, left then right, one half to each
 	Arts []ArtSlot `json:"arts,omitempty"`
+	// Symbols are the places a card's set symbol can draw, keyed by name. Only "set"
+	// is drawn today. A manifest without it draws no symbol
+	Symbols map[string]SymbolSpec `json:"symbols,omitempty"`
 	// Rotate turns the finished composite this many degrees clockwise, a multiple
 	// of 90, so a frame authored on its side delivers upright. Everything above
 	// is laid out in the authored canvas, and only a TextBoxSpec with Space
@@ -44,7 +47,8 @@ type LayerSpec struct {
 	Name string `json:"name"`
 	// Condition is one of the engine's fixed vocabulary: "", "legendary",
 	// "nonlegendary", "land", "nonland", "creature", "color_indicator",
-	// "front", "back", "fuse", "icon_left", "icon_right" (which side of the title bar
+	// "front", "back", "fuse", "set_symbol" (a set symbol draws for the card),
+	// "icon_left", "icon_right" (which side of the title bar
 	// the transform icon sits on), or a value the engine does not yet drive (nyx,
 	// companion, hollow_crown, fullart, divider, pt_dark), which renders the
 	// layer off. A comma-separated list such as "back,land" holds when every
@@ -212,4 +216,56 @@ func (m *Manifest) ArtSlots() []ArtSlot {
 		return m.Arts
 	}
 	return []ArtSlot{m.Art}
+}
+
+// SymbolSet is the key of the set expansion symbol in Manifest.Symbols
+const SymbolSet = "set"
+
+// SymbolSpec is where a symbol draws and how it is painted. The symbol is
+// scaled to fit inside the box without changing its shape, then placed by
+// Align and VAlign
+type SymbolSpec struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	// Align places the symbol across the box, "left", "center" or "right". Empty
+	// means right, where a set symbol ends the type line
+	Align string `json:"align,omitempty"`
+	// VAlign places it down the box, "top", "center" or "bottom". Empty means
+	// center
+	VAlign string `json:"vAlign,omitempty"`
+	// Scale shrinks the fitted symbol to this fraction of the box. Zero or less
+	// means 1
+	Scale float64 `json:"scale,omitempty"`
+	// Outline strokes the symbol's edge, nil draws none
+	Outline *SymbolOutline `json:"outline,omitempty"`
+	// Rarity is the paint for each rarity, keyed "common", "uncommon", "rare" and
+	// "mythic". A card whose rarity has no entry takes common's, and a manifest
+	// with no common entry paints black
+	Rarity map[string]SymbolPaint `json:"rarity,omitempty"`
+	// Condition is a layer condition (see LayerSpec.Condition) that must hold for
+	// the symbol to draw
+	Condition string `json:"condition,omitempty"`
+}
+
+// SymbolOutline is a stroke around a symbol, drawn outside its edge
+type SymbolOutline struct {
+	Width float64 `json:"width"` // pixels
+	Color string  `json:"color"` // "#RRGGBB"
+}
+
+// SymbolPaint fills a symbol, with one stop for a flat color or several for a
+// linear gradient
+type SymbolPaint struct {
+	Stops []SymbolStop `json:"stops"`
+	// Angle is the direction the gradient runs in degrees, 0 from left to right
+	// and 90 from top to bottom, across the symbol's own extent
+	Angle float64 `json:"angle,omitempty"`
+}
+
+// SymbolStop is one color of a gradient, At in [0,1] along it
+type SymbolStop struct {
+	Color string  `json:"color"` // "#RRGGBB"
+	At    float64 `json:"at"`
 }

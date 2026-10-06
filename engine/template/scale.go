@@ -243,6 +243,12 @@ func (m *Manifest) Scaled(s Scale) *Manifest {
 	for name, box := range m.TextBoxes {
 		out.TextBoxes[name] = scaleBox(box, s)
 	}
+	if len(m.Symbols) > 0 {
+		out.Symbols = make(map[string]SymbolSpec, len(m.Symbols))
+		for name, sym := range m.Symbols {
+			out.Symbols[name] = scaleSymbol(sym, s)
+		}
+	}
 	return &out
 }
 
@@ -270,4 +276,17 @@ func scalePad(p *int, s Scale) *int {
 	}
 	v := s.Px(*p)
 	return &v
+}
+
+// scaleSymbol multiplies a symbol's box and outline width. Its fraction and its
+// gradient angle are already resolution independent
+func scaleSymbol(sym SymbolSpec, s Scale) SymbolSpec {
+	sym.X, sym.Y = s.Px(sym.X), s.Px(sym.Y)
+	sym.Width, sym.Height = s.Px(sym.Width), s.Px(sym.Height)
+	if sym.Outline != nil {
+		o := *sym.Outline
+		o.Width = s.F(o.Width)
+		sym.Outline = &o
+	}
+	return sym
 }

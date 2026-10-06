@@ -85,6 +85,8 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 
 	d := req.FaceCard()
 	f := frame.DeriveFace(d, req.FaceSide())
+	symSpec, drawSymbol := setSymbolSpec(req, m, f)
+	f.SetSymbol = drawSymbol
 	halves := newHalves(d, f, m)
 
 	// Of the specs a manifest offers for one box, only the one whose condition
@@ -144,6 +146,16 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		syms.mana = ms
 		if box, ok := boxes.whole()["artist"]; ok {
 			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.Color)}
+		}
+	}
+
+	if drawSymbol {
+		node, err := symbolNode(req.SetSymbol, symSpec, d.Rarity, m.Width, m.Height)
+		if err != nil {
+			return nil, err
+		}
+		if node != nil {
+			nodes = append(nodes, node)
 		}
 	}
 
@@ -274,6 +286,7 @@ func newHalves(d *card.Data, f frame.Keys, m *template.Manifest) halfSet {
 	for i := range h.halfData {
 		h.halfData[i] = d.Half(i)
 		h.halfKeys[i] = frame.DeriveFace(h.halfData[i], frame.Single)
+		h.halfKeys[i].SetSymbol = f.SetSymbol
 	}
 	return h
 }

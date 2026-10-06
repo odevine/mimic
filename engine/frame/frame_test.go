@@ -322,3 +322,20 @@ func TestFuseKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestConditionMetSetSymbol(t *testing.T) {
+	with := Keys{SetSymbol: true}
+	without := Keys{}
+	if !with.ConditionMet("set_symbol") || without.ConditionMet("set_symbol") {
+		t.Error("set_symbol should hold exactly when the keys say a symbol draws")
+	}
+	// It combines with the other conditions, as a type line that gives way to
+	// both a color indicator and a symbol needs
+	both := Keys{SetSymbol: true, Indicator: "u"}
+	if !both.ConditionMet("color_indicator,set_symbol") {
+		t.Error("color_indicator,set_symbol should hold when both do")
+	}
+	if (Keys{Indicator: "u"}).ConditionMet("color_indicator,set_symbol") {
+		t.Error("color_indicator,set_symbol held without a symbol")
+	}
+}

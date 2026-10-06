@@ -26,6 +26,7 @@ func main() {
 	bundle := flag.String("bundle", "", "path to a .mimic bundle to render from; takes precedence over -assets")
 	tmplName := flag.String("template", "normal", "template name")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
+	noSymbol := flag.Bool("no-symbol", false, "skip fetching and drawing the set symbol")
 	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana, type, info); empty auto-uses ./local-fonts if present, else the embedded defaults")
 	face := flag.Int("face", 0, "which face to render, 0 for the front and 1 for a double-faced card's back")
 	dpi := flag.Int("dpi", 0, "resolution to render at, clamped to the template's own; 0 renders at the template's authored resolution")
@@ -35,12 +36,12 @@ func main() {
 	if *name == "" {
 		log.Fatal("rendercard: -name is required")
 	}
-	if err := run(*name, *out, *assetsDir, *bundle, *tmplName, *fontDir, *noArt, *face, *dpi, *timeout); err != nil {
+	if err := run(*name, *out, *assetsDir, *bundle, *tmplName, *fontDir, *noArt, *noSymbol, *face, *dpi, *timeout); err != nil {
 		log.Fatalf("rendercard: %v", err)
 	}
 }
 
-func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, face, dpi int, timeout time.Duration) error {
+func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt, noSymbol bool, face, dpi int, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -67,6 +68,14 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, fac
 		}
 	}
 
+	var symbol *card.SetSymbol
+	if !noSymbol {
+		// Like the art, the symbol is optional, and a frame without one still renders
+		if symbol, err = client.FetchSetSymbol(ctx, data); err != nil {
+			log.Printf("continuing without set symbol: %v", err)
+		}
+	}
+
 	tmpl, err := template.Get(tmplName)
 	if err != nil {
 		return err
@@ -76,12 +85,13 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt bool, fac
 	}
 
 	buf, err := tmpl.Render(ctx, template.RenderRequest{
-		Card:    data,
-		Face:    face,
-		Art:     art,
-		Assets:  assets,
-		FontDir: fontDir,
-		DPI:     dpi,
+		Card:      data,
+		Face:      face,
+		Art:       art,
+		SetSymbol: symbol,
+		Assets:    assets,
+		FontDir:   fontDir,
+		DPI:       dpi,
 	})
 	if err != nil {
 		return err

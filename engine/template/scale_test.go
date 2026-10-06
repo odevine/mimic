@@ -1,6 +1,7 @@
 package template
 
 import (
+	"encoding/json"
 	"image"
 	"image/color"
 	"reflect"
@@ -239,5 +240,49 @@ func TestBoxScaleKeepsTransparentColorOut(t *testing.T) {
 	}
 	if r != 0 || b != 0 {
 		t.Errorf("transparent half carried color rgb(%d,_,%d), want none", r>>8, b>>8)
+	}
+}
+
+func TestScaledSymbols(t *testing.T) {
+	m := &Manifest{
+		Width: 1000, Height: 2000, DPI: 1000,
+		Symbols: map[string]SymbolSpec{
+			SymbolSet: {
+				X: 400, Y: 600, Width: 200, Height: 100, Scale: 0.9,
+				Outline: &SymbolOutline{Width: 10, Color: "#000000"},
+			},
+		},
+	}
+	got := m.Scaled(0.5).Symbols[SymbolSet]
+	if got.X != 200 || got.Y != 300 || got.Width != 100 || got.Height != 50 {
+		t.Errorf("box = %d,%d %dx%d, want 200,300 100x50", got.X, got.Y, got.Width, got.Height)
+	}
+	if got.Outline == nil || got.Outline.Width != 5 {
+		t.Errorf("outline = %+v, want width 5", got.Outline)
+	}
+	if got.Scale != 0.9 {
+		t.Errorf("Scale = %v, want the fraction untouched", got.Scale)
+	}
+	// Scaling copies, so the authored manifest keeps its own numbers
+	if orig := m.Symbols[SymbolSet]; orig.Width != 200 || orig.Outline.Width != 10 {
+		t.Errorf("Scaled changed the original: %+v", orig)
+	}
+}
+
+func TestManifestSymbolsRoundTrip(t *testing.T) {
+	raw := `{"template":"t","width":10,"height":10,"layers":[],"textBoxes":{},"art":{},
+		"symbols":{"set":{"x":1,"y":2,"width":3,"height":4,"align":"right","scale":0.9,
+		"outline":{"width":2,"color":"#112233"},
+		"rarity":{"rare":{"angle":45,"stops":[{"color":"#000000","at":0},{"color":"#ffffff","at":1}]}}}}}`
+	var m Manifest
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatal(err)
+	}
+	s := m.Symbols[SymbolSet]
+	if s.Width != 3 || s.Outline == nil || s.Outline.Color != "#112233" {
+		t.Fatalf("symbol = %+v", s)
+	}
+	if p := s.Rarity["rare"]; p.Angle != 45 || len(p.Stops) != 2 || p.Stops[1].At != 1 {
+		t.Errorf("rare paint = %+v", p)
 	}
 }

@@ -215,3 +215,102 @@ func TestLoadImageWithoutCache(t *testing.T) {
 		t.Errorf("opens = %d, want 2", got)
 	}
 }
+
+func TestSetBudgetShrinkEvictsTheLeastUsed(t *testing.T) {
+	m := newMem(t, "a", "b", "c")
+	c := NewCachedAssets(m, 3*layerBytes)
+	for range 3 {
+		mustLoad(t, c, "a")
+	}
+	mustLoad(t, c, "b")
+	for range 2 {
+		mustLoad(t, c, "c")
+	}
+	c.SetBudget(2 * layerBytes)
+	if s := c.Stats(); s.Layers != 2 || s.Bytes != 2*layerBytes {
+		t.Fatalf("stats = %+v, want two layers", s)
+	}
+	opens := m.opens.Load()
+	mustLoad(t, c, "a")
+	mustLoad(t, c, "c")
+	if got := m.opens.Load() - opens; got != 0 {
+		t.Errorf("a and c should have stayed, %d opens", got)
+	}
+	mustLoad(t, c, "b")
+	if got := m.opens.Load() - opens; got != 1 {
+		t.Errorf("b should have been evicted, %d opens", got)
+	}
+}
+
+func TestSetBudgetToZeroEmptiesAndStopsCaching(t *testing.T) {
+	m := newMem(t, "a")
+	c := NewCachedAssets(m, 3*layerBytes)
+	held := mustLoad(t, c, "a")
+	c.SetBudget(0)
+	if s := c.Stats(); s.Layers != 0 || s.Bytes != 0 {
+		t.Errorf("stats = %+v, want empty", s)
+	}
+	if held.Bounds().Empty() {
+		t.Error("an image returned before the change should stay usable")
+	}
+	opens := m.opens.Load()
+	mustLoad(t, c, "a")
+	mustLoad(t, c, "a")
+	if got := m.opens.Load() - opens; got != 2 {
+		t.Errorf("opens = %d, want 2 with caching off", got)
+	}
+}
+
+func TestSetBudgetGrowCachesMore(t *testing.T) {
+	m := newMem(t, "a", "b", "c")
+	c := NewCachedAssets(m, layerBytes)
+	c.SetBudget(3 * layerBytes)
+	for _, n := range []string{"a", "b", "c"} {
+		mustLoad(t, c, n)
+	}
+	opens := m.opens.Load()
+	for _, n := range []string{"a", "b", "c"} {
+		mustLoad(t, c, n)
+	}
+	if got := m.opens.Load() - opens; got != 0 {
+		t.Errorf("opens = %d, want all three resident", got)
+	}
+}
+
+func TestSetBudgetTurnsCachingBackOn(t *testing.T) {
+	m := newMem(t, "a")
+	c := NewCachedAssets(m, 0)
+	mustLoad(t, c, "a")
+	c.SetBudget(3 * layerBytes)
+	mustLoad(t, c, "a")
+	opens := m.opens.Load()
+	mustLoad(t, c, "a")
+	if m.opens.Load() != opens {
+		t.Error("the layer should be cached once the budget is raised")
+	}
+}
+
+// Resizing while loads are in flight must be safe, and the cache must end
+// within its final budget
+func TestSetBudgetDuringLoads(t *testing.T) {
+	names := []string{"a", "b", "c", "d", "e", "f"}
+	m := newMem(t, names...)
+	c := NewCachedAssets(m, 4*layerBytes)
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range 300 {
+				mustLoad(t, c, names[(i+j)%len(names)])
+			}
+		}()
+	}
+	for _, b := range []int64{layerBytes, 5 * layerBytes, 0, 2 * layerBytes} {
+		c.SetBudget(b)
+	}
+	wg.Wait()
+	if s := c.Stats(); s.Bytes > 2*layerBytes {
+		t.Errorf("bytes = %d, over the final budget of %d", s.Bytes, 2*layerBytes)
+	}
+}

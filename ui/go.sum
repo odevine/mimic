@@ -1,7 +1,7 @@
-github.com/odevine/impasto v0.2.0 h1:bZSCsq/n56ng5sy1Smr0V4FIzxN8AhpcMgoVV4ZJBzE=
-github.com/odevine/impasto v0.2.0/go.mod h1:hsDtuh29Ba47P2Rv9Zr/FIvG9pA5Zv7Tp81NJoUdbvk=
-github.com/odevine/mimic/engine v0.16.0 h1:VHRTh21c89urB9z+eZYyyk+krNtH3dGaLMsy1jgl0GQ=
-github.com/odevine/mimic/engine v0.16.0/go.mod h1:PeSRabSsUv0NNSNW00Cs8xxT0z12MGVFQlbn/FBYPHY=
+github.com/odevine/impasto v0.2.1 h1:SIdtE8t4mRtKYvj/DZos3UHCB7WM3KgrVIHvH1SnDAs=
+github.com/odevine/impasto v0.2.1/go.mod h1:hsDtuh29Ba47P2Rv9Zr/FIvG9pA5Zv7Tp81NJoUdbvk=
+github.com/odevine/mimic/engine v0.16.2 h1:yECtIb0K02Zv4DMpFpAhtd8B0vaGyPV34VCze9mGmQw=
+github.com/odevine/mimic/engine v0.16.2/go.mod h1:JlSWhBb8p5H5sVx+3ZLJ5fdgAfvL0TNcFYVA+kH//Z4=
 golang.org/x/image v0.46.0 h1:b1+oYj0Jbp6K5MDT4i4/eZpYlk3V8SJhhDKh6LBHAyQ=
 golang.org/x/image v0.46.0/go.mod h1:3B3W05VGVQyuXucLINLjXKrqISASfi4Xj+iCVkLMwew=
 golang.org/x/mod v0.41.0 h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c=

@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"image"
 	"math"
 
 	"github.com/odevine/impasto/blend"
@@ -29,7 +30,7 @@ func setSymbolSpec(req template.RenderRequest, m *template.Manifest, f frame.Key
 // box without changing its shape, placed by the spec's alignment, and drawn in
 // the colors its own file carries. It returns nil for a symbol with nothing to
 // draw
-func symbolNode(sym *card.SetSymbol, spec template.SymbolSpec, docW, docH int) (canvas.Node, error) {
+func symbolNode(sym *card.SetSymbol, spec template.SymbolSpec) (canvas.Node, error) {
 	icon := sym.Icon
 	ink := icon.Bounds()
 	if len(icon.Shapes) == 0 || ink.W <= 0 || ink.H <= 0 {
@@ -59,9 +60,9 @@ func symbolNode(sym *card.SetSymbol, spec template.SymbolSpec, docW, docH int) (
 		y0 += (boxH - h) / 2
 	}
 
-	// The symbol is drawn into a buffer just big enough for it, then placed in the
-	// document, since a document-sized raster of a small shape would cost far more
-	// than the shape does. The margin leaves room for the edge's anti-aliasing
+	// The symbol is drawn into a buffer just big enough for it, which the layer
+	// places in the document at its origin. The margin leaves room for the edge's
+	// anti-aliasing
 	const pad = 2
 	bufX, bufY := int(math.Floor(x0))-pad, int(math.Floor(y0))-pad
 	bufW, bufH := int(math.Ceil(w))+2*pad+1, int(math.Ceil(h))+2*pad+1
@@ -73,5 +74,5 @@ func symbolNode(sym *card.SetSymbol, spec template.SymbolSpec, docW, docH int) (
 	// An icon point (x, y) lands at ((x-ink.X)*k + x0 - bufX, (y-ink.Y)*k + y0 - bufY)
 	m := svgpath.Translate(x0-float64(bufX)-float64(ink.X)*k, y0-float64(bufY)-float64(ink.Y)*k).Mul(svgpath.ScaleBy(k, k))
 	icon.Draw(buf, m)
-	return &canvas.Layer{Content: canvas.Place(docW, docH, buf, bufX, bufY), Mode: blend.Normal}, nil
+	return &canvas.Layer{Content: buf, Origin: image.Pt(bufX, bufY), Mode: blend.Normal}, nil
 }

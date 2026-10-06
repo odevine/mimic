@@ -2,10 +2,12 @@ package render
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
@@ -211,5 +213,60 @@ func TestRenderClampsDPIToNative(t *testing.T) {
 	w, h := buf.Bounds()
 	if w != placeholderWidth || h != placeholderHeight {
 		t.Errorf("buffer is %dx%d, want the native %dx%d", w, h, placeholderWidth, placeholderHeight)
+	}
+}
+
+// A frame layer decodes when the compositor reaches it, so a missing PNG fails
+// the render rather than the node list, and the error still names the path
+func TestRenderReportsAMissingFrameLayer(t *testing.T) {
+	req := renderBolt(t, nil)
+	atMinDPI(t, req)
+	m, err := req.Assets.Manifest()
+	if err != nil {
+		t.Fatalf("Manifest: %v", err)
+	}
+	if len(m.Layers) == 0 {
+		t.Fatal("placeholder manifest has no layers")
+	}
+	broken := *m
+	broken.Layers = append([]template.LayerSpec(nil), m.Layers...)
+	first := broken.Layers[0]
+	first.ColorVariants = map[string]template.LayerAsset{"any": {Path: "nope/missing.png"}}
+	broken.Layers[0] = first
+	req.Assets = manifestAssets{AssetProvider: req.Assets, m: &broken}
+
+	_, err = New("test").Render(context.Background(), *req)
+	if err == nil {
+		t.Fatal("expected an error for a layer whose PNG is missing")
+	}
+	if !strings.Contains(err.Error(), "nope/missing.png") {
+		t.Errorf("error %q does not name the missing asset", err)
+	}
+}
+
+// manifestAssets serves a replacement manifest over another provider's files
+type manifestAssets struct {
+	template.AssetProvider
+	m *template.Manifest
+}
+
+func (a manifestAssets) Manifest() (*template.Manifest, error) { return a.m, nil }
+
+// Cancelling while layers are loading stops the render with the context's error
+func TestRenderStopsWhenCancelledDuringFrameLoad(t *testing.T) {
+	req := renderBolt(t, nil)
+	atMinDPI(t, req)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The frame band is reported as layers load, which is after the text is laid
+	// out, so cancelling on the first such report lands inside the compositor
+	req.Progress = func(step string, frac float64) {
+		if step == stepFrame && frac >= fracTextTo && ctx.Err() == nil {
+			cancel()
+		}
+	}
+	_, err := New("test").Render(ctx, *req)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Render = %v, want context.Canceled", err)
 	}
 }

@@ -694,3 +694,63 @@ func TestAvoidNarrowsTheLinesBesideIt(t *testing.T) {
 		t.Errorf("wrapped to %d lines around the rectangle and %d without it", len(lay.lines), len(loose.lines))
 	}
 }
+
+// A bounded text image must hold exactly the pixels a document-sized one would,
+// with nothing drawn outside its bounds, including when a word runs past the box
+func TestRenderTextBoxIsBounded(t *testing.T) {
+	const docW, docH = 1000, 1000
+	cases := []struct {
+		name    string
+		box     TextBoxSpec
+		text    string
+		smaller bool
+	}{
+		{"inside", TextBoxSpec{X: 300, Y: 400, Width: 200, Height: 60, FontSize: 20, Color: "#FF0000"}, "hello there", true},
+		// The word cannot wrap and runs far past a box whose margin starts tiny
+		{"overflow", TextBoxSpec{X: 300, Y: 400, Width: 40, Height: 30, FontSize: 4, Color: "#FF0000"}, strings.Repeat("a", 40), true},
+		{"at the corner", TextBoxSpec{X: 0, Y: 0, Width: 200, Height: 60, FontSize: 20, Color: "#FF0000"}, "hello there", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parts := []TextPart{{Text: c.text, Src: fixedSource{}}}
+			res, err := RenderTextBox(c.box, docW, docH, parts...)
+			if err != nil {
+				t.Fatalf("RenderTextBox: %v", err)
+			}
+
+			ref := image.NewRGBA(image.Rect(0, 0, docW, docH))
+			inner := insetBox(c.box)
+			lay, err := fitLayout(inner, parts)
+			if err != nil {
+				t.Fatalf("fitLayout: %v", err)
+			}
+			if _, _, err := drawLayout(ref, inner, lay); err != nil {
+				t.Fatalf("drawLayout: %v", err)
+			}
+
+			b := res.Image.Bounds()
+			if c.smaller && (b.Dx() >= docW || b.Dy() >= docH) {
+				t.Errorf("image is %v, want one smaller than the %dx%d document", b, docW, docH)
+			}
+			ink := 0
+			for y := 0; y < docH; y++ {
+				for x := 0; x < docW; x++ {
+					want := ref.RGBAAt(x, y)
+					if want.A != 0 {
+						ink++
+					}
+					if p := image.Pt(x, y); p.In(b) {
+						if got := res.Image.RGBAAt(x, y); got != want {
+							t.Fatalf("pixel (%d,%d) = %v, want %v", x, y, got, want)
+						}
+					} else if want.A != 0 {
+						t.Fatalf("ink at (%d,%d) falls outside the image %v", x, y, b)
+					}
+				}
+			}
+			if ink == 0 {
+				t.Fatal("the reference drew nothing, so the test proves nothing")
+			}
+		})
+	}
+}

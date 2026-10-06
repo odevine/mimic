@@ -122,6 +122,8 @@ type partStyle struct {
 // the divider's document center Y and leaves the caller to place the divider
 // art there
 type TextBoxResult struct {
+	// Image covers the box and the ink around it, not the whole document. Its
+	// Bounds are in document coordinates, so Bounds().Min is where it belongs
 	Image *image.RGBA
 	// DividerY is the document Y of the divider's center, valid only when
 	// HasDivider is true
@@ -129,27 +131,74 @@ type TextBoxResult struct {
 	HasDivider bool
 }
 
-// RenderTextBox lays a box's parts out and draws them into a document-sized
-// transparent image, then returns it to be composited like any other layer. An
-// area box whose text overflows its height shrinks the font toward the box's
-// floor to fit, while a baseline-anchored box keeps its size. Parts are stacked
-// with a divider slot between them, so rules and flavor separate on their own.
+// RenderTextBox lays a box's parts out and draws them into a transparent image
+// that covers the box and a margin around it, clipped to a docW by docH
+// document, then returns it to be composited like any other layer. An area box
+// whose text overflows its height shrinks the font toward the box's floor to
+// fit, while a baseline-anchored box keeps its size. Parts are stacked with a
+// divider slot between them, so rules and flavor separate on their own.
 //
 // A part's source supplies the font at whatever size the fit needs and its
 // symbol renderer the braced codes. This module bundles neither, and there is no
 // shaping beyond what a face provides
 func RenderTextBox(box TextBoxSpec, docW, docH int, parts ...TextPart) (TextBoxResult, error) {
-	img := image.NewRGBA(image.Rect(0, 0, docW, docH))
 	inner := insetBox(box)
 	lay, err := fitLayout(inner, parts)
 	if err != nil {
 		return TextBoxResult{}, err
 	}
-	dividerY, hasDivider, err := drawLayout(img, inner, lay)
-	if err != nil {
-		return TextBoxResult{}, err
+	doc := image.Rect(0, 0, docW, docH)
+	// Ink can reach past the box a little, such as an italic overhang or a symbol
+	// at the end of a line. The margin starts at an em and doubles whenever ink
+	// lands on a cut edge, so a card whose text strays further is never clipped
+	margin := int(math.Ceil(box.FontSize)) + 2
+	for {
+		bounds := image.Rect(box.X-margin, box.Y-margin, box.X+box.Width+margin, box.Y+box.Height+margin).Intersect(doc)
+		if bounds.Empty() {
+			bounds = doc
+		}
+		img := image.NewRGBA(bounds)
+		dividerY, hasDivider, err := drawLayout(img, inner, lay)
+		if err != nil {
+			return TextBoxResult{}, err
+		}
+		if bounds == doc || !inkOnCutEdge(img, doc) {
+			return TextBoxResult{Image: img, DividerY: dividerY, HasDivider: hasDivider}, nil
+		}
+		margin *= 2
 	}
-	return TextBoxResult{Image: img, DividerY: dividerY, HasDivider: hasDivider}, nil
+}
+
+// inkOnCutEdge reports whether any ink sits on an edge of img that is not also
+// an edge of the document, which is where a margin that was too small would have
+// clipped something
+func inkOnCutEdge(img *image.RGBA, doc image.Rectangle) bool {
+	b := img.Bounds()
+	if b.Min.Y > doc.Min.Y && inkInRow(img, b.Min.Y) || b.Max.Y < doc.Max.Y && inkInRow(img, b.Max.Y-1) {
+		return true
+	}
+	return b.Min.X > doc.Min.X && inkInColumn(img, b.Min.X) || b.Max.X < doc.Max.X && inkInColumn(img, b.Max.X-1)
+}
+
+func inkInRow(img *image.RGBA, y int) bool {
+	b := img.Bounds()
+	row := img.Pix[img.PixOffset(b.Min.X, y) : img.PixOffset(b.Max.X-1, y)+4]
+	for i := 3; i < len(row); i += 4 {
+		if row[i] != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func inkInColumn(img *image.RGBA, x int) bool {
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		if img.Pix[img.PixOffset(x, y)+3] != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // TextSpan is the document X range a laid-out box's text covers, from the

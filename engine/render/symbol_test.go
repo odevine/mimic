@@ -25,13 +25,15 @@ func mustSymbol(t *testing.T, svg string) *card.SetSymbol {
 // A 40 by 20 rectangle inside a larger box, so the fit has room to show
 const wideSymbol = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M30 40h40v20H30z"/></svg>`
 
-func layerOf(t *testing.T, n canvas.Node) *raster.Buffer {
+// layerOf places a layer's content in a document of the given size, so a test can
+// read it at document coordinates whatever box the layer covers
+func layerOf(t *testing.T, n canvas.Node, docW, docH int) *raster.Buffer {
 	t.Helper()
 	l, ok := n.(*canvas.Layer)
 	if !ok {
 		t.Fatalf("node is %T, want a layer", n)
 	}
-	return l.Content
+	return canvas.Place(docW, docH, l.Content, l.Origin.X, l.Origin.Y)
 }
 
 // pixel returns straight linear color and alpha at x, y
@@ -58,14 +60,15 @@ func TestSymbolNodeFitsAndAligns(t *testing.T) {
 	// The ink is 40 by 20, so a 200 by 200 box scales it 5x, to the full width
 	// and half the height
 	spec := template.SymbolSpec{X: 100, Y: 300, Width: 200, Height: 200}
-	node, err := symbolNode(sym, spec, 600, 800)
+	node, err := symbolNode(sym, spec)
 	if err != nil || node == nil {
 		t.Fatalf("symbolNode = %v, %v", node, err)
 	}
-	b := layerOf(t, node)
-	if w, h := b.Bounds(); w != 600 || h != 800 {
-		t.Fatalf("layer is %dx%d, want the document's 600x800", w, h)
+	// The layer covers just the symbol's ink, not the document
+	if l := node.(*canvas.Layer); l.Content.Width >= 600 || l.Content.Height >= 800 {
+		t.Fatalf("layer is %dx%d, want one smaller than the document", l.Content.Width, l.Content.Height)
 	}
+	b := layerOf(t, node, 600, 800)
 	// Full width, centered on the box's vertical middle, 100 tall
 	if !opaque(b, 150, 400) || !opaque(b, 290, 400) {
 		t.Error("symbol does not cover the middle of its box")
@@ -88,11 +91,11 @@ func TestSymbolNodeFitsAndAligns(t *testing.T) {
 		"bottom": {"bottom", 480, 320},
 	} {
 		tall.VAlign = c.vAlign
-		n, err := symbolNode(sym, tall, 600, 800)
+		n, err := symbolNode(sym, tall)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tb := layerOf(t, n)
+		tb := layerOf(t, n, 600, 800)
 		if !opaque(tb, 150, c.in) || !clear(tb, 150, c.out) {
 			t.Errorf("%s: want ink at y=%d and none at y=%d", name, c.in, c.out)
 		}
@@ -113,11 +116,11 @@ func TestSymbolNodeAlignsAcrossTheBox(t *testing.T) {
 		{"right", 350, 150},
 	} {
 		spec.Align = c.align
-		n, err := symbolNode(sym, spec, 600, 400)
+		n, err := symbolNode(sym, spec)
 		if err != nil {
 			t.Fatal(err)
 		}
-		b := layerOf(t, n)
+		b := layerOf(t, n, 600, 400)
 		if !opaque(b, c.in, 150) || !clear(b, c.out, 150) {
 			t.Errorf("align %q: want ink at x=%d and none at x=%d", c.align, c.in, c.out)
 		}
@@ -127,11 +130,11 @@ func TestSymbolNodeAlignsAcrossTheBox(t *testing.T) {
 func TestSymbolNodeScale(t *testing.T) {
 	sym := mustSymbol(t, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg>`)
 	spec := template.SymbolSpec{X: 100, Y: 100, Width: 100, Height: 100, Scale: 0.5, Align: "center"}
-	n, err := symbolNode(sym, spec, 400, 400)
+	n, err := symbolNode(sym, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := layerOf(t, n)
+	b := layerOf(t, n, 400, 400)
 	if !opaque(b, 150, 150) || !opaque(b, 130, 130) || !clear(b, 120, 150) || !clear(b, 150, 120) {
 		t.Error("a half scale symbol should fill the middle half of its box")
 	}
@@ -140,7 +143,7 @@ func TestSymbolNodeScale(t *testing.T) {
 func TestSymbolNodeNothingToDraw(t *testing.T) {
 	// An icon whose shapes have no extent has nothing to place
 	icon := &svgpath.Icon{ViewBox: svgpath.Rect{W: 10, H: 10}}
-	n, err := symbolNode(&card.SetSymbol{Icon: icon}, template.SymbolSpec{Width: 10, Height: 10}, 100, 100)
+	n, err := symbolNode(&card.SetSymbol{Icon: icon}, template.SymbolSpec{Width: 10, Height: 10})
 	if n != nil || err != nil {
 		t.Errorf("symbolNode = %v, %v, want nil and no error", n, err)
 	}
@@ -236,11 +239,11 @@ func TestSymbolNodeKeepsTheIconsColors(t *testing.T) {
 	sym := mustSymbol(t, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 		<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x2="100"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs>
 		<path fill="url(#g)" d="M0 0h100v100H0z"/></svg>`)
-	n, err := symbolNode(sym, template.SymbolSpec{X: 100, Y: 100, Width: 200, Height: 200}, 400, 400)
+	n, err := symbolNode(sym, template.SymbolSpec{X: 100, Y: 100, Width: 200, Height: 200})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := layerOf(t, n)
+	b := layerOf(t, n, 400, 400)
 	left, _, _, a := pixel(b, 105, 200)
 	_, _, right, _ := pixel(b, 295, 200)
 	if a < 0.99 || left < 0.8 {

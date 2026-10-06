@@ -9,6 +9,7 @@ package render
 import (
 	"context"
 	"fmt"
+	"image"
 	"sort"
 	"strings"
 
@@ -25,8 +26,8 @@ import (
 )
 
 // Render step names and the cumulative fraction each phase spans. The fractions
-// are for feedback, not timing: the frame loop does the PNG decodes and is the
-// heaviest, so it owns the widest band
+// are for feedback, not timing. Frame layers decode as the compositor reaches
+// them, after the text is laid out, so that load owns the widest band
 const (
 	stepManifest = "Reading template"
 	stepFrame    = "Compositing frame"
@@ -35,11 +36,26 @@ const (
 
 	fracManifest  = 0.02
 	fracFrameFrom = 0.05
-	fracFrameTo   = 0.55
-	fracTextFrom  = 0.55
-	fracTextTo    = 0.85
+	fracFrameTo   = 0.08
+	fracTextFrom  = 0.08
+	fracTextTo    = 0.35
+	fracLoadTo    = 0.9
 	fracFinalize  = 0.9
 )
+
+// frameLoads counts the frame layers the compositor has loaded so far, so each
+// load can report its place in the band between the text and the finish. The
+// compositor loads one layer at a time, so the count needs no lock
+type frameLoads struct {
+	req         template.RenderRequest
+	done, total int
+}
+
+// started reports that a layer is about to load
+func (l *frameLoads) started() {
+	l.req.Report(stepFrame, fracTextTo+(fracLoadTo-fracTextTo)*float64(l.done)/float64(max(l.total, 1)))
+	l.done++
+}
 
 // Template renders a card against any WUBRG-frame manifest. name is what
 // Name() reports, which is also the name it was registered under
@@ -100,18 +116,20 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 
 	var nodes []canvas.Node
+	loads := &frameLoads{req: req}
 	artSlots := m.ArtSlots()
 	for i, layer := range m.Layers {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
-		node, err := layerNode(req, m, layer, layersByName, halves.keys(layer.Half), scale)
+		node, err := layerNode(ctx, loads, req, m, layer, layersByName, halves.keys(layer.Half), scale)
 		if err != nil {
 			return nil, err
 		}
 		if node != nil {
 			nodes = append(nodes, node)
+			loads.total++
 		}
 
 		// The art takes its place in the stack whether or not the layer it
@@ -133,8 +151,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			if err != nil {
 				return nil, fmt.Errorf("render: wrapping art: %w", err)
 			}
-			placedArt := canvas.Place(m.Width, m.Height, artBuf, slot.X, slot.Y)
-			nodes = append(nodes, &canvas.Layer{Content: placedArt, Mode: blend.Normal})
+			nodes = append(nodes, &canvas.Layer{Content: artBuf, Origin: image.Pt(slot.X, slot.Y), Mode: blend.Normal})
 		}
 	}
 
@@ -150,7 +167,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	}
 
 	if drawSymbol {
-		node, err := symbolNode(req.SetSymbol, symSpec, m.Width, m.Height)
+		node, err := symbolNode(req.SetSymbol, symSpec)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +200,6 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 
 	// A pass-through root is the correct default. Nothing sits beneath the
 	// document root, so pass-through and isolated behave the same here
-	req.Report(stepFinalize, fracFinalize)
 	doc := &canvas.Document{
 		Width:  m.Width,
 		Height: m.Height,
@@ -193,6 +209,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	if err != nil {
 		return nil, err
 	}
+	req.Report(stepFinalize, fracFinalize)
 	if m.Rotate == 0 {
 		return out, nil
 	}
@@ -249,7 +266,7 @@ func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, job
 	if err != nil {
 		return nil, fmt.Errorf("render: wrapping text box %q: %w", name, err)
 	}
-	text := &canvas.Layer{Content: buf, Mode: blend.Normal}
+	text := &canvas.Layer{Content: buf, Origin: res.Image.Bounds().Min, Mode: blend.Normal}
 	if box.Shadow != nil {
 		text.Effects = []effects.Effect{box.Shadow.Effect(box.FontSize)}
 	}
@@ -374,9 +391,11 @@ func lerp(from, to float64, i, n int) float64 {
 	return from + (to-from)*float64(i+1)/float64(n)
 }
 
-// layerNode loads one frame layer's variant for this card, or returns nil when
-// its condition does not hold or no variant applies to the card's color
-func layerNode(req template.RenderRequest, m *template.Manifest, layer template.LayerSpec, layersByName map[string]template.LayerSpec, f frame.Keys, scale template.Scale) (canvas.Node, error) {
+// layerNode builds one frame layer's node for this card, or returns nil when its
+// condition does not hold or no variant applies to the card's color. The node
+// decodes its PNG when the compositor reaches it and lets go of the pixels once
+// blended, so a render holds one frame layer at a time rather than all of them
+func layerNode(ctx context.Context, loads *frameLoads, req template.RenderRequest, m *template.Manifest, layer template.LayerSpec, layersByName map[string]template.LayerSpec, f frame.Keys, scale template.Scale) (canvas.Node, error) {
 	if !f.ConditionMet(layer.Condition) {
 		return nil, nil
 	}
@@ -390,10 +409,11 @@ func layerNode(req template.RenderRequest, m *template.Manifest, layer template.
 	}
 	key := f.Slot(layer.ColorSlot)
 	x, y := scale.Px(layer.X), scale.Px(layer.Y)
-	var placed *raster.Buffer
-	var err error
+	var load func() (*raster.Buffer, image.Point, error)
 	if blend := blendedPaths(layer, variants, key); blend != nil {
-		placed, err = template.LoadBlendedLayer(req.Assets, blend, m.Width, m.Height, scale, x, y)
+		load = func() (*raster.Buffer, image.Point, error) {
+			return template.LoadBlendedLayer(req.Assets, blend, m.Width, scale, x, y)
+		}
 	} else {
 		asset, ok := variants[key]
 		if !ok {
@@ -404,19 +424,30 @@ func layerNode(req template.RenderRequest, m *template.Manifest, layer template.
 			// lets a manifest leave a layer out where it does not apply
 			return nil, nil
 		}
-		placed, err = template.LoadLayerAt(req.Assets, asset.Path, m.Width, m.Height, scale, x, y)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if layer.Mirror != nil && f.ConditionMet(layer.Mirror.Condition) {
-		template.Mirror(placed, scale.Rect(layer.Mirror.Region()))
+		load = func() (*raster.Buffer, image.Point, error) {
+			return template.LoadLayerAt(req.Assets, asset.Path, scale, x, y)
+		}
 	}
 	mode, err := template.BlendMode(layer.Blend)
 	if err != nil {
 		return nil, err
 	}
-	return &canvas.Layer{Content: placed, Mode: mode}, nil
+	mirror := layer.Mirror != nil && f.ConditionMet(layer.Mirror.Condition)
+	return &canvas.Layer{Mode: mode, Load: func() (*raster.Buffer, image.Point, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, image.Point{}, err
+		}
+		loads.started()
+		buf, at, err := load()
+		if err != nil || !mirror {
+			return buf, at, err
+		}
+		// A mirror flips about the document's centre, so the layer takes the
+		// whole document to flip in
+		placed := canvas.Place(m.Width, m.Height, buf, at.X, at.Y)
+		template.Mirror(placed, scale.Rect(layer.Mirror.Region()))
+		return placed, image.Point{}, nil
+	}}, nil
 }
 
 // roleFor returns the font role a box's manifest Font names, defaulting to the

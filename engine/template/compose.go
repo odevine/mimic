@@ -12,25 +12,26 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-// LoadLayer decodes a layer PNG, resamples it to the render scale, and places
-// it at the document origin. Frame layers are authored document-sized, so the
-// origin placement leaves them where the artwork put them
-func LoadLayer(p AssetProvider, path string, w, h int, s Scale) (*raster.Buffer, error) {
-	return LoadLayerAt(p, path, w, h, s, 0, 0)
+// LoadLayer decodes a layer PNG and resamples it to the render scale. It returns
+// the buffer at the PNG's own size and the document origin it belongs at. Frame
+// layers are authored document-sized, so that origin leaves them where the
+// artwork put them
+func LoadLayer(p AssetProvider, path string, s Scale) (*raster.Buffer, image.Point, error) {
+	return LoadLayerAt(p, path, s, 0, 0)
 }
 
-// LoadLayerAt is LoadLayer with the PNG placed at (x, y) in the scaled document,
-// for a cut smaller than the document, such as one half of a split card
-func LoadLayerAt(p AssetProvider, path string, w, h int, s Scale, x, y int) (*raster.Buffer, error) {
+// LoadLayerAt is LoadLayer with the PNG belonging at (x, y) in the scaled
+// document, for a cut smaller than the document, such as one half of a split card
+func LoadLayerAt(p AssetProvider, path string, s Scale, x, y int) (*raster.Buffer, image.Point, error) {
 	img, err := LoadImage(p, path)
 	if err != nil {
-		return nil, err
+		return nil, image.Point{}, err
 	}
 	buf, err := raster.FromImage(s.Image(img))
 	if err != nil {
-		return nil, fmt.Errorf("template: wrapping layer %q: %w", path, err)
+		return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
 	}
-	return canvas.Place(w, h, buf, x, y), nil
+	return buf, image.Pt(x, y), nil
 }
 
 // Mirror flips buf left to right about its vertical center within region, a
@@ -87,8 +88,7 @@ func Divider(p AssetProvider, m *Manifest, centerY int, s Scale) (*canvas.Layer,
 	if err != nil {
 		return nil, fmt.Errorf("template: wrapping divider: %w", err)
 	}
-	placed := canvas.Place(m.Width, m.Height, buf, strip.Min.X, centerY-strip.Dy()/2)
-	return &canvas.Layer{Content: placed, Mode: blend.Normal}, nil
+	return &canvas.Layer{Content: buf, Origin: image.Pt(strip.Min.X, centerY-strip.Dy()/2), Mode: blend.Normal}, nil
 }
 
 // LayerAssetPath returns the color-invariant "any" asset path for a named
@@ -286,26 +286,27 @@ func blendWeights(stops []float64, n int, t float64, w []float64) {
 }
 
 // LoadBlendedLayer decodes several color variants of one layer and blends them
-// left to right at the seams BlendStops gives, placing the result at (x, y) in
-// the scaled document. The variants blend at their own size, so a bar costs the
-// size of the bar rather than of the document. They must be the same size
-func LoadBlendedLayer(p AssetProvider, paths []string, w, h int, s Scale, x, y int) (*raster.Buffer, error) {
+// left to right at the seams BlendStops gives, for a layer that belongs at
+// (x, y) in a scaled document w wide. It returns the blended buffer at the
+// variants' own size with that origin, so a bar costs the size of the bar rather
+// than of the document. They must be the same size
+func LoadBlendedLayer(p AssetProvider, paths []string, w int, s Scale, x, y int) (*raster.Buffer, image.Point, error) {
 	stops := BlendStops(len(paths))
 	if stops == nil {
-		return nil, fmt.Errorf("template: cannot blend %d colors", len(paths))
+		return nil, image.Point{}, fmt.Errorf("template: cannot blend %d colors", len(paths))
 	}
 	var bufs []*raster.Buffer
 	for _, path := range paths {
 		img, err := LoadImage(p, path)
 		if err != nil {
-			return nil, err
+			return nil, image.Point{}, err
 		}
 		buf, err := raster.FromImage(s.Image(img))
 		if err != nil {
-			return nil, fmt.Errorf("template: wrapping layer %q: %w", path, err)
+			return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
 		}
 		if len(bufs) > 0 && !buf.SameSize(bufs[0]) {
-			return nil, fmt.Errorf("template: blended layers %q and %q differ in size", paths[0], path)
+			return nil, image.Point{}, fmt.Errorf("template: blended layers %q and %q differ in size", paths[0], path)
 		}
 		bufs = append(bufs, buf)
 	}
@@ -324,7 +325,7 @@ func LoadBlendedLayer(p AssetProvider, paths []string, w, h int, s Scale, x, y i
 			}
 		}
 	}
-	return canvas.Place(w, h, out, x, y), nil
+	return out, image.Pt(x, y), nil
 }
 
 // BlendedPaths lists the variants a blended color key draws, one per letter, or

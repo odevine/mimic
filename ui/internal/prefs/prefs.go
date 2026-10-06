@@ -48,8 +48,11 @@ type Settings struct {
 	// collapsing them to one row per card name
 	ExpandPrintings bool                 `json:"expandPrintings,omitempty"`
 	Splits          map[string][]float64 `json:"splits,omitempty"`
-	// Concurrency is how many cards a batch renders at once, zero for the default
+	// Concurrency is how many cards a batch renders at once, zero to size it to
+	// the computer
 	Concurrency int `json:"concurrency,omitempty"`
+	// PNGCompression is "fast" or "balanced". Empty reads as balanced
+	PNGCompression string `json:"pngCompression,omitempty"`
 	// OutputDir is the folder a batch writes to, and RecentOutputDirs the
 	// folders offered beside it, newest first
 	OutputDir        string   `json:"outputDir,omitempty"`

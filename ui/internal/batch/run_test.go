@@ -1,6 +1,7 @@
 package batch
 
 import (
+	"image/png"
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
@@ -40,5 +41,37 @@ func TestStopMarksARunStopped(t *testing.T) {
 	r.Stop()
 	if !r.View().Stopped || r.ctx.Err() == nil {
 		t.Error("Stop did not mark the run stopped and cancel it")
+	}
+}
+
+func TestConcurrency(t *testing.T) {
+	cases := []struct {
+		name          string
+		setting, auto int
+		want          int
+	}{
+		{"automatic takes the machine's count", 0, 9, 9},
+		{"a negative setting is automatic too", -3, 5, 5},
+		{"a chosen count wins over automatic", 3, 9, 3},
+		{"a chosen count may exceed automatic", 12, 4, 12},
+		{"a chosen count stops at the maximum", 99, 4, MaxConcurrency},
+		{"automatic stops at the maximum", 0, 99, MaxConcurrency},
+		{"automatic never goes below one", 0, 0, 1},
+	}
+	for _, c := range cases {
+		if got := Concurrency(c.setting, c.auto); got != c.want {
+			t.Errorf("%s: Concurrency(%d, %d) = %d, want %d", c.name, c.setting, c.auto, got, c.want)
+		}
+	}
+}
+
+func TestCompression(t *testing.T) {
+	if got := Compression("fast"); got != png.BestSpeed {
+		t.Errorf("fast = %d, want BestSpeed", got)
+	}
+	for _, s := range []string{"", "balanced", "other"} {
+		if got := Compression(s); got != png.DefaultCompression {
+			t.Errorf("%q = %d, want the default", s, got)
+		}
 	}
 }

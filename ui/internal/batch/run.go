@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/png"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/pipeline"
+	"github.com/odevine/mimic/ui/internal/resource"
 )
 
 // The states a card moves through in a run. Skipped is a card a Stop reached
@@ -36,13 +38,10 @@ func settledStatus(status string) bool {
 	return status == StatusDone || status == StatusFailed || status == StatusSkipped || status == StatusUnsupported
 }
 
-// defaultConcurrency is how many cards render at once when nothing is set, and
-// MaxConcurrency the most a setting may ask for. Each full-size render holds a
-// buffer of tens of megabytes, so memory rather than CPU is what bounds it
-const (
-	defaultConcurrency = 2
-	MaxConcurrency     = 6
-)
+// MaxConcurrency is the most cards a run renders at once. A full-size render
+// peaks near a gigabyte, so memory rather than CPU is what bounds it in practice,
+// and the resource package sizes the automatic choice to the machine
+const MaxConcurrency = resource.MaxWorkers
 
 // Row is one card of a run as the review table sends it: the resolved card,
 // any field overrides on top, and how many copies the list asked for. A run
@@ -90,6 +89,8 @@ type Options struct {
 	Version     string
 	DPI         int
 	Concurrency int
+	// Compression is the PNG level a card is written at
+	Compression png.CompressionLevel
 	// ArtTimeout bounds one art download and RenderTimeout one card's render
 	ArtTimeout    time.Duration
 	RenderTimeout time.Duration
@@ -402,7 +403,7 @@ func (r *Run) renderCard(ctx context.Context, p *pipeline.Pipeline, i int) {
 
 	r.update(i, "", func(c *Card) { c.Status = StatusWriting })
 	file := r.files[i]
-	if err := WritePNG(filepath.Join(r.opts.OutDir, file), img); err != nil {
+	if err := WritePNG(filepath.Join(r.opts.OutDir, file), img, r.opts.Compression); err != nil {
 		fail("write", err)
 		return
 	}
@@ -437,13 +438,15 @@ func Counts(cards []Card) map[string]int {
 	return m
 }
 
-// Concurrency reads the render concurrency setting, filling in the default and
-// keeping it in a range the memory of one machine can hold
-func Concurrency(setting int) int {
+// Concurrency reads the render concurrency setting. A setting of zero is
+// automatic and takes auto, the count sized to this machine, and any other
+// setting is the user's choice. Either way it stays between one and
+// MaxConcurrency
+func Concurrency(setting, auto int) int {
 	if setting <= 0 {
-		return defaultConcurrency
+		setting = auto
 	}
-	return min(setting, MaxConcurrency)
+	return max(min(setting, MaxConcurrency), 1)
 }
 
 // ExpandFaces turns each card the list sends into one row per image it renders

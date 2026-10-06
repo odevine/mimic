@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -179,7 +179,7 @@ func (s *Server) handlePutCardback(w http.ResponseWriter, r *http.Request) {
 	// Written beside the stored one first, so a refused upload keeps the old
 	tmp := path + ".new"
 	defer os.Remove(tmp)
-	if err := batch.WritePNG(tmp, img); err != nil {
+	if err := batch.WritePNG(tmp, img, png.DefaultCompression); err != nil {
 		http.Error(w, "storing the cardback: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -79,17 +79,71 @@ function fillResolution() {
   }
 }
 
+const GB = 1024 ** 3;
+
+// bytesLabel reads a byte count the way memory is sold, in gigabytes
+function bytesLabel(bytes) {
+  const gb = bytes / GB;
+  return gb < 10 ? `${gb.toFixed(1)} GB` : `${Math.round(gb)} GB`;
+}
+
+// fillConcurrency lists automatic and each preset count with the memory it is
+// expected to use, so a choice shows its cost. The server owns the estimate and
+// hands over the numbers, which keeps the model in one place. Without them the
+// choice is plain counts. A saved count outside the presets stays listed, so
+// opening the panel never changes it
+async function fillConcurrency(current) {
+  const select = $("concurrency-select");
+  const note = $("concurrency-note");
+  let r = null;
+  try {
+    r = await api.resources();
+  } catch {
+    // the plain counts below still work
+  }
+  select.replaceChildren();
+  if (!r) {
+    select.append(new Option("Automatic", "0"));
+    const counts = new Set([1, 2, 4, 6, 8]);
+    if (current > 0) counts.add(current);
+    for (const n of [...counts].sort((a, b) => a - b)) select.append(new Option(`${n} at once`, String(n)));
+    select.value = String(Math.max(current, 0));
+    note.textContent = "";
+    return;
+  }
+
+  const cost = (n) => r.baseBytes + n * r.renderBytes;
+  const tooMuch = (n) => r.budgetBytes > 0 && cost(n) > r.budgetBytes;
+  const text = (n) => `${n} at once · about ${bytesLabel(cost(n))}${tooMuch(n) ? " · more than this computer can spare" : ""}`;
+  select.append(new Option(`Automatic · ${text(r.auto)}`, "0"));
+  const counts = new Set(r.presets);
+  if (current > 0) counts.add(current);
+  for (const n of [...counts].sort((a, b) => a - b)) select.append(new Option(text(n), String(n)));
+  select.value = String(Math.max(current, 0));
+
+  const free = r.availableBytes > 0 ? `, about ${bytesLabel(r.availableBytes)} free` : "";
+  note.textContent = `Estimates are for output-size renders. This computer has ${bytesLabel(r.totalBytes)} of memory${free} and ${r.cpus} processors.`;
+}
+
+// concurrencyChoice is the chosen count, zero for automatic. A list that never
+// filled leaves the saved count alone rather than resetting it to automatic
+function concurrencyChoice() {
+  const select = $("concurrency-select");
+  if (!select.options.length) return app.settings.peek().concurrency || 0;
+  return parseInt(select.value, 10) || 0;
+}
+
 async function open() {
   $("settings-status").textContent = "";
   const s = app.settings.peek();
   $("theme-select").value = s.theme || "dark";
   $("expand-printings").checked = !!s.expandPrintings;
-  $("concurrency-input").value = s.concurrency ? String(s.concurrency) : "";
   $("output-dir-input").value = s.outputDir || "";
+  $("png-compression-select").value = s.pngCompression === "fast" ? "fast" : "balanced";
   openCardData(s.cardData);
   openFonts();
   $("settings-dialog").showModal();
-  await loadResolution();
+  await Promise.all([fillConcurrency(s.concurrency || 0), loadResolution()]);
   fillResolution();
 }
 
@@ -110,7 +164,8 @@ async function save() {
       ...app.settings.peek(),
       theme: $("theme-select").value,
       expandPrintings: $("expand-printings").checked,
-      concurrency: Math.min(Math.max(parseInt($("concurrency-input").value, 10) || 0, 0), 6),
+      concurrency: concurrencyChoice(),
+      pngCompression: $("png-compression-select").value,
       outputDir: $("output-dir-input").value.trim(),
       cardData: cardDataChoice(),
     };

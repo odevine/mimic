@@ -539,7 +539,16 @@ Sideboard
         </div>
         <div class="setting">
           <span class="label" data-feature="settings.concurrency">Render concurrency</span>
-          <span class="inline"><input id="concurrency-input" type="number" min="1" max="6" placeholder="2" data-feature="settings.concurrency" aria-label="Render concurrency"><span class="dim">cards at once</span></span>
+          <select id="concurrency-select" data-feature="settings.concurrency" aria-label="Render concurrency"></select>
+          <p class="desc" id="concurrency-note"></p>
+        </div>
+        <div class="setting">
+          <span class="label" data-feature="settings.pngCompression">PNG compression</span>
+          <select id="png-compression-select" data-feature="settings.pngCompression" aria-label="PNG compression">
+            <option value="balanced">Balanced · smaller files</option>
+            <option value="fast">Fast · quicker batches, larger files</option>
+          </select>
+          <p class="desc">Fast spends less time compressing each card, so batches finish sooner, but the files come out larger. The pixels are identical either way. File size matters most when uploading to MPC Autofill, which hides images over its size limit.</p>
         </div>
       </section>
 

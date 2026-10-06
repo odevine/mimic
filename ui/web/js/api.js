@@ -50,6 +50,9 @@ export const api = {
   capabilities: () => get("/api/capabilities"),
   settings: () => get("/api/settings"),
   saveSettings: (s) => send("PUT", "/api/settings", s),
+  // resources describes this computer's memory and what one output render costs,
+  // for the concurrency setting
+  resources: () => get("/api/resources"),
 
   search: (q, signal) => get(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
   recents: () => get("/api/recents"),

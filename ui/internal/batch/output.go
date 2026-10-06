@@ -121,16 +121,26 @@ func sanitizeFilename(s string) string {
 	return out
 }
 
+// Compression reads the PNG compression setting, "fast" for the encoder's
+// fastest level and anything else for its default
+func Compression(setting string) png.CompressionLevel {
+	if setting == "fast" {
+		return png.BestSpeed
+	}
+	return png.DefaultCompression
+}
+
 // WritePNG encodes img to path through a temporary file in the same folder, so
 // a crash or a Stop never leaves a half-written PNG under the real name
-func WritePNG(path string, img image.Image) error {
+func WritePNG(path string, img image.Image, level png.CompressionLevel) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".mimic-*.png")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
 	bw := bufio.NewWriterSize(tmp, 1<<20)
-	if err := png.Encode(bw, img); err != nil {
+	enc := png.Encoder{CompressionLevel: level}
+	if err := enc.Encode(bw, img); err != nil {
 		tmp.Close()
 		return err
 	}

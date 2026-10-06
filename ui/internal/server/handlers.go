@@ -26,6 +26,7 @@ func (s *Server) routes() {
 	mux.HandleFunc("GET /api/render/{id}/events", s.handleJobEvents)
 	mux.HandleFunc("GET /api/render/{id}/image", s.handleRenderImage)
 	mux.HandleFunc("GET /api/resolution", s.handleResolution)
+	mux.HandleFunc("GET /api/resources", s.handleResources)
 	mux.HandleFunc("POST /api/resolution", s.handleSetResolution)
 	mux.HandleFunc("GET /api/templates", s.handleTemplates)
 	mux.HandleFunc("GET /api/template/active", s.handleActiveTemplate)

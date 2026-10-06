@@ -104,6 +104,11 @@ Card data and art come from [Scryfall](https://scryfall.com). Please respect
 their [API guidelines](https://scryfall.com/docs/api) when rendering at volume.
 The app paces its own requests to their published rate limits.
 
+Set symbols come from the [mtg-vectors](https://github.com/Investigamer/mtg-vectors)
+catalog by Investigamer, which is released under the Mozilla Public License 2.0.
+The engine downloads the latest release the first time it needs a symbol and
+keeps it in a cache folder, and the files are used unmodified.
+
 mimic is unofficial fan content and is not affiliated with or endorsed by
 Wizards of the Coast. Magic: The Gathering and its card names, text, and art
 belong to their respective owners.

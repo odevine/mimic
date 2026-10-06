@@ -51,7 +51,7 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt, noSymbol
 	}
 	defer cleanup()
 
-	client := card.NewClient()
+	client := card.NewClient(card.WithSymbolCache(card.NewDirCache(symbolCacheDir())))
 	data, err := client.FetchByName(ctx, name)
 	if err != nil {
 		return err
@@ -97,6 +97,16 @@ func run(name, out, assetsDir, bundle, tmplName, fontDir string, noArt, noSymbol
 		return err
 	}
 	return writePNG(out, buf.ToImage(8))
+}
+
+// symbolCacheDir is where downloaded set symbols are kept between runs, or "" when
+// the system has no cache directory, in which case they are downloaded each run
+func symbolCacheDir() string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mimic", "symbols")
 }
 
 // defaultFontDirs lists where rendercard looks for font overrides when -fonts

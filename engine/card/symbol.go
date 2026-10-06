@@ -16,25 +16,29 @@ import (
 	"github.com/odevine/mimic/engine/card/svgpath"
 )
 
-// SetSymbol is a set's expansion symbol, the outline Scryfall publishes for it
-// as an SVG icon. The icon carries no colour, so a template paints it
+// SetSymbol is a set's expansion symbol, drawn in its rarity's colors. It comes
+// from the mtg-vectors catalog, https://github.com/Investigamer/mtg-vectors,
+// whose icons carry their own gradients and outlines
 type SetSymbol struct {
-	// Code is the set code the symbol belongs to, lowercase as Scryfall spells it
+	// Code is the catalog folder the symbol was read from, such as "M21"
 	Code string
 	Icon *svgpath.Icon
 }
 
 const (
-	// setsIndexName and setsIndexMaxAge name the cached code to icon URL index
-	// and how long a copy is trusted. Scryfall adds sets every few weeks and
-	// re-versions an icon's URL when its art changes, so a week keeps new sets
-	// appearing without asking for the list on every launch
-	setsIndexName   = "sets-index.json"
-	setsIndexMaxAge = 7 * 24 * time.Hour
+	// setsIndexName and indexMaxAge name the cached set code to icon code index and
+	// how long a copy is trusted. Scryfall adds sets every few weeks, so a week
+	// keeps new sets appearing without asking for the list on every launch
+	setsIndexName = "sets-icons.json"
+	indexMaxAge   = 7 * 24 * time.Hour
 
-	// defaultIcon is the file name Scryfall points a set at when it has no
-	// symbol of its own
-	defaultIcon = "default.svg"
+	// catalogName, catalogMaxAge and defaultCatalogURL name the cached catalog
+	// zip, how long a copy is trusted, and where its latest release is published.
+	// The catalog is updated weekly
+	catalogName       = "mtg-vectors.optimized.zip"
+	catalogMaxAge     = 7 * 24 * time.Hour
+	defaultCatalogURL = "https://github.com/Investigamer/mtg-vectors/releases/latest/download/mtg-vectors.optimized.zip"
+	maxCatalogBytes   = 64 << 20
 )
 
 // SymbolCache keeps the downloads FetchSetSymbol makes, so a later run does not
@@ -51,72 +55,79 @@ type SymbolCache interface {
 // WithSymbolCache has the client keep set symbol downloads in c
 func WithSymbolCache(c SymbolCache) Option { return func(cl *Client) { cl.symbols.cache = c } }
 
+// WithSymbolCatalogURL overrides where the symbol catalog zip is downloaded
+// from, mainly for tests
+func WithSymbolCatalogURL(u string) Option { return func(cl *Client) { cl.symbols.catalogURL = u } }
+
 // symbolState is the set symbol data a client holds between calls: the index of
-// icon URLs and each icon already parsed, so a batch of cards from one set
-// downloads and parses its symbol once
+// icon codes, the catalog, and each icon already parsed, so a batch of cards
+// from one set reads and parses its symbol once
 type symbolState struct {
-	cache SymbolCache
+	cache      SymbolCache
+	catalogURL string
 
 	mu        sync.Mutex
-	index     map[string]string // set code to icon URL
+	index     map[string]string // lowercase set code to uppercase icon code
 	indexedAt time.Time
-	icons     map[string]*SetSymbol // keyed by icon URL
+	catalog   *catalog
+	loadedAt  time.Time
+	icons     map[string]*SetSymbol // keyed by folder and rarity letter
 }
 
-// FetchSetSymbol returns the expansion symbol of the card's set. It returns nil
-// and no error when there is nothing to draw: the card has no set code,
-// Scryfall does not list the set, or Scryfall lists it with its placeholder
-// icon. Any other failure is an error, so a caller can say the symbol is
-// unavailable and render without it
+// FetchSetSymbol returns the expansion symbol of the card's set, colored for its
+// rarity. It returns nil and no error when there is nothing to draw: the card
+// has no set code, Scryfall does not list the set, or the catalog has no symbol
+// for the icon Scryfall gives it. Any other failure is an error, so a caller can
+// say the symbol is unavailable and render without it
 func (c *Client) FetchSetSymbol(ctx context.Context, d *Data) (*SetSymbol, error) {
 	code := strings.ToLower(strings.TrimSpace(d.SetCode))
 	if code == "" {
 		return nil, nil
 	}
-	iconURL, err := c.setIconURL(ctx, code)
-	if err != nil || iconURL == "" {
+	iconCode, err := c.setIconCode(ctx, code)
+	if err != nil || iconCode == "" {
 		return nil, err
 	}
-	u, err := url.Parse(iconURL)
+	cat, err := c.loadCatalog(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("scryfall: icon URL for set %q: %w", code, err)
+		return nil, err
 	}
-	if path.Base(u.Path) == defaultIcon {
+	folder, ok := cat.folder(code, iconCode)
+	if !ok {
 		return nil, nil
 	}
 
+	key := folder + "/" + strings.Join(rarityLetters(d.Rarity), "")
 	c.symbols.mu.Lock()
-	sym, ok := c.symbols.icons[iconURL]
+	sym, ok := c.symbols.icons[key]
 	c.symbols.mu.Unlock()
 	if ok {
 		return sym, nil
 	}
-
-	svg, err := c.iconBytes(ctx, code, u)
+	icon, _, found, err := cat.icon(folder, d.Rarity)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("set symbol for %q: %w", code, err)
 	}
-	icon, err := svgpath.Parse(svg)
-	if err != nil {
-		return nil, fmt.Errorf("scryfall: set symbol for %q: %w", code, err)
+	if !found {
+		return nil, nil
 	}
-	sym = &SetSymbol{Code: code, Icon: icon}
+	sym = &SetSymbol{Code: folder, Icon: icon}
 	c.symbols.mu.Lock()
 	if c.symbols.icons == nil {
 		c.symbols.icons = make(map[string]*SetSymbol)
 	}
-	c.symbols.icons[iconURL] = sym
+	c.symbols.icons[key] = sym
 	c.symbols.mu.Unlock()
 	return sym, nil
 }
 
-// setIconURL looks a set code up in the icon index, loading the index first
+// setIconCode looks a set code up in the icon index, loading the index first
 // when none is held or the held one is old. It returns "" for a code the index
 // does not list
-func (c *Client) setIconURL(ctx context.Context, code string) (string, error) {
+func (c *Client) setIconCode(ctx context.Context, code string) (string, error) {
 	c.symbols.mu.Lock()
 	defer c.symbols.mu.Unlock()
-	if c.symbols.index == nil || time.Since(c.symbols.indexedAt) > setsIndexMaxAge {
+	if c.symbols.index == nil || time.Since(c.symbols.indexedAt) > indexMaxAge {
 		index, err := c.loadSetsIndex(ctx)
 		if err != nil {
 			return "", err
@@ -126,12 +137,14 @@ func (c *Client) setIconURL(ctx context.Context, code string) (string, error) {
 	return c.symbols.index[code], nil
 }
 
-// loadSetsIndex reads the code to icon URL index from the cache, or from
-// Scryfall's set list when the cache has none that is fresh. The caller holds
-// the symbol lock, so concurrent renders share one request
+// loadSetsIndex reads the set code to icon code index from the cache, or from
+// Scryfall's set list when the cache has none that is fresh. A set's icon code
+// is the name of the icon file Scryfall points it at, which for a set with no
+// symbol of its own is its parent's. The caller holds the symbol lock, so
+// concurrent renders share one request
 func (c *Client) loadSetsIndex(ctx context.Context) (map[string]string, error) {
 	if cache := c.symbols.cache; cache != nil {
-		if raw, ok := cache.Get(setsIndexName, setsIndexMaxAge); ok {
+		if raw, ok := cache.Get(setsIndexName, indexMaxAge); ok {
 			var index map[string]string
 			if json.Unmarshal(raw, &index) == nil && len(index) > 0 {
 				return index, nil
@@ -154,8 +167,12 @@ func (c *Client) loadSetsIndex(ctx context.Context) (map[string]string, error) {
 	}
 	index := make(map[string]string, len(list.Data))
 	for _, s := range list.Data {
-		if s.Code != "" && s.IconSVGURI != "" {
-			index[strings.ToLower(s.Code)] = s.IconSVGURI
+		u, err := url.Parse(s.IconSVGURI)
+		if err != nil || s.Code == "" {
+			continue
+		}
+		if icon := strings.ToUpper(strings.TrimSuffix(path.Base(u.Path), ".svg")); icon != "" && icon != "." && icon != "/" {
+			index[strings.ToLower(s.Code)] = icon
 		}
 	}
 	if len(index) == 0 {
@@ -169,39 +186,51 @@ func (c *Client) loadSetsIndex(ctx context.Context) (map[string]string, error) {
 	return index, nil
 }
 
-// iconBytes returns a set's SVG from the cache or from Scryfall. The cache entry
-// is named for the icon URL's version query as well as the set, so an icon
-// Scryfall re-versions is downloaded again
-func (c *Client) iconBytes(ctx context.Context, code string, u *url.URL) ([]byte, error) {
-	name := "icon-" + code + "-" + versionToken(u.RawQuery) + ".svg"
-	if cache := c.symbols.cache; cache != nil {
-		if svg, ok := cache.Get(name, 0); ok {
-			return svg, nil
-		}
+// loadCatalog returns the symbol catalog, from memory, the cache, or a download
+// of the latest release. A copy older than a week is replaced, and when the
+// replacement cannot be downloaded the old copy is used instead of failing
+func (c *Client) loadCatalog(ctx context.Context) (*catalog, error) {
+	c.symbols.mu.Lock()
+	defer c.symbols.mu.Unlock()
+	if c.symbols.catalog != nil && time.Since(c.symbols.loadedAt) <= catalogMaxAge {
+		return c.symbols.catalog, nil
 	}
-	svg, err := c.getBounded(ctx, u.String(), "image/svg+xml", svgpath.MaxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("scryfall: fetching symbol for set %q: %w", code, err)
+	cache := c.symbols.cache
+	set := func(cat *catalog) *catalog {
+		c.symbols.catalog, c.symbols.loadedAt = cat, time.Now()
+		c.symbols.icons = nil
+		return cat
 	}
-	if cache := c.symbols.cache; cache != nil {
-		cache.Put(name, svg)
-	}
-	return svg, nil
-}
 
-// versionToken reduces an icon URL's query, a number Scryfall bumps when the
-// icon changes, to characters that are safe in a file name
-func versionToken(query string) string {
-	var b strings.Builder
-	for _, r := range query {
-		if r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
-			b.WriteRune(r)
+	if cache != nil {
+		if data, ok := cache.Get(catalogName, catalogMaxAge); ok {
+			if cat, err := openCatalog(data); err == nil {
+				return set(cat), nil
+			}
 		}
 	}
-	if b.Len() == 0 {
-		return "0"
+	data, err := c.getBounded(ctx, c.symbols.catalogURL, "application/zip", maxCatalogBytes)
+	if err == nil {
+		var cat *catalog
+		if cat, err = openCatalog(data); err == nil {
+			if cache != nil {
+				cache.Put(catalogName, data)
+			}
+			return set(cat), nil
+		}
 	}
-	return b.String()
+	// A copy that has gone stale still draws the symbols it has
+	if c.symbols.catalog != nil {
+		return c.symbols.catalog, nil
+	}
+	if cache != nil {
+		if old, ok := cache.Get(catalogName, 0); ok {
+			if cat, oerr := openCatalog(old); oerr == nil {
+				return set(cat), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("set symbols: downloading the catalog: %w", err)
 }
 
 // getBounded fetches a URL and returns its body, failing on a status other than

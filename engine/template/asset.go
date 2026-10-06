@@ -221,9 +221,9 @@ func (m *Manifest) ArtSlots() []ArtSlot {
 // SymbolSet is the key of the set expansion symbol in Manifest.Symbols
 const SymbolSet = "set"
 
-// SymbolSpec is where a symbol draws and how it is painted. The symbol is
-// scaled to fit inside the box without changing its shape, then placed by
-// Align and VAlign
+// SymbolSpec is where a symbol draws. The symbol arrives colored for the card's
+// rarity, so the manifest only places it: it is scaled to fit inside the box
+// without changing its shape, then placed by Align and VAlign
 type SymbolSpec struct {
 	X      int `json:"x"`
 	Y      int `json:"y"`
@@ -238,34 +238,7 @@ type SymbolSpec struct {
 	// Scale shrinks the fitted symbol to this fraction of the box. Zero or less
 	// means 1
 	Scale float64 `json:"scale,omitempty"`
-	// Outline strokes the symbol's edge, nil draws none
-	Outline *SymbolOutline `json:"outline,omitempty"`
-	// Rarity is the paint for each rarity, keyed "common", "uncommon", "rare" and
-	// "mythic". A card whose rarity has no entry takes common's, and a manifest
-	// with no common entry paints black
-	Rarity map[string]SymbolPaint `json:"rarity,omitempty"`
 	// Condition is a layer condition (see LayerSpec.Condition) that must hold for
 	// the symbol to draw
 	Condition string `json:"condition,omitempty"`
-}
-
-// SymbolOutline is a stroke around a symbol, drawn outside its edge
-type SymbolOutline struct {
-	Width float64 `json:"width"` // pixels
-	Color string  `json:"color"` // "#RRGGBB"
-}
-
-// SymbolPaint fills a symbol, with one stop for a flat color or several for a
-// linear gradient
-type SymbolPaint struct {
-	Stops []SymbolStop `json:"stops"`
-	// Angle is the direction the gradient runs in degrees, 0 from left to right
-	// and 90 from top to bottom, across the symbol's own extent
-	Angle float64 `json:"angle,omitempty"`
-}
-
-// SymbolStop is one color of a gradient, At in [0,1] along it
-type SymbolStop struct {
-	Color string  `json:"color"` // "#RRGGBB"
-	At    float64 `json:"at"`
 }

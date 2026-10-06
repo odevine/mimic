@@ -76,12 +76,6 @@ type strokeUse struct {
 	dashOffset float64
 }
 
-// Transformed returns the shape's outline with every point (x, y) moved to
-// (x*sx+dx, y*sy+dy). The fill rule is unchanged
-func (s Shape) Transformed(sx, sy, dx, dy float32) *path.Path {
-	return s.outline.build(sx, sy, dx, dy)
-}
-
 // Parse reads an SVG icon. It returns an error wrapping ErrUnsupported for a
 // feature outside the supported subset, and another error for a file that is
 // not well formed SVG

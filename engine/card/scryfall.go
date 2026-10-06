@@ -67,6 +67,7 @@ func NewClient(opts ...Option) *Client {
 		maxCardBytes: defaultMaxCardBytes,
 		maxListBytes: defaultMaxListBytes,
 		maxArtBytes:  defaultMaxArtBytes,
+		symbols:      symbolState{catalogURL: defaultCatalogURL},
 	}
 	for _, opt := range opts {
 		opt(c)

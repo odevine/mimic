@@ -43,6 +43,10 @@ type Keys struct {
 	// red half beside a white one is "rw". FuseKey colors its textbox, gold when
 	// the blend has more than three colors, and FusePinKey colors its pinline,
 	// which blends up to four. Both are empty for any other card
+	// SetSymbol marks a card whose set symbol draws, which the renderer sets once
+	// it knows the symbol and the manifest's place for it. The type line reads it
+	// to give up the room the symbol takes
+	SetSymbol  bool
 	Fuse       bool
 	FuseKey    string
 	FusePinKey string
@@ -115,6 +119,8 @@ func (k Keys) ConditionMet(condition string) bool {
 		return k.Back
 	case "fuse":
 		return k.Fuse
+	case "set_symbol":
+		return k.SetSymbol
 	case "icon_left":
 		return k.TransformIcon != "" && !k.iconRight()
 	case "icon_right":

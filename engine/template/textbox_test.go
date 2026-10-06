@@ -110,3 +110,30 @@ func TestResolveTextBoxes(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveTextBoxesSetSymbol(t *testing.T) {
+	boxes := map[string]TextBoxSpec{
+		"type":            {Width: 2100, Condition: "set_symbol"},
+		"type_full":       {Box: "type", Width: 2531},
+		"type_shift":      {Box: "type", Width: 1971, Condition: "color_indicator,set_symbol"},
+		"type_shift_full": {Box: "type", Width: 2402, Condition: "color_indicator"},
+	}
+	tests := []struct {
+		name string
+		keys frame.Keys
+		want int
+	}{
+		{"symbol", frame.Keys{SetSymbol: true}, 2100},
+		{"no symbol takes the full width", frame.Keys{}, 2531},
+		{"symbol and color indicator", frame.Keys{SetSymbol: true, Indicator: "u"}, 1971},
+		{"color indicator and no symbol", frame.Keys{Indicator: "u"}, 2402},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveTextBoxes(boxes, tc.keys)
+			if len(got) != 1 || got["type"].Width != tc.want {
+				t.Errorf("type width = %d in %v, want %d", got["type"].Width, got, tc.want)
+			}
+		})
+	}
+}

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-
-	"github.com/odevine/impasto/path"
 )
 
 // maxCoord bounds every coordinate a path reaches. Real icons live in boxes of
@@ -13,13 +11,17 @@ import (
 // rasterizer geometry it cannot sensibly draw
 const maxCoord = 1e6
 
+// maxArcRadius bounds an arc's radius. An exporter writes a nearly straight curve as an
+// arc of enormous radius, which draws no further than its end points
+const maxArcRadius = 1e9
+
 // pathData builds an impasto path from the contents of an SVG d attribute. It
 // follows the grammar in https://www.w3.org/TR/SVG11/paths.html#PathData,
 // where numbers may run together ("1.5.5", "-.5", "a1 1 0 00.5.5"), a command
 // letter may be followed by several argument sets, and a moveto's extra sets
 // are linetos
-func pathData(d string) (*path.Path, error) {
-	b := &builder{p: path.New()}
+func pathData(d string) (*outline, error) {
+	b := &pathBuilder{p: &outline{}}
 	s := &scanner{s: d}
 	var cmd byte
 	for {
@@ -60,11 +62,11 @@ func isCommand(c byte) bool {
 	return false
 }
 
-// builder carries the pen state a path's commands read: the current point, the
+// pathBuilder carries the pen state a path's commands read: the current point, the
 // start of the current subpath for closepath, and the last control point so a
 // smooth curve can reflect it
-type builder struct {
-	p        *path.Path
+type pathBuilder struct {
+	p        *outline
 	x, y     float64
 	sx, sy   float64
 	cx, cy   float64 // last control point of the previous curve
@@ -74,7 +76,7 @@ type builder struct {
 }
 
 // run reads one command's arguments from s and applies them
-func (b *builder) run(cmd byte, s *scanner) error {
+func (b *pathBuilder) run(cmd byte, s *scanner) error {
 	rel := cmd >= 'a'
 	up := cmd &^ 0x20
 	if up != 'M' && up != 'Z' && !b.started {
@@ -193,7 +195,7 @@ func (b *builder) run(cmd byte, s *scanner) error {
 
 // pair reads an x y coordinate pair, resolving it against the current point
 // for a relative command
-func (b *builder) pair(s *scanner, rel bool) (x, y float64, err error) {
+func (b *pathBuilder) pair(s *scanner, rel bool) (x, y float64, err error) {
 	if x, err = s.number(); err != nil {
 		return
 	}
@@ -219,7 +221,7 @@ func checkCoord(s *scanner, v float64) error {
 }
 
 // arc reads an elliptical arc's arguments and appends it as cubic curves
-func (b *builder) arc(s *scanner, rel bool) error {
+func (b *pathBuilder) arc(s *scanner, rel bool) error {
 	rx, err := s.number()
 	if err != nil {
 		return err
@@ -244,7 +246,7 @@ func (b *builder) arc(s *scanner, rel bool) error {
 	if err != nil {
 		return err
 	}
-	if math.Abs(rx) > maxCoord || math.Abs(ry) > maxCoord {
+	if math.Abs(rx) > maxArcRadius || math.Abs(ry) > maxArcRadius {
 		return s.errorf("arc radius is out of range")
 	}
 	arcToCubics(b.p, b.x, b.y, rx, ry, rot, large, sweep, x, y)
@@ -255,7 +257,7 @@ func (b *builder) arc(s *scanner, rel bool) error {
 // arcToCubics appends the arc from (x1,y1) to (x2,y2) as at most four cubics
 // per quarter turn, following the endpoint to center conversion in
 // https://www.w3.org/TR/SVG11/implnote.html#ArcImplementationNotes
-func arcToCubics(p *path.Path, x1, y1, rx, ry, rotDeg float64, large, sweep bool, x2, y2 float64) {
+func arcToCubics(p *outline, x1, y1, rx, ry, rotDeg float64, large, sweep bool, x2, y2 float64) {
 	if x1 == x2 && y1 == y2 {
 		return
 	}

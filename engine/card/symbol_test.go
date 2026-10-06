@@ -160,7 +160,7 @@ func TestFetchSetSymbol_Errors(t *testing.T) {
 		}
 	})
 	t.Run("icon uses unsupported features", func(t *testing.T) {
-		svg := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path stroke="#000" d="M0 0h5v5z"/></svg>`
+		svg := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path filter="url(#f)" d="M0 0h5v5z"/></svg>`
 		s := newSymbolServer(t, map[string]string{"frc": svg})
 		_, err := s.client().FetchSetSymbol(context.Background(), &Data{SetCode: "frc"})
 		if !errors.Is(err, svgpath.ErrUnsupported) {

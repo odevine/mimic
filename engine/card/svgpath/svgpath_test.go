@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/odevine/impasto/path"
+	"github.com/odevine/impasto/raster"
 )
 
 // area is the filled area of p in square units, the sum of its pixel coverage
@@ -26,7 +27,7 @@ func mustPath(t *testing.T, d string) *path.Path {
 	if err != nil {
 		t.Fatalf("pathData(%q): %v", d, err)
 	}
-	return p
+	return p.build(1, 1, 0, 0)
 }
 
 func near(got, want, tol float64) bool { return math.Abs(got-want) <= tol }
@@ -255,16 +256,19 @@ func TestParseViewBox(t *testing.T) {
 
 func TestParseUnsupported(t *testing.T) {
 	tests := map[string]string{
-		"transform on a group": `<g transform="scale(2)"><path d="M0 0h2v2H0z"/></g>`,
-		"transform on a path":  `<path transform="translate(1 1)" d="M0 0h2v2H0z"/>`,
-		"stroke":               `<path stroke="#0055DC" d="M0 0h2v2H0z"/>`,
-		"style attribute":      `<path style="fill:red" d="M0 0h2v2H0z"/>`,
-		"style element":        `<style>path{fill:red}</style><path d="M0 0h2v2H0z"/>`,
-		"use":                  `<use href="#a"/>`,
-		"line":                 `<line x1="0" y1="0" x2="5" y2="5"/>`,
-		"text":                 `<text>x</text>`,
-		"clip path":            `<path clip-path="url(#c)" d="M0 0h2v2H0z"/>`,
-		"rounded rect":         `<rect width="4" height="4" rx="1"/>`,
+		"filter":              `<path filter="url(#f)" d="M0 0h2v2H0z"/>`,
+		"mask":                `<path style="mask:url(#m)" d="M0 0h2v2H0z"/>`,
+		"use of a missing id": `<use href="#a"/>`,
+		"nested svg":          `<svg><path d="M0 0h2v2H0z"/></svg>`,
+		"unknown color":       `<path fill="chartreuse" d="M0 0h2v2H0z"/>`,
+		"missing gradient":    `<path fill="url(#nope)" d="M0 0h2v2H0z"/>`,
+		"unknown transform":   `<path transform="wobble(1)" d="M0 0h2v2H0z"/>`,
+		"css at-rule":         `<style>@media print{path{fill:red}}</style><path d="M0 0h2v2H0z"/>`,
+		"css descendant rule": `<style>g path{fill:red}</style><path d="M0 0h2v2H0z"/>`,
+		"clip that cuts":      `<clipPath id="c"><path d="M0 0h1v1H0z"/></clipPath><path clip-path="url(#c)" d="M0 0h2v2H0z"/>`,
+		"line":                `<line x1="0" y1="0" x2="5" y2="5"/>`,
+		"text":                `<text>x</text>`,
+		"rounded rect":        `<rect width="4" height="4" rx="1"/>`,
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -317,6 +321,9 @@ func FuzzParse(f *testing.F) {
 	f.Add(svg(`<path d="M0 0a1 1 0 1020 0z"/>`))
 	f.Add(svg(`<path d="M1 1C2 2 3 3 4 4S5 5 6 6Q7 7 8 8T9 9z"/>`))
 	f.Add(svg(`<polygon points="0,0 1,0 1,1"/><circle cx="1" cy="1" r="1"/>`))
+	f.Add(svg(`<defs><linearGradient id="g" x2="1" gradientTransform="rotate(30)" spreadMethod="reflect"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f" stop-opacity=".5"/></linearGradient><radialGradient id="r" href="#g" fx=".2"/></defs><path fill="url(#r)" stroke="url(#g)" stroke-width="3" stroke-dasharray="4 2" d="M10 10h50v50H10z"/>`))
+	f.Add(svg(`<style>.a{fill:#f00;stroke:#000;stroke-width:2}</style><defs><path id="p" class="a" d="M0 0h10v10H0z"/></defs><use href="#p" x="5" transform="rotate(30 5 5)"/>`))
+	f.Add(svg(`<clipPath id="c"><path d="M0 0h100v100H0z"/></clipPath><g clip-path="url(#c)" opacity=".5"><circle cx="50" cy="50" r="20"/></g>`))
 	f.Add([]byte(`M0 0L1 1`))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		icon, err := Parse(data)
@@ -326,6 +333,9 @@ func FuzzParse(f *testing.F) {
 		if len(icon.Shapes) == 0 {
 			t.Fatal("Parse returned an icon with no shapes and no error")
 		}
+		// What parses must also draw, at a small size, without hanging
+		k := 32 / float64(max(icon.ViewBox.W, icon.ViewBox.H))
+		icon.Draw(raster.MustNewBuffer(32, 32), ScaleBy(k, k))
 		for _, s := range icon.Shapes {
 			minX, minY, maxX, maxY := s.Path.Bounds()
 			for _, v := range []float32{minX, minY, maxX, maxY} {
@@ -344,10 +354,11 @@ func FuzzPathData(f *testing.F) {
 		f.Add(d)
 	}
 	f.Fuzz(func(t *testing.T, d string) {
-		p, err := pathData(d)
+		o, err := pathData(d)
 		if err != nil {
 			return
 		}
+		p := o.build(1, 1, 0, 0)
 		// Rasterizing must finish for any path of sane size. Parse bounds the size
 		// of a whole file relative to its viewBox, so a bare path is only drawn
 		// when it is small
@@ -356,4 +367,54 @@ func FuzzPathData(f *testing.F) {
 			p.Coverage(8, 8, path.NonZero, path.DefaultTolerance)
 		}
 	})
+}
+
+func TestShapeTransformed(t *testing.T) {
+	icon, err := Parse(svg(`<path d="M0 0h10v10H0z"/>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Scaled by 3 by 2 and moved 5 across and 7 down, the 10 by 10 square is a
+	// 30 by 20 rectangle with its corner at 5, 7
+	p := icon.Shapes[0].Transformed(3, 2, 5, 7)
+	minX, minY, maxX, maxY := p.Bounds()
+	if minX != 5 || minY != 7 || maxX != 35 || maxY != 27 {
+		t.Errorf("bounds = %v %v %v %v, want 5 7 35 27", minX, minY, maxX, maxY)
+	}
+	if got := area(p, path.NonZero, 64, 64); !near(got, 600, 1) {
+		t.Errorf("area = %.1f, want 600", got)
+	}
+	// The shape's own path is untouched
+	if minX, _, maxX, _ := icon.Shapes[0].Path.Bounds(); minX != 0 || maxX != 10 {
+		t.Errorf("Path bounds changed to %v..%v", minX, maxX)
+	}
+}
+
+func TestIconBounds(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want Rect
+		tol  float32
+	}{
+		{"art smaller than the viewBox", `<path d="M10 20h30v40H10z"/>`, Rect{10, 20, 30, 40}, 0.001},
+		{"several shapes", `<path d="M0 0h2v2H0z"/><path d="M8 6h2v4H8z"/>`, Rect{0, 0, 10, 10}, 0.001},
+		{"curve bulges less than its control point", `<path d="M10 10Q20 50 30 10z"/>`, Rect{10, 10, 20, 20}, 0.2},
+		{"circle", `<circle cx="50" cy="40" r="10"/>`, Rect{40, 30, 20, 20}, 0.2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			icon, err := Parse(svg(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := icon.Bounds()
+			for i, d := range []float32{got.X - tc.want.X, got.Y - tc.want.Y, got.W - tc.want.W, got.H - tc.want.H} {
+				if d < -tc.tol || d > tc.tol {
+					t.Fatalf("Bounds = %+v, want %+v", got, tc.want)
+				}
+				_ = i
+			}
+		})
+	}
 }

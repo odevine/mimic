@@ -61,6 +61,7 @@ var features = []feature{
 	{key: "settings.bitDepth", state: gateNeedsEngine, reason: "Needs engine support for 16-bit output"},
 	{key: "settings.bleed", state: gateNeedsEngine, reason: "Needs engine support for trimming the bleed"},
 	{key: "settings.concurrency", state: gateLive},
+	{key: "settings.pngCompression", state: gateLive},
 	{key: "settings.outputDir", state: gateLive},
 	{key: "settings.filenameTemplate", state: gatePlanned, reason: "Runs name files like Sol Ring [C21-263].png, and templates for that are coming in v1.0"},
 	{key: "settings.runReport", state: gatePlanned, reason: "Every run writes its report, and turning that off is coming in v1.0"},

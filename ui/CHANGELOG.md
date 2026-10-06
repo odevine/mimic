@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.1](https://github.com/odevine/mimic/compare/ui/v0.9.0...ui/v0.9.1) (2026-10-06)
+
+
+### Features
+
+* **ui:** edit each half of a split card ([043e2af](https://github.com/odevine/mimic/commit/043e2af49498b5d83413e6b148c9c3c1209e57fa))
+* **ui:** size batch workers to the computer and add a PNG compression setting ([7ddb87f](https://github.com/odevine/mimic/commit/7ddb87f12ca534cf50f162e144cf76cc4e607809))
+
+
+### Bug Fixes
+
+* **ui:** enable the PNG compression setting ([447e729](https://github.com/odevine/mimic/commit/447e7294e57ac8e31a8f9ab65f775071a43007df))
+
+
+### Performance Improvements
+
+* **ui:** share decoded frame layers across a batch, with a cache size setting ([#74](https://github.com/odevine/mimic/issues/74)) ([36c6a77](https://github.com/odevine/mimic/commit/36c6a7720aef1a8a03246ed3f04331f80fced225))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.13.0 ([#60](https://github.com/odevine/mimic/issues/60)) ([ce4addc](https://github.com/odevine/mimic/commit/ce4addcb9272462e90e2f8d0828bb4dbe8bc1ec6))
+* **ui:** depend on the released engine v0.14.0 ([#63](https://github.com/odevine/mimic/issues/63)) ([ca0a3fc](https://github.com/odevine/mimic/commit/ca0a3fce5e2d7dcb6097b06fbc7c0ea248f78ab9))
+* **ui:** depend on the released engine v0.15.0 ([#66](https://github.com/odevine/mimic/issues/66)) ([fcdd70a](https://github.com/odevine/mimic/commit/fcdd70ab44f283afa6c4d1b1e8ada12daeb2c847))
+* **ui:** depend on the released engine v0.16.0 ([#69](https://github.com/odevine/mimic/issues/69)) ([ba9b5c5](https://github.com/odevine/mimic/commit/ba9b5c57a11cc44075fd676e52448453841a0963))
+
 ## [0.9.0](https://github.com/odevine/mimic/compare/ui/v0.8.1...ui/v0.9.0) (2026-10-04)
 
 

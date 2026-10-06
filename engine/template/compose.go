@@ -106,6 +106,58 @@ func LayerAssetPath(m *Manifest, name string) string {
 // alpha, the extent of a graphic baked into an otherwise transparent image. It
 // returns the empty rectangle when img is fully transparent
 func OpaqueBounds(img image.Image) image.Rectangle {
+	switch src := img.(type) {
+	case *image.NRGBA:
+		return alphaBounds(src.Pix, src.Stride, src.Rect, 4, 3, 3)
+	case *image.RGBA:
+		return alphaBounds(src.Pix, src.Stride, src.Rect, 4, 3, 3)
+	case *image.NRGBA64:
+		return alphaBounds(src.Pix, src.Stride, src.Rect, 8, 6, 7)
+	}
+	return opaqueBoundsAt(img)
+}
+
+// alphaBounds finds the rectangle of pixels with any alpha by reading the alpha
+// bytes of pix directly. Each pixel is bpp bytes, and its alpha lives at the
+// byte offsets a0 through a1. Every row is read from both ends and stops at the
+// first hit, so only the transparent margins are scanned in full
+func alphaBounds(pix []uint8, stride int, r image.Rectangle, bpp, a0, a1 int) image.Rectangle {
+	minX, minY := r.Max.X, r.Max.Y
+	maxX, maxY := r.Min.X, r.Min.Y
+	w := r.Dx()
+	found := false
+	for y := 0; y < r.Dy(); y++ {
+		row := pix[y*stride : y*stride+w*bpp]
+		first := 0
+		for first < w && !visible(row, first*bpp, a0, a1) {
+			first++
+		}
+		if first == w {
+			continue
+		}
+		last := w - 1
+		for !visible(row, last*bpp, a0, a1) {
+			last--
+		}
+		found = true
+		minX = min(minX, r.Min.X+first)
+		maxX = max(maxX, r.Min.X+last+1)
+		minY = min(minY, r.Min.Y+y)
+		maxY = r.Min.Y + y + 1
+	}
+	if !found {
+		return image.Rectangle{}
+	}
+	return image.Rect(minX, minY, maxX, maxY)
+}
+
+// visible reports whether the pixel starting at off has any alpha
+func visible(row []uint8, off, a0, a1 int) bool {
+	return row[off+a0] != 0 || row[off+a1] != 0
+}
+
+// opaqueBoundsAt is OpaqueBounds for any image type, reading through At
+func opaqueBoundsAt(img image.Image) image.Rectangle {
 	b := img.Bounds()
 	minX, minY := b.Max.X, b.Max.Y
 	maxX, maxY := b.Min.X, b.Min.Y

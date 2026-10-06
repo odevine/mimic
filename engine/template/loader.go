@@ -10,8 +10,22 @@ import (
 
 // LoadImage opens a provider-relative path and decodes it. It is the one place
 // a template turns a manifest path into pixels, so a provider's Open guard
-// covers every layer load
+// covers every layer load. A provider that decodes for itself, such as a
+// *CachedAssets, is asked to. The image may be shared with other loads, so a
+// caller must not write to it
 func LoadImage(p AssetProvider, relPath string) (image.Image, error) {
+	if l, ok := p.(imageLoader); ok {
+		return l.LoadImage(relPath)
+	}
+	return decodeImage(p, relPath)
+}
+
+// imageLoader is a provider that supplies decoded layers itself
+type imageLoader interface {
+	LoadImage(relPath string) (image.Image, error)
+}
+
+func decodeImage(p AssetProvider, relPath string) (image.Image, error) {
 	rc, err := p.Open(relPath)
 	if err != nil {
 		return nil, fmt.Errorf("template: opening %q: %w", relPath, err)

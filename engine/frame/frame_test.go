@@ -54,15 +54,15 @@ var deriveCases = []struct {
 	},
 	{
 		name: "two-color land", data: card.Data{TypeLine: "Land — Forest Island", ProducedMana: wubrg(card.Green, card.Blue)},
-		bg: "land", pin: "ug", twins: "gold", pt: "gold", crown: "ug", isLand: true,
+		bg: "land", pin: "ug", twins: "land", pt: "land", crown: "ug", isLand: true,
 	},
 	{
-		name: "tri land is gold", data: card.Data{TypeLine: "Land — Island Mountain", ProducedMana: wubrg(card.Red, card.Blue, card.White)},
-		bg: "gold", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
+		name: "tri land has gold pinlines on a land frame", data: card.Data{TypeLine: "Land — Island Mountain", ProducedMana: wubrg(card.Red, card.Blue, card.White)},
+		bg: "land", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
 	},
 	{
-		name: "any-color land is gold", data: card.Data{TypeLine: "Land", ProducedMana: wubrg(card.Black, card.Green, card.Red, card.Blue, card.White)},
-		bg: "gold", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
+		name: "any-color land has gold pinlines on a land frame", data: card.Data{TypeLine: "Land", ProducedMana: wubrg(card.Black, card.Green, card.Red, card.Blue, card.White)},
+		bg: "land", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
 	},
 	{
 		name: "wastes plain land", data: card.Data{TypeLine: "Basic Land", ProducedMana: wubrg(card.Colorless)},
@@ -71,15 +71,15 @@ var deriveCases = []struct {
 	// Fetch lands: produced mana empty, read from oracle text.
 	{
 		name: "typed untapped fetch", data: card.Data{TypeLine: "Land", OracleText: "Sacrifice this land: Search your library for a Plains or Island card, put it onto the battlefield, then shuffle."},
-		bg: "land", pin: "wu", twins: "gold", pt: "gold", crown: "wu", isLand: true,
+		bg: "land", pin: "wu", twins: "land", pt: "land", crown: "wu", isLand: true,
 	},
 	{
-		name: "generic untapped fetch is gold", data: card.Data{TypeLine: "Land", OracleText: "Sacrifice this land: Search your library for a basic land card, put it onto the battlefield, then shuffle."},
-		bg: "gold", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
+		name: "generic untapped fetch has gold pinlines on a land frame", data: card.Data{TypeLine: "Land", OracleText: "Sacrifice this land: Search your library for a basic land card, put it onto the battlefield, then shuffle."},
+		bg: "land", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
 	},
 	{
-		name: "conditional-untap fetch is gold", data: card.Data{TypeLine: "Land", OracleText: "Search your library for a basic land card, put it onto the battlefield tapped, then if you control four or more lands, untap that land."},
-		bg: "gold", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
+		name: "conditional-untap fetch has gold pinlines on a land frame", data: card.Data{TypeLine: "Land", OracleText: "Search your library for a basic land card, put it onto the battlefield tapped, then if you control four or more lands, untap that land."},
+		bg: "land", pin: "gold", twins: "gold", pt: "gold", crown: "gold", isLand: true,
 	},
 	{
 		name: "always-tapped generic fetch is plain", data: card.Data{TypeLine: "Land", OracleText: "Search your library for a basic land card, put it onto the battlefield tapped, then shuffle."},

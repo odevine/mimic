@@ -325,9 +325,8 @@ func namedBasicColors(lowerOracle string) []card.Color {
 func backgroundKey(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid bool) string {
 	switch {
 	case isLand:
-		if len(colors) >= 3 {
-			return "gold"
-		}
+		// The land frame body stays a land at any color count, and the pinlines
+		// and name box carry the gold of a land that makes three or more colors
 		return "land"
 	case isVehicle:
 		return "vehicle"
@@ -374,7 +373,8 @@ func pinlineKey(isLand, isArtifact bool, colors []card.Color) string {
 
 // twinsKey colors the name, type, and P/T boxes, which have no dual variant. A
 // pure-hybrid two-color card reads as colorless here, a gold two-color card as
-// gold. ptBox is true for the P/T box, which alone has a vehicle variant.
+// gold, and a two-color land as a land. ptBox is true for the P/T box, which
+// alone has a vehicle variant.
 func twinsKey(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid, ptBox bool) string {
 	if isVehicle {
 		if ptBox {
@@ -395,7 +395,10 @@ func twinsKey(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybri
 	case 1:
 		return monoKey(colors[0])
 	case 2:
-		if !isLand && pureHybrid {
+		switch {
+		case isLand:
+			return "land"
+		case pureHybrid:
 			return "colorless"
 		}
 		return "gold"

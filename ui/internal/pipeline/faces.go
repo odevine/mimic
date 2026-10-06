@@ -116,6 +116,7 @@ func (p *Pipeline) load(c prefs.TemplateChoice) (*Template, error) {
 	}
 	if old := p.loaded[c.Name]; old != nil {
 		log.Printf("mimic: template %s %s replaced by %s", old.Name, old.Version, at.Version)
+		old.dropLayers()
 	}
 	p.loaded[c.Name] = at
 	if at.cleanup != nil {

@@ -53,6 +53,10 @@ type Settings struct {
 	Concurrency int `json:"concurrency,omitempty"`
 	// PNGCompression is "fast" or "balanced". Empty reads as balanced
 	PNGCompression string `json:"pngCompression,omitempty"`
+	// LayerCache is how much decoded frame layer data a run keeps in memory to
+	// share between cards: "small", "medium", "large" or "xlarge". Empty reads as
+	// medium
+	LayerCache string `json:"layerCache,omitempty"`
 	// OutputDir is the folder a batch writes to, and RecentOutputDirs the
 	// folders offered beside it, newest first
 	OutputDir        string   `json:"outputDir,omitempty"`

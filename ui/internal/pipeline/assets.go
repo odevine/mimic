@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
@@ -13,6 +14,60 @@ import (
 	"github.com/odevine/mimic/engine/version"
 	"github.com/odevine/mimic/ui/internal/catalog"
 )
+
+// layerCaches is the budget each template's layer cache gets and the caches
+// currently holding layers, so a change of size reaches templates already loaded
+var layerCaches = struct {
+	sync.Mutex
+	budget int64
+	live   map[*template.CachedAssets]struct{}
+}{budget: template.DefaultImageCacheBytes, live: map[*template.CachedAssets]struct{}{}}
+
+// SetLayerCacheBytes sets how many bytes of decoded frame layers each template
+// keeps in memory to share between cards. It resizes the caches of templates
+// already loaded, and applies to the ones loaded later
+func SetLayerCacheBytes(n int64) {
+	layerCaches.Lock()
+	defer layerCaches.Unlock()
+	layerCaches.budget = n
+	for c := range layerCaches.live {
+		c.SetBudget(n)
+	}
+}
+
+// cached wraps a provider so the frame layers a batch shares are decoded once.
+// Releasing the template releases the cache, and the provider with it when it
+// can be closed. after runs last, for whatever the provider's files need
+func cached(p template.AssetProvider, after func()) (template.AssetProvider, func()) {
+	layerCaches.Lock()
+	c := template.NewCachedAssets(p, layerCaches.budget)
+	layerCaches.live[c] = struct{}{}
+	layerCaches.Unlock()
+	return c, func() {
+		forget(c)
+		c.Close()
+		if after != nil {
+			after()
+		}
+	}
+}
+
+// forget takes a cache out of the set that resizes with the setting
+func forget(c *template.CachedAssets) {
+	layerCaches.Lock()
+	delete(layerCaches.live, c)
+	layerCaches.Unlock()
+}
+
+// dropLayers empties a template's layer cache for good, for one that was swapped
+// out. A render still reading from it decodes as it goes, and the template's
+// files stay open until shutdown like before
+func (t *Template) dropLayers() {
+	if c, ok := t.provider.(*template.CachedAssets); ok {
+		forget(c)
+		c.SetBudget(0)
+	}
+}
 
 // LooseDirBases are the roots under which a template's loose developer assets
 // live as assets/<name>, relative to both a repo-root run and a ui-subdir run.
@@ -49,9 +104,10 @@ func Resolve(name string) (*Template, Source, error) {
 		return nil, SourcePlaceholder, err
 	}
 	if dir := LooseDir(name); dir != "" {
+		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
 		return &Template{
 			Name: name, Version: LocalVersion, template: tmpl,
-			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+			provider: p, cleanup: cleanup,
 		}, SourceLoose, nil
 	}
 	if ver, ok := catalog.NewestCachedVersion(name); ok {
@@ -82,9 +138,10 @@ func FromVersion(ctx context.Context, name, version string, progress func(done, 
 		if dir == "" {
 			return nil, fmt.Errorf("no local assets for %q", name)
 		}
+		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
 		return &Template{
 			Name: name, Version: LocalVersion, template: tmpl,
-			provider: template.NewFSAssetProvider(dir), cleanup: func() {},
+			provider: p, cleanup: cleanup,
 		}, nil
 	}
 	if _, err := catalog.EnsureVersion(ctx, name, version, progress); err != nil {
@@ -118,13 +175,14 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*Temp
 	if err != nil {
 		return nil, err
 	}
-	p, err := template.NewZipAssetProvider(path)
+	zp, err := template.NewZipAssetProvider(path)
 	if err != nil {
 		return nil, err
 	}
+	p, cleanup := cached(zp, nil)
 	return &Template{
 		Name: name, Version: version, template: tmpl,
-		provider: p, cleanup: func() { p.Close() },
+		provider: p, cleanup: cleanup,
 	}, nil
 }
 
@@ -143,9 +201,10 @@ func placeholderActive(name string, tmpl template.Template) (*Template, error) {
 		os.RemoveAll(tmp)
 		return nil, err
 	}
+	p, cleanup := cached(template.NewFSAssetProvider(tmp), func() { os.RemoveAll(tmp) })
 	return &Template{
 		Name: name, Version: "", template: tmpl,
-		provider: template.NewFSAssetProvider(tmp), cleanup: func() { os.RemoveAll(tmp) },
+		provider: p, cleanup: cleanup,
 	}, nil
 }
 

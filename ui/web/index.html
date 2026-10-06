@@ -543,6 +543,16 @@ Sideboard
           <p class="desc" id="concurrency-note"></p>
         </div>
         <div class="setting">
+          <span class="label" data-feature="settings.layerCache">Layer cache</span>
+          <select id="layer-cache-select" data-feature="settings.layerCache" aria-label="Layer cache size">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+            <option value="xlarge">Extra large</option>
+          </select>
+          <p class="desc">Keeps decoded frame layers in memory so cards that share a frame skip decoding it again. A larger cache speeds up long batches and uses more memory, which can lower how many cards Automatic renders at once.</p>
+        </div>
+        <div class="setting">
           <span class="label" data-feature="settings.pngCompression">PNG compression</span>
           <select id="png-compression-select" data-feature="settings.pngCompression" aria-label="PNG compression">
             <option value="balanced">Balanced · smaller files</option>

@@ -50,6 +50,7 @@ func TestMemoryBudget(t *testing.T) {
 }
 
 func TestWorkers(t *testing.T) {
+	medium := CacheBytes(DefaultCacheSize)
 	native := RenderBytes(3264, 4440)
 	small := RenderBytes(816, 1110)
 	cases := []struct {
@@ -70,7 +71,7 @@ func TestWorkers(t *testing.T) {
 		{"a budget under the base still runs one", Memory{Total: 1 * gib, Available: 256 * mib}, native, 8, 1},
 	}
 	for _, c := range cases {
-		if got := Workers(c.m, c.perRender, c.cpus); got != c.want {
+		if got := Workers(c.m, c.perRender, c.cpus, medium); got != c.want {
 			t.Errorf("%s: Workers = %d, want %d", c.name, got, c.want)
 		}
 	}
@@ -78,11 +79,54 @@ func TestWorkers(t *testing.T) {
 
 func TestRunBytesGrowsByOneRenderPerWorker(t *testing.T) {
 	per := RenderBytes(3264, 4440)
-	if got := RunBytes(3, per) - RunBytes(2, per); got != per {
+	cache := CacheBytes(DefaultCacheSize)
+	if got := RunBytes(3, per, cache) - RunBytes(2, per, cache); got != per {
 		t.Errorf("a third worker adds %d bytes, want %d", got, per)
 	}
-	if RunBytes(0, per) != BaseBytes() || RunBytes(-1, per) != BaseBytes() {
+	if RunBytes(0, per, cache) != BaseBytes(cache) || RunBytes(-1, per, cache) != BaseBytes(cache) {
 		t.Error("no workers should cost just the base")
+	}
+}
+
+func TestBaseHoldsTheLayerCache(t *testing.T) {
+	cache := CacheBytes("large")
+	if BaseBytes(cache) != baseBytes+cache {
+		t.Errorf("BaseBytes = %d, want the app's base plus the %d byte cache", BaseBytes(cache), cache)
+	}
+}
+
+func TestCacheSizes(t *testing.T) {
+	want := map[string]uint64{"small": 256 * mib, "medium": 512 * mib, "large": 1 * gib, "xlarge": 2 * gib}
+	if len(CacheSizes) != len(want) {
+		t.Fatalf("%d sizes, want %d", len(CacheSizes), len(want))
+	}
+	for _, c := range CacheSizes {
+		if c.Label == "" || want[c.Name] != c.Bytes || CacheBytes(c.Name) != c.Bytes || !ValidCacheSize(c.Name) {
+			t.Errorf("size %+v is not what the settings promise", c)
+		}
+	}
+	for _, name := range []string{"", "huge", "Medium"} {
+		if ValidCacheSize(name) {
+			t.Errorf("%q should not be a size", name)
+		}
+		if CacheBytes(name) != want[DefaultCacheSize] {
+			t.Errorf("CacheBytes(%q) = %d, want the default", name, CacheBytes(name))
+		}
+	}
+}
+
+// A bigger cache leaves less memory for renders, so it can only lower the
+// worker count
+func TestBiggerCacheNeverAddsWorkers(t *testing.T) {
+	m := Memory{Total: 16 * gib, Available: 10 * gib}
+	per := RenderBytes(3264, 4440)
+	prev := MaxWorkers + 1
+	for _, c := range CacheSizes {
+		n := Workers(m, per, 16, c.Bytes)
+		if n > prev {
+			t.Errorf("%s cache gives %d workers, more than a smaller one's %d", c.Name, n, prev)
+		}
+		prev = n
 	}
 }
 

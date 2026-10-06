@@ -84,7 +84,29 @@ const GB = 1024 ** 3;
 // bytesLabel reads a byte count the way memory is sold, in gigabytes
 function bytesLabel(bytes) {
   const gb = bytes / GB;
+  if (gb < 1) return `${Number(gb.toFixed(2))} GB`;
   return gb < 10 ? `${gb.toFixed(1)} GB` : `${Math.round(gb)} GB`;
+}
+
+// loadResources reads this computer's memory and what a render costs when the
+// layer cache is the named size, or the saved one for no name. It is null when
+// the server cannot say
+async function loadResources(cache) {
+  try {
+    return await api.resources(cache);
+  } catch {
+    return null;
+  }
+}
+
+// fillLayerCache adds each size's memory to its label. Without the numbers the
+// plain names stay
+function fillLayerCache(r) {
+  if (!r) return;
+  for (const option of $("layer-cache-select").options) {
+    const size = (r.cacheSizes || []).find((c) => c.name === option.value);
+    if (size) option.textContent = `${size.label} · ${bytesLabel(size.bytes)}`;
+  }
 }
 
 // fillConcurrency lists automatic and each preset count with the memory it is
@@ -92,15 +114,9 @@ function bytesLabel(bytes) {
 // hands over the numbers, which keeps the model in one place. Without them the
 // choice is plain counts. A saved count outside the presets stays listed, so
 // opening the panel never changes it
-async function fillConcurrency(current) {
+function fillConcurrency(r, current) {
   const select = $("concurrency-select");
   const note = $("concurrency-note");
-  let r = null;
-  try {
-    r = await api.resources();
-  } catch {
-    // the plain counts below still work
-  }
   select.replaceChildren();
   if (!r) {
     select.append(new Option("Automatic", "0"));
@@ -122,7 +138,14 @@ async function fillConcurrency(current) {
   select.value = String(Math.max(current, 0));
 
   const free = r.availableBytes > 0 ? `, about ${bytesLabel(r.availableBytes)} free` : "";
-  note.textContent = `Estimates are for output-size renders. This computer has ${bytesLabel(r.totalBytes)} of memory${free} and ${r.cpus} processors.`;
+  const cache = r.cacheBytes > 0 ? ` and include ${bytesLabel(r.cacheBytes)} for reusing frame layers between cards` : "";
+  note.textContent = `Estimates are for output-size renders${cache}. This computer has ${bytesLabel(r.totalBytes)} of memory${free} and ${r.cpus} processors.`;
+}
+
+// layerCacheChoice is the cache size the select shows, "medium" when nothing is
+// saved yet
+function layerCacheChoice() {
+  return $("layer-cache-select").value || "medium";
 }
 
 // concurrencyChoice is the chosen count, zero for automatic. A list that never
@@ -139,11 +162,14 @@ async function open() {
   $("theme-select").value = s.theme || "dark";
   $("expand-printings").checked = !!s.expandPrintings;
   $("output-dir-input").value = s.outputDir || "";
+  $("layer-cache-select").value = s.layerCache || "medium";
   $("png-compression-select").value = s.pngCompression === "fast" ? "fast" : "balanced";
   openCardData(s.cardData);
   openFonts();
   $("settings-dialog").showModal();
-  await Promise.all([fillConcurrency(s.concurrency || 0), loadResolution()]);
+  const [r] = await Promise.all([loadResources(layerCacheChoice()), loadResolution()]);
+  fillLayerCache(r);
+  fillConcurrency(r, s.concurrency || 0);
   fillResolution();
 }
 
@@ -165,6 +191,7 @@ async function save() {
       theme: $("theme-select").value,
       expandPrintings: $("expand-printings").checked,
       concurrency: concurrencyChoice(),
+      layerCache: layerCacheChoice(),
       pngCompression: $("png-compression-select").value,
       outputDir: $("output-dir-input").value.trim(),
       cardData: cardDataChoice(),
@@ -186,6 +213,11 @@ export function initSettings() {
   initFonts();
   $("settings-btn").addEventListener("click", open);
   $("settings-save").addEventListener("click", save);
+  // The memory each worker count needs depends on the cache size, so a new size
+  // refreshes the estimates before anything is saved
+  $("layer-cache-select").addEventListener("change", async () => {
+    fillConcurrency(await loadResources(layerCacheChoice()), concurrencyChoice());
+  });
   // Previewing the theme as it is picked, reverted on cancel
   $("theme-select").addEventListener("change", () => applyTheme($("theme-select").value));
   $("settings-dialog").addEventListener("close", () => applyTheme(app.settings.peek().theme));

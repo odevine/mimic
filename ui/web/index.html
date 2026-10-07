@@ -450,6 +450,8 @@ Sideboard
               <span id="run-count" class="tabular"></span>
               <button id="run-failed" class="link-btn err-text" type="button" hidden></button>
               <span id="run-elapsed" class="dim tabular"></span>
+              <span id="run-warmup" class="dim tabular" hidden></span>
+              <span id="run-rate" class="dim tabular" hidden></span>
               <span id="run-eta" class="dim tabular" hidden></span>
             </div>
             <div class="line">
@@ -461,13 +463,21 @@ Sideboard
               <button id="run-retry" class="btn" type="button" data-feature="run.retryFailed" hidden>
                 <svg class="icon"><use href="icons.svg#i-render"/></svg><span id="run-retry-label">Retry failed</span>
               </button>
-              <button id="run-review" class="btn subtle" type="button" data-feature="run.openInReview" hidden>
-                <svg class="icon"><use href="icons.svg#i-list"/></svg>Open in review
+              <button id="run-log-toggle" class="btn subtle" type="button" aria-expanded="false" aria-controls="run-log-panel">
+                <svg class="icon"><use href="icons.svg#i-list"/></svg>Log
               </button>
               <button id="run-open" class="btn subtle" type="button">
                 <svg class="icon"><use href="icons.svg#i-folder"/></svg>Open folder
               </button>
             </div>
+          </div>
+          <div id="run-log-panel" class="run-log-panel" hidden>
+            <div class="run-log-bar">
+              <span class="spacer"></span>
+              <button id="run-log-copy" class="btn subtle" type="button">Copy</button>
+              <button id="run-log-save" class="btn subtle" type="button">Save</button>
+            </div>
+            <pre id="run-log" class="log" tabindex="0" aria-label="Run log"></pre>
           </div>
           <div class="mode-body">
             <div class="review-pane">
@@ -478,20 +488,15 @@ Sideboard
               </div>
               <ul id="run-rows" class="run-rows"></ul>
             </div>
-            <div class="console-side">
+            <div id="run-side" class="console-side" hidden>
+              <button id="run-preview-close" class="btn subtle icon-only" type="button" aria-label="Close preview">
+                <svg class="icon"><use href="icons.svg#i-close"/></svg>
+              </button>
               <div class="run-preview">
                 <div id="run-placeholder" class="placeholder-card"></div>
                 <img id="run-image" class="card" alt="" hidden>
                 <p id="run-caption" class="mono dim truncate"></p>
               </div>
-              <details class="disclosure run-log-box">
-                <summary><svg class="icon"><use href="icons.svg#i-chevron-down"/></svg>Log
-                  <span class="spacer"></span>
-                  <button id="run-log-copy" class="btn subtle" type="button">Copy</button>
-                  <button id="run-log-save" class="btn subtle" type="button">Save</button>
-                </summary>
-                <pre id="run-log" class="log"></pre>
-              </details>
             </div>
           </div>
         </div>
@@ -553,12 +558,20 @@ Sideboard
           <p class="desc">Keeps decoded frame layers in memory so cards that share a frame skip decoding it again. A larger cache speeds up long batches and uses more memory, which can lower how many cards Automatic renders at once.</p>
         </div>
         <div class="setting">
+          <span class="label" data-feature="settings.imageFormat">Image format</span>
+          <select id="image-format-select" data-feature="settings.imageFormat" aria-label="Image format">
+            <option value="jpeg">JPEG · quicker batches, smaller files</option>
+            <option value="png">PNG · lossless</option>
+          </select>
+          <p class="desc">JPEG is written at quality 95, which is close to indistinguishable from the render at print size, and it encodes several times faster than PNG. An MPC Autofill project is always PNG.</p>
+        </div>
+        <div class="setting">
           <span class="label" data-feature="settings.pngCompression">PNG compression</span>
           <select id="png-compression-select" data-feature="settings.pngCompression" aria-label="PNG compression">
             <option value="balanced">Balanced · smaller files</option>
             <option value="fast">Fast · quicker batches, larger files</option>
           </select>
-          <p class="desc">Fast spends less time compressing each card, so batches finish sooner, but the files come out larger. The pixels are identical either way. File size matters most when uploading to MPC Autofill, which hides images over its size limit.</p>
+          <p class="desc">Applies when the image format is PNG. Fast spends less time compressing each card, so batches finish sooner, but the files come out larger. The pixels are identical either way. File size matters most when uploading to MPC Autofill, which hides images over its size limit.</p>
         </div>
       </section>
 

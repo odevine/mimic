@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"image/jpeg"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/ui/internal/batch"
+	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
 // runServer is a placeholder-template server that renders small, so a batch
@@ -80,7 +82,7 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 	}
 	v = waitRun(t, s)
 
-	want := []string{"Sol Ring [C21-263].png", "Sol Ring [C21-263] (2).png", "Fire - Ice.png"}
+	want := []string{"Sol Ring [C21-263].jpg", "Sol Ring [C21-263] (2).jpg", "Fire - Ice.jpg"}
 	for i, c := range v.Cards {
 		if c.Status != batch.StatusDone || c.File != want[i] {
 			t.Errorf("card %d = %+v, want done as %q", i, c, want[i])
@@ -90,8 +92,8 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := png.DecodeConfig(f); err != nil {
-			t.Errorf("%s is not a PNG: %v", c.File, err)
+		if _, err := jpeg.DecodeConfig(f); err != nil {
+			t.Errorf("%s is not a JPEG: %v", c.File, err)
 		}
 		f.Close()
 	}
@@ -104,6 +106,9 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 	if err := json.Unmarshal(raw, &rep); err != nil {
 		t.Fatal(err)
 	}
+	if v.Warmup == 0 || v.WarmupCards == 0 || rep.Warmup != v.Warmup || rep.WarmupCards != v.WarmupCards {
+		t.Errorf("warm-up: view %d ms over %d cards, report %d ms over %d cards", v.Warmup, v.WarmupCards, rep.Warmup, rep.WarmupCards)
+	}
 	if rep.Counts[batch.StatusDone] != 3 || rep.Cards[2].Qty != 4 || rep.Cards[2].Fields["power"] != "1" || rep.Label != "test deck" {
 		t.Errorf("report = %+v", rep)
 	}
@@ -111,16 +116,35 @@ func TestRunWritesFilesAndReport(t *testing.T) {
 	// The image endpoint serves a finished card from disk
 	img := httptest.NewRecorder()
 	s.mux.ServeHTTP(img, httptest.NewRequest(http.MethodGet, "/api/run/"+v.ID+"/image/0", nil))
-	if img.Code != http.StatusOK || img.Header().Get("Content-Type") != "image/png" {
+	if img.Code != http.StatusOK || img.Header().Get("Content-Type") != "image/jpeg" {
 		t.Errorf("image: %d %s", img.Code, img.Header().Get("Content-Type"))
 	}
 
 	// A rerun into the same folder overwrites rather than adding copies
 	postRun(t, s, runBody{Rows: rows[:1], OutDir: dir})
 	waitRun(t, s)
-	matches, _ := filepath.Glob(filepath.Join(dir, "Sol Ring*.png"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "Sol Ring*.jpg"))
 	if len(matches) != 2 {
 		t.Errorf("after a rerun found %v", matches)
+	}
+}
+
+func TestRunWritesPNGWhenChosen(t *testing.T) {
+	s := runServer(t)
+	s.prefs.SetSettings(prefs.Settings{ImageFormat: "png", PNGCompression: "fast"})
+	dir := t.TempDir()
+	postRun(t, s, runBody{Rows: []batch.Row{customRunRow("Sol Ring", "c21", "263")}, OutDir: dir})
+	v := waitRun(t, s)
+	if v.Format != batch.FormatPNG || len(v.Cards) != 1 || v.Cards[0].File != "Sol Ring [C21-263].png" || v.Cards[0].Status != batch.StatusDone {
+		t.Fatalf("view = %+v", v)
+	}
+	f, err := os.Open(filepath.Join(dir, v.Cards[0].File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := png.DecodeConfig(f); err != nil {
+		t.Errorf("not a PNG: %v", err)
 	}
 }
 

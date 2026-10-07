@@ -1,4 +1,4 @@
-// Package batch renders a list of cards into a folder of PNGs with a small
+// Package batch renders a list of cards into a folder of images with a small
 // worker pool, tracking each card's progress and writing a report beside them
 package batch
 
@@ -71,13 +71,16 @@ type Card struct {
 
 // Event is one progress message from a run. Step and Frac are the run's
 // overall progress, Card is a card that changed, Log is a console line, and
-// Done marks the last event
+// Done marks the last event. Warmup and WarmupCards are View's, set on the one
+// event that ends the warm-up and zero on every other
 type Event struct {
-	Step string
-	Frac float64
-	Card *Card
-	Log  string
-	Done bool
+	Step        string
+	Frac        float64
+	Card        *Card
+	Log         string
+	Done        bool
+	Warmup      int64
+	WarmupCards int
 }
 
 // Options describes a run apart from its rows
@@ -89,7 +92,10 @@ type Options struct {
 	Version     string
 	DPI         int
 	Concurrency int
-	// Compression is the PNG level a card is written at
+	// Format is FormatJPEG or FormatPNG, and an MPC Autofill project is always
+	// PNG, since its layout names every file .png. Compression is the PNG level
+	// a card is written at
+	Format      string
 	Compression png.CompressionLevel
 	// ArtTimeout bounds one art download and RenderTimeout one card's render
 	ArtTimeout    time.Duration
@@ -117,6 +123,13 @@ type Run struct {
 	stopped  bool
 	report   string
 	order    string
+
+	// warmedAt is when the first wave of cards, as many as render at once, had
+	// all been rendered, and warmCards is how many had been by then. Until then
+	// every worker is paying for loading frame layers and fonts for the first
+	// time, so a rate that counted it would measure the start and not the run
+	warmedAt  time.Time
+	warmCards int
 }
 
 // New prepares a run of rows, with every card queued. Nothing renders until
@@ -124,6 +137,10 @@ type Run struct {
 func New(rows []Row, o Options) *Run {
 	if o.Emit == nil {
 		o.Emit = func(Event) {}
+	}
+	o.Format = ParseFormat(o.Format)
+	if o.Project != nil {
+		o.Format = FormatPNG
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Run{
@@ -137,7 +154,7 @@ func New(rows []Row, o Options) *Run {
 	if o.Project != nil {
 		r.files = o.Project.files
 	} else {
-		r.files = outputNames(rows)
+		r.files = outputNames(rows, Ext(o.Format))
 	}
 	for i, row := range rows {
 		r.cards[i] = Card{Index: i, Name: row.displayName(), Face: row.Face, Status: StatusQueued}
@@ -159,6 +176,7 @@ type View struct {
 	OutDir      string    `json:"outDir"`
 	Template    string    `json:"template"`
 	DPI         int       `json:"dpi"`
+	Format      string    `json:"format"`
 	Concurrency int       `json:"concurrency"`
 	Started     time.Time `json:"started"`
 	Finished    time.Time `json:"finished,omitzero"`
@@ -166,19 +184,30 @@ type View struct {
 	Report      string    `json:"report,omitempty"`
 	MPC         bool      `json:"mpc,omitempty"`
 	Order       string    `json:"order,omitempty"`
-	Cards       []Card    `json:"cards"`
+	// Warmup is how long the run took to render its first wave of cards, in
+	// milliseconds, and WarmupCards how many cards had been rendered by then.
+	// Both are zero until that wave is done, and a rate over the rest of the run
+	// counts the cards after WarmupCards in the time after Warmup
+	Warmup      int64  `json:"warmupMs,omitempty"`
+	WarmupCards int    `json:"warmupCards,omitempty"`
+	Cards       []Card `json:"cards"`
 }
 
 // View returns a snapshot of the run
 func (r *Run) View() View {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	var warmup int64
+	if !r.warmedAt.IsZero() {
+		warmup = max(r.warmedAt.Sub(r.started).Milliseconds(), 1)
+	}
 	return View{
 		ID:          r.opts.ID,
 		Label:       r.opts.Label,
 		OutDir:      r.opts.OutDir,
 		Template:    strings.TrimSpace(r.opts.Template + " " + r.opts.Version),
 		DPI:         r.opts.DPI,
+		Format:      r.opts.Format,
 		Concurrency: r.opts.Concurrency,
 		Started:     r.started,
 		Finished:    r.finished,
@@ -186,6 +215,8 @@ func (r *Run) View() View {
 		Report:      r.report,
 		MPC:         r.opts.Project != nil,
 		Order:       r.order,
+		Warmup:      warmup,
+		WarmupCards: r.warmCards,
 		Cards:       append([]Card(nil), r.cards...),
 	}
 }
@@ -251,22 +282,39 @@ func (r *Run) update(i int, logLine string, fn func(c *Card)) {
 	r.mu.Lock()
 	fn(&r.cards[i])
 	c := r.cards[i]
-	settled := 0
+	settled, rendered := 0, 0
 	for _, x := range r.cards {
 		if settledStatus(x.Status) {
 			settled++
 		}
+		if x.Status == StatusDone || x.Status == StatusFailed {
+			rendered++
+		}
+	}
+	var warmup int64
+	var warmCards int
+	if r.warmedAt.IsZero() && rendered >= r.warmTarget() {
+		r.warmedAt, r.warmCards = time.Now(), rendered
+		warmup, warmCards = max(r.warmedAt.Sub(r.started).Milliseconds(), 1), rendered
 	}
 	r.mu.Unlock()
 	e := Event{
-		Step: fmt.Sprintf("%d of %d", settled, len(r.cards)),
-		Frac: float64(settled) / float64(len(r.cards)),
-		Card: &c,
+		Step:        fmt.Sprintf("%d of %d", settled, len(r.cards)),
+		Frac:        float64(settled) / float64(len(r.cards)),
+		Card:        &c,
+		Warmup:      warmup,
+		WarmupCards: warmCards,
 	}
 	if logLine != "" {
 		e.Log = time.Now().Format("15:04:05") + "  " + logLine
 	}
 	r.opts.Emit(e)
+}
+
+// warmTarget is how many rendered cards end the warm-up: one per worker, or all
+// of them when the run has fewer cards than workers
+func (r *Run) warmTarget() int {
+	return max(min(r.opts.Concurrency, len(r.cards)), 1)
 }
 
 func (r *Run) log(line string) {
@@ -278,8 +326,8 @@ func (r *Run) log(line string) {
 func (r *Run) Execute(p *pipeline.Pipeline) {
 	defer r.cancel()
 	ctx := r.ctx
-	r.log(fmt.Sprintf("run %s: %d cards with %s at %d dpi, %d at a time, into %s",
-		r.opts.ID, len(r.rows), strings.TrimSpace(r.opts.Template+" "+r.opts.Version), r.opts.DPI, r.opts.Concurrency, r.opts.OutDir))
+	r.log(fmt.Sprintf("run %s: %d cards with %s at %d dpi as %s, %d at a time, into %s",
+		r.opts.ID, len(r.rows), strings.TrimSpace(r.opts.Template+" "+r.opts.Version), r.opts.DPI, strings.ToUpper(r.opts.Format), r.opts.Concurrency, r.opts.OutDir))
 
 	next := make(chan int)
 	var wg sync.WaitGroup
@@ -388,22 +436,36 @@ func (r *Run) renderCard(ctx context.Context, p *pipeline.Pipeline, i int) {
 	renderCtx, cancel := context.WithTimeout(ctx, r.opts.RenderTimeout)
 	defer cancel()
 	last := 0.0
-	img, err := p.Render(renderCtx, d, row.Face, art, r.opts.DPI, func(step string, frac float64) {
+	progress := func(step string, frac float64) {
 		// A tenth at a time keeps a long run's event backlog short
 		if frac-last < 0.1 && frac < 1 {
 			return
 		}
 		last = frac
 		r.update(i, "", func(c *Card) { c.Frac = frac })
-	})
-	if err != nil {
-		fail("render", err)
-		return
+	}
+	// A JPEG converts the finished render straight to the planes it stores, so
+	// the render is kept in the form its writer takes
+	var write func(path string) error
+	if r.opts.Format == FormatJPEG {
+		img, err := p.RenderYCbCr(renderCtx, d, row.Face, art, r.opts.DPI, progress)
+		if err != nil {
+			fail("render", err)
+			return
+		}
+		write = func(path string) error { return WriteJPEG(path, img, DefaultJPEGQuality) }
+	} else {
+		img, err := p.Render(renderCtx, d, row.Face, art, r.opts.DPI, progress)
+		if err != nil {
+			fail("render", err)
+			return
+		}
+		write = func(path string) error { return WritePNG(path, img, r.opts.Compression) }
 	}
 
 	r.update(i, "", func(c *Card) { c.Status = StatusWriting })
 	file := r.files[i]
-	if err := WritePNG(filepath.Join(r.opts.OutDir, file), img, r.opts.Compression); err != nil {
+	if err := write(filepath.Join(r.opts.OutDir, file)); err != nil {
 		fail("write", err)
 		return
 	}

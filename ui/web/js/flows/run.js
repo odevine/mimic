@@ -34,8 +34,7 @@ const store = {
   version: signal(0),
   filter: signal("all"),
   query: signal(""),
-  selected: signal(null), // a card index the user picked
-  latestDone: signal(null), // the most recent card to finish, followed while running
+  selected: signal(null), // a card index the user picked, which opens the preview
   expanded: new Set(),
   now: signal(Date.now()),
   // stopping is set from a Stop press until the run settles, since a card mid-render finishes first
@@ -59,6 +58,18 @@ function duration(ms) {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+// Elapsed time to the hundredth of a second, for the run header and summary
+function precise(ms) {
+  const cs = Math.max(0, Math.floor(ms / 10));
+  const sec = Math.floor(cs / 100);
+  const frac = String(cs % 100).padStart(2, "0");
+  if (sec < 60) return `${sec}.${frac}s`;
+  const m = Math.floor(sec / 60);
+  const rest = `${String(sec % 60).padStart(2, "0")}.${frac}s`;
+  if (m < 60) return `${m}m ${rest}`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m ${rest}`;
 }
 
 function counts() {
@@ -88,7 +99,6 @@ export async function attach(view) {
     store.filter.value = "all";
     store.query.value = "";
     store.selected.value = null;
-    store.latestDone.value = null;
   });
   $("run-filter").value = "";
   rows.reset(store.cards);
@@ -100,9 +110,13 @@ export async function attach(view) {
       const card = store.cards[e.card.index];
       if (card) {
         card.state.value = e.card;
-        if (e.card.status === "done") store.latestDone.value = e.card.index;
         bump();
       }
+    }
+    // The event that ends the warm-up carries its time, which the snapshot taken
+    // when the page attached could not know yet
+    if (e.warmupMs && store.run.peek()) {
+      store.run.value = { ...store.run.peek(), warmupMs: e.warmupMs, warmupCards: e.warmupCards };
     }
     if (e.log) appendLog(e.log);
   });
@@ -129,7 +143,7 @@ export async function attach(view) {
 
 function startTicker() {
   stopTicker();
-  ticker = setInterval(() => (store.now.value = Date.now()), 1000);
+  ticker = setInterval(() => (store.now.value = Date.now()), 50);
 }
 
 function stopTicker() {
@@ -255,6 +269,17 @@ function copyLog() {
   navigator.clipboard.writeText(text).then(() => toast("Log copied", "ok"), fallback);
 }
 
+// The log opens between the header and the card list, scrolled to the latest line
+function toggleLog() {
+  const panel = $("run-log-panel");
+  panel.hidden = !panel.hidden;
+  $("run-log-toggle").setAttribute("aria-expanded", String(!panel.hidden));
+  if (!panel.hidden) {
+    const log = $("run-log");
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
 function saveLog() {
   const r = store.run.peek();
   const blob = new Blob([`${logLines.join("\n")}\n`], { type: "text/plain" });
@@ -274,13 +299,10 @@ function initView() {
     if (r) api.openRunFolder(r.id).catch(() => toast("Could not open the folder", "err"));
   });
   $("run-retry").addEventListener("click", retryFailed);
-  // The buttons sit in the log's summary, so a press must not also toggle it
-  const inSummary = (fn) => (e) => {
-    e.preventDefault();
-    fn();
-  };
-  $("run-log-copy").addEventListener("click", inSummary(copyLog));
-  $("run-log-save").addEventListener("click", inSummary(saveLog));
+  $("run-log-copy").addEventListener("click", copyLog);
+  $("run-log-save").addEventListener("click", saveLog);
+  $("run-log-toggle").addEventListener("click", toggleLog);
+  $("run-preview-close").addEventListener("click", () => (store.selected.value = null));
   $("run-filter").addEventListener("input", (e) => (store.query.value = e.target.value));
   $("run-empty-list").addEventListener("click", () => (location.hash = "list"));
 
@@ -311,7 +333,25 @@ function initView() {
     const failed = $("run-failed");
     failed.textContent = `${c.failed} failed`;
     failed.hidden = c.failed === 0;
-    $("run-elapsed").textContent = duration(elapsed);
+    $("run-elapsed").textContent = precise(elapsed);
+
+    // The first wave of cards pays for loading layers and fonts, so it is shown
+    // as its own time. The rate counts the cards rendered after it, failures
+    // included, over the time after it
+    const rendered = c.done + c.failed;
+    const warm = $("run-warmup");
+    const warmed = r.warmupMs > 0;
+    warm.textContent = warmed ? `warm-up ${precise(r.warmupMs)}` : "warming up";
+    warm.dataset.tip = warmed
+      ? `Time to render the first ${r.warmupCards} cards, which load the frame layers and fonts. The rate leaves them out`
+      : "";
+    warm.hidden = !warmed && !live;
+    const steadyCards = rendered - (r.warmupCards || 0);
+    const steadyMs = elapsed - (r.warmupMs || 0);
+    const rate = $("run-rate");
+    rate.hidden = !(warmed && steadyCards > 0 && steadyMs > 0);
+    if (!rate.hidden) rate.textContent = `${(steadyCards / (steadyMs / 1000)).toFixed(2)} cards/s`;
+    rate.dataset.tip = "Cards rendered after the warm-up, per second";
 
     // The estimate spreads the mean time of finished cards over the workers
     let eta = "";
@@ -329,7 +369,7 @@ function initView() {
       if (c.failed) parts.push(`${c.failed} failed`);
       if (c.skipped) parts.push(`${c.skipped} skipped`);
       if (c.unsupported) parts.push(`${c.unsupported} unsupported`);
-      summary.textContent = `${parts.join(" · ")} in ${duration(elapsed)}`;
+      summary.textContent = `${parts.join(" · ")} in ${precise(elapsed)}`;
     }
     const order = r.mpc && !live ? (r.order ? `${r.order} written` : "no cards.xml yet") : "";
     $("run-meta").textContent = [r.id, r.template, `${r.dpi} dpi`, r.report, order].filter(Boolean).join(" · ");
@@ -341,7 +381,6 @@ function initView() {
     $("run-stop").dataset.tip = stopping ? "Waiting for the cards already rendering to finish" : "";
     $("run-retry").hidden = live || c.failed === 0;
     $("run-retry-label").textContent = `Retry ${c.failed} failed`;
-    $("run-review").hidden = live;
 
     const filter = store.filter.value;
     store.query.value;
@@ -365,12 +404,15 @@ function initView() {
   // Clicking the failure count shows the failures
   $("run-failed").addEventListener("click", () => (store.filter.value = "failed"));
 
-  // The side panel shows the picked card, or follows the latest one to finish
+  // The side panel is closed until a card is picked, and it shows that card
+  // until another is picked, however many finish meanwhile
   effect(() => {
     store.version.value;
     const r = store.run.value;
-    const picked = store.selected.value;
-    const index = picked ?? store.latestDone.value;
+    const index = store.selected.value;
+    const side = $("run-side");
+    side.hidden = !r || index == null;
+    if (side.hidden) return;
     const img = $("run-image");
     const caption = $("run-caption");
     const card = index == null ? null : store.cards[index];

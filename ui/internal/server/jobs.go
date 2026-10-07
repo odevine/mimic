@@ -23,6 +23,10 @@ type jobEvent struct {
 	Row        *cardlist.Resolved `json:"row,omitempty"`
 	Card       *batch.Card        `json:"card,omitempty"`
 	Log        string             `json:"log,omitempty"`
+	// Warmup and WarmupCards ride on the event of a batch run that ends its
+	// warm-up, in milliseconds and cards, and are zero on every other
+	Warmup      int64 `json:"warmupMs,omitempty"`
+	WarmupCards int   `json:"warmupCards,omitempty"`
 }
 
 // job is one render or template-download in flight. It records every event so a

@@ -82,9 +82,9 @@ func TestRunRendersEveryFace(t *testing.T) {
 		name, status, file string
 		face               int
 	}{
-		{"Delver of Secrets", batch.StatusDone, "Delver of Secrets [ISD-51].png", 0},
-		{"Insectile Aberration", batch.StatusDone, "Insectile Aberration [ISD-51].png", 1},
-		{"Nissa, Vastwood Seer", batch.StatusDone, "Nissa, Vastwood Seer [ISD-51].png", 0},
+		{"Delver of Secrets", batch.StatusDone, "Delver of Secrets [ISD-51].jpg", 0},
+		{"Insectile Aberration", batch.StatusDone, "Insectile Aberration [ISD-51].jpg", 1},
+		{"Nissa, Vastwood Seer", batch.StatusDone, "Nissa, Vastwood Seer [ISD-51].jpg", 0},
 		{"Nissa, Sage Animist", batch.StatusUnsupported, "", 1},
 	}
 	for i, w := range want {

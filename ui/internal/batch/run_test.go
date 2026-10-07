@@ -2,7 +2,10 @@ package batch
 
 import (
 	"image/png"
+	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/odevine/mimic/engine/card"
 )
@@ -73,5 +76,124 @@ func TestCompression(t *testing.T) {
 		if got := Compression(s); got != png.DefaultCompression {
 			t.Errorf("%q = %d, want the default", s, got)
 		}
+	}
+}
+
+func TestFormat(t *testing.T) {
+	for _, c := range []struct{ setting, format, ext string }{
+		{"", FormatJPEG, ".jpg"}, {"jpeg", FormatJPEG, ".jpg"}, {"bmp", FormatJPEG, ".jpg"}, {"png", FormatPNG, ".png"},
+	} {
+		if got := ParseFormat(c.setting); got != c.format || Ext(got) != c.ext {
+			t.Errorf("%q = %q%s, want %q%s", c.setting, got, Ext(got), c.format, c.ext)
+		}
+	}
+}
+
+func TestProjectRunIsAlwaysPNG(t *testing.T) {
+	rows := []Row{{Qty: 1, Base: card.Data{Name: "A"}}}
+	p, err := PlanProject(rows, ProjectSpec{CardbackName: "Back"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(rows, Options{Format: FormatJPEG, Project: p})
+	if r.opts.Format != FormatPNG || filepath.Ext(r.files[0]) != ".png" {
+		t.Errorf("a project run is %q as %q, want PNG", r.opts.Format, r.files[0])
+	}
+}
+
+// finish moves card i through to a status the way the workers do
+func finish(r *Run, i int, status string) {
+	r.update(i, "", func(c *Card) { c.Status = status })
+}
+
+func warmRun(cards, workers int) *Run {
+	rows := make([]Row, cards)
+	return New(rows, Options{Concurrency: workers})
+}
+
+func TestWarmupEndsWithTheFirstWaveOfRenderedCards(t *testing.T) {
+	r := warmRun(6, 3)
+	if v := r.View(); v.Warmup != 0 || v.WarmupCards != 0 {
+		t.Fatalf("a run that has not started has warm-up %d ms over %d cards", v.Warmup, v.WarmupCards)
+	}
+	finish(r, 0, StatusDone)
+	finish(r, 1, StatusFailed) // a failure was rendered too
+	if v := r.View(); v.Warmup != 0 {
+		t.Fatalf("warm-up ended after 2 of 3 cards: %+v", v)
+	}
+	time.Sleep(3 * time.Millisecond)
+	finish(r, 2, StatusDone)
+	v := r.View()
+	if v.Warmup < 3 || v.WarmupCards != 3 {
+		t.Fatalf("warm-up = %d ms over %d cards, want at least 3 ms over 3 cards", v.Warmup, v.WarmupCards)
+	}
+
+	// Later cards do not move it
+	time.Sleep(3 * time.Millisecond)
+	finish(r, 3, StatusDone)
+	finish(r, 4, StatusDone)
+	if again := r.View(); again.Warmup != v.Warmup || again.WarmupCards != v.WarmupCards {
+		t.Errorf("warm-up moved from %+v to %+v", v.Warmup, again.Warmup)
+	}
+}
+
+func TestWarmupIgnoresCardsThatWereNeverRendered(t *testing.T) {
+	r := warmRun(4, 2)
+	finish(r, 0, StatusSkipped)
+	finish(r, 1, StatusUnsupported)
+	finish(r, 2, StatusDone)
+	if v := r.View(); v.Warmup != 0 {
+		t.Fatalf("skipped and unsupported cards ended the warm-up: %+v", v)
+	}
+	finish(r, 3, StatusDone)
+	if v := r.View(); v.Warmup == 0 || v.WarmupCards != 2 {
+		t.Errorf("warm-up = %d ms over %d cards, want it set over 2", v.Warmup, v.WarmupCards)
+	}
+}
+
+func TestWarmupOfARunSmallerThanItsWorkersIsTheWholeRun(t *testing.T) {
+	r := warmRun(2, 8)
+	finish(r, 0, StatusDone)
+	if v := r.View(); v.Warmup != 0 {
+		t.Fatalf("warm-up ended with a card still to render: %+v", v)
+	}
+	finish(r, 1, StatusDone)
+	if v := r.View(); v.Warmup == 0 || v.WarmupCards != 2 {
+		t.Errorf("warm-up = %d ms over %d cards, want it set over both", v.Warmup, v.WarmupCards)
+	}
+}
+
+func TestWarmupNeverSetWhenNothingRenders(t *testing.T) {
+	r := warmRun(2, 2)
+	finish(r, 0, StatusUnsupported)
+	finish(r, 1, StatusSkipped)
+	if v := r.View(); v.Warmup != 0 || v.WarmupCards != 0 {
+		t.Errorf("a run that rendered nothing has warm-up %+v", v)
+	}
+}
+
+func TestTheEventThatEndsTheWarmupCarriesIt(t *testing.T) {
+	var mu sync.Mutex
+	var events []Event
+	r := New(make([]Row, 5), Options{Concurrency: 2, Emit: func(e Event) {
+		mu.Lock()
+		events = append(events, e)
+		mu.Unlock()
+	}})
+	for i := 0; i < 5; i++ {
+		time.Sleep(2 * time.Millisecond)
+		finish(r, i, StatusDone)
+	}
+	var carrying []Event
+	for _, e := range events {
+		if e.Warmup != 0 || e.WarmupCards != 0 {
+			carrying = append(carrying, e)
+		}
+	}
+	if len(carrying) != 1 {
+		t.Fatalf("%d events carry the warm-up, want exactly one", len(carrying))
+	}
+	if v := r.View(); carrying[0].Warmup != v.Warmup || carrying[0].WarmupCards != v.WarmupCards || carrying[0].WarmupCards != 2 {
+		t.Errorf("event has %d ms over %d cards, view has %d ms over %d cards, want 2 cards", carrying[0].Warmup, carrying[0].WarmupCards, v.Warmup, v.WarmupCards)
 	}
 }

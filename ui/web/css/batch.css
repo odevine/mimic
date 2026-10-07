@@ -453,31 +453,55 @@ footer wraps once even a short path no longer fits */
   font-size: 12px;
 }
 
-.run-log-box {
-  flex: none;
+/* The preview opens beside the list when a card is picked, with a way to close it */
+#run-side {
+  position: relative;
 }
 
-.run-log-box[open] {
+#run-preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+
+/* The Log button reads as pressed while the log is open */
+#run-log-toggle[aria-expanded="true"] {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* The log opens between the header and the card list */
+.run-log-panel {
   display: flex;
+  flex: none;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
-.run-log-box > summary .spacer {
+.run-log-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 0;
+}
+
+.run-log-bar .spacer {
   flex: 1;
 }
 
-.run-log-box > summary .btn {
+.run-log-bar .btn {
   min-height: 24px;
   padding: 0 8px;
 }
 
-.run-log-box .log {
+.run-log-panel .log {
   overflow: auto;
+  flex: none;
   min-height: 120px;
-  max-height: 40vh;
-  margin: 0;
+  max-height: 32vh;
+  margin: 6px 12px 12px;
   user-select: text;
 }
 

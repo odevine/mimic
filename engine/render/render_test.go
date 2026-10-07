@@ -330,3 +330,42 @@ func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
 		t.Errorf("outside the nyx patch has alpha %d, so the background drew too", a)
 	}
 }
+
+// A render through a layer cache composites each layer's image with its index of
+// visible pixels, and one through a plain provider composites the bare image.
+// Both, on a first render and on one that reuses the cached layers, must give the
+// same pixels, at native size and scaled
+func TestRenderThroughACacheMatchesAPlainProvider(t *testing.T) {
+	for _, dpi := range []int{0, 150} {
+		plainReq := renderBolt(t, nil)
+		plainReq.Card.TypeLine = "Legendary Creature — Elf"
+		plainReq.Card.Power, plainReq.Card.Toughness = "2", "2"
+		plainReq.DPI = dpi
+		want, err := New("test").Render(context.Background(), *plainReq)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cached := template.NewCachedAssets(template.NewFSAssetProvider(placeholderDir), 1<<30)
+		defer cached.Close()
+		req := *plainReq
+		req.Assets = cached
+		for pass := 1; pass <= 2; pass++ {
+			got, err := New("test").Render(context.Background(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.SameSize(want) {
+				t.Fatalf("dpi %d pass %d: %dx%d, want %dx%d", dpi, pass, got.Width, got.Height, want.Width, want.Height)
+			}
+			for i := range want.Pix {
+				if got.Pix[i] != want.Pix[i] {
+					t.Fatalf("dpi %d pass %d: value %d (pixel %d, channel %d) = %v, want %v", dpi, pass, i, i/4, i%4, got.Pix[i], want.Pix[i])
+				}
+			}
+		}
+		if s := cached.Stats(); s.Hits == 0 {
+			t.Errorf("dpi %d: the second render found nothing in the cache: %+v", dpi, s)
+		}
+	}
+}

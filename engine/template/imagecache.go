@@ -6,6 +6,8 @@ import (
 	"io"
 	"slices"
 	"sync"
+
+	"github.com/odevine/impasto/blend"
 )
 
 // DefaultImageCacheBytes is the size a caller can pass NewCachedAssets when it
@@ -46,6 +48,11 @@ type cachedImage struct {
 	img   image.Image
 	bytes int64
 	last  uint64
+	// index is built the first time the layer is asked for with one, and goes
+	// when the layer does. It is small beside the pixels, so it is not counted
+	// against the budget
+	index   sync.Once
+	indexed *blend.Indexed
 }
 
 type decoding struct {
@@ -112,6 +119,30 @@ func (c *CachedAssets) LoadImage(relPath string) (image.Image, error) {
 	}()
 	d.img, d.err = decodeImage(c.AssetProvider, relPath)
 	return d.img, d.err
+}
+
+// LoadIndexed is LoadImage for a layer that is only composited. A resident
+// *image.NRGBA comes back as a *blend.Indexed, whose index of visible pixels is
+// built once, the first time it is asked for, and kept as long as the layer is
+// resident. A layer that is not cached, because it did not fit or the cache is
+// off, or that is not an NRGBA image, comes back as LoadImage gives it
+func (c *CachedAssets) LoadIndexed(relPath string) (image.Image, error) {
+	img, err := c.LoadImage(relPath)
+	if err != nil {
+		return nil, err
+	}
+	n, ok := img.(*image.NRGBA)
+	if !ok {
+		return img, nil
+	}
+	c.mu.Lock()
+	e, resident := c.resident[relPath]
+	c.mu.Unlock()
+	if !resident || e.img != image.Image(n) {
+		return img, nil
+	}
+	e.index.Do(func() { e.indexed = blend.Index(n) })
+	return e.indexed, nil
 }
 
 // count records a load of path and ages every count once per agePeriod loads

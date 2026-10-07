@@ -26,7 +26,37 @@ func LoadLayer(p AssetProvider, path string, s Scale) (*raster.Buffer, image.Poi
 // document-sized layer would have there. It returns a nil buffer for a PNG that
 // lands on no pixel
 func LoadLayerAt(p AssetProvider, path string, s Scale, x, y, docW, docH int) (*raster.Buffer, image.Point, error) {
-	img, err := LoadImage(p, path)
+	scaled, at, err := loadLayerImage(p, path, s, x, y, docW, docH, false)
+	if err != nil || scaled == nil {
+		return nil, at, err
+	}
+	buf, err := raster.FromImage(scaled)
+	if err != nil {
+		return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
+	}
+	return buf, at, nil
+}
+
+// LoadLayerImage is LoadLayerAt for a layer that is only to be composited, which
+// returns the image and not a buffer made from it. At native scale that is the
+// decoded image itself, shared and with its index when the provider keeps one, and
+// below it the box-scaled part of the document the image touches. Either way it is
+// what a canvas layer's Image takes, so the buffer is never built. It returns a nil
+// image for a PNG that lands on no pixel
+func LoadLayerImage(p AssetProvider, path string, s Scale, x, y, docW, docH int) (image.Image, image.Point, error) {
+	return loadLayerImage(p, path, s, x, y, docW, docH, true)
+}
+
+// loadLayerImage decodes a layer and resamples it to the render scale, with the
+// provider's index of it when indexed is set and one exists
+func loadLayerImage(p AssetProvider, path string, s Scale, x, y, docW, docH int, indexed bool) (image.Image, image.Point, error) {
+	var img image.Image
+	var err error
+	if indexed && s.Native() {
+		img, err = LoadIndexedImage(p, path)
+	} else {
+		img, err = LoadImage(p, path)
+	}
 	if err != nil {
 		return nil, image.Point{}, err
 	}
@@ -37,11 +67,7 @@ func LoadLayerAt(p AssetProvider, path string, s Scale, x, y, docW, docH int) (*
 	if scaled.Bounds().Empty() {
 		return nil, at, nil
 	}
-	buf, err := raster.FromImage(scaled)
-	if err != nil {
-		return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
-	}
-	return buf, at, nil
+	return scaled, at, nil
 }
 
 // Mirror flips buf left to right about its vertical center within region, a

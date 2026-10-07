@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
-	"github.com/odevine/mimic/engine/encode"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -84,7 +83,7 @@ func BenchmarkRenderNormal(b *testing.B) {
 					b.Fatal(err)
 				}
 				if withYCbCr {
-					encode.ToYCbCr(buf)
+					buf.ToYCbCr()
 				}
 			}
 			b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "cards/s")
@@ -108,7 +107,7 @@ func BenchmarkRenderNormalParallel(b *testing.B) {
 				b.Error(err)
 				return
 			}
-			encode.ToYCbCr(buf)
+			buf.ToYCbCr()
 		}
 	})
 	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "cards/s")

@@ -12,26 +12,36 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-// LoadLayer decodes a layer PNG and resamples it to the render scale. It returns
-// the buffer at the PNG's own size and the document origin it belongs at. Frame
-// layers are authored document-sized, so that origin leaves them where the
-// artwork put them
+// LoadLayer decodes a layer PNG that fills the document and resamples it to the
+// render scale. It returns the buffer at the PNG's own size and the document
+// origin it belongs at
 func LoadLayer(p AssetProvider, path string, s Scale) (*raster.Buffer, image.Point, error) {
-	return LoadLayerAt(p, path, s, 0, 0)
+	return LoadLayerAt(p, path, s, 0, 0, 0, 0)
 }
 
-// LoadLayerAt is LoadLayer with the PNG belonging at (x, y) in the scaled
-// document, for a cut smaller than the document, such as one half of a split card
-func LoadLayerAt(p AssetProvider, path string, s Scale, x, y int) (*raster.Buffer, image.Point, error) {
+// LoadLayerAt is LoadLayer for a PNG belonging at (x, y) in an authored document
+// of docW by docH, such as a layer cut to its bounds or one half of a split
+// card. A docW or docH of zero is the PNG's own size. The buffer covers just the
+// part of the scaled document the PNG touches, and its pixels are the ones the
+// document-sized layer would have there. It returns a nil buffer for a PNG that
+// lands on no pixel
+func LoadLayerAt(p AssetProvider, path string, s Scale, x, y, docW, docH int) (*raster.Buffer, image.Point, error) {
 	img, err := LoadImage(p, path)
 	if err != nil {
 		return nil, image.Point{}, err
 	}
-	buf, err := raster.FromImage(s.Image(img))
+	if b := img.Bounds(); docW <= 0 || docH <= 0 {
+		docW, docH = b.Dx(), b.Dy()
+	}
+	scaled, at := s.ImageAt(img, x, y, docW, docH)
+	if scaled.Bounds().Empty() {
+		return nil, at, nil
+	}
+	buf, err := raster.FromImage(scaled)
 	if err != nil {
 		return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
 	}
-	return buf, image.Pt(x, y), nil
+	return buf, at, nil
 }
 
 // Mirror flips buf left to right about its vertical center within region, a
@@ -339,33 +349,38 @@ func blendWeights(stops []float64, n int, t float64, w []float64) {
 
 // LoadBlendedLayer decodes several color variants of one layer and blends them
 // left to right at the seams BlendStops gives, for a layer that belongs at
-// (x, y) in a scaled document w wide. It returns the blended buffer at the
-// variants' own size with that origin, so a bar costs the size of the bar rather
-// than of the document. They must be the same size
-func LoadBlendedLayer(p AssetProvider, paths []string, w int, s Scale, x, y int) (*raster.Buffer, image.Point, error) {
+// (x, y) in an authored document of docW by docH. It returns the blended buffer
+// at the variants' own size with its origin in the scaled document, so a bar
+// costs the size of the bar rather than of the document. They must be the same size
+func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH int) (*raster.Buffer, image.Point, error) {
 	stops := BlendStops(len(paths))
 	if stops == nil {
 		return nil, image.Point{}, fmt.Errorf("template: cannot blend %d colors", len(paths))
 	}
 	var bufs []*raster.Buffer
+	var origin image.Point
 	for _, path := range paths {
-		img, err := LoadImage(p, path)
+		buf, at, err := LoadLayerAt(p, path, s, x, y, docW, docH)
 		if err != nil {
 			return nil, image.Point{}, err
 		}
-		buf, err := raster.FromImage(s.Image(img))
-		if err != nil {
-			return nil, image.Point{}, fmt.Errorf("template: wrapping layer %q: %w", path, err)
+		if buf == nil {
+			return nil, at, nil
 		}
+		origin = at
 		if len(bufs) > 0 && !buf.SameSize(bufs[0]) {
 			return nil, image.Point{}, fmt.Errorf("template: blended layers %q and %q differ in size", paths[0], path)
 		}
 		bufs = append(bufs, buf)
 	}
+	w := max(s.Px(docW), 1)
+	if s.Native() {
+		w = docW
+	}
 	out := raster.MustNewBuffer(bufs[0].Width, bufs[0].Height)
 	weights := make([]float64, len(bufs))
 	for sx := 0; sx < out.Width; sx++ {
-		blendWeights(stops, len(bufs), (float64(x+sx)+0.5)/float64(w), weights)
+		blendWeights(stops, len(bufs), (float64(origin.X+sx)+0.5)/float64(w), weights)
 		for sy := 0; sy < out.Height; sy++ {
 			i := (sy*out.Width + sx) * 4
 			for c := 0; c < 4; c++ {
@@ -377,7 +392,7 @@ func LoadBlendedLayer(p AssetProvider, paths []string, w int, s Scale, x, y int)
 			}
 		}
 	}
-	return out, image.Pt(x, y), nil
+	return out, origin, nil
 }
 
 // BlendedPaths lists the variants a blended color key draws, one per letter, or

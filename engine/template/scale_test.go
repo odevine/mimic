@@ -277,3 +277,41 @@ func TestManifestSymbolsRoundTrip(t *testing.T) {
 		t.Fatalf("symbol = %+v", s)
 	}
 }
+
+// A layer cut to its bounds shrinks to the pixels the document-sized layer does
+func TestImageAtMatchesTheWholeDocumentScaled(t *testing.T) {
+	const docW, docH = 301, 427
+	cut := image.Rect(37, 53, 211, 389)
+	full := image.NewNRGBA(image.Rect(0, 0, docW, docH))
+	for y := cut.Min.Y; y < cut.Max.Y; y++ {
+		for x := cut.Min.X; x < cut.Max.X; x++ {
+			full.SetNRGBA(x, y, color.NRGBA{uint8(x * 7), uint8(y * 3), uint8(x + y), uint8(60 + (x*y)%190)})
+		}
+	}
+	piece := full.SubImage(cut)
+	for _, f := range []float64{0.25, 0.37, 0.5, 0.73, 0.99} {
+		s := Scale(f)
+		want := s.Image(full).(*image.RGBA)
+		got, at := s.ImageAt(piece, cut.Min.X, cut.Min.Y, docW, docH)
+		g := got.(*image.RGBA)
+		for y := 0; y < want.Rect.Dy(); y++ {
+			for x := 0; x < want.Rect.Dx(); x++ {
+				var have color.RGBA
+				if p := image.Pt(x, y).Sub(at); p.In(g.Rect) {
+					have = g.RGBAAt(p.X, p.Y)
+				}
+				if w := want.RGBAAt(x, y); have != w {
+					t.Fatalf("scale %v: pixel (%d,%d) = %v, want %v", f, x, y, have, w)
+				}
+			}
+		}
+	}
+}
+
+func TestImageAtLeavesNativeAlone(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	got, at := Scale(1).ImageAt(img, 7, 9, 100, 100)
+	if got != image.Image(img) || at != image.Pt(7, 9) {
+		t.Errorf("native ImageAt = %v at %v", got, at)
+	}
+}

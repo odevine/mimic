@@ -14,8 +14,10 @@ import (
 // fully transparent. That means a box can name an AvoidLayer unconditionally: it
 // only ever narrows for a card whose render actually draws that layer. The
 // rectangle comes back in the scaled document's coordinates, so it lines up
-// with the text boxes that consult it
-func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name string, s Scale) (image.Rectangle, bool) {
+// with the text boxes that consult it. docW and docH are the authored document's
+// size, which a layer cut to its bounds is placed within, and zero reads as the
+// asset's own size
+func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name string, s Scale, docW, docH int) (image.Rectangle, bool) {
 	spec, ok := layers[name]
 	if !ok || !f.ConditionMet(spec.Condition) {
 		return image.Rectangle{}, false
@@ -31,9 +33,13 @@ func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name 
 	if err != nil {
 		return image.Rectangle{}, false
 	}
-	b := OpaqueBounds(s.Image(img))
+	if b := img.Bounds(); docW <= 0 || docH <= 0 {
+		docW, docH = b.Dx(), b.Dy()
+	}
+	scaled, at := s.ImageAt(img, spec.X, spec.Y, docW, docH)
+	b := OpaqueBounds(scaled)
 	if b.Empty() {
 		return image.Rectangle{}, false
 	}
-	return b.Add(image.Pt(s.Px(spec.X), s.Px(spec.Y))), true
+	return b.Add(at), true
 }

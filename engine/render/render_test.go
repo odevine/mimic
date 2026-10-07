@@ -1,11 +1,15 @@
 package render
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
+	"image/png"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -268,5 +272,61 @@ func TestRenderStopsWhenCancelledDuringFrameLoad(t *testing.T) {
 	_, err := New("test").Render(ctx, *req)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Render = %v, want context.Canceled", err)
+	}
+}
+
+// overlayAssets serves one extra file over another provider's
+type overlayAssets struct {
+	template.AssetProvider
+	m    *template.Manifest
+	path string
+	data []byte
+}
+
+func (a overlayAssets) Manifest() (*template.Manifest, error) { return a.m, nil }
+
+func (a overlayAssets) Open(rel string) (io.ReadCloser, error) {
+	if rel == a.path {
+		return io.NopCloser(bytes.NewReader(a.data)), nil
+	}
+	return a.AssetProvider.Open(rel)
+}
+
+// The nyx frame stands in for the background and loads where its own layer
+// says, not where the background's does
+func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
+	req := renderBolt(t, nil)
+	req.Card.TypeLine = "Enchantment"
+	m, err := req.Assets.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blue := color.NRGBA{0, 0, 0xFF, 0xFF}
+	patch := image.NewNRGBA(image.Rect(0, 0, 40, 30))
+	draw.Draw(patch, patch.Bounds(), image.NewUniform(blue), image.Point{}, draw.Src)
+	var png_ bytes.Buffer
+	if err := png.Encode(&png_, patch); err != nil {
+		t.Fatal(err)
+	}
+	withNyx := *m
+	withNyx.Layers = append(append([]template.LayerSpec(nil), m.Layers...), template.LayerSpec{
+		Name:          "nyx",
+		Condition:     "nyx",
+		ColorVariants: map[string]template.LayerAsset{"r": {Path: "nyx/r.png"}},
+		X:             100,
+		Y:             200,
+	})
+	req.Assets = overlayAssets{AssetProvider: req.Assets, m: &withNyx, path: "nyx/r.png", data: png_.Bytes()}
+
+	buf, err := New("test").Render(context.Background(), *req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := buf.ToImage(8)
+	if got := color.NRGBAModel.Convert(img.At(110, 210)).(color.NRGBA); !closeColor(got, blue) {
+		t.Errorf("inside the nyx patch = %v, want %v", got, blue)
+	}
+	if _, _, _, a := img.At(10, 10).RGBA(); a != 0 {
+		t.Errorf("outside the nyx patch has alpha %d, so the background drew too", a)
 	}
 }

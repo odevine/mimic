@@ -410,23 +410,16 @@ func layerNode(ctx context.Context, loads *frameLoads, req template.RenderReques
 		}
 	}
 	key := f.Slot(layer.ColorSlot)
-	var load func() (*raster.Buffer, image.Point, error)
-	if blend := blendedPaths(layer, variants, key); blend != nil {
-		load = func() (*raster.Buffer, image.Point, error) {
-			return template.LoadBlendedLayer(req.Assets, blend, scale, at.X, at.Y, authored.X, authored.Y)
-		}
-	} else {
-		asset, ok := variants[key]
-		if !ok {
-			asset, ok = variants["any"]
-		}
-		if !ok {
-			// No variant applies to this color. Skipping rather than erroring
-			// lets a manifest leave a layer out where it does not apply
-			return nil, nil
-		}
-		load = func() (*raster.Buffer, image.Point, error) {
-			return template.LoadLayerAt(req.Assets, asset.Path, scale, at.X, at.Y, authored.X, authored.Y)
+	blended := blendedPaths(layer, variants, key)
+	var asset template.LayerAsset
+	if blended == nil {
+		var ok bool
+		if asset, ok = variants[key]; !ok {
+			if asset, ok = variants["any"]; !ok {
+				// No variant applies to this color. Skipping rather than erroring
+				// lets a manifest leave a layer out where it does not apply
+				return nil, nil
+			}
 		}
 	}
 	mode, err := template.BlendMode(layer.Blend)
@@ -434,21 +427,46 @@ func layerNode(ctx context.Context, loads *frameLoads, req template.RenderReques
 		return nil, err
 	}
 	mirror := layer.Mirror != nil && f.ConditionMet(layer.Mirror.Condition)
+
+	// A layer that is neither blended from several colors nor mirrored is only
+	// composited, so its image goes to the compositor as it is, shared and with
+	// its index of visible pixels, and no float buffer is built for it
+	if blended == nil && !mirror {
+		return &canvas.Layer{Mode: mode, LoadImage: func() (image.Image, image.Point, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, image.Point{}, err
+			}
+			loads.started()
+			return template.LoadLayerImage(req.Assets, asset.Path, scale, at.X, at.Y, authored.X, authored.Y)
+		}}, nil
+	}
+
+	// Blending several colors writes new pixels and a mirror rewrites them, so
+	// these two build a buffer of their own
 	return &canvas.Layer{Mode: mode, Load: func() (*raster.Buffer, image.Point, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, image.Point{}, err
 		}
 		loads.started()
-		buf, at, err := load()
-		if err != nil || !mirror || buf == nil {
-			return buf, at, err
+		if blended != nil {
+			buf, origin, err := template.LoadBlendedLayer(req.Assets, blended, scale, at.X, at.Y, authored.X, authored.Y)
+			return mirrored(buf, origin, err, mirror, m, layer, scale)
 		}
-		// A mirror flips about the document's centre, so the layer takes the
-		// whole document to flip in
-		placed := canvas.Place(m.Width, m.Height, buf, at.X, at.Y)
-		template.Mirror(placed, scale.Rect(layer.Mirror.Region()))
-		return placed, image.Point{}, nil
+		buf, origin, err := template.LoadLayerAt(req.Assets, asset.Path, scale, at.X, at.Y, authored.X, authored.Y)
+		return mirrored(buf, origin, err, mirror, m, layer, scale)
 	}}, nil
+}
+
+// mirrored flips a loaded layer left to right when its mirror holds, and
+// otherwise returns it as it is. A mirror flips about the document's centre, so
+// the layer takes the whole document to flip in
+func mirrored(buf *raster.Buffer, origin image.Point, err error, mirror bool, m *template.Manifest, layer template.LayerSpec, scale template.Scale) (*raster.Buffer, image.Point, error) {
+	if err != nil || !mirror || buf == nil {
+		return buf, origin, err
+	}
+	placed := canvas.Place(m.Width, m.Height, buf, origin.X, origin.Y)
+	template.Mirror(placed, scale.Rect(layer.Mirror.Region()))
+	return placed, image.Point{}, nil
 }
 
 // roleFor returns the font role a box's manifest Font names, defaulting to the

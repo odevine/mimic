@@ -91,7 +91,7 @@ export function batch(fn) {
 export const app = {
   mode: signal("single"),
   capabilities: signal({}),
-  settings: signal({ theme: "dark", expandPrintings: false, splits: {} }),
+  settings: signal({ theme: "dark", expandPrintings: false, livePreview: true, splits: {} }),
   template: signal(null), // { name, version, label, source }
   resolution: signal(null),
   status: signal("Ready."),

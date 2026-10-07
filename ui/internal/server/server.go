@@ -347,14 +347,15 @@ func (s *Server) lookupJob(id string) (*job, bool) {
 // doRender fetches the face's art (once per URL) and renders that face through
 // the template chosen for it at dpi, streaming progress to the job and ending with a done event
 // carrying whether art was missing
-func (s *Server) doRender(j *job, d *card.Data, face, dpi int) {
-	artCtx, cancelArt := context.WithTimeout(context.Background(), netTimeout)
+func (s *Server) doRender(parent context.Context, j *job, d *card.Data, face, dpi int) {
+	defer j.cancel()
+	artCtx, cancelArt := context.WithTimeout(parent, netTimeout)
 	art, artErr := s.artFor(artCtx, d.Face(face))
 	cancelArt()
 
 	// The render is local work on a bound that has nothing to do with the
 	// network's, and a full-resolution export is the slowest thing the app does
-	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
+	ctx, cancel := context.WithTimeout(parent, renderTimeout)
 	defer cancel()
 
 	img, err := s.pipe.Render(ctx, d, face, art, dpi, throttleRender(func(step string, frac float64) {

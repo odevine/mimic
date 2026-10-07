@@ -25,6 +25,7 @@ func (s *Server) routes() {
 	mux.HandleFunc("POST /api/render", s.handleRender)
 	mux.HandleFunc("GET /api/render/{id}/events", s.handleJobEvents)
 	mux.HandleFunc("GET /api/render/{id}/image", s.handleRenderImage)
+	mux.HandleFunc("POST /api/render/{id}/cancel", s.handleRenderCancel)
 	mux.HandleFunc("GET /api/resolution", s.handleResolution)
 	mux.HandleFunc("GET /api/resources", s.handleResources)
 	mux.HandleFunc("POST /api/resolution", s.handleSetResolution)
@@ -183,8 +184,24 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, j := s.newJob()
-	go s.doRender(j, d, body.Face, dpi)
+	ctx, cancel := context.WithCancel(context.Background())
+	j.cancel = cancel
+	go s.doRender(ctx, j, d, body.Face, dpi)
 	writeJSON(w, map[string]any{"jobId": id, "dpi": dpi})
+}
+
+// handleRenderCancel stops a render the client no longer wants, such as a
+// preview superseded by a newer edit. Cancelling a finished job does nothing
+func (s *Server) handleRenderCancel(w http.ResponseWriter, r *http.Request) {
+	j, ok := s.lookupJob(r.PathValue("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if j.cancel != nil {
+		j.cancel()
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleResolution returns the preview and output resolutions, the presets a

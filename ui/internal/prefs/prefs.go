@@ -46,8 +46,11 @@ type Settings struct {
 	Theme string `json:"theme,omitempty"`
 	// ExpandPrintings lists every printing as its own search result rather than
 	// collapsing them to one row per card name
-	ExpandPrintings bool                 `json:"expandPrintings,omitempty"`
-	Splits          map[string][]float64 `json:"splits,omitempty"`
+	ExpandPrintings bool `json:"expandPrintings,omitempty"`
+	// LivePreview redraws the single card preview as its fields are edited.
+	// Nil reads as on, so settings saved before this existed keep it
+	LivePreview *bool                `json:"livePreview,omitempty"`
+	Splits      map[string][]float64 `json:"splits,omitempty"`
 	// Concurrency is how many cards a batch renders at once, zero to size it to
 	// the computer
 	Concurrency int `json:"concurrency,omitempty"`

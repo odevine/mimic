@@ -89,6 +89,9 @@ const store = {
 let searchAbort = null;
 let printingsAbort = null;
 let renderJob = null;
+let renderJobId = ""; // the server job behind renderJob
+let renderSeq = 0; // counts renders started, so a slow start can tell it was superseded
+let liveTimer = 0;
 let preview = null; // { jobId, dpi, face } of the preview on screen
 
 const faceCount = (card) => (card && card.shapes ? card.shapes.length : 1);
@@ -590,10 +593,25 @@ function outputDPI() {
   return r && r.output ? r.output.dpi : 0;
 }
 
+// Edits redraw the preview once typing pauses for this long
+const LIVE_DELAY_MS = 350;
+
+// abandonRender stops following the render in flight and tells the server to
+// stop working on it
+function abandonRender() {
+  renderSeq++;
+  if (renderJob) renderJob.close();
+  if (renderJobId) api.cancelRender(renderJobId);
+  renderJob = null;
+  renderJobId = "";
+}
+
 async function render() {
+  clearTimeout(liveTimer);
   const base = store.base.peek();
   if (!base || saving) return;
-  if (renderJob) renderJob.close();
+  abandonRender();
+  const seq = renderSeq;
   preview = null;
   const name = faceTitle();
   const face = store.face.peek();
@@ -602,12 +620,18 @@ async function render() {
   begin(`Rendering ${name}`, compactSize(res && res.preview));
   try {
     const { jobId, dpi } = await api.render(base, store.edits.peek(), "preview", face);
+    if (seq !== renderSeq) {
+      api.cancelRender(jobId);
+      return;
+    }
+    renderJobId = jobId;
     const job = (renderJob = api.renderEvents(jobId, (step, frac) => {
       if (renderJob === job) progress(step, frac);
     }));
     const done = await job;
     if (renderJob !== job) return;
     renderJob = null;
+    renderJobId = "";
     const img = $("preview-img");
     img.src = api.renderImageURL(jobId);
     img.hidden = false;
@@ -617,7 +641,9 @@ async function render() {
     if (done.artMissing) finish("warn", `Rendered ${name}`, "The art could not be fetched, so the frame is empty");
     else finish("done", `Rendered ${name}`, "");
   } catch (err) {
+    if (seq !== renderSeq) return;
     renderJob = null;
+    renderJobId = "";
     finish("error", "Render failed", err.message);
   }
 }
@@ -631,8 +657,8 @@ function renderIfSupported() {
     render();
     return;
   }
-  if (renderJob) renderJob.close();
-  renderJob = null;
+  clearTimeout(liveTimer);
+  abandonRender();
   preview = null;
   clearInterval(ticker);
   batch(() => {
@@ -665,8 +691,7 @@ async function save() {
     finish("done", `Saved ${name}.png`, "Handed to the browser as a download", size);
     return;
   }
-  if (renderJob) renderJob.close();
-  renderJob = null;
+  abandonRender();
   saving = true;
   $("save-btn").disabled = true;
   $("render-btn").disabled = true;
@@ -802,6 +827,18 @@ export function initSingle() {
     $("stale-dot").hidden = !stale();
   });
 
+  // Live preview: an edit that leaves the preview behind schedules a redraw.
+  // A face no installed template renders is skipped, and Render stays manual
+  effect(() => {
+    const e = store.edits.value;
+    clearTimeout(liveTimer);
+    if (!e || app.settings.value.livePreview === false || JSON.stringify(e) === store.rendered.peek()) return;
+    liveTimer = setTimeout(() => {
+      const base = store.base.peek();
+      if (base && !faceUnsupportedBy(base, store.face.peek())) render();
+    }, LIVE_DELAY_MS);
+  });
+
   const GLYPH = { idle: "card", working: "render", done: "check", stale: "render", warn: "warn", error: "warn" };
   effect(() => {
     const a = store.activity.value;
@@ -824,7 +861,7 @@ export function initSingle() {
     } else if (state === "done" && stale()) {
       state = "stale";
       title = "Preview is behind your edits";
-      step = "Press Render or ⌘↵ to draw them";
+      step = app.settings.peek().livePreview === false ? "Press Render or ⌘↵ to draw them" : "Redrawing when you pause, or press ⌘↵ to draw now";
     } else if (a.secs) {
       meta = seconds(a.secs);
     }

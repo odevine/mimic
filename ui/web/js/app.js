@@ -29,7 +29,7 @@ async function loadCapabilities() {
 async function loadSettings() {
   try {
     const s = await api.settings();
-    app.settings.value = { theme: "dark", expandPrintings: false, splits: {}, ...s };
+    app.settings.value = { theme: "dark", expandPrintings: false, livePreview: true, splits: {}, ...s };
   } catch {
     // defaults stand
   }

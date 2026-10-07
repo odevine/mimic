@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"image"
 	"sync"
 	"time"
@@ -42,6 +43,10 @@ type job struct {
 	img     image.Image
 	name    string
 	created time.Time
+
+	// cancel stops a render job's work, and is nil on jobs that cannot be
+	// stopped this way
+	cancel context.CancelFunc
 }
 
 // emit appends an event and wakes any subscribers. A Done event marks the job

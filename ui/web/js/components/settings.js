@@ -161,6 +161,7 @@ async function open() {
   const s = app.settings.peek();
   $("theme-select").value = s.theme || "dark";
   $("expand-printings").checked = !!s.expandPrintings;
+  $("live-preview").checked = s.livePreview !== false;
   $("output-dir-input").value = s.outputDir || "";
   $("layer-cache-select").value = s.layerCache || "medium";
   $("image-format-select").value = s.imageFormat === "png" ? "png" : "jpeg";
@@ -191,6 +192,7 @@ async function save() {
       ...app.settings.peek(),
       theme: $("theme-select").value,
       expandPrintings: $("expand-printings").checked,
+      livePreview: $("live-preview").checked,
       concurrency: concurrencyChoice(),
       layerCache: layerCacheChoice(),
       imageFormat: $("image-format-select").value,

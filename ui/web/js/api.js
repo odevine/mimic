@@ -63,6 +63,7 @@ export const api = {
   // render starts a job for one target, "preview" or "output", and resolves to
   // { jobId, dpi }
   render: (base, edits, target, face) => send("POST", "/api/render", { base, edits, target, face }),
+  cancelRender: (jobId) => fetch(`/api/render/${jobId}/cancel`, { method: "POST" }).catch(() => {}),
   renderEvents: (jobId, onStep) => watchJob(`/api/render/${jobId}/events`, onStep),
   renderImageURL: (jobId, download) =>
     `/api/render/${jobId}/image${download ? "?download=1" : `?ts=${Date.now()}`}`,

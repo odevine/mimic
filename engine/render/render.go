@@ -96,6 +96,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 	// and a print-ready export run the same layout over smaller numbers rather
 	// than down one path each
 	scale := m.ScaleForDPI(req.DPI)
+	authored := image.Pt(m.Width, m.Height)
 	m = m.Scaled(scale)
 	req.Report(stepManifest, fracManifest)
 
@@ -123,7 +124,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 			return nil, err
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(m.Layers)))
-		node, err := layerNode(ctx, loads, req, m, layer, layersByName, halves.keys(layer.Half), scale)
+		node, err := layerNode(ctx, loads, req, m, authored, layer, layersByName, halves.keys(layer.Half), scale)
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +188,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 		if job.box.Space == template.SpaceOutput {
 			docW, docH = m.DeliveredWidth(), m.DeliveredHeight()
 		}
-		got, err := t.drawBox(req, m, job, boxes, layersByName, halves, syms, scale, docW, docH)
+		got, err := t.drawBox(req, m, authored, job, boxes, layersByName, halves, syms, scale, docW, docH)
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +230,7 @@ func (t *Template) Render(ctx context.Context, req template.RenderRequest) (*ras
 // drawBox lays one text box out and returns the nodes it draws, the text and a
 // flavor divider when the box carries one. docW and docH are the canvas the box
 // is laid out in, which is the delivered one for a box in the output space
-func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, job boxJob, boxes boxSet, layersByName map[string]template.LayerSpec, halves halfSet, syms symbols, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
+func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, authored image.Point, job boxJob, boxes boxSet, layersByName map[string]template.LayerSpec, halves halfSet, syms symbols, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
 	name, box := job.name, job.box
 	d, f := halves.data(job.half), halves.keys(job.half)
 	group := boxes[job.half]
@@ -238,7 +239,7 @@ func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, job
 		return nil, nil
 	}
 	if box.DuckLayer != "" && box.DuckRow != "" {
-		if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer, scale); ok {
+		if _, ok := template.AvoidRect(req.Assets, layersByName, f, box.DuckLayer, scale, authored.X, authored.Y); ok {
 			box = template.MoveToRow(box, &template.Manifest{TextBoxes: group}, box.DuckRow)
 		}
 	}
@@ -254,7 +255,7 @@ func (t *Template) drawBox(req template.RenderRequest, m *template.Manifest, job
 		}
 	}
 	if box.AvoidLayer != "" {
-		if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer, scale); ok {
+		if r, ok := template.AvoidRect(req.Assets, layersByName, f, box.AvoidLayer, scale, authored.X, authored.Y); ok {
 			box.Avoid = r
 		}
 	}
@@ -395,24 +396,24 @@ func lerp(from, to float64, i, n int) float64 {
 // condition does not hold or no variant applies to the card's color. The node
 // decodes its PNG when the compositor reaches it and lets go of the pixels once
 // blended, so a render holds one frame layer at a time rather than all of them
-func layerNode(ctx context.Context, loads *frameLoads, req template.RenderRequest, m *template.Manifest, layer template.LayerSpec, layersByName map[string]template.LayerSpec, f frame.Keys, scale template.Scale) (canvas.Node, error) {
+func layerNode(ctx context.Context, loads *frameLoads, req template.RenderRequest, m *template.Manifest, authored image.Point, layer template.LayerSpec, layersByName map[string]template.LayerSpec, f frame.Keys, scale template.Scale) (canvas.Node, error) {
 	if !f.ConditionMet(layer.Condition) {
 		return nil, nil
 	}
 	// An enchantment draws the nyx frame in the background slot, so it sits
-	// below the art and follows the same color key as the background
-	variants := layer.ColorVariants
+	// below the art and follows the same color key as the background. It loads
+	// at its own position, since its PNG is cut to its own bounds
+	variants, at := layer.ColorVariants, layer
 	if layer.ColorSlot == "background" && f.Nyx {
 		if nyx, ok := layersByName["nyx"]; ok {
-			variants = nyx.ColorVariants
+			variants, at = nyx.ColorVariants, nyx
 		}
 	}
 	key := f.Slot(layer.ColorSlot)
-	x, y := scale.Px(layer.X), scale.Px(layer.Y)
 	var load func() (*raster.Buffer, image.Point, error)
 	if blend := blendedPaths(layer, variants, key); blend != nil {
 		load = func() (*raster.Buffer, image.Point, error) {
-			return template.LoadBlendedLayer(req.Assets, blend, m.Width, scale, x, y)
+			return template.LoadBlendedLayer(req.Assets, blend, scale, at.X, at.Y, authored.X, authored.Y)
 		}
 	} else {
 		asset, ok := variants[key]
@@ -425,7 +426,7 @@ func layerNode(ctx context.Context, loads *frameLoads, req template.RenderReques
 			return nil, nil
 		}
 		load = func() (*raster.Buffer, image.Point, error) {
-			return template.LoadLayerAt(req.Assets, asset.Path, scale, x, y)
+			return template.LoadLayerAt(req.Assets, asset.Path, scale, at.X, at.Y, authored.X, authored.Y)
 		}
 	}
 	mode, err := template.BlendMode(layer.Blend)
@@ -439,7 +440,7 @@ func layerNode(ctx context.Context, loads *frameLoads, req template.RenderReques
 		}
 		loads.started()
 		buf, at, err := load()
-		if err != nil || !mirror {
+		if err != nil || !mirror || buf == nil {
 			return buf, at, err
 		}
 		// A mirror flips about the document's centre, so the layer takes the

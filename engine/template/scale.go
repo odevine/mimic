@@ -77,36 +77,64 @@ func (s Scale) Image(img image.Image) image.Image {
 // aliasing into moire at preview sizes, and it costs one pass over the source
 // where a filter kernel costs several
 func boxScale(src image.Image, w, h int) *image.RGBA {
-	// Averaging happens in premultiplied alpha, or the color under a transparent
-	// pixel bleeds into its neighbors as a halo
-	rgba, ok := src.(*image.RGBA)
-	if !ok {
-		rgba = image.NewRGBA(image.Rect(0, 0, src.Bounds().Dx(), src.Bounds().Dy()))
-		xdraw.Draw(rgba, rgba.Bounds(), src, src.Bounds().Min, xdraw.Src)
-	}
-	sw, sh := rgba.Bounds().Dx(), rgba.Bounds().Dy()
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	rgba := premultiplied(src)
+	out, _ := boxScaleRegion(rgba, 0, 0, rgba.Bounds().Dx(), rgba.Bounds().Dy(), w, h)
+	return out
+}
 
-	// The source span each destination column covers, worked out once so the
-	// inner loop divides nothing
-	cols := make([]int, w+1)
-	for x := range cols {
-		cols[x] = x * sw / w
+// premultiplied is src as an RGBA image with its origin at zero. Averaging
+// happens in premultiplied alpha, or the color under a transparent pixel bleeds
+// into its neighbors as a halo
+func premultiplied(src image.Image) *image.RGBA {
+	if rgba, ok := src.(*image.RGBA); ok && rgba.Rect.Min == (image.Point{}) {
+		return rgba
 	}
-	for y := range h {
-		sy0, sy1 := y*sh/h, (y+1)*sh/h
-		if sy1 <= sy0 {
-			sy1 = sy0 + 1
-		}
-		row := dst.Pix[y*dst.Stride:]
-		for x := range w {
-			sx0, sx1 := cols[x], cols[x+1]
-			if sx1 <= sx0 {
-				sx1 = sx0 + 1
-			}
+	rgba := image.NewRGBA(image.Rect(0, 0, src.Bounds().Dx(), src.Bounds().Dy()))
+	xdraw.Draw(rgba, rgba.Bounds(), src, src.Bounds().Min, xdraw.Src)
+	return rgba
+}
+
+// boxSpans gives the source column each destination column starts at when n
+// source pixels shrink to scaled, with one more entry for where the last ends
+func boxSpans(n, scaled int) []int {
+	cols := make([]int, scaled+1)
+	for i := range cols {
+		cols[i] = i * n / scaled
+	}
+	return cols
+}
+
+// boxSpan is the source range destination pixel i covers, at least one pixel wide
+func boxSpan(cols []int, i int) (lo, hi int) {
+	lo, hi = cols[i], cols[i+1]
+	if hi <= lo {
+		hi = lo + 1
+	}
+	return lo, hi
+}
+
+// boxScaleRegion box-scales a document of docW by docH down to w by h when the
+// document is transparent except for src, which sits at (ox, oy) in it. It
+// returns only the destination pixels src touches and where they start, and
+// each is exactly the pixel scaling the whole document would give, so a layer cut
+// to its bounds shrinks to the same pixels as the document-sized layer it was cut from
+func boxScaleRegion(src *image.RGBA, ox, oy, docW, docH, w, h int) (*image.RGBA, image.Point) {
+	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
+	cols, rows := boxSpans(docW, w), boxSpans(docH, h)
+	x0, x1 := touched(cols, w, ox, ox+sw)
+	y0, y1 := touched(rows, h, oy, oy+sh)
+	dst := image.NewRGBA(image.Rect(0, 0, max(x1-x0, 0), max(y1-y0, 0)))
+	for y := y0; y < y1; y++ {
+		slo, shi := boxSpan(rows, y)
+		row := dst.Pix[(y-y0)*dst.Stride:]
+		for x := x0; x < x1; x++ {
+			xlo, xhi := boxSpan(cols, x)
+			// Only the part of the span inside src has color. The rest is
+			// transparent, so it adds nothing but its share of the area
+			cx0, cx1 := max(xlo, ox), min(xhi, ox+sw)
 			var r, g, b, a uint32
-			for sy := sy0; sy < sy1; sy++ {
-				line := rgba.Pix[sy*rgba.Stride+sx0*4 : sy*rgba.Stride+sx1*4]
+			for sy := max(slo, oy); sy < min(shi, oy+sh); sy++ {
+				line := src.Pix[(sy-oy)*src.Stride+(cx0-ox)*4 : (sy-oy)*src.Stride+(cx1-ox)*4]
 				for i := 0; i < len(line); i += 4 {
 					r += uint32(line[i])
 					g += uint32(line[i+1])
@@ -114,15 +142,46 @@ func boxScale(src image.Image, w, h int) *image.RGBA {
 					a += uint32(line[i+3])
 				}
 			}
-			n := uint32((sx1 - sx0) * (sy1 - sy0))
-			o := x * 4
+			n := uint32((xhi - xlo) * (shi - slo))
+			o := (x - x0) * 4
 			row[o] = uint8(r / n)
 			row[o+1] = uint8(g / n)
 			row[o+2] = uint8(b / n)
 			row[o+3] = uint8(a / n)
 		}
 	}
-	return dst
+	return dst, image.Pt(x0, y0)
+}
+
+// touched is the destination range [lo, hi) whose source spans overlap [from, to)
+func touched(cols []int, n, from, to int) (lo, hi int) {
+	lo, hi = n, 0
+	for i := 0; i < n; i++ {
+		a, b := boxSpan(cols, i)
+		if b > from && a < to {
+			lo, hi = min(lo, i), i+1
+		}
+	}
+	if hi <= lo {
+		return 0, 0
+	}
+	return lo, hi
+}
+
+// ImageAt resamples img, which sits at (x, y) in an authored document of docW by
+// docH, and returns the part of the scaled document it covers with the point
+// that part starts at. Every pixel is the one Image gives for a document-sized
+// layer holding img at that position, so cutting a layer to its bounds changes
+// no pixel at any scale. An empty result means img lands on no pixel
+func (s Scale) ImageAt(img image.Image, x, y, docW, docH int) (image.Image, image.Point) {
+	if s.Native() {
+		return img, image.Pt(x, y)
+	}
+	if s.Factor() > 1 {
+		return s.Image(img), image.Pt(s.Px(x), s.Px(y))
+	}
+	out, at := boxScaleRegion(premultiplied(img), x, y, docW, docH, max(s.Px(docW), 1), max(s.Px(docH), 1))
+	return out, at
 }
 
 // Turned reports whether the manifest's rotation swaps its width and height

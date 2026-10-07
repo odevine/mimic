@@ -835,7 +835,7 @@ function initReview() {
     const dir = outputDir();
     $("list-output-label").textContent = dir || "Choose a folder…";
     $("list-output-label").classList.toggle("faint", !dir);
-    $("list-output").dataset.tip = dir ? "Change the output folder" : "Choose where the PNGs are written";
+    $("list-output").dataset.tip = dir ? "Change the output folder" : "Choose where the images are written";
   });
 }
 

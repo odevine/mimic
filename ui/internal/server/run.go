@@ -116,12 +116,13 @@ func (s *Server) startRun(w http.ResponseWriter, rows []batch.Row, outDir, label
 		Version:       version,
 		DPI:           dpi,
 		Concurrency:   batch.Concurrency(s.prefs.Settings().Concurrency, s.autoConcurrency()),
+		Format:        s.prefs.Settings().ImageFormat,
 		Compression:   batch.Compression(s.prefs.Settings().PNGCompression),
 		ArtTimeout:    netTimeout,
 		RenderTimeout: renderTimeout,
 		Project:       project,
 		Emit: func(e batch.Event) {
-			j.emit(jobEvent{Step: e.Step, Frac: e.Frac, Card: e.Card, Log: e.Log, Done: e.Done})
+			j.emit(jobEvent{Step: e.Step, Frac: e.Frac, Card: e.Card, Log: e.Log, Done: e.Done, Warmup: e.Warmup, WarmupCards: e.WarmupCards})
 		},
 	})
 	s.run, s.runJob = run, j

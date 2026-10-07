@@ -52,7 +52,6 @@ var features = []feature{
 	{key: "presets", state: gatePlanned, reason: "Presets are coming in v1.0"},
 
 	{key: "run.retryFailed", state: gateLive},
-	{key: "run.openInReview", state: gatePlanned, reason: "Loading a run back into review is coming in v1.0"},
 	{key: "list.inspector", state: gatePlanned, reason: "Editing a row in the field editor is coming in v1.0"},
 	{key: "list.bulk", state: gatePlanned, reason: "Bulk actions on checked rows are coming in v1.0"},
 	{key: "palette", state: gatePlanned, reason: "The command palette is coming in v1.0"},
@@ -61,6 +60,7 @@ var features = []feature{
 	{key: "settings.bitDepth", state: gateNeedsEngine, reason: "Needs engine support for 16-bit output"},
 	{key: "settings.bleed", state: gateNeedsEngine, reason: "Needs engine support for trimming the bleed"},
 	{key: "settings.concurrency", state: gateLive},
+	{key: "settings.imageFormat", state: gateLive},
 	{key: "settings.pngCompression", state: gateLive},
 	{key: "settings.layerCache", state: gateLive},
 	{key: "settings.outputDir", state: gateLive},

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/odevine/impasto/raster"
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/prefs"
@@ -141,6 +142,34 @@ func (p *Pipeline) FetchArt(ctx context.Context, d *card.Data) (image.Image, err
 // receives step updates: the engine's own steps scaled into the first 90% of the
 // bar, then a final downscale step. progress may be nil
 func (p *Pipeline) Render(ctx context.Context, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (image.Image, error) {
+	buf, err := p.render(ctx, d, face, art, dpi, progress)
+	if err != nil {
+		return nil, err
+	}
+	img := buf.ToImage(8)
+	if progress != nil {
+		progress("", 1)
+	}
+	return img, nil
+}
+
+// RenderYCbCr is Render for an image headed to a JPEG. It converts the finished
+// render straight to the planes a JPEG stores, which skips the 8-bit RGB image
+// Render builds and the encoder would only convert again
+func (p *Pipeline) RenderYCbCr(ctx context.Context, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (*image.YCbCr, error) {
+	buf, err := p.render(ctx, d, face, art, dpi, progress)
+	if err != nil {
+		return nil, err
+	}
+	img := buf.ToYCbCr()
+	if progress != nil {
+		progress("", 1)
+	}
+	return img, nil
+}
+
+// render composites the card and reports the encoding step
+func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (*raster.Buffer, error) {
 	shapes := template.Classify(d)
 	if face < 0 || face >= len(shapes) {
 		return nil, fmt.Errorf("face %d out of range, %q renders %d", face, d.Name, len(shapes))
@@ -159,7 +188,7 @@ func (p *Pipeline) Render(ctx context.Context, d *card.Data, face int, art image
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to
-		// 0.9 and the downscale below fills the rest
+		// 0.9 and the encoding below fills the rest
 		req.Progress = func(step string, frac float64) { progress(step, frac*0.9) }
 	}
 	buf, err := at.template.Render(ctx, req)
@@ -169,9 +198,5 @@ func (p *Pipeline) Render(ctx context.Context, d *card.Data, face int, art image
 	if progress != nil {
 		progress("Encoding image", 0.92)
 	}
-	img := buf.ToImage(8)
-	if progress != nil {
-		progress("", 1)
-	}
-	return img, nil
+	return buf, nil
 }

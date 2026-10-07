@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,11 +55,11 @@ func ExpandPath(p string) (string, error) {
 	return filepath.Clean(p), nil
 }
 
-// outputNames picks every card's filename up front, in list order, so two cards
+// outputNames picks every card's filename, ending in ext, up front, in list order, so two cards
 // that would share a name get the same suffix however the workers interleave.
 // A name carries the set code and collector number of the printing pulled from
 // Scryfall, and a rerun into the same folder overwrites the files it wrote
-func outputNames(rows []Row) []string {
+func outputNames(rows []Row, ext string) []string {
 	names := make([]string, len(rows))
 	seen := make(map[string]int)
 	for i, row := range rows {
@@ -67,7 +69,7 @@ func outputNames(rows []Row) []string {
 		if n := seen[key]; n > 1 {
 			stem = fmt.Sprintf("%s (%d)", stem, n)
 		}
-		names[i] = stem + ".png"
+		names[i] = stem + ext
 	}
 	return names
 }
@@ -130,17 +132,59 @@ func Compression(setting string) png.CompressionLevel {
 	return png.DefaultCompression
 }
 
+// The image formats a run writes. A zero value reads as JPEG, the default
+const (
+	FormatJPEG = "jpeg"
+	FormatPNG  = "png"
+)
+
+// DefaultJPEGQuality is the quality a card's JPEG is written at
+const DefaultJPEGQuality = 95
+
+// ParseFormat reads the image format setting, "png" for PNG and anything else
+// for the default, JPEG
+func ParseFormat(setting string) string {
+	if setting == FormatPNG {
+		return FormatPNG
+	}
+	return FormatJPEG
+}
+
+// Ext is the file extension, with its dot, a format's images carry
+func Ext(format string) string {
+	if format == FormatPNG {
+		return ".png"
+	}
+	return ".jpg"
+}
+
+// WriteJPEG encodes img to path at quality through a temporary file in the same
+// folder, so a crash or a Stop never leaves a half-written JPEG under the real name
+func WriteJPEG(path string, img image.Image, quality int) error {
+	return writeAtomic(path, ".mimic-*.jpg", func(w io.Writer) error {
+		return jpeg.Encode(w, img, &jpeg.Options{Quality: quality})
+	})
+}
+
 // WritePNG encodes img to path through a temporary file in the same folder, so
 // a crash or a Stop never leaves a half-written PNG under the real name
 func WritePNG(path string, img image.Image, level png.CompressionLevel) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".mimic-*.png")
+	return writeAtomic(path, ".mimic-*.png", func(w io.Writer) error {
+		enc := png.Encoder{CompressionLevel: level}
+		return enc.Encode(w, img)
+	})
+}
+
+// writeAtomic runs encode into a temporary file beside path and renames it into
+// place once it is complete
+func writeAtomic(path, pattern string, encode func(io.Writer) error) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
 	bw := bufio.NewWriterSize(tmp, 1<<20)
-	enc := png.Encoder{CompressionLevel: level}
-	if err := enc.Encode(bw, img); err != nil {
+	if err := encode(bw); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -158,7 +202,7 @@ func WritePNG(path string, img image.Image, level png.CompressionLevel) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// Report is the JSON written beside the PNGs, enough to see what a run did and
+// Report is the JSON written beside the images, enough to see what a run did and
 // to reproduce it
 type Report struct {
 	ID          string         `json:"id"`
@@ -168,10 +212,15 @@ type Report struct {
 	Stopped     bool           `json:"stopped,omitempty"`
 	Template    string         `json:"template"`
 	DPI         int            `json:"dpi"`
+	Format      string         `json:"format"`
 	Concurrency int            `json:"concurrency"`
 	Counts      map[string]int `json:"counts"`
 	Order       string         `json:"order,omitempty"`
-	Cards       []ReportCard   `json:"cards"`
+	// Warmup and WarmupCards are as in View. The rate of the rest of the run is
+	// the cards after the first WarmupCards over the time after Warmup
+	Warmup      int64        `json:"warmupMs,omitempty"`
+	WarmupCards int          `json:"warmupCards,omitempty"`
+	Cards       []ReportCard `json:"cards"`
 }
 
 // ReportCard is one card's line in a Report
@@ -201,9 +250,12 @@ func writeReport(r *Run) (string, error) {
 		Stopped:     v.Stopped,
 		Template:    v.Template,
 		DPI:         v.DPI,
+		Format:      v.Format,
 		Concurrency: v.Concurrency,
 		Counts:      Counts(v.Cards),
 		Order:       v.Order,
+		Warmup:      v.Warmup,
+		WarmupCards: v.WarmupCards,
 	}
 	for i, c := range v.Cards {
 		row := r.rows[i]

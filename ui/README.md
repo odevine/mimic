@@ -82,16 +82,18 @@ editor field, such as `power` or `oracle`, overrides that field on the matched
 card. A row with a truthy `custom` column skips the lookup and renders from its
 own fields, and so does a row whose name matches nothing when it has a `type`.
 
-Render writes one PNG per card into the output folder, picked through a folder
+Render writes one image per card into the output folder, picked through a folder
 browser in the footer and remembered with a short list of recent folders. A
 file is named after the card and the printing it came from, as in
-`Sol Ring [C21-263].png`, and rendering into the same folder again overwrites
-it. A second copy of the same printing in one run gets a `(2)` suffix, and a
+`Sol Ring [C21-263].jpg`, and rendering into the same folder again overwrites
+it. Cards are JPEG at quality 95 by default, converted straight from the
+engine's render to the planes a JPEG stores, and the Image format setting
+switches them to PNG, whose compression setting then applies. A second copy of the same printing in one run gets a `(2)` suffix, and a
 quantity is recorded in the run report rather than written as extra files.
 Cards render two at a time by default, which the settings panel changes.
 
-A double-faced card renders one PNG per face, each named after that face, as in
-`Delver of Secrets [MID-51].png` and `Insectile Aberration [MID-51].png`, and
+A double-faced card renders one image per face, each named after that face, as in
+`Delver of Secrets [MID-51].jpg` and `Insectile Aberration [MID-51].jpg`, and
 the run treats each face as its own card. Each face renders through the
 template chosen for its shape: standard cards through the active template, and
 every other shape through the one picked under Templates, Defaults, or the
@@ -105,7 +107,7 @@ such as `half2Oracle`.
 
 The format beside the folder switches Render to an
 [MPC Autofill](https://github.com/chilli-axe/mpc-autofill) project instead,
-laid out by the engine's `mpcfill` package: fronts in `fronts/`, the backs of
+laid out by the engine's `mpcfill` package, whose files are always PNG: fronts in `fronts/`, the backs of
 double-faced cards in `backs/`, the shared cardback in `cardback/`, and a
 `cards.xml` order file beside them. Its options set the cardstock, foil, and
 the cardback, an uploaded PNG or JPEG kept beside `prefs.json` and scaled down
@@ -121,12 +123,18 @@ followed by an import of `cards.xml`, and its desktop tool takes the folder
 with `-d`.
 
 Run shows the batch as it goes: overall progress with an estimate, a line per
-card with its time or its own progress, and the finished render of whichever
-card is picked. A failed card opens to its error and the stage it failed at.
+card with its time or its own progress, and the run's time. The first wave of
+cards, as many as render at once, load the frame layers and fonts, so that time
+is shown on its own as the warm-up and the cards per second counts only what is
+rendered after it. Picking a card opens its finished render beside the list and
+it stays until another is picked or it is closed, so a running batch spends no
+time drawing previews nobody asked for. The Log button beside Open folder opens
+the run's log above the list, with Copy and Save. A failed card opens to its
+error and the stage it failed at.
 Stop skips every card still queued, and a card already rendering finishes
-first. When the run ends, a `mimic-run-<timestamp>.json` report beside the PNGs
+first. When the run ends, a `mimic-run-<timestamp>.json` report beside the images
 records each card's outcome, printing, file, and field overrides, along with
-the template and resolution used. Retry failed starts a new run from only the
+the template, resolution, and warm-up used. Retry failed starts a new run from only the
 failed cards. The server keeps the latest run, so reloading the page picks it
 back up, and the template cannot be switched while a run is going.
 

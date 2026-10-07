@@ -51,7 +51,11 @@ type Settings struct {
 	// Concurrency is how many cards a batch renders at once, zero to size it to
 	// the computer
 	Concurrency int `json:"concurrency,omitempty"`
-	// PNGCompression is "fast" or "balanced". Empty reads as balanced
+	// ImageFormat is the format a batch writes its cards in, "jpeg" or "png".
+	// Empty reads as jpeg
+	ImageFormat string `json:"imageFormat,omitempty"`
+	// PNGCompression is "fast" or "balanced" and applies to PNG output. Empty
+	// reads as balanced
 	PNGCompression string `json:"pngCompression,omitempty"`
 	// LayerCache is how much decoded frame layer data a run keeps in memory to
 	// share between cards: "small", "medium", "large" or "xlarge". Empty reads as

@@ -163,6 +163,7 @@ async function open() {
   $("expand-printings").checked = !!s.expandPrintings;
   $("output-dir-input").value = s.outputDir || "";
   $("layer-cache-select").value = s.layerCache || "medium";
+  $("image-format-select").value = s.imageFormat === "png" ? "png" : "jpeg";
   $("png-compression-select").value = s.pngCompression === "fast" ? "fast" : "balanced";
   openCardData(s.cardData);
   openFonts();
@@ -192,6 +193,7 @@ async function save() {
       expandPrintings: $("expand-printings").checked,
       concurrency: concurrencyChoice(),
       layerCache: layerCacheChoice(),
+      imageFormat: $("image-format-select").value,
       pngCompression: $("png-compression-select").value,
       outputDir: $("output-dir-input").value.trim(),
       cardData: cardDataChoice(),

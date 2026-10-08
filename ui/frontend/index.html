@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mimic</title>
-  <link rel="icon" href="mimic.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
@@ -12,7 +11,7 @@
   <link rel="stylesheet" href="css/batch.css">
   <script>
     // Apply the remembered theme before first paint so a light-theme user never
-    // sees a dark flash. The server copy in prefs is authoritative and app.js
+    // sees a dark flash. The app copy in prefs is authoritative and app.js
     // reconciles the two once it loads
     try {
       const t = localStorage.getItem("mimic.theme");
@@ -37,7 +36,7 @@
 <body>
   <div id="boot-error" class="boot-error" hidden>
     <h1>mimic could not start its interface</h1>
-    <p class="dim">The server is running, but the page's scripts failed to load. Reloading usually fixes it. If it keeps happening, the terminal that launched mimic may show why.</p>
+    <p class="dim">The app started, but the page's scripts failed to load. Restarting mimic usually fixes it.</p>
     <p class="mono faint" id="boot-error-detail"></p>
   </div>
 
@@ -215,9 +214,8 @@
               <button id="list-open" class="btn subtle" type="button" data-tip="Open a .txt, .dek or .csv file">
                 <svg class="icon"><use href="icons.svg#i-upload"/></svg>Open file
               </button>
-              <input id="list-file" type="file" accept=".txt,.dek,.dec,.csv,.tsv,text/plain,text/csv" hidden>
             </div>
-            <textarea id="list-input" spellcheck="false" aria-label="Card list" placeholder="4 Lightning Bolt
+            <textarea id="list-input" data-file-drop-target spellcheck="false" aria-label="Card list" placeholder="4 Lightning Bolt
 1 Counterspell (MH2) 267
 
 Sideboard
@@ -626,7 +624,6 @@ Sideboard
               </button>
               <button id="fonts-reset" class="btn subtle" type="button" hidden>Reset all</button>
             </div>
-            <input id="fonts-file" type="file" accept=".ttf,.otf" hidden>
           </div>
         </div>
         <div class="setting">

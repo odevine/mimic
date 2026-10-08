@@ -43,15 +43,17 @@ jobs:
           go test ./render
           go test -race $(go list ./... | grep -v '/render$')
 
-  ui:
+  # ui-core is everything in ui except the window: the services, the workspace
+  # and their tests. It builds and tests without cgo, so it runs on one Linux
+  # runner and cross-compiles to every target
+  ui-core:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ui
     # ui depends on engine's go.mod pin, not whatever a go.work happens to
     # union locally, so CI builds the same hermetic dependency graph a real
-    # release does (see ui-binaries in release-please.yml) rather than
-    # coupling ui's CI to every unreleased engine change
+    # release does rather than coupling ui's CI to every unreleased engine change
     env:
       GOWORK: "off"
     steps:
@@ -71,19 +73,88 @@ jobs:
             exit 1
           fi
 
+      # The window package and the main package that imports it need a C
+      # toolchain and the webview's libraries, so they are built by ui-desktop
+      - name: List the core packages
+        run: go list ./... | grep -v -e '/internal/desktop$' -e '/mimic/ui$' > "$RUNNER_TEMP/core.txt"
+
       - name: Vet
-        run: go vet ./...
+        run: go vet $(cat "$RUNNER_TEMP/core.txt")
 
       - name: Test
-        run: go test -race ./...
+        run: go test -race $(cat "$RUNNER_TEMP/core.txt")
 
-      # The payoff: with Fyne gone the module builds without cgo and
-      # cross-compiles to every target from a single Linux runner
-      - name: Cross-compile all targets
+      - name: Cross-compile the core for all targets
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os="${target%/*}"
             arch="${target#*/}"
             echo "building ${os}/${arch}"
-            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -o /dev/null .
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build $(cat "$RUNNER_TEMP/core.txt")
           done
+
+      # Only internal/desktop may depend on Wails, which is what keeps the rest
+      # buildable and testable without cgo
+      - name: Check that only the window package imports Wails
+        run: |
+          status=0
+          for pkg in $(cat "$RUNNER_TEMP/core.txt"); do
+            if go list -deps "$pkg" | grep -q 'github.com/wailsapp/wails'; then
+              echo "$pkg depends on Wails"
+              status=1
+            fi
+          done
+          exit $status
+
+  # ui-desktop builds the app itself on each operating system, since the webview
+  # needs the platform's own toolchain and libraries, and then starts it with
+  # --smoke to prove the window, the bridge and the image routes work
+  ui-desktop:
+    name: ui-desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: ui
+    env:
+      GOWORK: "off"
+      # Wails v3 builds against GTK 4 on Linux unless told otherwise, and Ubuntu
+      # 22.04 ships GTK 3 and WebKitGTK 4.1
+      TAGS: ${{ runner.os == 'Linux' && 'gtk3' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev xvfb
+
+      - name: Vet
+        run: go vet -tags "$TAGS" ./internal/desktop .
+
+      - name: Test the window package
+        run: go test ${{ runner.os != 'Windows' && '-race' || '' }} -tags "$TAGS" ./internal/desktop
+
+      - name: Build
+        run: go build -tags "$TAGS" -o "mimic${{ runner.os == 'Windows' && '.exe' || '' }}" .
+
+      - name: Launch check
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            timeout 120 dbus-run-session -- xvfb-run -a ./mimic -smoke
+          elif [ "$RUNNER_OS" = Windows ]; then
+            ./mimic.exe -smoke
+          else
+            ./mimic -smoke
+          fi

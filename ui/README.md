@@ -1,30 +1,37 @@
 # mimic ui
 
-A local app for the mimic card renderer. It runs a loopback HTTP server, serves
-a small embedded web frontend, and opens it in your browser. It searches
-Scryfall, previews a card through the normal template, and downloads the result.
+A desktop app for the mimic card renderer. It opens a window that shows an
+embedded web frontend through the system webview, searches Scryfall, previews a
+card through the normal template, and saves the result. The frontend and the Go
+services talk through the window, so nothing listens on the network.
 
-The whole binary is pure Go: the frontend is embedded with `//go:embed`, so
-there is no Node or npm step, and the module builds with `CGO_ENABLED=0` and
-cross-compiles to a single static file per target.
+The frontend is embedded with `//go:embed`, so there is no Node or npm step. The
+window needs the system webview, which needs cgo on macOS and Linux. Only
+`internal/desktop` imports it, and every other package builds and tests with
+`CGO_ENABLED=0`.
 
 ## Running it
 
 ```
-go run .
+go run .            # macOS and Windows
+go run -tags gtk3 . # Linux
 ```
 
 Run it from a checkout of the full repository, not the `ui` directory in
-isolation, so the Go workspace resolves the local `engine` module. It prints the
-URL it bound and opens that page in your default browser.
+isolation, so the Go workspace resolves the local `engine` module. Linux needs a
+C compiler and the `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` packages. Wails v3
+builds against GTK 4 unless told otherwise, and the `gtk3` tag selects the GTK 3
+and WebKitGTK 4.1 that Ubuntu 22.04 ships.
 
 Flags:
 
-- `-addr` binds a specific address instead of the default loopback ephemeral
-  port, for example `-addr 127.0.0.1:8080`.
-- `-no-open` prints the URL but does not open a browser.
 - `-fonts <dir>` renders with the font overrides in dir, laid out one subfolder
   per role, ahead of every other font source.
+- `-smoke` runs the launch check against a scratch config folder and exits. It
+  opens the window, boots the page, renders a card through the bridge, loads the
+  images and exits zero when all of that works.
+
+A build made with `-tags dev` turns on the webview's developer tools.
 
 ## Using it
 
@@ -55,7 +62,7 @@ field can be redacted by wrapping words in `~~`, as in
 of them. A span left open runs to the end of its paragraph.
 
 Render draws the current values into the preview, which zooms to fit, 100% and
-200% and pans by dragging. Save downloads the card at the output resolution.
+200% and pans by dragging. Save asks where to put the card, then writes it at the output resolution.
 `⌘↵` renders, `⌘S` saves, `/` jumps to search, and `?` lists the rest.
 
 A card's art is fetched once when you select it and reused across edits, so
@@ -82,8 +89,8 @@ editor field, such as `power` or `oracle`, overrides that field on the matched
 card. A row with a truthy `custom` column skips the lookup and renders from its
 own fields, and so does a row whose name matches nothing when it has a `type`.
 
-Render writes one image per card into the output folder, picked through a folder
-browser in the footer and remembered with a short list of recent folders. A
+Render writes one image per card into the output folder, chosen with the system folder
+dialog from the footer and remembered with a short list of recent folders. A
 file is named after the card and the printing it came from, as in
 `Sol Ring [C21-263].jpg`, and rendering into the same folder again overwrites
 it. Cards are JPEG at quality 95 by default, converted straight from the
@@ -135,17 +142,17 @@ Stop skips every card still queued, and a card already rendering finishes
 first. When the run ends, a `mimic-run-<timestamp>.json` report beside the images
 records each card's outcome, printing, file, and field overrides, along with
 the template, resolution, and warm-up used. Retry failed starts a new run from only the
-failed cards. The server keeps the latest run, so reloading the page picks it
+failed cards. The app keeps the latest run, so reloading the page picks it
 back up, and the template cannot be switched while a run is going.
 
 ## Features that are not built yet
 
 Features that are designed but not built still appear, dimmed with a lock, and
-hovering or focusing one says why. The server decides this: `GET
-/api/capabilities` returns every feature key with a state of `live`, `planned`,
+hovering or focusing one says why. The app decides this: `Settings.Capabilities`
+returns every feature key with a state of `live`, `planned`,
 `needs-engine` or `needs-template` and a reason, and the page renders what it is
 told. Lifting a gate is a change to the table in
-`internal/server/capabilities.go`.
+`internal/services/settings/capabilities.go`.
 
 ## Settings
 
@@ -174,15 +181,7 @@ them. When `-fonts` or a checkout's `local-fonts/` is in use instead, the panel
 shows that folder read-only. The role folders and the fonts real cards use are
 listed in the [top-level README](../README.md#templates-and-fonts).
 
-## HTTP API
-
-The page drives the server entirely through a small JSON API on the loopback
-address, so a script can drive it too.
-
-The server answers only requests addressed to `localhost` or an IP address,
-which keeps another website from reaching it through DNS rebinding. It refuses
-a POST or PUT whose `Origin` header names a different site. A script that sends
-no `Origin`, such as curl, is let through.
+## Scryfall rate limits
 
 Calls to the Scryfall API are paced to Scryfall's
 [published rate limits](https://scryfall.com/docs/api/rate-limits): two a second
@@ -192,41 +191,3 @@ list makes one search per matched line, so a 100-line list takes about a minute
 the first time and is cached for the rest of the session, unless a local copy of
 the card data is in use. Card images come from Scryfall's image hosts, which
 have no limit, so they skip the queue.
-
-| Endpoint                           | Purpose                                              |
-| ---------------------------------- | ---------------------------------------------------- |
-| `GET /api/search?q=`               | Scryfall search, one result per match                |
-| `GET /api/printings?name=`         | Every printing of one card, newest first             |
-| `GET /api/recents`                 | Recent searches                                      |
-| `POST /api/render`                 | Start a render of a base card plus edits             |
-| `GET /api/render/{id}/events`      | Render progress as server-sent events                |
-| `GET /api/render/{id}/image`       | The finished PNG, `?download=1` for an attachment    |
-| `GET /api/symbol?code=&px=`        | One mana symbol as a PNG, 404 for an unknown code    |
-| `GET, POST /api/resolution`        | Preview and output resolutions                       |
-| `GET, PUT /api/settings`           | Interface settings                                   |
-| `GET /api/capabilities`            | The feature gate map                                 |
-| `GET /api/templates`               | Template catalog rows                                |
-| `GET /api/template/active`         | The active template and where its assets come from   |
-| `POST /api/template/select`        | Switch template, downloading first when needed       |
-| `GET, PUT /api/template/faces`     | The template chosen for each face shape              |
-| `POST /api/resolve`                | Parse a list and start resolving it                  |
-| `GET /api/resolve/{id}/events`     | One resolved row per event                           |
-| `POST /api/run`                    | Start a batch into an output folder                  |
-| `GET /api/run`                     | The latest run, 204 when there has been none         |
-| `GET /api/run/{id}/events`         | Per-card progress and log lines                      |
-| `GET /api/run/{id}/image/{n}`      | One finished card, read from the file it wrote       |
-| `POST /api/run/{id}/stop`          | Skip the queued cards and end the run                |
-| `POST /api/run/{id}/retry`         | Start a new run from the failed cards                |
-| `POST /api/run/{id}/open`          | Open the run's folder in the file browser            |
-| `GET /api/fs/list?path=`           | Subfolders of a folder, for the folder picker        |
-| `GET /api/mpc`                     | MPC Autofill stocks, card limit, and the cardback    |
-| `GET, PUT /api/mpc/cardback`       | The cardback image, `?name=` names an upload         |
-| `GET /api/mpc/folder`              | Files an earlier project left in `?path=`            |
-| `GET /api/carddata`                | The local card data, and what a download would fetch |
-| `POST /api/carddata/download`      | Download and install the local card data             |
-| `GET /api/carddata/{id}/events`    | Card data download progress                          |
-| `DELETE /api/carddata`             | Remove the local card data                           |
-| `GET /api/fonts`                   | The fonts folder in use and each role's font         |
-| `PUT /api/fonts/{folder}`          | Add a font to a role, as a multipart `file` field    |
-| `DELETE /api/fonts/{folder}`       | Remove a role's font, returning it to its default    |
-| `POST /api/fonts/open`             | Open the fonts folder in the file browser            |

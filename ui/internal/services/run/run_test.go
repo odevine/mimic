@@ -19,6 +19,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/prefs"
+	"github.com/odevine/mimic/ui/internal/rules"
 	"github.com/odevine/mimic/ui/internal/workspace"
 	"github.com/odevine/mimic/ui/internal/workspace/workspacetest"
 )
@@ -476,4 +477,42 @@ func TestOnFinishedHearsHowARunEnded(t *testing.T) {
 		t.Fatal("OnFinished was not called")
 	}
 	waitRun(t, ws)
+}
+
+func TestGlobalRulesFillInWhatTheRowDidNotSet(t *testing.T) {
+	ws := workspacetest.NewSmall(t)
+	svc := newService(ws)
+	ws.Prefs.SetRules([]rules.Rule{{
+		ID:   "pt",
+		When: []rules.Condition{{Field: "typeLine", Op: rules.OpContains, Value: "creature"}},
+		Then: []rules.Action{{Op: rules.ActionSet, Field: "power", Value: "4"}, {Op: rules.ActionSet, Field: "toughness", Value: "4"}},
+	}})
+	rows := []batch.Row{
+		customRunRow("Bear", "", ""),
+		{Qty: 1, Base: card.Data{Name: "Own Power", TypeLine: "Creature"}, Fields: map[string]string{"power": "7"}},
+		{Qty: 1, Base: card.Data{Name: "Spell", TypeLine: "Instant"}},
+	}
+	dir := t.TempDir()
+	if _, err := svc.Start(Request{Rows: rows, OutDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	v := waitRun(t, ws)
+	raw, err := os.ReadFile(filepath.Join(dir, v.Report))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rep batch.Report
+	if err := json.Unmarshal(raw, &rep); err != nil {
+		t.Fatal(err)
+	}
+	got := func(i int) map[string]string { return rep.Cards[i].Fields }
+	if got(0)["power"] != "4" || got(0)["toughness"] != "4" {
+		t.Errorf("the rule did not apply to the creature: %v", got(0))
+	}
+	if got(1)["power"] != "7" || got(1)["toughness"] != "4" {
+		t.Errorf("the row's own power was overwritten, or toughness was not filled in: %v", got(1))
+	}
+	if len(got(2)) != 0 {
+		t.Errorf("a rule changed a card it does not match: %v", got(2))
+	}
 }

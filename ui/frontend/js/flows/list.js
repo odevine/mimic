@@ -7,6 +7,9 @@ import { openFolderMenu } from "../components/folderMenu.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { toast } from "../components/toast.js";
 import { unsupportedBy, partlyUnsupportedBy, faceSupport } from "../supports.js";
+import { initInspector, openInspector, closeInspector, checkInspected, inspectedRow } from "./listInspector.js";
+import { initBulk } from "./listBulk.js";
+import { single } from "./single.js";
 
 // Flow 2: paste a list, check what it matched, render the lot to a folder. The
 // app parses and resolves, the browser holds the rows. Each row keeps its
@@ -59,8 +62,19 @@ let resolveJob = null;
 // excludedKeys remembers what the user unticked by line text and occurrence, so
 // an exclusion survives resolving the list again
 const excludedKeys = new Set();
+// savedEdits does the same for what the user changed on a row, the fields and the
+// quantity, so resolving the same list again keeps them
+const savedEdits = new Map();
+// removed holds the rows as they were before the last removal, for undo
+let removed = null;
 
-const bump = () => (store.version.value = store.version.peek() + 1);
+let changedTimer = 0;
+const bump = () => {
+  store.version.value = store.version.peek() + 1;
+  // Whatever shows counts over the rows hears of a change once it settles
+  clearTimeout(changedTimer);
+  changedTimer = setTimeout(() => document.dispatchEvent(new CustomEvent("mimic:list-changed")), 300);
+};
 
 function setRow(row, patch) {
   row.state.value = { ...row.state.peek(), ...patch };
@@ -90,19 +104,22 @@ async function resolve() {
     const n = (seen.get(base) || 0) + 1;
     seen.set(base, n);
     const key = `${base}\u0000${n}`;
+    const kept = savedEdits.get(key);
     return {
       id: String(i),
       line: r.line,
       text: r.text,
-      qty: r.qty,
+      qty: kept ? kept.qty : r.qty,
       name: r.name || "",
       group: r.group || "",
-      fields: r.fields || null,
+      fields: kept ? kept.fields : r.fields || null,
       key,
       state: signal({ status: "pending", card: null, candidates: null, note: "", excluded: excludedKeys.has(key) }),
     };
   });
 
+  removed = null;
+  closeInspector();
   batch(() => {
     store.format.value = res.format;
     store.rows.value = rows;
@@ -148,9 +165,9 @@ function applyResolved(row, r) {
         id: `${row.id}.${k}`,
         line: row.line,
         text: card.Name,
-        qty: 1,
+        qty: savedEdits.get(key)?.qty || 1,
         group: row.group,
-        fields: null,
+        fields: savedEdits.get(key)?.fields || null,
         key,
         fromQuery: row.text,
         state: signal({ status: "matched", card, candidates: null, note: k === 0 ? r.note || "" : "", excluded: excludedKeys.has(key) }),
@@ -289,7 +306,7 @@ function buildRow(row) {
     if (row.fromQuery && s.note) sub.textContent = s.note;
     // A CSV row's own columns overlay the matched card, so say which
     const changed = Object.keys(row.fields || {}).filter((k) => k !== "name");
-    if (changed.length && s.status === "matched") sub.textContent = `${changed.join(", ")} set by the list`;
+    if (changed.length && s.status === "matched") sub.textContent = `${changed.join(", ")} set on this row`;
     cardCell.replaceChildren(thumb(s.status === "notFound" ? null : card), h("span", { class: "row-text" }, name, sub));
     set.textContent = s.status === "matched" || s.status === "custom" ? printingOf(card) : "";
     group.textContent = row.group;
@@ -297,6 +314,24 @@ function buildRow(row) {
     const why = resolved(s) ? unsupportedBy(s.card) || partlyUnsupportedBy(s.card) : "";
     const pill = h("span", why ? { class: `pill ${st.cls}`, "data-tip": why } : { class: `pill ${st.cls}` }, st.label);
     status.replaceChildren(pill);
+    if (resolved(s)) {
+      status.append(
+        h(
+          "button",
+          {
+            class: "btn subtle icon-only row-edit",
+            type: "button",
+            "aria-label": `Edit ${nameOf(row)}`,
+            "data-tip": "Edit this row's fields",
+            onClick: (e) => {
+              e.stopPropagation();
+              openInspector(row);
+            },
+          },
+          icon("sliders"),
+        ),
+      );
+    }
     if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note }, icon("warn")));
     buildDetail(row, s, detail);
   });
@@ -721,6 +756,12 @@ function initReview() {
     } else if (e.key === "ArrowUp" || e.key === "k") {
       e.preventDefault();
       moveSelection(-1);
+    } else if ((e.key === "e" || e.key === "Enter") && store.selected.peek()) {
+      const row = store.rows.peek().find((r) => r.id === store.selected.peek());
+      if (row && resolved(row.state.peek())) {
+        e.preventDefault();
+        openInspector(row);
+      }
     } else if (e.key === " " && store.selected.peek()) {
       e.preventDefault();
       const row = store.rows.peek().find((r) => r.id === store.selected.peek());
@@ -832,9 +873,102 @@ function initReview() {
   });
 }
 
+// --- editing rows: the inspector and the bulk actions ---
+
+// patchFields replaces the fields a row sets itself. An empty set clears them
+function patchFields(row, fields) {
+  row.fields = fields && Object.keys(fields).length ? { ...fields } : null;
+  savedEdits.set(row.key, { fields: row.fields, qty: row.qty });
+  setRow(row, {});
+}
+
+function setQty(rows, qty) {
+  for (const row of rows) {
+    row.qty = qty;
+    savedEdits.set(row.key, { fields: row.fields, qty });
+    setRow(row, {});
+  }
+}
+
+// setField writes one field on each row, keeping the rest of what it sets
+function setField(rows, field, value) {
+  for (const row of rows) patchFields(row, { ...(row.fields || {}), [field]: value });
+  const open = inspectedRow();
+  if (open && rows.includes(open)) openInspector(open);
+}
+
+function setExcluded(rows, excluded) {
+  for (const row of rows) {
+    if (excluded) excludedKeys.add(row.key);
+    else excludedKeys.delete(row.key);
+    row.state.value = { ...row.state.peek(), excluded };
+  }
+  bump();
+}
+
+function removeRows(rows) {
+  const gone = new Set(rows.map((r) => r.id));
+  removed = store.rows.peek();
+  store.rows.value = removed.filter((r) => !gone.has(r.id));
+  for (const row of rows) table.replace(row.id, []);
+  if (gone.has(store.selected.peek())) store.selected.value = null;
+  bump();
+  checkInspected(store.rows.peek());
+}
+
+// undoRemove puts back the rows the last removal took, and says how many
+function undoRemove() {
+  if (!removed) return 0;
+  const rows = removed;
+  removed = null;
+  const n = rows.length - store.rows.peek().length;
+  store.rows.value = rows;
+  table.reset(rows);
+  bump();
+  return n;
+}
+
+// The list hands the inspector and the bulk actions what they work on, and keeps
+// the rows to itself
+const editHost = {
+  rows: () => store.rows.peek(),
+  checked: () => store.rows.peek().filter((r) => resolved(r.state.peek()) && !r.state.peek().excluded),
+  shown: () => store.rows.peek().filter((r) => !table.el(r.id)?.hidden),
+  groups: () => [...counts().groups.keys()],
+  needsAttention: (row) => needsAttention(row.state.peek()),
+  patchFields,
+  setQty,
+  setField,
+  setExcluded,
+  remove: removeRows,
+  undo: undoRemove,
+  canUndo: () => !!removed,
+  onInspectorClosed() {
+    table?.el(store.selected.peek())?.querySelector(".row-main")?.focus({ preventScroll: true });
+  },
+  // openInSingle previews a row's card in Single with its edits on it. The edits
+  // come back to the row through onApply
+  openInSingle(opts) {
+    single.openRow(opts);
+    location.hash = "single";
+  },
+};
+
+// ruleRows is the resolved rows as the rules see them: the card each matched and
+// the fields the row sets itself
+function ruleRows() {
+  const out = [];
+  for (const row of store.rows.peek()) {
+    const s = row.state.peek();
+    if (resolved(s)) out.push({ base: s.card, fields: row.fields || {} });
+  }
+  return out;
+}
+
 export const list = {
   render,
   resolve,
+  ruleRows,
   focusInput: () => $("list-input").focus(),
   // openFile and chooseOutput are the File menu's choices
   openFile: () => $("list-open").click(),
@@ -844,5 +978,7 @@ export const list = {
 export function initList() {
   initSource();
   initReview();
+  initInspector(editHost);
+  initBulk(editHost);
   loadMPC();
 }

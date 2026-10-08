@@ -129,6 +129,20 @@ renders again. MPC Autofill's website then takes the folder as a local folder,
 followed by an import of `cards.xml`, and its desktop tool takes the folder
 with `-d`.
 
+Selecting a row and pressing `e`, or choosing the sliders button on it, opens the
+row inspector beside the table. It is the same field editor Single uses, and it
+edits that one row: each field you change is kept on the row as a field override,
+the way a CSV column is, and a render draws the row with them. A field you have
+not changed stays off the row. Open in Single previews the row's card with its
+edits on it, and Apply to row brings what you changed there back. Revert row
+removes every edit. What you change on a row, its fields and its quantity, is
+kept when you resolve the same list again, for lines whose text has not changed.
+
+The Actions menu in the review summary works on the checked rows. It can set one
+field or one quantity on all of them, remove them, and tick or untick rows: the
+rows shown by the current filter, the rows that need attention, or a section. A
+removal can be undone from the same menu until the next resolve.
+
 Run shows the batch as it goes: overall progress with an estimate, a line per
 card with its time or its own progress, and the run's time. The first wave of
 cards, as many as render at once, load the frame layers and fonts, so that time
@@ -210,6 +224,35 @@ and the build was stamped with the public key. Restart then swaps the new
 version in. An install the app cannot replace itself in, such as a system
 package, offers the release page instead. A development build does not check.
 
+## Overrides
+
+Templates, Overrides, Global holds rules that apply to every card you render,
+whether one at a time in Single or in a list. A rule has conditions on a card's
+fields and actions that set or clear fields. A condition compares a field with a
+value: contains, does not contain, is, is not, starts with, ends with, matches a
+pattern, is empty or is not empty. Text comparisons ignore case, and a pattern is
+a regular expression. All of a rule's conditions must hold, and a rule with none
+applies to every card. Actions set a field to a value or clear it.
+
+Rules apply in order from the top, and a later rule sees what an earlier one
+changed. A field you edit yourself, on a card in Single or on a list row, keeps
+your value, and a rule that tests that field reads it. Each rule can be turned
+off, Disable all turns every rule off, and each rule shows how many rows of the
+current list it holds for. In Single, a field a rule set shows its own dot until
+you change it. The rules save a moment after each change, and the app checks the
+whole list, so a rule that does not check, such as a pattern that does not parse,
+says why and nothing is saved until it does. A run records the fields a rule set
+in its report, beside the ones the list set.
+
+The Preset menu saves the rules together with the render settings, which are the
+two resolutions, the image format and PNG compression, and the MPC Autofill stock
+and foil choice. A preset has a name and a version, applying one changes only
+those settings, and the menu marks the one that matches what is in force now.
+Rules and presets live in `prefs.json`.
+
+Overrides for a single template's layers and text boxes need engine support and
+are tracked in the issue named on the Template tab.
+
 ## Features that are not built yet
 
 Features that are designed but not built still appear, dimmed with a lock, and
@@ -217,7 +260,8 @@ hovering or focusing one says why. The app decides this: `Settings.Capabilities`
 returns every feature key with a state of `live`, `planned`,
 `needs-engine` or `needs-template` and a reason, and the page renders what it is
 told. Lifting a gate is a change to the table in
-`internal/services/settings/capabilities.go`.
+`internal/services/settings/capabilities.go`. Every gate that remains names the
+GitHub issue that tracks what it waits on.
 
 ## Settings
 

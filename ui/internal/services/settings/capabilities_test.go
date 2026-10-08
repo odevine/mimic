@@ -1,6 +1,10 @@
 package settings
 
-import "testing"
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
 
 func TestFeaturesAreWellFormed(t *testing.T) {
 	valid := map[string]bool{gateLive: true, gatePlanned: true, gateNeedsEngine: true, gateNeedsTemplate: true}
@@ -16,6 +20,14 @@ func TestFeaturesAreWellFormed(t *testing.T) {
 		// A gated control shows its reason, so a gate without one reads as a bug
 		if f.state != gateLive && f.reason == "" {
 			t.Errorf("gated feature %q has no reason", f.key)
+		}
+		// A gate waits on something, and the reason says which issue tracks it, so
+		// it never promises a version
+		if f.state != gateLive && !regexp.MustCompile(`#\d+`).MatchString(f.reason) {
+			t.Errorf("gated feature %q does not name its tracking issue: %q", f.key, f.reason)
+		}
+		if strings.Contains(f.reason, "v1.0") {
+			t.Errorf("gated feature %q promises a version: %q", f.key, f.reason)
 		}
 	}
 }

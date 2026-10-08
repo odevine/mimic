@@ -167,3 +167,50 @@ func colorLetters(colors []card.Color) string {
 func (h halfFields) empty() bool {
 	return *h.name == "" && *h.manaCost == "" && *h.colors == "" && *h.typeLine == "" && *h.oracle == "" && *h.flavor == ""
 }
+
+// FieldValues is a card's editable fields as the strings the form carries them,
+// keyed the way Edits marshals. A rule reads a card through it, and the names it
+// returns are the ones Overlay accepts
+func FieldValues(d *card.Data) map[string]string {
+	raw, _ := json.Marshal(editsOf(d))
+	var m map[string]string
+	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+// FieldNames lists every editable field name, sorted
+func FieldNames() []string {
+	raw, _ := json.Marshal(Edits{})
+	var m map[string]string
+	_ = json.Unmarshal(raw, &m)
+	names := make([]string, 0, len(m))
+	for k := range m {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// NormalizeColors puts raw color letters in WUBRG order without repeats, the way
+// the editor shows them, and drops anything that is not a color
+func NormalizeColors(s string) string {
+	const order = "WUBRGC"
+	seen := map[rune]bool{}
+	for _, r := range strings.ToUpper(s) {
+		if strings.ContainsRune(order, r) {
+			seen[r] = true
+		}
+	}
+	var b strings.Builder
+	for _, r := range order {
+		if seen[r] {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// IsColorField reports whether a field holds color letters
+func IsColorField(name string) bool {
+	return name == "colors" || (strings.HasPrefix(name, "half") && strings.HasSuffix(name, "Colors"))
+}

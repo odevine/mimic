@@ -3,14 +3,17 @@ package desktop
 import (
 	"context"
 
+	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
+	"github.com/odevine/mimic/ui/internal/rules"
 	"github.com/odevine/mimic/ui/internal/services/cards"
 	"github.com/odevine/mimic/ui/internal/services/data"
 	"github.com/odevine/mimic/ui/internal/services/list"
+	"github.com/odevine/mimic/ui/internal/services/overrides"
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
@@ -92,6 +95,20 @@ type settingsAPI interface {
 
 // Settings is the bound settings service
 type Settings struct{ settingsAPI }
+
+type overridesAPI interface {
+	Rules() []rules.Rule
+	SaveRules(list []rules.Rule) ([]rules.Rule, error)
+	Matches(list []rules.Rule, rows []overrides.RowRef) ([]int, error)
+	Apply(base card.Data, fields map[string]string) rules.Result
+	Presets() []overrides.Preset
+	SavePreset(name string) (overrides.Preset, error)
+	ApplyPreset(name string) (overrides.Applied, error)
+	DeletePreset(name string) error
+}
+
+// Overrides is the bound global rules and presets service
+type Overrides struct{ overridesAPI }
 
 type dataAPI interface {
 	CardData(ctx context.Context) data.CardDataView

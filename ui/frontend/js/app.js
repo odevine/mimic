@@ -13,6 +13,7 @@ import { initSingle, single } from "./flows/single.js";
 import { initList, list } from "./flows/list.js";
 import { initRun } from "./flows/run.js";
 import { initTemplates } from "./flows/templates.js";
+import { initOverrides } from "./flows/overrides.js";
 import { initUpdates } from "./components/updates.js";
 
 // Entry point: loads what every mode shares, wires the shell, and routes
@@ -210,6 +211,7 @@ async function boot() {
   initList();
   initRun();
   initTemplates();
+  initOverrides();
   initKeyboard();
   initLinks();
   initUpdates();

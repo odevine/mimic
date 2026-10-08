@@ -110,18 +110,8 @@ func (s *Service) SetResolution(req ResolutionRequest) (Resolutions, error) {
 	}
 	// Clamping before the store keeps a dpi the active template cannot reach
 	// from sitting in prefs and surprising a later, larger template
-	s.ws.Prefs.SetResolution(m.ClampDPI(workspace.PreviewOrDefault(req.PreviewDPI)), clampOutputDPI(m, req.OutputDPI))
+	s.ws.Prefs.SetResolution(m.ClampDPI(workspace.PreviewOrDefault(req.PreviewDPI)), workspace.ClampOutputDPI(m, req.OutputDPI))
 	return s.Resolution()
-}
-
-// clampOutputDPI keeps a stored output resolution inside what the template can
-// render, preserving zero as "the template's own" so the preference tracks a
-// later template rather than pinning this one's number
-func clampOutputDPI(m *template.Manifest, dpi int) int {
-	if dpi <= 0 || dpi >= m.NativeDPI() {
-		return 0
-	}
-	return m.ClampDPI(dpi)
 }
 
 // ResourcesView is what Resources returns: what this computer has, what one

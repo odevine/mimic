@@ -15,6 +15,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/cards"
 	"github.com/odevine/mimic/ui/internal/services/data"
 	"github.com/odevine/mimic/ui/internal/services/list"
+	"github.com/odevine/mimic/ui/internal/services/overrides"
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
@@ -55,6 +56,7 @@ func launch() error {
 			Templates: templates.New(ws),
 			Settings:  settings.New(ws),
 			Data:      data.New(ws, desktop.OpenPath),
+			Overrides: overrides.New(ws),
 		},
 		Frontend: staticFS(),
 		Smoke:    *smoke,

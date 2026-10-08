@@ -20,6 +20,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/cards"
 	"github.com/odevine/mimic/ui/internal/services/data"
 	"github.com/odevine/mimic/ui/internal/services/list"
+	"github.com/odevine/mimic/ui/internal/services/overrides"
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
@@ -50,6 +51,7 @@ type Services struct {
 	Templates *templates.Service
 	Settings  *settings.Service
 	Data      *data.Service
+	Overrides *overrides.Service
 }
 
 // Options is what the shell needs from the binary around it
@@ -103,6 +105,7 @@ func Launch(o Options) error {
 		application.NewService(&Run{runAPI: svc.Run, lifecycle: lifecycle{stop: svc.Run.Shutdown}}),
 		application.NewService(&Templates{templatesAPI: svc.Templates, lifecycle: startIf(!o.Smoke, svc.Templates.Startup)}),
 		application.NewService(&Settings{svc.Settings}),
+		application.NewService(&Overrides{svc.Overrides}),
 		application.NewService(&Data{dataAPI: svc.Data, lifecycle: startIf(!o.Smoke, svc.Data.Startup)}),
 		application.NewService(&Updates{updatesAPI: updates, lifecycle: startIf(!o.Smoke, updates.startup)}),
 		application.NewService(jobs.NewService(ws.Jobs)),

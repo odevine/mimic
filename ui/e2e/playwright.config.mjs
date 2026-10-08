@@ -13,10 +13,18 @@ const webServer = ({ port, fake, home }, name) => ({
   stderr: "pipe",
 });
 
-const browsers = {
+export const browsers = {
   chromium: devices["Desktop Chrome"],
   webkit: devices["Desktop Safari"],
 };
+
+// The page tests run the frontend against a bridge in the test and need no
+// server, so they have projects of their own that a config without servers shares
+export const pageProjects = Object.entries(browsers).map(([browser, device]) => ({
+  name: `${browser}-page`,
+  testMatch: /tests\/page\/.*\.spec\.mjs$/,
+  use: { ...device, viewport: { width: 1280, height: 820 } },
+}));
 
 const projects = Object.entries(browsers).flatMap(([browser, device]) =>
   [
@@ -43,6 +51,6 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects,
+  projects: [...projects, ...pageProjects],
   webServer: Object.entries(servers).map(([name, server]) => webServer(server, name)),
 });

@@ -61,10 +61,10 @@ func TestWorkers(t *testing.T) {
 		want      int
 	}{
 		{"a small machine fits one full-size render", Memory{Total: 4 * gib, Available: 2 * gib}, native, 8, 1},
-		{"memory is the limit", Memory{Total: 16 * gib, Available: 8 * gib}, native, 16, 4},
+		{"memory is the limit", Memory{Total: 16 * gib, Available: 8 * gib}, native, 16, 3},
 		{"processors are the limit", Memory{Total: 128 * gib, Available: 100 * gib}, small, 4, 4},
 		{"the ceiling is the limit", Memory{Total: 512 * gib, Available: 400 * gib}, small, 128, MaxWorkers},
-		{"half the total when free memory is unknown", Memory{Total: 16 * gib}, native, 16, 6},
+		{"half the total when free memory is unknown", Memory{Total: 16 * gib}, native, 16, 5},
 		{"unknown memory keeps the old default", Memory{}, native, 16, 2},
 		{"unknown memory on a one processor machine", Memory{}, native, 1, 1},
 		{"no processor count means the ceiling", Memory{Total: 512 * gib, Available: 400 * gib}, small, 0, MaxWorkers},
@@ -90,8 +90,8 @@ func TestRunBytesGrowsByOneRenderPerWorker(t *testing.T) {
 
 func TestBaseHoldsTheLayerCache(t *testing.T) {
 	cache := CacheBytes("large")
-	if BaseBytes(cache) != baseBytes+cache {
-		t.Errorf("BaseBytes = %d, want the app's base plus the %d byte cache", BaseBytes(cache), cache)
+	if BaseBytes(cache) != baseBytes+webviewBytes+cache {
+		t.Errorf("BaseBytes = %d, want the app's base, the window's and the %d byte cache", BaseBytes(cache), cache)
 	}
 }
 

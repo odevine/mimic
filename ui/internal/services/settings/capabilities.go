@@ -64,7 +64,7 @@ var features = []feature{
 	{key: "settings.pngCompression", state: gateLive},
 	{key: "settings.layerCache", state: gateLive},
 	{key: "settings.outputDir", state: gateLive},
-	{key: "settings.filenameTemplate", state: gatePlanned, reason: "Runs name files like Sol Ring [C21-263].png, and templates for that are planned. Tracked in #82"},
+	{key: "settings.filenameTemplate", state: gatePlanned, reason: "Runs name files like Sol Ring [C21-263], and templates for that are planned. Tracked in #82"},
 	{key: "settings.runReport", state: gatePlanned, reason: "Every run writes its report, and turning that off is planned. Tracked in #82"},
 	{key: "settings.scryfallRate", state: gatePlanned, reason: "Scryfall calls follow its published rate limits, and changing that is planned. Tracked in #82"},
 	{key: "settings.localData", state: gateLive},

@@ -28,7 +28,7 @@ tasks:
       MIMIC_VERSION: '{{.VERSION}}'
     cmds:
       - mkdir -p "{{.BIN_DIR}}/stage"
-      - go tool wails3 generate appimage -binary "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}" -icon "{{.ROOT_DIR}}/build/appicon.png" -desktopfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -outputdir "{{.ROOT_DIR}}/{{.BIN_DIR}}/stage" -builddir "{{.ROOT_DIR}}/{{.BIN_DIR}}/appimage-build"
+      - go tool wails3 generate appimage -binary "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}" -icon "{{.ROOT_DIR}}/build/linux/mimic.png" -desktopfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -outputdir "{{.ROOT_DIR}}/{{.BIN_DIR}}/stage" -builddir "{{.ROOT_DIR}}/{{.BIN_DIR}}/appimage-build"
       - go tool wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
       - go tool wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
       - go run ./cmd/pkgtool linux-names -dir "{{.BIN_DIR}}/stage" -out "{{.BIN_DIR}}" -version "{{.VERSION}}" -arch "{{.ARCH}}"

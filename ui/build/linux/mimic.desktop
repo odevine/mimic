@@ -6,5 +6,5 @@ Exec=mimic
 Terminal=false
 Type=Application
 Icon=mimic
-Categories=Graphics;Utility;
+Categories=Graphics;
 StartupWMClass=mimic

@@ -15,8 +15,8 @@ homepage: "https://github.com/odevine/mimic"
 contents:
   - src: "./bin/mimic"
     dst: "/usr/bin/mimic"
-  - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/1024x1024/apps/mimic.png"
+  - src: "./build/linux/mimic.png"
+    dst: "/usr/share/icons/hicolor/256x256/apps/mimic.png"
   - src: "./build/linux/mimic.desktop"
     dst: "/usr/share/applications/mimic.desktop"
 

@@ -53,3 +53,45 @@ func TestCapabilitiesLiftsSatisfiedEngineGate(t *testing.T) {
 		t.Errorf("no minEngine: state %q, want needs-engine", got)
 	}
 }
+
+func TestForceLiveOpensListedGatesOnly(t *testing.T) {
+	old := features
+	t.Cleanup(func() { features = old; forced = map[string]bool{} })
+	features = []feature{
+		{key: "a", state: gatePlanned, reason: "r #1"},
+		{key: "b", state: gatePlanned, reason: "r #1"},
+	}
+	if err := ForceLive("a"); err != nil {
+		t.Fatal(err)
+	}
+	got := capabilities()
+	if got["a"].State != gateLive || got["a"].Reason != "" {
+		t.Errorf("a = %+v, want live with no reason", got["a"])
+	}
+	if got["b"].State != gatePlanned {
+		t.Errorf("b = %+v, want planned", got["b"])
+	}
+}
+
+func TestForceLiveRejectsAnUnknownKeyAndChangesNothing(t *testing.T) {
+	old := features
+	t.Cleanup(func() { features = old; forced = map[string]bool{} })
+	features = []feature{{key: "a", state: gatePlanned, reason: "r #1"}}
+	if err := ForceLive("a", "typo"); err == nil || !strings.Contains(err.Error(), "typo") {
+		t.Fatalf("ForceLive = %v, want an error naming the key", err)
+	}
+	if capabilities()["a"].State != gatePlanned {
+		t.Error("a failed call still opened a gate")
+	}
+}
+
+func TestForceLiveReplacesTheEarlierList(t *testing.T) {
+	old := features
+	t.Cleanup(func() { features = old; forced = map[string]bool{} })
+	features = []feature{{key: "a", state: gatePlanned, reason: "r #1"}}
+	ForceLive("a")
+	ForceLive()
+	if capabilities()["a"].State != gatePlanned {
+		t.Error("an empty list left a gate open")
+	}
+}

@@ -23,12 +23,14 @@ type VersionInfo struct {
 	UI     string `json:"ui"`
 	Commit string `json:"commit,omitempty"`
 	Engine string `json:"engine"`
+	// TestBuild is set in a build made for tests, which never ships
+	TestBuild bool `json:"testBuild,omitempty"`
 }
 
 // Version reports the ui and engine versions, which are dev for a build that
 // was not stamped
 func (s *System) Version() VersionInfo {
-	return VersionInfo{UI: buildinfo.Version, Commit: buildinfo.Commit, Engine: buildinfo.Engine()}
+	return VersionInfo{UI: buildinfo.Version, Commit: buildinfo.Commit, Engine: buildinfo.Engine(), TestBuild: buildinfo.TestBuild}
 }
 
 // Filter is one entry in a file dialog's type menu. Pattern is a

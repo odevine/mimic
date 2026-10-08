@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/odevine/mimic/ui/internal/buildinfo"
 	"github.com/odevine/mimic/ui/internal/jobs"
 	"github.com/odevine/mimic/ui/internal/services/cards"
 	"github.com/odevine/mimic/ui/internal/services/data"
@@ -126,7 +127,9 @@ func Launch(o Options) error {
 		Mac:        application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 		ShouldQuit: sh.shouldQuit,
 	}
-	if !o.Smoke {
+	// A test build runs beside the developer's own copy, so it takes no lock that
+	// would hand its launch to that copy
+	if !o.Smoke && !buildinfo.TestBuild {
 		opts.SingleInstance = &application.SingleInstanceOptions{
 			UniqueID:               appID,
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) { sh.raise() },

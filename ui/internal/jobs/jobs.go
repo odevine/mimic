@@ -59,10 +59,12 @@ type Job struct {
 	events   []Event
 	finished bool
 	waiters  []chan struct{}
-	img      image.Image
-	name     string
-	created  time.Time
-	cancel   context.CancelFunc
+	// sinkMu orders Emit from numbering an event to handing it on
+	sinkMu  sync.Mutex
+	img     image.Image
+	name    string
+	created time.Time
+	cancel  context.CancelFunc
 	// pinned keeps the job out of the reaper, for a run that stays the latest
 	// until the next replaces it
 	pinned bool
@@ -75,6 +77,12 @@ func (j *Job) ID() string { return j.id }
 // registry's emitter. A Done event marks the job finished, which ends every
 // stream after the backlog drains
 func (j *Job) Emit(e Event) {
+	// The event is numbered and handed to the sink under one lock, so two
+	// goroutines emitting at once reach the sink in the order of their numbers.
+	// The page applies an event only when its number is above the last it applied,
+	// so one that arrived late would be dropped
+	j.sinkMu.Lock()
+	defer j.sinkMu.Unlock()
 	j.mu.Lock()
 	e.Seq = len(j.events) + 1
 	j.events = append(j.events, e)

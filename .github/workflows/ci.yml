@@ -111,6 +111,70 @@ jobs:
           done
           exit $status
 
+  # ui-e2e drives the page in headless Chromium and WebKit, with no window and no
+  # input control. The app is built with the server tag, which has no native
+  # window and needs neither cgo nor GTK, and it runs beside a fake Scryfall,
+  # GitHub and template catalog, so a run touches no network. The page tests need
+  # no server at all and run in the same pass. A failure leaves the report and
+  # the traces behind
+  ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui/e2e
+    env:
+      GOWORK: "off"
+      CGO_ENABLED: "0"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/e2e/package-lock.json
+
+      - name: Install the test dependencies
+        run: npm ci
+
+      # The browsers are downloaded once per version of Playwright, and the
+      # operating system libraries they need are installed on every run
+      - name: Cache the browsers
+        id: browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('ui/e2e/package-lock.json') }}
+
+      - name: Install the browsers
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Install the browsers' system libraries
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
+
+      - name: Test
+        run: npx playwright test
+
+      - name: Keep the report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            ui/e2e/report
+            ui/e2e/test-results
+            ui/e2e/.scratch/*.log
+          retention-days: 14
+
   # ui-desktop builds the app itself on each operating system, since the webview
   # needs the platform's own toolchain and libraries, and then starts it with
   # --smoke to prove the window, the bridge and the image routes work

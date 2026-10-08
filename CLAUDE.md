@@ -51,6 +51,18 @@ at the page, `test:e2e:shot` writes a PNG from a given search and state and
 prints its path, and `dev:server` serves the page on a local port. The tests
 live in `e2e/tests`, with a page object per mode in `e2e/pages`.
 
+The page tests in `e2e/tests/page` need no server. They load the real frontend
+in a browser against a bridge the test controls (`e2e/bridge.mjs`), which
+answers each call into the app from a reply the test sets and sends the page its
+events, so they reach states the real app makes hard to reach, such as a render
+that fails, an update that errors or a lookup that stops partway. They start from
+replies captured from the real app in `e2e/bridge/replies.json`, and a test fails
+on a call no reply covers. `test:e2e:page` runs only them, in a few seconds. When
+a test in `e2e/tests/bridge-replies.spec.mjs` reports the captured replies are
+stale after a change to what the bridge returns, run `test:e2e:capture`. Reach
+for a page test when a state needs a reply the fake upstream cannot produce, and
+for a test against the test server when the real services should answer.
+
 Each test gets the fake upstream, a scratch dialogs folder and a guard that fails
 it if the page reaches outside the machine, through the fixtures in
 `e2e/fixtures.mjs`. The `fake` fixture changes what Scryfall, GitHub and the

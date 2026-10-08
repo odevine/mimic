@@ -92,6 +92,32 @@ tasks:
     cmds:
       - npx playwright test {{.ARGS}}
 
+  test:e2e:page:
+    desc: Runs only the page tests, which need no server and take a few seconds
+    summary: |
+      The page tests load the real frontend against replies set in the test, which
+      reaches states the real app makes hard to reach, such as a failed render or
+      an update that errors. Pass Playwright's arguments as ARGS
+    dir: e2e
+    preconditions:
+      - sh: test -d node_modules/@playwright
+        msg: Run test:e2e:install first
+    cmds:
+      - npx playwright test -c playwright.page.config.mjs {{.ARGS}}
+
+  test:e2e:capture:
+    desc: Refreshes the replies the page tests start from, from the real app
+    summary: |
+      Asks the test server the questions in e2e/bridge/calls.mjs and writes its
+      answers to e2e/bridge/replies.json. Run it when the bridge test or the
+      replies test reports that the captured replies are stale
+    dir: e2e
+    preconditions:
+      - sh: test -d node_modules/@playwright
+        msg: Run test:e2e:install first
+    cmds:
+      - node bridge/capture.mjs
+
   test:e2e:shot:
     desc: Takes a screenshot of the page and prints the PNG's path
     summary: |

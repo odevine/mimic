@@ -1,0 +1,327 @@
+{
+  "System.Version": {
+    "ui": "1.0.0",
+    "engine": "dev",
+    "testBuild": true
+  },
+  "Settings.Capabilities": {
+    "flow.art": {
+      "state": "needs-engine",
+      "reason": "Needs engine support for art override. Tracked in #81"
+    },
+    "flow.list": {
+      "state": "live"
+    },
+    "flow.run": {
+      "state": "live"
+    },
+    "flow.single": {
+      "state": "live"
+    },
+    "list.bulk": {
+      "state": "live"
+    },
+    "list.inspector": {
+      "state": "live"
+    },
+    "output.mpc": {
+      "state": "live"
+    },
+    "output.pdf": {
+      "state": "planned",
+      "reason": "Print sheets are planned. Tracked in #85"
+    },
+    "overrides": {
+      "state": "live"
+    },
+    "overrides.assets": {
+      "state": "planned",
+      "reason": "Asset substitution is planned. Tracked in #84"
+    },
+    "overrides.global": {
+      "state": "live"
+    },
+    "overrides.layers": {
+      "state": "needs-engine",
+      "reason": "Needs manifest introspection and layer forcing. Tracked in #83"
+    },
+    "overrides.textboxes": {
+      "state": "needs-engine",
+      "reason": "Needs per-box overrides in RenderRequest. Tracked in #83"
+    },
+    "palette": {
+      "state": "planned",
+      "reason": "The command palette is planned. Tracked in #82"
+    },
+    "presets": {
+      "state": "live"
+    },
+    "run.retryFailed": {
+      "state": "live"
+    },
+    "settings.bitDepth": {
+      "state": "needs-engine",
+      "reason": "Needs engine support for 16-bit output. Tracked in #86"
+    },
+    "settings.bleed": {
+      "state": "needs-engine",
+      "reason": "Needs engine support for trimming the bleed. Tracked in #87"
+    },
+    "settings.concurrency": {
+      "state": "live"
+    },
+    "settings.density": {
+      "state": "planned",
+      "reason": "A denser layout is planned. Tracked in #82"
+    },
+    "settings.filenameRegex": {
+      "state": "planned",
+      "reason": "Arrives with rendering from your art. Tracked in #81"
+    },
+    "settings.filenameTemplate": {
+      "state": "planned",
+      "reason": "Runs name files like Sol Ring [C21-263], and templates for that are planned. Tracked in #82"
+    },
+    "settings.fonts": {
+      "state": "live"
+    },
+    "settings.imageFormat": {
+      "state": "live"
+    },
+    "settings.language": {
+      "state": "planned",
+      "reason": "Choosing a card language is planned. Tracked in #82"
+    },
+    "settings.layerCache": {
+      "state": "live"
+    },
+    "settings.localData": {
+      "state": "live"
+    },
+    "settings.outputDir": {
+      "state": "live"
+    },
+    "settings.pngCompression": {
+      "state": "live"
+    },
+    "settings.preferNonPromo": {
+      "state": "planned",
+      "reason": "Preferring non-promo printings is planned. Tracked in #82"
+    },
+    "settings.resolution": {
+      "state": "live"
+    },
+    "settings.restoreSession": {
+      "state": "planned",
+      "reason": "Restoring the last session is planned. Tracked in #82"
+    },
+    "settings.runReport": {
+      "state": "planned",
+      "reason": "Every run writes its report, and turning that off is planned. Tracked in #82"
+    },
+    "settings.scryfallRate": {
+      "state": "planned",
+      "reason": "Scryfall calls follow its published rate limits, and changing that is planned. Tracked in #82"
+    },
+    "single.artDrop": {
+      "state": "needs-engine",
+      "reason": "Needs engine support for art override. Tracked in #81"
+    },
+    "single.compare": {
+      "state": "planned",
+      "reason": "Comparing against the Scryfall scan is planned. Tracked in #82"
+    },
+    "single.dfc": {
+      "state": "live"
+    },
+    "single.printings": {
+      "state": "live"
+    },
+    "single.symbols": {
+      "state": "live"
+    },
+    "single.zoom": {
+      "state": "live"
+    }
+  },
+  "Settings.Get": {},
+  "Settings.Resolution": {
+    "preview": {
+      "dpi": 274,
+      "width": 744,
+      "height": 1039,
+      "native": true
+    },
+    "output": {
+      "dpi": 274,
+      "width": 744,
+      "height": 1039,
+      "native": true
+    },
+    "presets": [
+      {
+        "dpi": 150,
+        "width": 407,
+        "height": 569
+      },
+      {
+        "dpi": 274,
+        "width": 744,
+        "height": 1039,
+        "native": true
+      }
+    ],
+    "minDpi": 72,
+    "maxDpi": 274
+  },
+  "Settings.Resources": {
+    "cpus": 16,
+    "totalBytes": 68719476736,
+    "availableBytes": 0,
+    "budgetBytes": 34359738368,
+    "baseBytes": 1879048192,
+    "cache": "medium",
+    "cacheBytes": 536870912,
+    "cacheSizes": [
+      {
+        "name": "small",
+        "label": "Small",
+        "bytes": 268435456
+      },
+      {
+        "name": "medium",
+        "label": "Medium",
+        "bytes": 536870912
+      },
+      {
+        "name": "large",
+        "label": "Large",
+        "bytes": 1073741824
+      },
+      {
+        "name": "xlarge",
+        "label": "Extra large",
+        "bytes": 2147483648
+      }
+    ],
+    "renderBytes": 259188224,
+    "auto": 16,
+    "max": 16,
+    "presets": [
+      1,
+      2,
+      4,
+      8,
+      12,
+      16
+    ]
+  },
+  "Templates.Active": {
+    "name": "normal",
+    "version": "",
+    "label": "normal (placeholder)",
+    "source": "placeholder",
+    "supports": {
+      "roles": [
+        "single"
+      ],
+      "kinds": [
+        "standard"
+      ]
+    },
+    "faces": {
+      "single/standard": "normal"
+    }
+  },
+  "Templates.List": [],
+  "Templates.Faces": [
+    {
+      "key": "single/standard",
+      "role": "single",
+      "kind": "standard",
+      "options": null,
+      "chosen": {
+        "name": "normal"
+      },
+      "using": "normal (placeholder)",
+      "primary": true
+    }
+  ],
+  "Cards.Recents": null,
+  "Updates.Status": {
+    "state": "idle",
+    "current": "1.0.0",
+    "canInstall": false
+  },
+  "Data.CardData": {
+    "source": "api",
+    "local": {
+      "state": "none"
+    }
+  },
+  "Data.Fonts": {
+    "kind": "managed",
+    "path": "/Users/owendevine/Repos/mimic/ui/e2e/.scratch/capture-home/mimic/fonts",
+    "writable": true,
+    "roles": [
+      {
+        "role": "title",
+        "folder": "title",
+        "source": "default",
+        "family": "Big Shoulders",
+        "style": "Bold"
+      },
+      {
+        "role": "body",
+        "folder": "body",
+        "source": "default",
+        "family": "Merriweather",
+        "style": "Regular"
+      },
+      {
+        "role": "body-italic",
+        "folder": "body-italic",
+        "source": "default",
+        "family": "Merriweather",
+        "style": "Italic"
+      },
+      {
+        "role": "mana",
+        "folder": "mana",
+        "source": "default",
+        "family": "Mana",
+        "style": "Regular"
+      },
+      {
+        "role": "small-caps",
+        "folder": "type",
+        "source": "borrowed",
+        "family": "Big Shoulders",
+        "style": "Bold",
+        "borrows": "title"
+      },
+      {
+        "role": "info",
+        "folder": "info",
+        "source": "borrowed",
+        "family": "Merriweather",
+        "style": "Regular",
+        "borrows": "body"
+      }
+    ]
+  },
+  "Overrides.Rules": [],
+  "Overrides.Presets": [],
+  "Run.Latest": null,
+  "Run.MPCInfo": {
+    "stocks": [
+      "(S30) Standard Smooth",
+      "(S27) Smooth",
+      "(S33) Superior Smooth",
+      "(M31) Linen",
+      "(P10) Plastic"
+    ],
+    "maxCards": 612,
+    "cardback": null
+  }
+}

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.0](https://github.com/odevine/mimic/compare/ui/v0.9.2...ui/v1.0.0) (2026-10-08)
+
+
+### Features
+
+* **ui:** add global override rules, presets, a row inspector and bulk edits ([#93](https://github.com/odevine/mimic/issues/93)) ([14690bf](https://github.com/odevine/mimic/commit/14690bfbe0c9b22ea971b7cd882e74322e3f2637))
+* **ui:** open the app in a native window instead of the browser ([#90](https://github.com/odevine/mimic/issues/90)) ([8370c19](https://github.com/odevine/mimic/commit/8370c19caceca6658406ea495644cf3a70ee17e3))
+* **ui:** remember the window, add menus, notifications and updates ([#91](https://github.com/odevine/mimic/issues/91)) ([0ac14df](https://github.com/odevine/mimic/commit/0ac14dfe5bbae78cc47727c3b9468245a4e136e7))
+
+
+### Bug Fixes
+
+* **ui:** deliver job events in the order they are numbered ([4a49613](https://github.com/odevine/mimic/commit/4a49613b5bc7095e2fdf78055c3887423dce92df))
+* **ui:** give each card editor field ids of its own ([9bc2992](https://github.com/odevine/mimic/commit/9bc2992804efc8d0b147a6e23a56a79902ca23ec)), closes [#95](https://github.com/odevine/mimic/issues/95)
+
+
+### Code Refactoring
+
+* **ui:** split the HTTP server into a workspace and services ([#88](https://github.com/odevine/mimic/issues/88)) ([d7b086d](https://github.com/odevine/mimic/commit/d7b086dbaca6243a46531b46690a2ba0742f7c32))
+
+
+### Miscellaneous Chores
+
+* **ui:** prepare 1.0 with a release checklist, a throughput tool and copy cleanup ([8364ebe](https://github.com/odevine/mimic/commit/8364ebe498efde4cc2ea8ca710aa576cc99d743d))
+
 ## [0.9.2](https://github.com/odevine/mimic/compare/ui/v0.9.1...ui/v0.9.2) (2026-10-07)
 
 

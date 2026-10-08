@@ -86,3 +86,33 @@ func TestFinishedJobsAreReaped(t *testing.T) {
 		t.Error("an expired finished job was kept")
 	}
 }
+
+// Events from goroutines emitting at once must reach the emitter in the order of
+// their numbers, since the page drops an event numbered below one it has applied
+func TestConcurrentEventsReachTheEmitterInOrder(t *testing.T) {
+	reg := NewRegistry()
+	rec := &recorder{}
+	reg.SetEmitter(rec)
+	j := reg.New()
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 500 {
+				j.Emit(Event{Step: "row"})
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(rec.seq) != 4000 {
+		t.Fatalf("the emitter heard %d events, want 4000", len(rec.seq))
+	}
+	for i := 1; i < len(rec.seq); i++ {
+		if rec.seq[i] != rec.seq[i-1]+1 {
+			t.Fatalf("event %d arrived after %d: the emitter heard them out of order", rec.seq[i], rec.seq[i-1])
+		}
+	}
+}

@@ -22,7 +22,14 @@ type Service struct {
 	// cardbackMu keeps two cardback uploads from mixing one's image with the
 	// other's name
 	cardbackMu sync.Mutex
+
+	// finished is told how each run ended
+	finished func(batch.View)
 }
+
+// OnFinished sets a function called, off the run's own goroutine, with the final
+// state of every run when it ends. Set it before any run starts
+func (s *Service) OnFinished(f func(batch.View)) { s.finished = f }
 
 // New returns the service over a workspace. open shows a folder in the system
 // file browser
@@ -121,6 +128,9 @@ func (s *Service) start(rows []batch.Row, outDir, label string, project *batch.P
 			Project:       project,
 			Emit: func(e batch.Event) {
 				j.Emit(jobs.Event{Step: e.Step, Frac: e.Frac, Card: e.Card, Log: e.Log, Done: e.Done, Warmup: e.Warmup, WarmupCards: e.WarmupCards})
+				if e.Done && s.finished != nil {
+					go s.finished(run.View())
+				}
 			},
 		})
 		return run, j, nil

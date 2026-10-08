@@ -836,6 +836,9 @@ export const list = {
   render,
   resolve,
   focusInput: () => $("list-input").focus(),
+  // openFile and chooseOutput are the File menu's choices
+  openFile: () => $("list-open").click(),
+  chooseOutput: () => $("list-output").click(),
 };
 
 export function initList() {

@@ -21,6 +21,7 @@ var boundTypes = map[string]reflect.Type{
 	"Templates": reflect.TypeFor[*Templates](),
 	"Settings":  reflect.TypeFor[*Settings](),
 	"Data":      reflect.TypeFor[*Data](),
+	"Updates":   reflect.TypeFor[*Updates](),
 	"System":    reflect.TypeFor[*System](),
 }
 

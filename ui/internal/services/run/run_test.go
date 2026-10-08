@@ -458,3 +458,22 @@ func TestMPCRunRefusals(t *testing.T) {
 		t.Errorf("unsupported face: %v", err)
 	}
 }
+
+func TestOnFinishedHearsHowARunEnded(t *testing.T) {
+	ws := workspacetest.NewSmall(t)
+	svc := newService(ws)
+	got := make(chan batch.View, 1)
+	svc.OnFinished(func(v batch.View) { got <- v })
+	if _, err := svc.Start(Request{Rows: []batch.Row{customRunRow("Sol Ring", "c21", "263")}, OutDir: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case v := <-got:
+		if v.ID == "" || len(v.Cards) != 1 || v.Cards[0].Status != batch.StatusDone {
+			t.Errorf("finished view = %+v", v)
+		}
+	case <-time.After(60 * time.Second):
+		t.Fatal("OnFinished was not called")
+	}
+	waitRun(t, ws)
+}

@@ -4,6 +4,7 @@ import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
 import { openFonts, initFonts } from "./fonts.js";
+import { openUpdates } from "./updates.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
 // them against the active template, and the interface settings go through
@@ -160,12 +161,15 @@ async function open() {
   $("theme-select").value = s.theme || "dark";
   $("expand-printings").checked = !!s.expandPrintings;
   $("live-preview").checked = s.livePreview !== false;
+  $("notify-run").checked = s.notifyRunDone !== false;
+  $("check-updates").checked = s.checkUpdates !== false;
   $("output-dir-input").value = s.outputDir || "";
   $("layer-cache-select").value = s.layerCache || "medium";
   $("image-format-select").value = s.imageFormat === "png" ? "png" : "jpeg";
   $("png-compression-select").value = s.pngCompression === "fast" ? "fast" : "balanced";
   openCardData(s.cardData);
   openFonts();
+  openUpdates();
   $("settings-dialog").showModal();
   const [r] = await Promise.all([loadResources(layerCacheChoice()), loadResolution()]);
   fillLayerCache(r);
@@ -191,6 +195,8 @@ async function save() {
       theme: $("theme-select").value,
       expandPrintings: $("expand-printings").checked,
       livePreview: $("live-preview").checked,
+      notifyRunDone: $("notify-run").checked,
+      checkUpdates: $("check-updates").checked,
       concurrency: concurrencyChoice(),
       layerCache: layerCacheChoice(),
       imageFormat: $("image-format-select").value,

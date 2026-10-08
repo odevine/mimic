@@ -110,8 +110,24 @@ const SYSTEM = "System";
 const pickFile = (req) => rpc(SYSTEM, "PickFile", req);
 const pickFolder = (req) => rpc(SYSTEM, "PickFolder", req);
 
+// payload is the data of a window event, which arrives as the value itself or
+// as a one-element list of it
+const payload = (ev) => (Array.isArray(ev.data) ? ev.data[0] : ev.data);
+
 export const api = {
   version: () => rpc(SYSTEM, "Version"),
+  // onMenu calls back with the action of each application menu choice that the
+  // page acts on: save, openList, chooseOutput or mode:<name>
+  onMenu: (cb) => Events.On("menu", (ev) => cb(payload(ev))),
+
+  // The update status is { state, current, reason, release, canInstall, written,
+  // total, error }. onUpdate calls back whenever it changes
+  updateStatus: () => rpc("Updates", "Status"),
+  checkUpdates: () => rpc("Updates", "Check"),
+  installUpdate: () => rpc("Updates", "Install"),
+  restartForUpdate: () => rpc("Updates", "Restart"),
+  onUpdate: (cb) => Events.On("update", (ev) => cb(payload(ev))),
+
   openURL: (url) => rpc(SYSTEM, "OpenURL", url),
   // confirm asks a yes or no question in a native dialog, since the webview has
   // no confirm() of its own

@@ -13,6 +13,7 @@ import { initSingle, single } from "./flows/single.js";
 import { initList, list } from "./flows/list.js";
 import { initRun } from "./flows/run.js";
 import { initTemplates } from "./flows/templates.js";
+import { initUpdates } from "./components/updates.js";
 
 // Entry point: loads what every mode shares, wires the shell, and routes
 // between modes. Switching modes changes the workspace and nothing else
@@ -110,14 +111,38 @@ function initShell() {
   });
 }
 
+// On macOS the application menu owns Save and the mode shortcuts and sends them
+// to the page as menu events, so the page ignores those keys there and each one
+// does its job once. Elsewhere the page handles the keys itself and the menu only
+// shows their text
+const menuOwnsShortcuts = /Mac/.test(navigator.platform);
+
+// handleMenu does what an application menu choice asks. They arrive from Go as
+// action names
+function handleMenu(action) {
+  if (action.startsWith("mode:")) {
+    setMode(action.slice(5));
+  } else if (action === "save") {
+    setMode("single");
+    single.save();
+  } else if (action === "openList") {
+    setMode("list");
+    list.openFile();
+  } else if (action === "chooseOutput") {
+    setMode("list");
+    list.chooseOutput();
+  }
+}
+
 function initKeyboard() {
+  api.onMenu(handleMenu);
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented) return;
     const typing = isTyping();
     const dialogOpen = !!document.querySelector("dialog[open]");
 
     if (modKey(e) && !e.shiftKey && !e.altKey) {
-      if (/^[1-5]$/.test(e.key)) {
+      if (/^[1-5]$/.test(e.key) && !menuOwnsShortcuts) {
         e.preventDefault();
         setMode(MODES[Number(e.key) - 1]);
         return;
@@ -132,7 +157,7 @@ function initKeyboard() {
         }
         return;
       }
-      if (e.key.toLowerCase() === "s" && app.mode.peek() === "single" && !dialogOpen) {
+      if (e.key.toLowerCase() === "s" && app.mode.peek() === "single" && !dialogOpen && !menuOwnsShortcuts) {
         e.preventDefault();
         single.save();
         return;
@@ -187,6 +212,7 @@ async function boot() {
   initTemplates();
   initKeyboard();
   initLinks();
+  initUpdates();
   initSplitters(document.querySelector("#mode-single .regions"), (app.settings.peek().splits || {}).single, (w) =>
     persistSplits("single", w),
   );

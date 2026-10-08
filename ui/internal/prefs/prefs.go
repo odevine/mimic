@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // data is the on-disk shape: the recent-search list, the last chosen
@@ -28,7 +29,23 @@ type data struct {
 	// CardbackName names the uploaded MPC Autofill cardback, which is kept
 	// beside this file
 	CardbackName string `json:"cardbackName,omitempty"`
+	// Window is where the main window was last, restored on launch
+	Window *Window `json:"window,omitempty"`
+	// LastUpdateCheck is when the app last asked for a newer release, in Unix
+	// seconds, so the check at launch runs at most once a day
+	LastUpdateCheck int64 `json:"lastUpdateCheck,omitempty"`
 	Settings
+}
+
+// Window is the main window's last size and position in screen coordinates, and
+// whether it was maximised. A maximised window keeps the size it had before, so
+// restoring it later has somewhere to go
+type Window struct {
+	X         int  `json:"x"`
+	Y         int  `json:"y"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
+	Maximised bool `json:"maximised,omitempty"`
 }
 
 // TemplateChoice names one template and version, the value a face preference
@@ -76,7 +93,19 @@ type Settings struct {
 	OutputFormat string `json:"outputFormat,omitempty"`
 	MPCStock     string `json:"mpcStock,omitempty"`
 	MPCFoil      bool   `json:"mpcFoil,omitempty"`
+	// CheckUpdates asks GitHub for a newer release when the app starts. Nil
+	// reads as on, so settings saved before this existed keep it
+	CheckUpdates *bool `json:"checkUpdates,omitempty"`
+	// NotifyRunDone posts a system notification when a run finishes while the
+	// window is not in front. Nil reads as on
+	NotifyRunDone *bool `json:"notifyRunDone,omitempty"`
+	// DismissedUpdate is the release whose banner was closed, so the banner
+	// stays away until a newer one comes out
+	DismissedUpdate string `json:"dismissedUpdate,omitempty"`
 }
+
+// On reports whether a setting that reads as on when unset is on
+func On(b *bool) bool { return b == nil || *b }
 
 // Store persists a little user state to a JSON file, guarded by a mutex. Reads
 // and writes are best-effort and never fatal, so a missing or unwritable config
@@ -175,6 +204,44 @@ func (s *Store) SetSettings(u Settings) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data.Settings = u
+	s.save()
+}
+
+// WindowState returns the stored window, or nil when none was saved
+func (s *Store) WindowState() *Window {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.Window == nil {
+		return nil
+	}
+	w := *s.data.Window
+	return &w
+}
+
+// SetWindowState stores the window and persists it
+func (s *Store) SetWindowState(w Window) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.Window = &w
+	s.save()
+}
+
+// LastUpdateCheck returns when the app last asked for a newer release, or the
+// zero time if it never has
+func (s *Store) LastUpdateCheck() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.LastUpdateCheck == 0 {
+		return time.Time{}
+	}
+	return time.Unix(s.data.LastUpdateCheck, 0)
+}
+
+// SetLastUpdateCheck records when the app asked for a newer release
+func (s *Store) SetLastUpdateCheck(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.LastUpdateCheck = t.Unix()
 	s.save()
 }
 

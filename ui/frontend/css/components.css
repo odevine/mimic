@@ -1032,3 +1032,36 @@ input.gated {
   font-weight: 600;
   color: var(--text-dim);
 }
+
+/* Update strip in the top bar, and the notes under the Updates setting */
+.update-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border-strong));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.update-strip[hidden] {
+  display: none;
+}
+
+.update-notes {
+  max-height: 160px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.setting .desc.err {
+  color: var(--err);
+}

@@ -55,6 +55,12 @@
 
       <span class="spacer"></span>
 
+      <div id="update-strip" class="update-strip" role="status" hidden>
+        <span id="update-strip-text"></span>
+        <button id="update-strip-action" class="btn subtle" type="button"></button>
+        <button id="update-strip-dismiss" class="btn subtle icon-only" type="button" aria-label="Dismiss" data-tip="Dismiss"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
+      </div>
+
       <button id="palette-btn" class="btn subtle" type="button" data-feature="palette" aria-label="Command palette">
         <svg class="icon"><use href="icons.svg#i-command"/></svg><span>K</span>
       </button>
@@ -660,6 +666,11 @@ Sideboard
           <p class="desc">Show each printing as its own search result rather than one row per card.</p>
         </div>
         <div class="setting">
+          <label for="notify-run">Notify when a run finishes</label>
+          <span class="inline"><input id="notify-run" type="checkbox"></span>
+          <p class="desc">Post a system notification with the number of cards rendered and failed, when the window is not in front.</p>
+        </div>
+        <div class="setting">
           <label for="live-preview">Live preview</label>
           <span class="inline"><input id="live-preview" type="checkbox"></span>
           <p class="desc">Redraw the card as you edit its fields. When off, press Render or ⌘↵.</p>
@@ -671,6 +682,23 @@ Sideboard
         <div class="setting">
           <span class="label" data-feature="settings.restoreSession">Restore last session</span>
           <span class="inline"><input type="checkbox" data-feature="settings.restoreSession" aria-label="Restore last session"></span>
+        </div>
+      </section>
+      <section class="settings-group">
+        <h3 class="section-heading">Updates</h3>
+        <div class="setting">
+          <span class="label" id="update-version"></span>
+          <span class="inline">
+            <button id="update-check" class="btn" type="button">Check for updates</button>
+            <button id="update-action" class="btn primary" type="button" hidden></button>
+          </span>
+          <p class="desc" id="update-summary"></p>
+          <pre class="update-notes mono" id="update-notes" hidden></pre>
+        </div>
+        <div class="setting">
+          <label for="check-updates">Check at launch</label>
+          <span class="inline"><input id="check-updates" type="checkbox"></span>
+          <p class="desc">Look for a newer release when Mimic starts, at most once a day. Nothing downloads until you choose to install it.</p>
         </div>
       </section>
       <p class="faint" style="margin-top:20px">Settings live in <span class="mono">prefs.json</span> in your user config folder, under <span class="mono">mimic</span>. Editing that file by hand is supported.</p>

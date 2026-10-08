@@ -1,6 +1,8 @@
 // Package desktop is the native shell. It registers the services with Wails,
-// opens the window, serves the frontend and the images to it, and carries job
-// events across to the page. It is the only package that imports Wails, so the
+// opens the window, serves the frontend and the images to it, carries job events
+// across to the page, and owns what makes the app an application: the window's
+// remembered place, the menus, the single instance, the close prompt, system
+// notifications and updates. It is the only package that imports Wails, so the
 // rest of the app builds and tests without cgo
 package desktop
 
@@ -11,6 +13,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/odevine/mimic/ui/internal/jobs"
@@ -32,6 +35,10 @@ var smokeHTML []byte
 // smokeTimeout is how long the launch check has to report
 const smokeTimeout = 90 * time.Second
 
+// appID identifies the app to the operating system. A second launch finds the
+// first by it, and it is the bundle identifier of the packaged app
+const appID = "io.github.odevine.mimic"
+
 // Services are the services the window's page calls. Run, Data and Templates
 // start their background work and stop it through Startup and Shutdown
 type Services struct {
@@ -52,7 +59,8 @@ type Options struct {
 	Frontend fs.FS
 	// Smoke runs the launch check instead of the app: the window loads a page
 	// that exercises the bridge, the events and the image routes, and the app
-	// exits when it reports
+	// exits when it reports. It uses no remembered window, takes no single
+	// instance lock, and sends no notification or update check
 	Smoke bool
 }
 
@@ -60,17 +68,33 @@ type Options struct {
 // open folders take it, and it works once the app exists
 func OpenPath(path string) error { return application.Get().Browser.OpenFile(path) }
 
+// shell is the running app: the Wails application, its window and the services
+// the native pieces reach into
+type shell struct {
+	app   *application.App
+	win   application.Window
+	svc   Services
+	sys   *System
+	smoke bool
+	// quitting is set once the user has agreed to quit, so the close prompt does
+	// not ask again on the way out
+	quitting atomic.Bool
+}
+
 // Launch opens the window and blocks until the app quits. In a launch check it
 // returns the check's verdict
 func Launch(o Options) error {
-	sys := &System{}
+	sh := &shell{svc: o.Services, smoke: o.Smoke, sys: &System{}}
 	if o.Smoke {
-		sys.smoke = &smoke{done: make(chan error, 1)}
+		sh.sys.smoke = &smoke{done: make(chan error, 1)}
 	}
-
 	svc := o.Services
 	ws := svc.Workspace
 	img := images{render: svc.Render, run: svc.Run, data: svc.Data}
+
+	updates := newUpdates(sh)
+	notifier := newNotifier(sh)
+	svc.Run.OnFinished(notifier.runFinished)
 
 	bound := []application.Service{
 		application.NewService(&Cards{svc.Cards}),
@@ -80,11 +104,15 @@ func Launch(o Options) error {
 		application.NewService(&Templates{templatesAPI: svc.Templates, lifecycle: startIf(!o.Smoke, svc.Templates.Startup)}),
 		application.NewService(&Settings{svc.Settings}),
 		application.NewService(&Data{dataAPI: svc.Data, lifecycle: startIf(!o.Smoke, svc.Data.Startup)}),
+		application.NewService(&Updates{updatesAPI: updates, lifecycle: startIf(!o.Smoke, updates.startup)}),
 		application.NewService(jobs.NewService(ws.Jobs)),
-		application.NewService(sys),
+		application.NewService(sh.sys),
+	}
+	if !o.Smoke {
+		bound = append(bound, application.NewService(notifier))
 	}
 
-	app := application.New(application.Options{
+	opts := application.Options{
 		Name:        "Mimic",
 		Description: "Mimic renders Magic: The Gathering cards.",
 		Services:    bound,
@@ -92,37 +120,40 @@ func Launch(o Options) error {
 			Handler:        assetHandler(img, o.Frontend, o.Smoke),
 			DisableLogging: true,
 		},
-		Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
-	})
-	sys.app = app
-	ws.Jobs.SetEmitter(newEmitter(func(name string, data any) { app.Event.Emit(name, data) }))
+		Mac:        application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
+		ShouldQuit: sh.shouldQuit,
+	}
+	if !o.Smoke {
+		opts.SingleInstance = &application.SingleInstanceOptions{
+			UniqueID:               appID,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) { sh.raise() },
+		}
+	}
+	sh.app = application.New(opts)
+	sh.sys.app = sh.app
+	updates.init()
+	ws.Jobs.SetEmitter(newEmitter(func(name string, data any) { sh.app.Event.Emit(name, data) }))
 
 	start := "/"
 	if o.Smoke {
 		start = "/smoke.html"
 	}
-	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             "main",
-		Title:            "Mimic",
-		Width:            1280,
-		Height:           820,
-		MinWidth:         720,
-		MinHeight:        520,
-		URL:              start,
-		BackgroundColour: application.NewRGB(0x22, 0x1f, 0x22),
-		EnableFileDrop:   true,
-		DevToolsEnabled:  devBuild,
-	})
-	sys.window = win
-	win.OnWindowEvent(events.Common.WindowFilesDropped, func(e *application.WindowEvent) {
-		app.Event.Emit("files-dropped", e.Context().DroppedFiles())
-	})
+	sh.win = sh.app.Window.NewWithOptions(sh.windowOptions(start))
+	sh.sys.window = sh.win
+	if !o.Smoke {
+		sh.app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			sh.place()
+			sh.trackWindow()
+		})
+		sh.app.Menu.SetApplicationMenu(sh.menu())
+	}
+	sh.watchDrops()
 
 	var verdict error
-	if sys.smoke != nil {
-		timer := time.AfterFunc(smokeTimeout, func() { sys.smoke.done <- errors.New("launch check timed out") })
+	if sh.sys.smoke != nil {
+		timer := time.AfterFunc(smokeTimeout, func() { sh.sys.smoke.done <- errors.New("launch check timed out") })
 		go func() {
-			verdict = <-sys.smoke.done
+			verdict = <-sh.sys.smoke.done
 			timer.Stop()
 			if verdict != nil {
 				// Quitting can end the process before Run returns, so a failed
@@ -130,11 +161,11 @@ func Launch(o Options) error {
 				log.Println("mimic:", verdict)
 				os.Exit(1)
 			}
-			app.Quit()
+			sh.app.Quit()
 		}()
 	}
 
-	if err := app.Run(); err != nil {
+	if err := sh.app.Run(); err != nil {
 		return err
 	}
 	return verdict

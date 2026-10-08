@@ -145,6 +145,37 @@ the template, resolution, and warm-up used. Retry failed starts a new run from o
 failed cards. The app keeps the latest run, so reloading the page picks it
 back up, and the template cannot be switched while a run is going.
 
+## The window
+
+The window opens where it was left. Its position and size are saved to
+`prefs.json` under `window`, and a saved place that is off every connected
+display, such as after unplugging a monitor, is dropped and the window opens
+centered at the default size. Closing the window quits the app, and with a run
+going a dialog asks first and stops the run if you agree. Starting Mimic a
+second time brings the first window forward instead of opening another.
+
+The menu bar follows each platform. File holds Save Card, Open List and Choose
+Output Folder, View switches modes, and Help links to this repository and shows
+the versions in About. On macOS the menu owns `⌘S` and `⌘1` to `⌘5`. On Windows
+and Linux the page handles those keys and the menu shows their text.
+
+When a run finishes while the window is not in front, the app posts a system
+notification with the number of cards rendered and failed, and no card names.
+The Notify setting turns it off. Notifications need a packaged app, so a build
+from `go run` logs that they are off.
+
+## Updates
+
+At launch, at most once a day, the app asks GitHub for the newest `ui/` release
+and shows a strip in the top bar when it is newer and has a file for this
+platform. Settings, under Updates, shows the same status with the release notes
+and a Check for updates button, and a setting turns the launch check off.
+Nothing downloads until you choose Install. The download is checked against the
+release's `SHA256SUMS`, and against its `.sig` file when the release is signed
+and the build was stamped with the public key. Restart then swaps the new
+version in. An install the app cannot replace itself in, such as a system
+package, offers the release page instead. A development build does not check.
+
 ## Features that are not built yet
 
 Features that are designed but not built still appear, dimmed with a lock, and

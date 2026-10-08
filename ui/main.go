@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -42,6 +43,9 @@ func launch() error {
 		}
 	}
 
+	// smokeOut is where the launch check's run writes its cards, in the scratch
+	// folder it deletes afterward
+	smokeOut := ""
 	if *smoke {
 		scratch, err := os.MkdirTemp("", "mimic-smoke-")
 		if err != nil {
@@ -49,17 +53,23 @@ func launch() error {
 		}
 		defer os.RemoveAll(scratch)
 		workspace.UserConfigDir = func() (string, error) { return filepath.Join(scratch, "config"), nil }
+		smokeOut = filepath.Join(scratch, "out")
 	}
 
 	ws := workspace.New(workspace.Options{FontDir: *fontDir})
 	defer ws.Close()
+	if smokeOut != "" {
+		settings := ws.Prefs.Settings()
+		settings.OutputDir = smokeOut
+		ws.Prefs.SetSettings(settings)
+	}
 
 	scripted := ""
 	if buildinfo.TestBuild {
 		scripted = filepath.Join(os.Getenv(testbuild.EnvHome), "dialogs")
 	}
 
-	return desktop.Launch(desktop.Options{
+	err := desktop.Launch(desktop.Options{
 		Services: desktop.Services{
 			Workspace: ws,
 			Cards:     cards.New(ws),
@@ -75,4 +85,22 @@ func launch() error {
 		Smoke:           *smoke,
 		ScriptedDialogs: scripted,
 	})
+	if err == nil && smokeOut != "" {
+		err = checkSmokeOutput(smokeOut)
+	}
+	return err
+}
+
+// checkSmokeOutput confirms the launch check's run left a card on disk, which the
+// page cannot see for itself
+func checkSmokeOutput(dir string) error {
+	files, err := filepath.Glob(filepath.Join(dir, "*.[jp][pn]g"))
+	if err != nil || len(files) == 0 {
+		return fmt.Errorf("the launch check's run wrote no card to %s", dir)
+	}
+	info, err := os.Stat(files[0])
+	if err != nil || info.Size() < 1000 {
+		return fmt.Errorf("the launch check's card %s is empty", files[0])
+	}
+	return nil
 }

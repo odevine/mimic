@@ -37,7 +37,12 @@ go tool wails3 task test:e2e
 ```
 
 `-smoke` opens the real window against a scratch config folder, boots the page,
-renders a card through the bridge and exits. For the engine, run `go vet ./...`
+renders a card through the bridge, drives a few flows through the page's own
+buttons and fields (a gated control's popover, the settings dialog, a list of one
+custom card rendered to a folder, and Single's preview) and exits. The same page
+is served by the test server as `/smoke.html?e2e`, and `tests/smoke.spec.mjs`
+runs it in headless browsers, so the flows are checked on every change and not
+only on CI's real webviews. For the engine, run `go vet ./...`
 and `go test ./...` in `engine/`. After a change to a workflow in
 `.github/workflows/`, run `actionlint` on it, because a file that parses as YAML
 can still be one GitHub refuses to run. A job that fails in zero seconds, named

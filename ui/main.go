@@ -17,7 +17,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/odevine/mimic/ui/internal/server"
+	"github.com/odevine/mimic/ui/internal/httpapi"
+	"github.com/odevine/mimic/ui/internal/services/cards"
+	"github.com/odevine/mimic/ui/internal/services/data"
+	"github.com/odevine/mimic/ui/internal/services/list"
+	"github.com/odevine/mimic/ui/internal/services/render"
+	"github.com/odevine/mimic/ui/internal/services/run"
+	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/templates"
+	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
 func main() {
@@ -26,8 +34,22 @@ func main() {
 	fontDir := flag.String("fonts", "", "folder of font overrides, one subfolder per role, used ahead of the app's own fonts folder")
 	flag.Parse()
 
-	s := server.New(server.Options{Static: staticFS(), Open: openBrowser, FontDir: *fontDir})
-	defer s.Close()
+	ws := workspace.New(workspace.Options{FontDir: *fontDir})
+	defer ws.Close()
+
+	svc := httpapi.Services{
+		Workspace: ws,
+		Cards:     cards.New(ws),
+		Render:    render.New(ws),
+		List:      list.New(ws),
+		Run:       run.New(ws, openBrowser),
+		Templates: templates.New(ws),
+		Settings:  settings.New(ws),
+		Data:      data.New(ws, openBrowser),
+	}
+	svc.Data.Startup()
+	svc.Templates.Startup()
+	defer svc.Run.Shutdown()
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
@@ -36,7 +58,7 @@ func main() {
 	url := "http://" + ln.Addr().String()
 	fmt.Println(url)
 
-	srv := &http.Server{Handler: s.Handler()}
+	srv := &http.Server{Handler: httpapi.New(svc, staticFS()).Handler()}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("mimic: serving: %v", err)

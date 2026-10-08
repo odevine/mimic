@@ -1,0 +1,27 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0003",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0003",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Llanowar Elves",
+  "mana_cost": "{G}",
+  "cmc": 1,
+  "type_line": "Creature — Elf Druid",
+  "oracle_text": "{T}: Add {G}.",
+  "power": "1",
+  "toughness": "1",
+  "colors": ["G"],
+  "color_identity": ["G"],
+  "produced_mana": ["G"],
+  "keywords": [],
+  "rarity": "common",
+  "collector_number": "168",
+  "set": "dom",
+  "set_name": "Dominaria",
+  "released_at": "2018-04-27",
+  "artist": "Anson Maddocks",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/llanowar-elves-dom.jpg"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0002",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0001",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Lightning Bolt",
+  "mana_cost": "{R}",
+  "cmc": 1,
+  "type_line": "Instant",
+  "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+  "flavor_text": "",
+  "colors": ["R"],
+  "color_identity": ["R"],
+  "rarity": "common",
+  "collector_number": "149",
+  "set": "m11",
+  "set_name": "Magic 2011",
+  "released_at": "2010-07-16",
+  "artist": "Christopher Rush",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/lightning-bolt-m11.jpg"
+  }
+}

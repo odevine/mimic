@@ -54,6 +54,11 @@ func launch() error {
 	ws := workspace.New(workspace.Options{FontDir: *fontDir})
 	defer ws.Close()
 
+	scripted := ""
+	if buildinfo.TestBuild {
+		scripted = filepath.Join(os.Getenv(testbuild.EnvHome), "dialogs")
+	}
+
 	return desktop.Launch(desktop.Options{
 		Services: desktop.Services{
 			Workspace: ws,
@@ -66,7 +71,8 @@ func launch() error {
 			Data:      data.New(ws, desktop.OpenPath),
 			Overrides: overrides.New(ws),
 		},
-		Frontend: staticFS(),
-		Smoke:    *smoke,
+		Frontend:        staticFS(),
+		Smoke:           *smoke,
+		ScriptedDialogs: scripted,
 	})
 }

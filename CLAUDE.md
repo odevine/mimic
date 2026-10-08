@@ -33,6 +33,7 @@ go vet ./...
 go test -race ./...
 node --test frontend/test/*.test.mjs
 go run . -smoke
+go tool wails3 task test:e2e
 ```
 
 `-smoke` opens the real window against a scratch config folder, boots the page,
@@ -41,6 +42,14 @@ and `go test ./...` in `engine/`. After a change to a workflow in
 `.github/workflows/`, run `actionlint` on it, because a file that parses as YAML
 can still be one GitHub refuses to run. A job that fails in zero seconds, named
 after the workflow path, means the file is invalid.
+
+`test:e2e` drives the real page in headless Chromium and WebKit against a test
+build of the app and a fake Scryfall, with no window and no input control. Run
+`go tool wails3 task test:e2e:install` once first. Pass Playwright's arguments as
+`ARGS='-g "name"'`, since the task runner takes variables and not flags. To look
+at the page, `test:e2e:shot` writes a PNG from a given search and state and
+prints its path, and `dev:server` serves the page on a local port. The tests
+live in `e2e/tests`, with a page object per mode in `e2e/pages`.
 
 Do not drive the desktop window with accessibility or UI scripting. Check
 behavior through tests, logs, `-smoke` and files the app writes, and say plainly
@@ -81,9 +90,11 @@ three environment variables. `MIMIC_E2E_HOME` names a scratch folder used in
 place of the user config folder and is required. `MIMIC_E2E_UPSTREAM` is the
 `host:port` that answers every outbound request, with the original `Host` header
 kept, and every request is refused when it is unset. `MIMIC_E2E_CAPABILITIES`
-lists gate keys to report live. A test build also ignores loose template assets
-and takes no single instance lock. Release recipes build with the `production`
-tag, and combining it with a test tag fails to compile.
+lists gate keys to report live. A test build also ignores loose template assets,
+takes no single instance lock, and answers file dialogs, questions and links from
+the `dialogs` folder inside the scratch folder, so a save lands in
+`dialogs/saved` and nothing opens on the desktop. Release recipes build with the
+`production` tag, and combining it with a test tag fails to compile.
 
 ## Branches, commits and releases
 

@@ -1,0 +1,24 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0004",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0004",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Sol Ring",
+  "mana_cost": "{1}",
+  "cmc": 1,
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {C}{C}.",
+  "colors": [],
+  "color_identity": [],
+  "produced_mana": ["C"],
+  "rarity": "uncommon",
+  "collector_number": "263",
+  "set": "c21",
+  "set_name": "Commander 2021",
+  "released_at": "2021-04-23",
+  "artist": "Mike Bierek",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/sol-ring-c21.jpg"
+  }
+}

@@ -568,7 +568,7 @@ export const single = {
 let editor = null;
 
 export function initSingle() {
-  editor = createCardEditor({ base: store.base, edits: store.edits, reference: store.reference, ruled: store.ruled, onEnter: render });
+  editor = createCardEditor({ idPrefix: "single", base: store.base, edits: store.edits, reference: store.reference, ruled: store.ruled, onEnter: render });
   editor.mount($("editor-form"));
   effect(() => {
     $("revert-all").hidden = !editor.dirty.value;

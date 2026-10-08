@@ -146,7 +146,7 @@ export function checkInspected(rows) {
 
 export function initInspector(h) {
   host = h;
-  editor = createCardEditor({ base, edits, reference, ruled, onEnter() {} });
+  editor = createCardEditor({ idPrefix: "inspector", base, edits, reference, ruled, onEnter() {} });
   editor.mount($("inspector-form"));
 
   // An edit in the form is an edit to the row

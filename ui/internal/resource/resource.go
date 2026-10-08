@@ -27,6 +27,12 @@ const (
 	// 1.9, 3.0 and 4.9 GB in all
 	baseBytes = 768 << 20
 
+	// webviewBytes is what the window's web content, network and graphics
+	// processes add beside the app. They measured about 110 MiB with the page
+	// open, and the page decodes one finished card at a time at up to 58 MiB, so
+	// this holds a couple of those with room to grow over a long session
+	webviewBytes = 512 << 20
+
 	// DefaultCacheSize names the layer cache size used when none is chosen
 	DefaultCacheSize = "medium"
 
@@ -106,9 +112,10 @@ func RenderBytes(width, height int) uint64 {
 	return renderFixed + uint64(width)*uint64(height)*bytesPerPixel
 }
 
-// BaseBytes is the memory a run needs before any render: the app's own and a
-// layer cache of cache bytes, which is planned for in full since a batch fills it
-func BaseBytes(cache uint64) uint64 { return baseBytes + cache }
+// BaseBytes is the memory a run needs before any render: the app's own, the
+// window's web content and a layer cache of cache bytes, which is planned for in
+// full since a batch fills it
+func BaseBytes(cache uint64) uint64 { return baseBytes + webviewBytes + cache }
 
 // RunBytes estimates the memory n renders of perRender bytes each use together
 // with a layer cache of cache bytes

@@ -3,7 +3,7 @@
   <img src=".github/banner-light.svg" alt="mimic">
 </picture>
 
-mimic renders Magic: The Gathering cards from Scryfall data into PNGs. It looks
+mimic renders Magic: The Gathering cards from Scryfall data into images. It looks
 up a card, draws its name, type line, rules text, mana symbols, and art through
 a frame template, and writes the finished card. Any field can be edited before
 it renders, so the same tool makes a faithful proxy of a real printing or a card

@@ -10,6 +10,19 @@ window needs the system webview, which needs cgo on macOS and Linux. Only
 `internal/desktop` imports it, and every other package builds and tests with
 `CGO_ENABLED=0`.
 
+## System requirements
+
+| System  | Needs                                                                                     |
+| ------- | ----------------------------------------------------------------------------------------- |
+| macOS   | macOS 12 or later, Apple silicon or Intel                                                 |
+| Windows | Windows 10 or 11, 64-bit Intel or Arm. The installer adds the WebView2 runtime if needed |
+| Linux   | GTK 3 and WebKitGTK 4.1, as Ubuntu 22.04 and later package them                          |
+
+A render holds a few document-sized buffers, so memory decides how many cards
+render at once. The app plans for the window's own memory, about half a gigabyte,
+before it sizes a run, and a computer with 8 GB typically renders full-size cards one
+or two at a time.
+
 ## Running it
 
 ```
@@ -48,8 +61,7 @@ installed there rather than selected. Defaults picks which installed template
 renders each kind of face, and a change there applies at once. Overrides holds
 the per-template and global overrides.
 
-Single and From a List work today, with Run as the console for a batch. In
-Single, the left column searches Scryfall with its
+In Single, the left column searches Scryfall with its
 full query syntax (for example `t:goblin c:r cmc=1`) and lists one row per card
 name. Selecting a match fills the editor, where a printing dropdown switches
 between every printing of the card. Fields you have not edited follow the new
@@ -97,7 +109,7 @@ it. Cards are JPEG at quality 95 by default, converted straight from the
 engine's render to the planes a JPEG stores, and the Image format setting
 switches them to PNG, whose compression setting then applies. A second copy of the same printing in one run gets a `(2)` suffix, and a
 quantity is recorded in the run report rather than written as extra files.
-Cards render two at a time by default, which the settings panel changes.
+A run renders as many cards at once as the computer's memory and processors hold, and the Concurrency setting picks a fixed number instead.
 
 A double-faced card renders one image per face, each named after that face, as in
 `Delver of Secrets [MID-51].jpg` and `Insectile Aberration [MID-51].jpg`, and
@@ -158,6 +170,33 @@ records each card's outcome, printing, file, and field overrides, along with
 the template, resolution, and warm-up used. Retry failed starts a new run from only the
 failed cards. The app keeps the latest run, so reloading the page picks it
 back up, and the template cannot be switched while a run is going.
+
+## Development
+
+The checks CI runs are the ones to run before sending a change:
+
+```
+go vet ./...
+go test -race ./...
+node --test frontend/test/*.test.mjs
+go run . -smoke
+```
+
+`go test` covers the Go packages without a window, and the Node tests cover the
+frontend logic that does not need a document, such as the job watcher and the
+tooltip. The smoke check opens the window, so it needs a display. Add `-tags gtk3`
+to the Go commands on Linux.
+
+`cmd/throughput` renders a list through the same run service the window uses and
+prints cards per second, which is the number to compare when the run loop or the
+engine changes. It takes a JSON file of run rows, the shape the page sends, and
+renders the list more than once, since the first pass fetches art.
+
+```
+go run ./cmd/throughput -rows rows.json -runs 3
+```
+
+`RELEASING.md` lists what to check by hand on each system before a release.
 
 ## Packaging
 

@@ -51,6 +51,21 @@ at the page, `test:e2e:shot` writes a PNG from a given search and state and
 prints its path, and `dev:server` serves the page on a local port. The tests
 live in `e2e/tests`, with a page object per mode in `e2e/pages`.
 
+For a question only the real webview can answer, such as how WKWebView lays out
+a control, `dev:mcp` builds the app with the `mcp` tag and opens its real window
+against the same fake Scryfall and a scratch folder at `bin/mcp-home`. Start it in
+the background and tell the developer a window is about to open, since it appears
+on their desktop. `mcp:call` then sends one tool call to it and prints the
+result, as in `go run ./cmd/mcpcall dom_query selector='#results .result'`, and
+`go run ./cmd/mcpcall tools` lists every tool and its arguments. The tools
+dispatch DOM events inside the page, so they need no accessibility permission and
+no control of the mouse or keyboard. Call services through `js_eval`, whose
+argument is named `js`, and the page's own `api.js`, not `call_bound_method`,
+which stops the page's event handlers (wailsapp/wails#6136). A selector that
+matches nothing comes back as a stack trace and not a message. Stop the build
+with `go tool wails3 task mcp:stop`. It never runs in CI, and a hand-off says
+what was seen this way and what was seen only in the test server.
+
 Do not drive the desktop window with accessibility or UI scripting. Check
 behavior through tests, logs, `-smoke` and files the app writes, and say plainly
 in the hand-off what was not seen in a real window.

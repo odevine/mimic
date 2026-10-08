@@ -104,3 +104,32 @@ tasks:
         msg: Run test:e2e:install first
     cmds:
       - node shot.mjs {{.ARGS}}
+
+  dev:mcp:
+    desc: Runs the real window as a test build an agent can drive from the shell
+    summary: |
+      Builds the app with the mcp tag and opens its window on this desktop, with a
+      fake Scryfall and a scratch folder at bin/mcp-home. It prints the MCP
+      endpoint and keeps running, so start it in the background. Then use mcp:call
+      to inspect and drive the window, and mcp:stop to close it. The endpoint
+      listens on loopback behind a random token written to bin/mcp.json, and the
+      build is for tests and never ships
+    cmds:
+      - go run ./cmd/testserver -mode mcp -home bin/mcp-home -clean {{.ARGS}}
+
+  mcp:call:
+    desc: Sends one tool call to the running dev:mcp build and prints the result
+    summary: |
+      ARGS starts with a tool name and then key=value arguments, as in
+      ARGS='dom_query selector=#results'. ARGS=tools lists the tools and what they
+      take. Flags go before the pairs, as in ARGS='js_eval -json {"code":"return 1"}'.
+      The task exits non-zero when the tool reports an error
+    silent: true
+    cmds:
+      - go run ./cmd/mcpcall {{.ARGS}}
+
+  mcp:stop:
+    desc: Stops the running dev:mcp build
+    silent: true
+    cmds:
+      - go run ./cmd/mcpcall stop

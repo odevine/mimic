@@ -93,7 +93,7 @@ tasks:
       - npx playwright test {{.ARGS}}
 
   test:e2e:page:
-    desc: Runs only the page tests, which need no server and take a few seconds
+    desc: Runs only the page, accessibility and visual tests, which need no server
     summary: |
       The page tests load the real frontend against replies set in the test, which
       reaches states the real app makes hard to reach, such as a failed render or

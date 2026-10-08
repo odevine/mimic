@@ -1,0 +1,266 @@
+[
+  {
+    "rule": "aria-prohibited-attr",
+    "target": ".note-dot",
+    "scenes": "*",
+    "reason": "A span carries an aria-label with no role. Tracked in #99"
+  },
+  {
+    "rule": "aria-required-attr",
+    "target": "div[data-split=\"0\"]",
+    "scenes": "*",
+    "reason": "A splitter has the separator role without aria-valuenow. Tracked in #99"
+  },
+  {
+    "rule": "aria-required-attr",
+    "target": "div[data-split=\"1\"]",
+    "scenes": "*",
+    "reason": "A splitter has the separator role without aria-valuenow. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#activity-step",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#concurrency-note",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#editor-form > .field-grid > .field[data-field=\"colors\"] > .control > .note",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#empty-search",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#inspector-form > .field-grid > .field[data-field=\"colors\"] > .control > .note",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#list-output-label",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#output-size",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#overrides-chip-label",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#preset-trigger > .dim",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#preview-size",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#printing-trigger > .dim",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#run-caption",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#run-meta",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#run-state",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "#update-strip-action",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".detail.faint.tabular",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".err-text.detail.tabular",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(2) > .kw",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(2) > .rule-lines > .rule-add.subtle.btn",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(3) > .kw",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(3) > .rule-lines > .rule-add.subtle.btn",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(3) > .rule-lines > .rule-line > select[aria-label=\"Action\"]",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".off > .rule-block:nth-child(3) > .rule-lines > .rule-line > select[aria-label=\"Field\"]",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".pips-label",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".row-error > div:nth-child(1) > .dim",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".rule-always",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".rules > .faint",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".set",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".setting:nth-child(7) > .desc",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".setting:nth-child(8) > .desc",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".setting:nth-child(9) > .desc",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".tp-reason",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": ".type",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "input[placeholder=\"Rule 2\"]",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "input[value=\"Anonymous\"]",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "tbody > .row-main > .card-cell > .row-text > .row-sub",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "tbody > .row-main > td:nth-child(6) > .err.pill",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "tbody > .row-main > td:nth-child(6) > .warn.pill",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "color-contrast",
+    "target": "td:nth-child(6) > .ok.pill",
+    "scenes": "*",
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+  },
+  {
+    "rule": "label",
+    "target": "#f-inspector-toughness",
+    "scenes": "*",
+    "reason": "The second field of the Power / Toughness pair has no label. Tracked in #99"
+  },
+  {
+    "rule": "label",
+    "target": "#f-single-toughness",
+    "scenes": "*",
+    "reason": "The second field of the Power / Toughness pair has no label. Tracked in #99"
+  }
+]

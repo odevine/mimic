@@ -115,8 +115,10 @@ jobs:
   # input control. The app is built with the server tag, which has no native
   # window and needs neither cgo nor GTK, and it runs beside a fake Scryfall,
   # GitHub and template catalog, so a run touches no network. The page tests need
-  # no server at all and run in the same pass. A failure leaves the report and
-  # the traces behind
+  # no server at all and run in the same pass, along with the accessibility scan
+  # and the screenshot comparison, which compares against baselines made on this
+  # runner (see update-visual-baselines.yml). A failure leaves the report and the
+  # traces behind, with the images that differed
   ui-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20

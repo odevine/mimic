@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 import { servers } from "./servers.mjs";
+import { snapshotDir, visualEnabled } from "./visual.mjs";
 
 // The test servers run for the whole run, described in servers.mjs. Each project
 // names the server its tests use in its metadata
@@ -40,6 +41,18 @@ const projects = Object.entries(browsers).flatMap(([browser, device]) =>
   })),
 );
 
+// The visual tests also run from a bridge and need no server. They run only where
+// the baselines are made, so a screenshot is never compared across platforms
+export const visualProjects = visualEnabled
+  ? [
+      {
+        name: "chromium-visual",
+        testMatch: /tests\/visual\/.*\.spec\.mjs$/,
+        use: { ...browsers.chromium, viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1 },
+      },
+    ]
+  : [];
+
 // One server and one scratch folder serve each group of tests, so the tests in a
 // group run one at a time
 export default defineConfig({
@@ -51,6 +64,8 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [...projects, ...pageProjects],
+  projects: [...projects, ...pageProjects, ...visualProjects],
+  snapshotPathTemplate: `${snapshotDir}/{arg}{ext}`,
+  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.002 } },
   webServer: Object.entries(servers).map(([name, server]) => webServer(server, name)),
 });

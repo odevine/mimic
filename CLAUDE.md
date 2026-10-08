@@ -70,8 +70,20 @@ not built appear gated by `Settings.Capabilities` in
 `internal/services/settings/capabilities.go`, and every gate that is not live
 must name its tracking issue as `#123`. Never write a version number in a gate.
 
-Calls to Scryfall go through the paced client, and the app opens no listening
-port. Do not add a server mode.
+Calls to Scryfall go through the paced client, and a release opens no listening
+port. Do not add a server mode to the product.
+
+A build with the `server` or `mcp` tag is a test build and never ships. The
+`server` tag runs the app as a headless HTTP server on `WAILS_SERVER_PORT`, and
+`mcp` adds a loopback MCP endpoint to the real window. Both set
+`buildinfo.TestBuild`, and `main.go` then calls `testbuild.Apply`, which reads
+three environment variables. `MIMIC_E2E_HOME` names a scratch folder used in
+place of the user config folder and is required. `MIMIC_E2E_UPSTREAM` is the
+`host:port` that answers every outbound request, with the original `Host` header
+kept, and every request is refused when it is unset. `MIMIC_E2E_CAPABILITIES`
+lists gate keys to report live. A test build also ignores loose template assets
+and takes no single instance lock. Release recipes build with the `production`
+tag, and combining it with a test tag fails to compile.
 
 ## Branches, commits and releases
 

@@ -12,6 +12,7 @@ const notes = [];
 async function check() {
   const v = await api.version();
   if (!v.ui || !v.engine) throw new Error("System.Version answered " + JSON.stringify(v));
+  if (v.testBuild) throw new Error("the launch check ran against a test build");
   notes.push("version " + v.ui + " engine " + v.engine);
 
   const caps = await api.capabilities();

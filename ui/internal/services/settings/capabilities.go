@@ -1,6 +1,10 @@
 package settings
 
-import "github.com/odevine/mimic/engine/version"
+import (
+	"fmt"
+
+	"github.com/odevine/mimic/engine/version"
+)
 
 // The four gate levels a feature can sit at. Only live is usable. The other
 // three render the control dimmed with a reason, and differ in what resolves
@@ -79,6 +83,36 @@ var features = []feature{
 	{key: "output.pdf", state: gatePlanned, reason: "Print sheets are planned. Tracked in #85"},
 }
 
+// forced holds the keys a test build reports live whatever the table says. It
+// is set once, before the app starts
+var forced = map[string]bool{}
+
+// KnownGate reports whether key is a feature the table lists
+func KnownGate(key string) bool {
+	for _, f := range features {
+		if f.key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// ForceLive makes each key report live, so a test can reach a feature that is
+// not built yet. A key the table does not list is an error, which keeps a typo
+// from passing for a gate that is simply closed. It replaces any earlier list
+// and must be called before the app starts
+func ForceLive(keys ...string) error {
+	next := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		if !KnownGate(k) {
+			return fmt.Errorf("no feature %q to force live", k)
+		}
+		next[k] = true
+	}
+	forced = next
+	return nil
+}
+
 // engineSatisfies is a seam over version.Satisfies so a test can lift a
 // needs-engine gate without stamping a binary
 var engineSatisfies = version.Satisfies
@@ -92,6 +126,9 @@ func capabilities() map[string]Gate {
 	for _, f := range features {
 		g := Gate{State: f.state, Reason: f.reason}
 		if f.state == gateNeedsEngine && f.minEngine != "" && engineSatisfies(f.minEngine) {
+			g = Gate{State: gateLive}
+		}
+		if forced[f.key] {
 			g = Gate{State: gateLive}
 		}
 		out[f.key] = g

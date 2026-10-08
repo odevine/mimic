@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/odevine/mimic/ui/internal/buildinfo"
 	"github.com/odevine/mimic/ui/internal/desktop"
 	"github.com/odevine/mimic/ui/internal/services/cards"
 	"github.com/odevine/mimic/ui/internal/services/data"
@@ -20,6 +21,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
 	"github.com/odevine/mimic/ui/internal/services/templates"
+	"github.com/odevine/mimic/ui/internal/testbuild"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -33,6 +35,12 @@ func launch() error {
 	fontDir := flag.String("fonts", "", "folder of font overrides, one subfolder per role, used ahead of the app's own fonts folder")
 	smoke := flag.Bool("smoke", false, "run the launch check against a scratch config folder and exit")
 	flag.Parse()
+
+	if buildinfo.TestBuild {
+		if err := testbuild.Apply(os.Getenv); err != nil {
+			return err
+		}
+	}
 
 	if *smoke {
 		scratch, err := os.MkdirTemp("", "mimic-smoke-")

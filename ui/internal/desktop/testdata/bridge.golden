@@ -311,6 +311,7 @@ desktop.VersionInfo struct {
 	ui string
 	commit string (omitempty)
 	engine string
+	testBuild bool (omitempty)
 }
 
 float64 = float64

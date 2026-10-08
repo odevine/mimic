@@ -21,7 +21,8 @@
     "rule": "color-contrast",
     "target": "#activity-step",
     "scenes": "*",
-    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99. Found on macOS and not on Linux, where the text is drawn at a size that passes",
+    "optional": true
   },
   {
     "rule": "color-contrast",
@@ -39,7 +40,8 @@
     "rule": "color-contrast",
     "target": "#empty-search",
     "scenes": "*",
-    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99"
+    "reason": "Secondary text is below 4.5:1 in one theme or both. Tracked in #99. Found on macOS and not on Linux, where the text is drawn at a size that passes",
+    "optional": true
   },
   {
     "rule": "color-contrast",

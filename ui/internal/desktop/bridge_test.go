@@ -271,8 +271,9 @@ func TestBridgeMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v: run go test ./internal/desktop -run Bridge -update to write it", err)
 	}
-	if got != string(want) {
-		t.Errorf("the bridge changed. If that is intended, run go test ./internal/desktop -run Bridge -update and review the diff.\n%s", firstDifference(string(want), got))
+	// A checkout on Windows may turn the file's line ends into CRLF
+	if got != strings.ReplaceAll(string(want), "\r\n", "\n") {
+		t.Errorf("the bridge changed. If that is intended, run go test ./internal/desktop -run Bridge -update and review the diff.\n%s", firstDifference(strings.ReplaceAll(string(want), "\r\n", "\n"), got))
 	}
 }
 

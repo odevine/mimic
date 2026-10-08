@@ -1,6 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
 import { test, expect } from "../fixtures.mjs";
-import { saved, savedPath, events } from "../scratch.mjs";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -17,7 +16,7 @@ test("a search with no match says so and offers nothing to edit", async ({ singl
   await expect(single.editor).toBeHidden();
 });
 
-test("search, edit, render and save writes a PNG", async ({ single }) => {
+test("search, edit, render and save writes a PNG", async ({ single, scratch }) => {
   await single.search("llanowar elves");
   await single.select("Llanowar Elves");
 
@@ -37,10 +36,10 @@ test("search, edit, render and save writes a PNG", async ({ single }) => {
   await expect(single.activity).toHaveAttribute("data-state", "done", { timeout: 120_000 });
   await expect(single.page.locator("#activity-title")).toHaveText("Saved Llanowar Elves.png");
 
-  expect(await saved()).toEqual(["Llanowar Elves.png"]);
-  const file = savedPath("Llanowar Elves.png");
+  expect(await scratch.saved()).toEqual(["Llanowar Elves.png"]);
+  const file = scratch.savedPath("Llanowar Elves.png");
   const head = (await readFile(file)).subarray(0, 8);
   expect(head.equals(PNG)).toBe(true);
   expect((await stat(file)).size).toBeGreaterThan(10_000);
-  expect((await events()).map(([kind]) => kind)).toContain("save");
+  expect((await scratch.events()).map(([kind]) => kind)).toContain("save");
 });

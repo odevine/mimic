@@ -1,7 +1,10 @@
 package testbuild
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -9,13 +12,18 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/buildinfo"
+	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/fakeupstream"
+	"github.com/odevine/mimic/ui/internal/fontdir"
 	"github.com/odevine/mimic/ui/internal/pipeline"
+	"github.com/odevine/mimic/ui/internal/releases"
 	"github.com/odevine/mimic/ui/internal/scryfall"
 	"github.com/odevine/mimic/ui/internal/services/settings"
 	"github.com/odevine/mimic/ui/internal/workspace"
@@ -26,10 +34,14 @@ import (
 func restoreGlobals(t *testing.T) {
 	t.Helper()
 	dir, bases := workspace.UserConfigDir, pipeline.LooseDirBases
+	pace, version := scryfall.PaceFactor, buildinfo.Version
+	fonts := fontdir.CheckoutCandidates
 	tr := http.DefaultTransport.(*http.Transport)
 	dial, dialTLS, proxy, h2 := tr.DialContext, tr.DialTLSContext, tr.Proxy, tr.ForceAttemptHTTP2
 	t.Cleanup(func() {
 		workspace.UserConfigDir, pipeline.LooseDirBases = dir, bases
+		scryfall.PaceFactor, buildinfo.Version = pace, version
+		fontdir.CheckoutCandidates = fonts
 		tr.DialContext, tr.DialTLSContext, tr.Proxy, tr.ForceAttemptHTTP2 = dial, dialTLS, proxy, h2
 		tr.CloseIdleConnections()
 		settings.ForceLive()
@@ -58,6 +70,33 @@ func TestApplyMovesTheConfigFolderAndIgnoresLooseAssets(t *testing.T) {
 	}
 	if len(pipeline.LooseDirBases) != 0 {
 		t.Errorf("loose asset roots = %v, want none", pipeline.LooseDirBases)
+	}
+	if len(fontdir.CheckoutCandidates) != 0 {
+		t.Errorf("checkout font folders = %v, want none", fontdir.CheckoutCandidates)
+	}
+}
+
+func TestApplyTurnsOffPacingAndTakesTheVersion(t *testing.T) {
+	restoreGlobals(t)
+	if err := Apply(envOf(map[string]string{EnvHome: t.TempDir(), EnvVersion: "1.2.3"})); err != nil {
+		t.Fatal(err)
+	}
+	if scryfall.PaceFactor != 0 {
+		t.Errorf("PaceFactor = %v, want 0 in a test build", scryfall.PaceFactor)
+	}
+	if buildinfo.Version != "1.2.3" {
+		t.Errorf("Version = %q, want 1.2.3", buildinfo.Version)
+	}
+}
+
+func TestApplyLeavesTheVersionAloneWhenNoneIsGiven(t *testing.T) {
+	restoreGlobals(t)
+	before := buildinfo.Version
+	if err := Apply(envOf(map[string]string{EnvHome: t.TempDir()})); err != nil {
+		t.Fatal(err)
+	}
+	if buildinfo.Version != before {
+		t.Errorf("Version changed to %q", buildinfo.Version)
 	}
 }
 
@@ -219,5 +258,102 @@ func TestThePacedClientReadsCardsAndArtFromTheFakeUpstream(t *testing.T) {
 	delver, err := client.Search(context.Background(), `!"Delver of Secrets"`)
 	if err != nil || len(delver) != 1 || len(delver[0].Faces) != 2 {
 		t.Errorf("a double-faced card = %v, %v, want one card with two faces", delver, err)
+	}
+}
+
+// fakeUpstream starts the fake and points every outbound request at it
+func fakeUpstream(t *testing.T) string {
+	t.Helper()
+	cards, err := fs.Sub(testassets.Scryfall, "scryfall")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, err := fakeupstream.New(cards)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+	Redirect(strings.TrimPrefix(srv.URL, "http://"))
+	return srv.URL
+}
+
+func putJSON(t *testing.T, url, body string) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPut, url, strings.NewReader(body))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("PUT %s = %s", url, resp.Status)
+	}
+}
+
+// The updater's own release client finds the release the fake offers, picks the
+// installer for this platform and checks it against the listed digest
+func TestTheReleaseClientFindsAndChecksTheFakeRelease(t *testing.T) {
+	restoreGlobals(t)
+	url := fakeUpstream(t)
+	client := releases.NewClient("odevine/mimic")
+	if _, err := client.Latest(context.Background()); !errors.Is(err, releases.ErrNone) {
+		t.Fatalf("with no release, Latest = %v, want ErrNone", err)
+	}
+	putJSON(t, url+"/__fake/release", `{"version":"1.1.0","notes":"Fixes the thing"}`)
+
+	rel, err := client.Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.Version != "1.1.0" || rel.Notes != "Fixes the thing" || !releases.Newer(rel.Version, "1.0.0") {
+		t.Errorf("release = %+v", rel)
+	}
+	asset := releases.Pick(rel.Assets, runtime.GOOS, runtime.GOARCH)
+	if asset == nil {
+		t.Fatalf("no installer for %s/%s among %+v", runtime.GOOS, runtime.GOARCH, rel.Assets)
+	}
+	digest, err := client.Digest(context.Background(), rel, asset.Name)
+	if err != nil || len(digest) != 32 {
+		t.Fatalf("Digest = %x, %v", digest, err)
+	}
+	var got bytes.Buffer
+	if err := client.Download(context.Background(), asset, &got, nil); err != nil {
+		t.Fatal(err)
+	}
+	if sum := sha256.Sum256(got.Bytes()); !bytes.Equal(sum[:], digest) {
+		t.Errorf("the installer's digest is %x, the checksums say %x", sum, digest)
+	}
+}
+
+// A bundle the fake builds is one the app installs: it is listed in the catalog,
+// downloads against its digest, and opens as a template that renders
+func TestAFakeBundleInstallsThroughTheCatalogAndOpens(t *testing.T) {
+	restoreGlobals(t)
+	cache := t.TempDir()
+	oldDir := catalog.Dir
+	catalog.Dir = func() (string, error) { return cache, nil }
+	t.Cleanup(func() { catalog.Dir = oldDir })
+	url := fakeUpstream(t)
+	putJSON(t, url+"/__fake/catalog", `{"templates":[{"name":"normal","version":"1.0.0"}]}`)
+
+	idx, err := catalog.FetchIndex(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl, ok := idx.Find("normal")
+	if !ok {
+		t.Fatalf("the catalog lacks normal: %+v", idx)
+	}
+	if v, ok := catalog.PickCompatible(tmpl); !ok || v.Version != "1.0.0" {
+		t.Fatalf("PickCompatible = %+v, %v", v, ok)
+	}
+	at, err := pipeline.FromVersion(context.Background(), "normal", "1.0.0", nil)
+	if err != nil {
+		t.Fatalf("installing the fake bundle: %v", err)
+	}
+	defer at.Close()
+	if at.Name != "normal" || at.Version != "1.0.0" {
+		t.Errorf("template = %s %s", at.Name, at.Version)
 	}
 }

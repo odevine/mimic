@@ -12,7 +12,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/odevine/mimic/ui/internal/buildinfo"
+	"github.com/odevine/mimic/ui/internal/fontdir"
 	"github.com/odevine/mimic/ui/internal/pipeline"
+	"github.com/odevine/mimic/ui/internal/scryfall"
 	"github.com/odevine/mimic/ui/internal/services/settings"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
@@ -25,6 +28,10 @@ const (
 	// EnvUpstream is the host:port that answers every outbound request. Left
 	// empty, every request is refused
 	EnvUpstream = "MIMIC_E2E_UPSTREAM"
+	// EnvVersion is the version the app reports and compares releases against.
+	// Left empty the build stays a development build, which never checks for
+	// updates
+	EnvVersion = "MIMIC_E2E_VERSION"
 	// EnvCapabilities lists feature keys, separated by commas, to report live
 	EnvCapabilities = "MIMIC_E2E_CAPABILITIES"
 )
@@ -45,9 +52,18 @@ func Apply(env func(string) string) error {
 		return err
 	}
 	workspace.UserConfigDir = func() (string, error) { return home, nil }
+	// Requests go to a fake that answers at once, so waiting on Scryfall's
+	// published limits would only slow a test down
+	scryfall.PaceFactor = 0
+	if v := env(EnvVersion); v != "" {
+		buildinfo.Version = v
+	}
 	// A checkout with loose template assets would render from them, and a test
 	// should see the same template on every machine
 	pipeline.LooseDirBases = nil
+	// The same goes for a checkout's local fonts, which are a developer's own and
+	// read-only, so the fonts come from the scratch folder and the engine
+	fontdir.CheckoutCandidates = nil
 
 	upstream := env(EnvUpstream)
 	if upstream == "" {

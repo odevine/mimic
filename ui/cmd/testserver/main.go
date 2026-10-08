@@ -50,6 +50,8 @@ func run() error {
 	bin := flag.String("bin", "", "a build of the app to run, built when empty")
 	stdin := flag.Bool("exit-on-stdin-close", false, "quit when standard input closes, for a parent that cannot signal this process through go run")
 	logPath := flag.String("log", "", "file for the app's own output, standard error when empty")
+	fakePort := flag.Int("fake-port", 0, "port for the fake upstream's control paths, 0 for a free one")
+	version := flag.String("version", os.Getenv(testbuild.EnvVersion), "the version the app reports, a development build when empty")
 	caps := flag.String("capabilities", os.Getenv(testbuild.EnvCapabilities), "feature keys to report live, separated by commas")
 	flag.Parse()
 	if *mode != "server" && *mode != "mcp" {
@@ -86,7 +88,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	fakeLn, err := net.Listen("tcp", "127.0.0.1:0")
+	fakeLn, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(*fakePort))
 	if err != nil {
 		return err
 	}
@@ -126,6 +128,7 @@ func run() error {
 		testbuild.EnvHome+"="+scratch,
 		testbuild.EnvUpstream+"="+fakeLn.Addr().String(),
 		testbuild.EnvCapabilities+"="+*caps,
+		testbuild.EnvVersion+"="+*version,
 	)
 	var token string
 	var url string
@@ -185,13 +188,13 @@ func run() error {
 			return err
 		}
 		defer mcpstate.Remove(root, state.PID)
-		fmt.Printf("mimic mcp test build ready at %s\nscratch folder: %s\nstate file: %s\n", url, scratch, mcpstate.Path(root))
+		fmt.Printf("mimic mcp test build ready at %s\nscratch folder: %s\nstate file: %s\nfake upstream: http://%s\n", url, scratch, mcpstate.Path(root), fakeLn.Addr())
 	} else {
 		if err := waitFor(ctx, url); err != nil {
 			app.Process.Kill()
 			return err
 		}
-		fmt.Printf("mimic test server listening at %s\nscratch folder: %s\n", url, scratch)
+		fmt.Printf("mimic test server listening at %s\nscratch folder: %s\nfake upstream: http://%s\n", url, scratch, fakeLn.Addr())
 	}
 
 	select {

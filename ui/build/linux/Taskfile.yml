@@ -12,10 +12,11 @@ tasks:
     summary: Builds for this machine's architecture
     env:
       GOOS: linux
-      CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
     cmds:
-      - go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}}" -o "{{.BIN_DIR}}/{{.APP_NAME}}" .
+      # cgo is set on the command, since Task does not override a variable the
+      # environment already has, and CI runs the CLI with cgo off
+      - CGO_ENABLED=1 go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}}" -o "{{.BIN_DIR}}/{{.APP_NAME}}" .
 
   package:
     summary: Makes the AppImage, deb and rpm

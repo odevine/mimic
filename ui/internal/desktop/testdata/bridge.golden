@@ -1,0 +1,573 @@
+# Every bound method, as Service.Method(arguments) -> results. A trailing ! means it can fail,
+# which the page sees as a rejected call
+
+Cards.Printings(string) -> []cardlist.ShapedCard !
+Cards.Recents() -> []string
+Cards.Search(string) -> []cards.SearchResult !
+Data.AddFont(string, string) -> data.FontsStatus !
+Data.CardData() -> data.CardDataView
+Data.DownloadCardData() -> string !
+Data.Fonts() -> data.FontsStatus
+Data.OpenFonts() !
+Data.RemoveCardData() -> carddata.Status !
+Data.RemoveFont(string) -> data.FontsStatus !
+Jobs.Backlog(string, int) -> jobs.Backlog !
+List.ReadFile(string) -> string !
+List.Resolve(list.Request) -> list.Started !
+Overrides.Apply(card.Data, map[string]string) -> rules.Result
+Overrides.ApplyPreset(string) -> overrides.Applied !
+Overrides.DeletePreset(string) !
+Overrides.Matches([]rules.Rule, []overrides.RowRef) -> []int !
+Overrides.Presets() -> []overrides.Preset
+Overrides.Rules() -> []rules.Rule
+Overrides.SavePreset(string) -> overrides.Preset !
+Overrides.SaveRules([]rules.Rule) -> []rules.Rule !
+Render.Cancel(string) !
+Render.Save(string, string) !
+Render.Start(render.Request) -> render.Started !
+Render.SuggestedFilename(string) -> string !
+Run.Latest() -> batch.View
+Run.MPCFolder(string) -> map[string]int !
+Run.MPCInfo() -> run.MPCInfo
+Run.OpenFolder(string) !
+Run.Retry(string) -> batch.View !
+Run.SetCardback(string) -> run.MPCInfo !
+Run.Start(run.Request) -> batch.View !
+Run.Stop(string) !
+Settings.Capabilities() -> map[string]settings.Gate
+Settings.Get() -> prefs.Settings
+Settings.Put(prefs.Settings) -> prefs.Settings
+Settings.Resolution() -> settings.Resolutions !
+Settings.Resources(string) -> settings.ResourcesView
+Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
+System.Confirm(desktop.ConfirmRequest) -> bool
+System.OpenURL(string) !
+System.PickFile(desktop.PickRequest) -> string !
+System.PickFolder(desktop.PickRequest) -> string !
+System.SmokeResult(bool, string)
+System.Version() -> desktop.VersionInfo
+Templates.Active() -> templates.ActiveView
+Templates.Faces() -> []pipeline.FaceRow
+Templates.List() -> []templates.TemplateView
+Templates.Select(templates.SelectRequest) -> string !
+Templates.SetFace(templates.FaceChoice) -> []pipeline.FaceRow !
+Updates.Check() -> desktop.UpdateStatus !
+Updates.Install() !
+Updates.Restart() !
+Updates.Status() -> desktop.UpdateStatus
+
+# The JSON shape of every type those signatures use
+
+batch.Card struct {
+	index int
+	name string
+	face int (omitempty)
+	status string
+	stage string (omitempty)
+	error string (omitempty)
+	frac float64 (omitempty)
+	file string (omitempty)
+	ms int64 (omitempty)
+}
+
+batch.Row struct {
+	name string
+	qty int
+	group string (omitempty)
+	base card.Data
+	fields map[string]string (omitempty)
+	face int (omitempty)
+}
+
+batch.View struct {
+	id string
+	label string
+	outDir string
+	template string
+	dpi int
+	format string
+	concurrency int
+	started time
+	finished time (omitempty)
+	stopped bool (omitempty)
+	report string (omitempty)
+	mpc bool (omitempty)
+	order string (omitempty)
+	warmupMs int64 (omitempty)
+	warmupCards int (omitempty)
+	cards []batch.Card
+}
+
+bool = bool
+
+card.Color = string
+
+card.Data struct {
+	Name string
+	ManaCost string
+	TypeLine string
+	OracleText string
+	FlavorText string
+	Power string
+	Toughness string
+	Loyalty string
+	Colors []card.Color
+	ColorIdentity []card.Color
+	ProducedMana []card.Color
+	Rarity string
+	CollectorNumber string
+	SetCode string
+	Artist string
+	Language string
+	ReleasedAt string
+	ArtworkURL string
+	Layout string
+	FrameEffects []string
+	Keywords []string
+	ColorIndicator []card.Color
+	Faces []card.Face
+	FaceIndex int
+}
+
+card.Face struct {
+	Name string
+	ManaCost string
+	TypeLine string
+	OracleText string
+	FlavorText string
+	Power string
+	Toughness string
+	Loyalty string
+	Colors []card.Color
+	ColorIndicator []card.Color
+	Artist string
+	ArtworkURL string
+}
+
+carddata.Remote struct {
+	updatedAt time
+	size int64
+}
+
+carddata.Status struct {
+	state string
+	error string (omitempty)
+	updatedAt time (omitempty)
+	printings int (omitempty)
+	bytes int64 (omitempty)
+	jobId string (omitempty)
+}
+
+cardlist.Edits struct {
+	name string
+	manaCost string
+	colors string
+	typeLine string
+	oracle string
+	flavor string
+	power string
+	toughness string
+	loyalty string
+	artist string
+	setCode string
+	collector string
+	rarity string
+	released string
+	language string
+	half1Name string
+	half1ManaCost string
+	half1Colors string
+	half1TypeLine string
+	half1Oracle string
+	half1Flavor string
+	half2Name string
+	half2ManaCost string
+	half2Colors string
+	half2TypeLine string
+	half2Oracle string
+	half2Flavor string
+}
+
+cardlist.Resolved struct {
+	index int
+	status string
+	card cardlist.ShapedCard (omitempty)
+	candidates []cardlist.ShapedCard (omitempty)
+	cards []cardlist.ShapedCard (omitempty)
+	note string (omitempty)
+}
+
+cardlist.Row struct {
+	line int
+	text string
+	qty int
+	name string (omitempty)
+	set string (omitempty)
+	number string (omitempty)
+	group string (omitempty)
+	query string (omitempty)
+	fields map[string]string (omitempty)
+	custom bool (omitempty)
+}
+
+cardlist.ShapedCard struct {
+	Name string
+	ManaCost string
+	TypeLine string
+	OracleText string
+	FlavorText string
+	Power string
+	Toughness string
+	Loyalty string
+	Colors []card.Color
+	ColorIdentity []card.Color
+	ProducedMana []card.Color
+	Rarity string
+	CollectorNumber string
+	SetCode string
+	Artist string
+	Language string
+	ReleasedAt string
+	ArtworkURL string
+	Layout string
+	FrameEffects []string
+	Keywords []string
+	ColorIndicator []card.Color
+	Faces []card.Face
+	FaceIndex int
+	shapes []template.Shape
+}
+
+cards.SearchResult struct {
+	text string
+	card cardlist.ShapedCard
+}
+
+data.CardDataView struct {
+	source string
+	local carddata.Status
+	remote carddata.Remote (omitempty)
+}
+
+data.FontRole struct {
+	role string
+	folder string
+	source string
+	file string (omitempty)
+	family string (omitempty)
+	style string (omitempty)
+	borrows string (omitempty)
+	rejected string (omitempty)
+	error string (omitempty)
+	ignored []string (omitempty)
+}
+
+data.FontsStatus struct {
+	kind string
+	path string (omitempty)
+	writable bool
+	roles []data.FontRole
+}
+
+desktop.ConfirmRequest struct {
+	title string
+	message string
+	accept string
+}
+
+desktop.Filter struct {
+	name string
+	pattern string
+}
+
+desktop.PickRequest struct {
+	title string
+	filters []desktop.Filter (omitempty)
+	dir string (omitempty)
+	name string (omitempty)
+	save bool (omitempty)
+}
+
+desktop.UpdateRelease struct {
+	version string
+	notes string (omitempty)
+	pageUrl string (omitempty)
+	size int64 (omitempty)
+}
+
+desktop.UpdateStatus struct {
+	state string
+	current string
+	reason string (omitempty)
+	release desktop.UpdateRelease (omitempty)
+	canInstall bool
+	written int64 (omitempty)
+	total int64 (omitempty)
+	error string (omitempty)
+	checkedAt int64 (omitempty)
+}
+
+desktop.VersionInfo struct {
+	ui string
+	commit string (omitempty)
+	engine string
+}
+
+float64 = float64
+
+int = int
+
+int64 = int64
+
+jobs.Backlog struct {
+	events []jobs.Event
+	finished bool
+}
+
+jobs.Event struct {
+	seq int
+	step string (omitempty)
+	frac float64
+	done bool (omitempty)
+	artMissing bool (omitempty)
+	error string (omitempty)
+	row cardlist.Resolved (omitempty)
+	card batch.Card (omitempty)
+	log string (omitempty)
+	warmupMs int64 (omitempty)
+	warmupCards int (omitempty)
+}
+
+list.Request struct {
+	text string
+	format string
+}
+
+list.Started struct {
+	jobId string
+	format string
+	rows []cardlist.Row
+}
+
+overrides.Applied struct {
+	rules []rules.Rule
+	settings prefs.Settings
+}
+
+overrides.Preset struct {
+	name string
+	version int
+	rules int
+	current bool
+}
+
+overrides.RowRef struct {
+	base card.Data
+	fields map[string]string (omitempty)
+}
+
+pipeline.FaceOption struct {
+	name string
+	versions []string
+}
+
+pipeline.FaceRow struct {
+	key string
+	role template.Role
+	kind template.Kind
+	options []pipeline.FaceOption
+	chosen prefs.TemplateChoice (omitempty)
+	using string
+	primary bool (omitempty)
+}
+
+prefs.Settings struct {
+	theme string (omitempty)
+	expandPrintings bool (omitempty)
+	livePreview bool (omitempty)
+	splits map[string][]float64 (omitempty)
+	concurrency int (omitempty)
+	imageFormat string (omitempty)
+	pngCompression string (omitempty)
+	layerCache string (omitempty)
+	outputDir string (omitempty)
+	recentOutputDirs []string (omitempty)
+	cardData string (omitempty)
+	outputFormat string (omitempty)
+	mpcStock string (omitempty)
+	mpcFoil bool (omitempty)
+	checkUpdates bool (omitempty)
+	notifyRunDone bool (omitempty)
+	dismissedUpdate string (omitempty)
+}
+
+prefs.TemplateChoice struct {
+	name string
+	version string (omitempty)
+}
+
+render.Request struct {
+	base card.Data
+	edits cardlist.Edits
+	target string (omitempty)
+	face int (omitempty)
+}
+
+render.Started struct {
+	jobId string
+	dpi int
+}
+
+rules.Action struct {
+	op string
+	field string
+	value string (omitempty)
+}
+
+rules.Condition struct {
+	field string
+	op string
+	value string (omitempty)
+}
+
+rules.Result struct {
+	fields map[string]string
+	applied []string
+}
+
+rules.Rule struct {
+	id string
+	name string (omitempty)
+	disabled bool (omitempty)
+	when []rules.Condition
+	then []rules.Action
+}
+
+run.CardbackInfo struct {
+	name string
+	width int
+	height int
+	dpi int
+}
+
+run.MPCInfo struct {
+	stocks []string
+	maxCards int
+	cardback run.CardbackInfo
+}
+
+run.MPCOptions struct {
+	stock string
+	foil bool
+}
+
+run.Request struct {
+	rows []batch.Row
+	outDir string
+	label string
+	mpc run.MPCOptions (omitempty)
+}
+
+settings.CacheSize struct {
+	name string
+	label string
+	bytes uint64
+}
+
+settings.Gate struct {
+	state string
+	reason string (omitempty)
+}
+
+settings.ResolutionRequest struct {
+	previewDpi int
+	outputDpi int
+}
+
+settings.Resolutions struct {
+	preview template.Resolution
+	output template.Resolution
+	presets []template.Resolution
+	minDpi int
+	maxDpi int
+}
+
+settings.ResourcesView struct {
+	cpus int
+	totalBytes uint64
+	availableBytes uint64
+	budgetBytes uint64
+	baseBytes uint64
+	cache string
+	cacheBytes uint64
+	cacheSizes []settings.CacheSize
+	renderBytes uint64
+	auto int
+	max int
+	presets []int
+}
+
+string = string
+
+template.Kind = string
+
+template.Resolution struct {
+	dpi int
+	width int
+	height int
+	native bool (omitempty)
+}
+
+template.Role = string
+
+template.Shape struct {
+	role template.Role
+	kind template.Kind
+}
+
+template.Supports struct {
+	roles []template.Role
+	kinds []template.Kind
+}
+
+templates.ActiveView struct {
+	name string
+	version string
+	label string
+	source string
+	supports template.Supports
+	faces map[string]string
+}
+
+templates.FaceChoice struct {
+	key string
+	name string
+	version string
+}
+
+templates.SelectRequest struct {
+	name string
+	version string
+	install bool (omitempty)
+}
+
+templates.TemplateView struct {
+	name string
+	description string (omitempty)
+	renderable bool
+	standard bool
+	reason string (omitempty)
+	versions []templates.VersionView
+}
+
+templates.VersionView struct {
+	version string
+	label string
+	cached bool
+	selectable bool
+	active bool
+	reason string (omitempty)
+	action string
+}
+
+uint64 = uint64

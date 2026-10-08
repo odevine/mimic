@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.2](https://github.com/odevine/mimic/compare/ui/v0.9.1...ui/v0.9.2) (2026-10-07)
+
+
+### Features
+
+* **ui:** redraw the single card preview live as fields are edited ([9286418](https://github.com/odevine/mimic/commit/9286418b5e34ffa80becc813fbcbd3092de47b37))
+* **ui:** write JPEG by default, and make the run page cheaper to watch ([f528e6e](https://github.com/odevine/mimic/commit/f528e6e4659bee2e5890dff6367feff03083a087))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.17.0 ([#77](https://github.com/odevine/mimic/issues/77)) ([6587ad2](https://github.com/odevine/mimic/commit/6587ad2550494bd1bc314d0de5d7d34c64f3409a))
+
 ## [0.9.1](https://github.com/odevine/mimic/compare/ui/v0.9.0...ui/v0.9.1) (2026-10-06)
 
 

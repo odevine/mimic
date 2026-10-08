@@ -51,6 +51,18 @@ at the page, `test:e2e:shot` writes a PNG from a given search and state and
 prints its path, and `dev:server` serves the page on a local port. The tests
 live in `e2e/tests`, with a page object per mode in `e2e/pages`.
 
+Each test gets the fake upstream, a scratch dialogs folder and a guard that fails
+it if the page reaches outside the machine, through the fixtures in
+`e2e/fixtures.mjs`. The `fake` fixture changes what Scryfall, GitHub and the
+template catalog answer (a release, a catalog of bundles, a failing or slow
+host), and `scratch` reads what the app saved and offers it files to open. Tests
+in `e2e/tests` share one server and leave its settings, rules, presets and fonts
+as they found them. A test that installs a template or otherwise changes what the
+app keeps for good goes in `e2e/tests/isolated`, which has a server of its own
+and does not retry. Card fixtures are in `testassets/scryfall`, and a search the
+fake does not understand fails loudly, so add the card or the operator rather
+than loosening a test.
+
 For a question only the real webview can answer, such as how WKWebView lays out
 a control, `dev:mcp` builds the app with the `mcp` tag and opens its real window
 against the same fake Scryfall and a scratch folder at `bin/mcp-home`. Start it in

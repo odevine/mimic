@@ -18,10 +18,10 @@ export class SinglePage {
     this.printing = page.locator("#printing-trigger");
   }
 
-  // open loads the app and waits for the page to finish booting
-  async open() {
-    await this.page.goto("/");
-    await this.page.locator("html.booted").waitFor();
+  // show switches to Single mode, which is where the page starts
+  async show() {
+    await this.page.locator('button[data-mode="single"]').click();
+    await expect(this.searchInput).toBeVisible();
   }
 
   // field is the input for one editor field, by its key such as name or flavor.

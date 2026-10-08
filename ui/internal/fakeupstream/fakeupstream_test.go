@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/odevine/mimic/ui/testassets"
 	"io/fs"
@@ -136,6 +137,128 @@ func TestGitHubHostsAnswerAsAnEmptyWorld(t *testing.T) {
 	rec := get(s, GitHubRaw, "/odevine/mimic-templates/main/index.json")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"templates"`) {
 		t.Errorf("index = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func control(s *Server, method, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, "http://127.0.0.1:1"+path, strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestAReleaseAppearsAndClears(t *testing.T) {
+	s := newServer(t)
+	if rec := control(s, "PUT", "/__fake/release", `{"version":"1.1.0","notes":"Fixes"}`); rec.Code != 204 {
+		t.Fatalf("PUT release = %d %s", rec.Code, rec.Body)
+	}
+	rec := get(s, GitHubAPI, "/repos/odevine/mimic/releases")
+	for _, want := range []string{`"ui/v1.1.0"`, `"Fixes"`, "SHA256SUMS", installer("1.1.0")} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("releases lack %q: %s", want, rec.Body)
+		}
+	}
+	if sums := get(s, GitHubFiles, "/odevine/mimic/releases/download/ui/v1.1.0/SHA256SUMS"); !strings.Contains(sums.Body.String(), installer("1.1.0")) {
+		t.Errorf("checksums = %s", sums.Body)
+	}
+	control(s, "DELETE", "/__fake/release", "")
+	if rec := get(s, GitHubAPI, "/repos/odevine/mimic/releases"); strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("a cleared release still answers: %s", rec.Body)
+	}
+}
+
+func TestAReleaseNeedsAVersion(t *testing.T) {
+	s := newServer(t)
+	if rec := control(s, "PUT", "/__fake/release", `{"notes":"x"}`); rec.Code != 400 {
+		t.Errorf("a release with no version = %d", rec.Code)
+	}
+}
+
+func TestAHostCanBeToldToFail(t *testing.T) {
+	s := newServer(t)
+	control(s, "PUT", "/__fake/fail", `{"host":"api.scryfall.com","status":503}`)
+	if rec := get(s, ScryfallAPI, "/cards/search?q=bolt"); rec.Code != 503 {
+		t.Errorf("a failing host = %d, want 503", rec.Code)
+	}
+	if rec := get(s, ScryfallImages, "/art_crop/x.jpg"); rec.Code != 200 {
+		t.Errorf("another host = %d, want it unaffected", rec.Code)
+	}
+	control(s, "DELETE", "/__fake/fail", "")
+	if rec := get(s, ScryfallAPI, "/cards/search?q=bolt"); rec.Code != 200 {
+		t.Errorf("after clearing = %d", rec.Code)
+	}
+	if rec := control(s, "PUT", "/__fake/fail", `{"host":"x","status":200}`); rec.Code != 400 {
+		t.Errorf("a failure with a success status = %d, want 400", rec.Code)
+	}
+}
+
+func TestAHostCanBeToldToWait(t *testing.T) {
+	s := newServer(t)
+	control(s, "PUT", "/__fake/delay", `{"host":"cards.scryfall.io","ms":150}`)
+	start := time.Now()
+	get(s, ScryfallImages, "/art_crop/x.jpg")
+	if took := time.Since(start); took < 150*time.Millisecond {
+		t.Errorf("a slow host answered in %v", took)
+	}
+	start = time.Now()
+	get(s, ScryfallAPI, "/bulk-data")
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("another host waited %v", took)
+	}
+	control(s, "DELETE", "/__fake/delay", "")
+	start = time.Now()
+	get(s, ScryfallImages, "/art_crop/x.jpg")
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("after clearing it still waited %v", took)
+	}
+	if rec := control(s, "PUT", "/__fake/delay", `{"host":"x","ms":0}`); rec.Code != 400 {
+		t.Errorf("a zero delay = %d, want 400", rec.Code)
+	}
+}
+
+func TestControlCallsAreNotRecordedAsTheAppsRequests(t *testing.T) {
+	s := newServer(t)
+	control(s, "PUT", "/__fake/release", `{"version":"2.0.0"}`)
+	get(s, ScryfallAPI, "/cards/search?q=bolt")
+	if reqs := s.Requests(); len(reqs) != 1 {
+		t.Errorf("requests = %v, want only the app's", reqs)
+	}
+	var listed []string
+	rec := control(s, "GET", "/__fake/requests", "")
+	json.Unmarshal(rec.Body.Bytes(), &listed)
+	if len(listed) != 1 {
+		t.Errorf("GET requests = %v", listed)
+	}
+	control(s, "DELETE", "/__fake/requests", "")
+	if len(s.Requests()) != 0 {
+		t.Error("requests were not forgotten")
+	}
+}
+
+func TestTheCatalogListsTheBundlesItIsToldOf(t *testing.T) {
+	s := newServer(t)
+	rec := get(s, GitHubRaw, "/odevine/mimic-templates/main/index.json")
+	if strings.Contains(rec.Body.String(), `"normal"`) {
+		t.Error("the catalog starts with a template")
+	}
+	if rec := control(s, "PUT", "/__fake/catalog", `{"templates":[{"name":"normal","version":"1.0.0"},{"name":"normal","version":"1.1.0"}]}`); rec.Code != 204 {
+		t.Fatalf("PUT catalog = %d %s", rec.Code, rec.Body)
+	}
+	var idx struct {
+		Templates []struct {
+			Name, Latest string
+			Versions     []struct{ Version, URL string }
+		}
+	}
+	rec = get(s, GitHubRaw, "/odevine/mimic-templates/main/index.json")
+	if err := json.Unmarshal(rec.Body.Bytes(), &idx); err != nil {
+		t.Fatal(err)
+	}
+	if len(idx.Templates) != 1 || idx.Templates[0].Latest != "1.1.0" || idx.Templates[0].Versions[0].Version != "1.1.0" {
+		t.Errorf("index = %+v, want one template whose newest version is first", idx.Templates)
+	}
+	if rec := control(s, "PUT", "/__fake/catalog", `{"templates":[{"name":"nope","version":"1.0.0"}]}`); rec.Code != 400 {
+		t.Errorf("an unknown template = %d, want 400", rec.Code)
 	}
 }
 

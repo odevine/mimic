@@ -1,32 +1,48 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 4173;
-const baseURL = `http://127.0.0.1:${port}`;
+import { servers } from "./servers.mjs";
 
-// One server and one scratch folder serve the whole run, so the tests share the
-// app's state and run one at a time. The server builds the app with the server
-// tag, starts a fake Scryfall, and prints its address once the page answers
+// The test servers run for the whole run, described in servers.mjs. Each project
+// names the server its tests use in its metadata
+const webServer = ({ port, fake, home }, name) => ({
+  command: `go run ../cmd/testserver -port ${port} -fake-port ${fake} -version 1.0.0 -home ${home} -clean -log .scratch/${name}.log`,
+  url: `http://127.0.0.1:${port}`,
+  reuseExistingServer: false,
+  timeout: 240_000,
+  stdout: "ignore",
+  stderr: "pipe",
+});
+
+const browsers = {
+  chromium: devices["Desktop Chrome"],
+  webkit: devices["Desktop Safari"],
+};
+
+const projects = Object.entries(browsers).flatMap(([browser, device]) =>
+  [
+    { name: browser, server: "main", testMatch: /tests\/[^/]+\.spec\.mjs$/, retries: process.env.CI ? 1 : 0 },
+    // The isolated tests change what the app keeps for good, so a second try would
+    // meet the first one's leftovers
+    { name: `${browser}-isolated`, server: `${browser}-isolated`, testMatch: /tests\/isolated\/.*\.spec\.mjs$/, retries: 0 },
+  ].map(({ name, server, ...rest }) => ({
+    name,
+    ...rest,
+    metadata: { server },
+    use: { ...device, viewport: { width: 1280, height: 820 }, baseURL: `http://127.0.0.1:${servers[server].port}` },
+  })),
+);
+
+// One server and one scratch folder serve each group of tests, so the tests in a
+// group run one at a time
 export default defineConfig({
   testDir: "tests",
   outputDir: "test-results",
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { outputFolder: "report", open: "never" }]],
   use: {
-    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 820 } } },
-    { name: "webkit", use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 820 } } },
-  ],
-  webServer: {
-    command: `go run ../cmd/testserver -port ${port} -home .scratch/home -clean -log .scratch/server.log`,
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 240_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  projects,
+  webServer: Object.entries(servers).map(([name, server]) => webServer(server, name)),
 });

@@ -237,7 +237,8 @@ func (u *updatesService) unavailable() string {
 	switch {
 	case u.sh.smoke:
 		return "The launch check does not look for updates"
-	case buildinfo.Version == "" || buildinfo.Version == "dev" || devBuild:
+	// A test build that was given a version checks for updates like a release
+	case buildinfo.Version == "" || buildinfo.Version == "dev" || (devBuild && !buildinfo.TestBuild):
 		return "A development build does not check for updates"
 	}
 	return ""

@@ -162,3 +162,18 @@ func TestPacedTransportQueuesSlowPathsApart(t *testing.T) {
 		t.Errorf("3 searches spanned %v, want at least 120ms", s[2].Sub(s[0]))
 	}
 }
+
+func TestPaceFactorScalesTheIntervals(t *testing.T) {
+	old := PaceFactor
+	t.Cleanup(func() { PaceFactor = old })
+	PaceFactor = 0
+	tr := NewHTTPClient(time.Second).Transport.(*pacedTransport)
+	if tr.interval != 0 || tr.slow["/cards/search"] != 0 {
+		t.Errorf("intervals = %v and %v, want none", tr.interval, tr.slow["/cards/search"])
+	}
+	PaceFactor = 1
+	tr = NewHTTPClient(time.Second).Transport.(*pacedTransport)
+	if tr.interval != defaultInterval || tr.slow["/cards/search"] != slowInterval {
+		t.Errorf("intervals = %v and %v, want the published ones", tr.interval, tr.slow["/cards/search"])
+	}
+}

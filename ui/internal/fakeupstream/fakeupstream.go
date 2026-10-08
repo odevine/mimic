@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Hosts the handler answers for
@@ -27,6 +28,8 @@ const (
 	ScryfallImages = "cards.scryfall.io"
 	GitHubAPI      = "api.github.com"
 	GitHubRaw      = "raw.githubusercontent.com"
+	// GitHubFiles serves the files attached to a release
+	GitHubFiles = "github.com"
 )
 
 // Server is the handler and the record of what it was asked
@@ -35,6 +38,14 @@ type Server struct {
 
 	mu       sync.Mutex
 	requests []string
+	// release is the ui release on offer, nil for none
+	release *Release
+	// catalog is the template bundles on offer, none by default
+	catalog []bundle
+	// failing maps a host to the status it answers every request with
+	failing map[string]int
+	// slow maps a host to how long each of its requests waits before an answer
+	slow map[string]time.Duration
 }
 
 // card is one Scryfall card object and the fields a search reads from it
@@ -71,7 +82,7 @@ func New(dir fs.FS) (*Server, error) {
 	return s, nil
 }
 
-// Requests lists every request seen, as "host path", oldest first
+// Requests lists every request seen from the app, as "host path", oldest first
 func (s *Server) Requests() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -79,13 +90,29 @@ func (s *Server) Requests() []string {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, controlPrefix) {
+		s.control(w, r)
+		return
+	}
 	host := r.Host
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
 	s.mu.Lock()
 	s.requests = append(s.requests, host+" "+r.URL.Path)
+	status, wait := s.failing[host], s.slow[host]
 	s.mu.Unlock()
+	if wait > 0 {
+		select {
+		case <-time.After(wait):
+		case <-r.Context().Done():
+			return
+		}
+	}
+	if status != 0 {
+		http.Error(w, "fakeupstream: told to fail "+host, status)
+		return
+	}
 
 	switch host {
 	case ScryfallAPI:
@@ -93,14 +120,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case ScryfallImages:
 		art(w, r)
 	case GitHubAPI:
-		// No releases, so the updater reports the app as current
-		writeJSON(w, http.StatusOK, []any{})
+		s.githubAPI(w, r)
 	case GitHubRaw:
-		if strings.HasSuffix(r.URL.Path, "/index.json") {
-			writeJSON(w, http.StatusOK, map[string]any{"schema": 1, "templates": []any{}})
-			return
-		}
-		http.NotFound(w, r)
+		s.githubRaw(w, r)
+	case GitHubFiles:
+		s.githubFiles(w, r)
 	default:
 		// A host nobody planned for is a request the test build should not make
 		http.Error(w, "fakeupstream: no answer planned for the host "+host, http.StatusBadGateway)

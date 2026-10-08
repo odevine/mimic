@@ -26,6 +26,10 @@ const (
 	slowInterval    = 500 * time.Millisecond
 )
 
+// PaceFactor scales both intervals. It is 1 in the app, and a test build sets it
+// to 0 so a list of cards resolves without waiting on Scryfall's published limits
+var PaceFactor = 1.0
+
 var slowPaths = []string{"/cards/search", "/cards/named", "/cards/random", "/cards/collection"}
 
 // penalty is how long Scryfall limits access after a 429, and what a 429
@@ -43,9 +47,9 @@ const maxRetryAfter = 2 * penalty
 func NewHTTPClient(timeout time.Duration) *http.Client {
 	base := http.DefaultTransport.(*http.Transport).Clone()
 	base.ResponseHeaderTimeout = timeout
-	t := newPacedTransport(base, apiHost, defaultInterval)
+	t := newPacedTransport(base, apiHost, time.Duration(float64(defaultInterval)*PaceFactor))
 	for _, p := range slowPaths {
-		t.slow[p] = slowInterval
+		t.slow[p] = time.Duration(float64(slowInterval) * PaceFactor)
 	}
 	return &http.Client{Transport: t}
 }

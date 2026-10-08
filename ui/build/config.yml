@@ -1,0 +1,14 @@
+# The identity of the app, which the platform assets under this folder spell out
+# (Info.plist, info.json, the installer script and the package configs). The
+# version here is a placeholder: the packaging tasks write the real one from the
+# release tag into a build copy, and nothing in git changes per release
+version: '3'
+
+info:
+  companyName: "Owen Devine"
+  productName: "Mimic"
+  productIdentifier: "io.github.odevine.mimic"
+  description: "Renders Magic: The Gathering cards"
+  copyright: "Copyright Owen Devine"
+  comments: ""
+  version: "0.0.0"

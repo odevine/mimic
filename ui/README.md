@@ -145,6 +145,40 @@ the template, resolution, and warm-up used. Retry failed starts a new run from o
 failed cards. The app keeps the latest run, so reloading the page picks it
 back up, and the template cannot be switched while a run is going.
 
+## Packaging
+
+The Wails CLI is a tool dependency of the module, so there is nothing to install
+beyond what a build needs:
+
+```
+go tool wails3 task build                  # the binary, into bin/
+go tool wails3 task package VERSION=1.0.0  # what a release ships, into bin/
+```
+
+Package stamps the version into `build/darwin/Info.plist`,
+`build/windows/info.json` and `build/config.yml`, so run it on a throwaway
+checkout, or revert `build/` afterward. It also wants `GOWORK=off`, so the
+engine version it stamps is the release the module pins. Each system packages
+only itself, because the webview needs the system's own toolchain. macOS makes a
+universal `.dmg` and `.zip`. Windows needs
+[NSIS](https://nsis.sourceforge.io) for `makensis`, takes `ARCH=amd64` or
+`ARCH=arm64`, and makes a per-user installer and a portable `.zip`. Linux makes
+an AppImage, a `.deb` and an `.rpm` for its own architecture. The AppImage step
+downloads linuxdeploy when it runs.
+
+`.github/workflows/package-ui.yml` runs all five on native runners. A release
+calls it to publish, and a manual run, the weekly run and any pull request that
+touches `ui/build` call it without publishing, which leaves the files as
+workflow artifacts.
+
+`cmd/pkgtool` holds the chores the tasks share across systems: stamping the
+version, zipping an app for the updater, listing checksums and signing. To sign
+updates, make a key pair with `go run ./cmd/pkgtool keygen`. Store the private
+half as the `MIMIC_UPDATE_PRIVATE_KEY` secret and the public half as the
+`MIMIC_UPDATE_PUBLIC_KEY` variable, and releases then carry a `.sig` beside each
+update file, checked by the key stamped into the app. A signature is Ed25519
+over the file's SHA-256, which is what the updater verifies.
+
 ## The window
 
 The window opens where it was left. Its position and size are saved to

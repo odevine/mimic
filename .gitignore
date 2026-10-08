@@ -24,6 +24,11 @@ rendercard
 rendercard.exe
 mimic
 /ui/ui
+# Packaging output and the temporary files its tasks write
+/ui/bin/
+/ui/build/linux/appimage-build/
+/ui/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+*.syso
 *.exe
 *.dll
 *.so

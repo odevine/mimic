@@ -69,8 +69,11 @@ Events.On("job", (ev) => {
 export function watchJob(jobId, onStep) {
   const j = jobState(jobId);
   let watcher;
+  let heard = 0; // the last sequence number this watcher applied
   const p = new Promise((resolve, reject) => {
     watcher = (e) => {
+      if (e.seq <= heard) return;
+      heard = e.seq;
       if (e.done) {
         j.watchers.delete(watcher);
         jobs.delete(jobId);
@@ -81,14 +84,18 @@ export function watchJob(jobId, onStep) {
       if (onStep) onStep(e.step, e.frac, e);
     };
     j.watchers.add(watcher);
-    // Events already collected, then anything the app holds beyond them
-    for (const e of [...j.events]) watcher(e);
-    Call.ByName(`${NS}jobs.Service.Backlog`, jobId, j.seq).then(
-      (b) => b.events.forEach((e) => deliver(jobId, e)),
-      (err) => {
-        if (!j.events.some((e) => e.done)) reject(new Error(message(err)));
-      },
-    );
+    // Events already collected, then anything the app holds beyond them. This
+    // waits a tick, so a caller never hears an event before watchJob returns:
+    // callers refer to the promise it returns from inside their callback
+    queueMicrotask(() => {
+      for (const e of [...j.events]) watcher(e);
+      Call.ByName(`${NS}jobs.Service.Backlog`, jobId, j.seq).then(
+        (b) => b.events.forEach((e) => deliver(jobId, e)),
+        (err) => {
+          if (!j.events.some((e) => e.done)) reject(new Error(message(err)));
+        },
+      );
+    });
   });
   p.close = () => {
     j.watchers.delete(watcher);

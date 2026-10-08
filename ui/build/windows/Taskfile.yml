@@ -1,0 +1,57 @@
+version: '3'
+
+# Windows needs no cgo, so both architectures build with plain Go cross
+# compilation. The installer is NSIS, made with makensis (install it first), and
+# installs per user so it needs no elevation, which is also what lets the app
+# replace itself when it updates. The zip is the portable build and the file the
+# updater swaps in. A code signing step is guarded by its secrets and does nothing
+# without them
+
+tasks:
+  build:
+    summary: Builds one architecture, ARCH defaulting to this machine's
+    env:
+      GOOS: windows
+      CGO_ENABLED: 0
+      GOARCH: '{{.ARCH | default ARCH}}'
+    cmds:
+      - task: syso
+        vars: {ARCH: '{{.ARCH | default ARCH}}'}
+      - go build -tags production -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}} -H windowsgui" -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe" .
+      - defer: {task: syso:clean}
+
+  syso:
+    summary: Generates the resource file that gives the exe its icon, manifest and version
+    internal: true
+    dir: build
+    cmds:
+      - go tool wails3 generate syso -arch {{.ARCH}} -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.json -out ../wails_windows_{{.ARCH}}.syso
+
+  syso:clean:
+    internal: true
+    cmds:
+      - cmd: powershell -NoProfile -Command "Remove-Item -ErrorAction SilentlyContinue *.syso"
+        platforms: [windows]
+      - cmd: rm -f *.syso
+        platforms: [linux, darwin]
+
+  package:
+    summary: Makes the installer for a fresh install and the zip the updater swaps in
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+      ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
+    deps:
+      - task: build
+        vars: {ARCH: '{{.ARCH | default ARCH}}'}
+    cmds:
+      - go tool wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
+      # The script names its output and its includes relative to its own folder,
+      # so makensis runs from there
+      - cmd: cd build/windows/nsis && makensis -DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        platforms: [windows]
+      - cmd: cd build/windows/nsis && makensis -DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        platforms: [linux, darwin]
+      - go run ./cmd/pkgtool rename "{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH}}-installer.exe" "{{.BIN_DIR}}/{{.PRODUCT}}-{{.VERSION}}-windows-{{.ARCH}}-installer.exe"
+      # The updater takes a zip holding one file, the exe
+      - go run ./cmd/pkgtool rename "{{.BIN_DIR}}/{{.APP_NAME}}.exe" "{{.BIN_DIR}}/stage/{{.PRODUCT}}.exe" --copy
+      - go run ./cmd/pkgtool zip -out "{{.BIN_DIR}}/{{.PRODUCT}}-{{.VERSION}}-windows-{{.ARCH}}.zip" "{{.BIN_DIR}}/stage/{{.PRODUCT}}.exe"

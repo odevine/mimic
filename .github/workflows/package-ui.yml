@@ -1,0 +1,212 @@
+name: Package ui
+
+# Builds the app natively on each operating system and packages what a release
+# ships: a dmg and zip on macOS, an installer and zip on Windows for both
+# architectures, and an AppImage, deb and rpm on Linux for both. The release
+# workflow calls it with publish on, which attaches the files to the release. A
+# manual run, the weekly run and a pull request that touches the packaging call
+# it with publish off, which leaves the files as workflow artifacts, so the
+# installers are exercised long before a release depends on them
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag, such as ui/v1.0.0, to build and publish to
+        type: string
+        default: ""
+      publish:
+        description: Attach the files to the release named by tag
+        type: boolean
+        default: false
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  pull_request:
+    paths:
+      - ui/build/**
+      - ui/Taskfile.yml
+      - ui/cmd/pkgtool/**
+      - .github/workflows/package-ui.yml
+
+permissions:
+  contents: read
+
+jobs:
+  # The version is the tag without its ui/v prefix. A run with no release behind
+  # it builds 0.0.0, which stamps the files like a release but is never published
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      ref: ${{ steps.version.outputs.ref }}
+    steps:
+      - id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            echo "version=${TAG#ui/v}" >> "$GITHUB_OUTPUT"
+            echo "ref=${TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+            echo "ref=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+  package:
+    name: package (${{ matrix.leg }})
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: macos-universal
+            runner: macos-latest
+          - leg: windows-amd64
+            runner: windows-latest
+            arch: amd64
+          - leg: windows-arm64
+            runner: windows-latest
+            arch: arm64
+          # Linux builds on the oldest supported Ubuntu, so the binary links
+          # against an older glibc and runs on newer distributions
+          - leg: linux-amd64
+            runner: ubuntu-22.04
+          - leg: linux-arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: ui
+    env:
+      # Build against the pinned engine module, not a workspace, so the release
+      # is hermetic and the stamped engine version is the real one
+      GOWORK: "off"
+      VERSION: ${{ needs.meta.outputs.version }}
+      UPDATE_KEY: ${{ vars.MIMIC_UPDATE_PUBLIC_KEY }}
+      # Whether the signing key is set, which is all the step condition can see
+      SIGNING: ${{ secrets.MIMIC_UPDATE_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.ref }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install the Windows installer builder
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
+
+      - name: Package
+        run: go tool wails3 task package VERSION="$VERSION" ${{ matrix.arch && format('ARCH={0}', matrix.arch) || '' }}
+
+      # The updater verifies the digest it computes while downloading against
+      # the signature, with the public key stamped into the app. Only the files
+      # it swaps in are signed, and only when the signing key is configured
+      - name: Sign the update files
+        if: env.SIGNING == 'true'
+        env:
+          MIMIC_UPDATE_PRIVATE_KEY: ${{ secrets.MIMIC_UPDATE_PRIVATE_KEY }}
+        run: |
+          shopt -s nullglob
+          go run ./cmd/pkgtool sign bin/Mimic-*.zip bin/Mimic-*.AppImage
+
+      - name: List what was built
+        run: ls -la bin
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ui-${{ matrix.leg }}
+          if-no-files-found: error
+          path: |
+            ui/bin/Mimic-*
+            ui/bin/mimic_*.deb
+            ui/bin/mimic-*.rpm
+
+  # Every expected file is there, and SHA256SUMS covers all of them. The updater
+  # checks a download against that list, so a release without it offers no update
+  verify:
+    needs: [meta, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.ref }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ui-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check every file is there
+        run: |
+          v="$VERSION"
+          expected="
+            Mimic-${v}-macos-universal.dmg
+            Mimic-${v}-macos-universal.zip
+            Mimic-${v}-windows-amd64-installer.exe
+            Mimic-${v}-windows-amd64.zip
+            Mimic-${v}-windows-arm64-installer.exe
+            Mimic-${v}-windows-arm64.zip
+            Mimic-${v}-linux-amd64.AppImage
+            mimic_${v}_amd64.deb
+            mimic-${v}.x86_64.rpm
+            Mimic-${v}-linux-arm64.AppImage
+            mimic_${v}_arm64.deb
+            mimic-${v}.aarch64.rpm"
+          missing=0
+          for f in $expected; do
+            if [ ! -f "dist/$f" ]; then
+              echo "missing: $f"
+              missing=1
+            fi
+          done
+          ls -la dist
+          exit $missing
+
+      - name: Write the checksums
+        working-directory: ui
+        run: |
+          files=$(ls "${GITHUB_WORKSPACE}"/dist/* | grep -v '\.sig$')
+          go run ./cmd/pkgtool sums -out "${GITHUB_WORKSPACE}/dist/SHA256SUMS" $files
+          cat "${GITHUB_WORKSPACE}/dist/SHA256SUMS"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ui-checksums
+          path: dist/SHA256SUMS
+
+      # Everything goes up last, so a release never shows files with no
+      # checksums, which the updater reads as nothing to offer yet
+      - name: Attach the files to the release
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" dist/* --clobber

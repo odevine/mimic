@@ -13,5 +13,10 @@ var Version = "dev"
 var Commit = ""
 
 // Engine is the engine release this build renders with, stamped through the
-// engine module's own variable
-func Engine() string { return version.Version }
+// engine module's own variable, and is dev when that was stamped empty
+func Engine() string {
+	if version.Version == "" {
+		return "dev"
+	}
+	return version.Version
+}

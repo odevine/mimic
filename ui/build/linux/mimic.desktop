@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=Mimic
+Comment=Renders Magic: The Gathering cards
+Exec=mimic
+Terminal=false
+Type=Application
+Icon=mimic
+Categories=Graphics;Utility;
+StartupWMClass=mimic

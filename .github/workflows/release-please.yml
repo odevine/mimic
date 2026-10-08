@@ -2,7 +2,7 @@ name: Release Please
 
 # release-please watches main for conventional commits and keeps a release pull
 # request open per package. Merging that pull request tags the release and
-# publishes it. A ui release then gets its app binaries built below. The engine
+# publishes it. A ui release then gets its installers built below. The engine
 # is a Go module, so its release is the tag alone
 on:
   push:
@@ -32,79 +32,29 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Binaries attach to the release release-please just created, so this job
-  # uploads rather than creating a release of its own. The mimic app builds
-  # without cgo, so all six targets cross-compile from this one Linux runner and
-  # archive per OS
-  ui-binaries:
+  # The app builds natively on each operating system and attaches its installers
+  # and update files, with a SHA256SUMS covering them, to the release
+  # release-please just created. package-ui.yml does the work, and is also run on
+  # its own to exercise the packaging before a release depends on it
+  ui-packages:
     needs: release-please
     if: needs.release-please.outputs.ui-released == 'true'
-    runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.ui-tag }}
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: ui/go.mod
-          cache-dependency-path: ui/go.sum
-
-      - name: Test
-        working-directory: ui
-        run: go test ./...
-
-      - name: Build mimic binaries
-        working-directory: ui
-        env:
-          # ui/v0.2.0 carries the module path prefix, the binaries do not
-          TAG: ${{ needs.release-please.outputs.ui-tag }}
-          # Build against the pinned engine module, not the workspace checkout,
-          # so the release is hermetic and the stamped version is the real one
-          GOWORK: off
-        run: |
-          version="${TAG#ui/}"
-          # Stamp the engine version this ui release depends on, so the shipped
-          # binary keeps real template-compatibility gating rather than the
-          # unstamped "dev" that renders anything
-          engine_version="$(go list -m -f '{{.Version}}' github.com/odevine/mimic/engine)"
-          echo "stamping engine version ${engine_version}"
-          mkdir -p "${GITHUB_WORKSPACE}/dist"
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            os="${target%/*}"
-            arch="${target#*/}"
-            ext=""
-            [ "$os" = "windows" ] && ext=".exe"
-            stage="mimic-${version}-${os}-${arch}"
-            mkdir -p "${stage}"
-            echo "building ${stage}"
-            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
-              -trimpath -ldflags "-s -w -X github.com/odevine/mimic/engine/version.Version=${engine_version}" \
-              -o "${stage}/mimic${ext}" .
-            cp README.md "${stage}/"
-            if [ "$os" = "windows" ]; then
-              zip -qr "${GITHUB_WORKSPACE}/dist/${stage}.zip" "${stage}"
-            else
-              tar -czf "${GITHUB_WORKSPACE}/dist/${stage}.tar.gz" "${stage}"
-            fi
-          done
-
-      - name: Attach binaries to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-please.outputs.ui-tag }}
-        run: gh release upload "$TAG" "${GITHUB_WORKSPACE}"/dist/*
+    uses: ./.github/workflows/package-ui.yml
+    with:
+      tag: ${{ needs.release-please.outputs.ui-tag }}
+      publish: true
+    secrets: inherit
 
   # GitHub marks each new release as latest, so an engine release would take the
   # badge from the app. This hands it back to the newest ui release after either
-  # package releases, and waits for ui-binaries so the badge lands on a release
+  # package releases, and waits for ui-packages so the badge lands on a release
   # that already has its downloads
   pin-latest:
-    needs: [release-please, ui-binaries]
+    needs: [release-please, ui-packages]
     if: >-
-      !cancelled() && needs.ui-binaries.result != 'failure' &&
+      !cancelled() && needs.ui-packages.result != 'failure' &&
       (needs.release-please.outputs.engine-released == 'true' ||
        needs.release-please.outputs.ui-released == 'true')
     runs-on: ubuntu-latest

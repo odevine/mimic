@@ -1,0 +1,33 @@
+version: '3'
+
+# Linux needs cgo and the GTK 3 and WebKitGTK 4.1 development packages, so it
+# builds on the oldest supported Ubuntu, which keeps the binary's glibc
+# requirement low enough to run on newer distributions. Wails v3 builds against
+# GTK 4 unless told otherwise, and the gtk3 tag selects the stack Ubuntu 22.04
+# ships. The AppImage is the install that needs no package manager and the file
+# the updater swaps in. The deb and rpm belong to the system's package manager
+
+tasks:
+  build:
+    summary: Builds for this machine's architecture
+    env:
+      GOOS: linux
+      CGO_ENABLED: 1
+      GOARCH: '{{.ARCH | default ARCH}}'
+    cmds:
+      - go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}}" -o "{{.BIN_DIR}}/{{.APP_NAME}}" .
+
+  package:
+    summary: Makes the AppImage, deb and rpm
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+    deps: [build]
+    env:
+      GOARCH: '{{.ARCH}}'
+      MIMIC_VERSION: '{{.VERSION}}'
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}/stage"
+      - go tool wails3 generate appimage -binary "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}" -icon "{{.ROOT_DIR}}/build/appicon.png" -desktopfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -outputdir "{{.ROOT_DIR}}/{{.BIN_DIR}}/stage" -builddir "{{.ROOT_DIR}}/{{.BIN_DIR}}/appimage-build"
+      - go tool wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
+      - go tool wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
+      - go run ./cmd/pkgtool linux-names -dir "{{.BIN_DIR}}/stage" -out "{{.BIN_DIR}}" -version "{{.VERSION}}" -arch "{{.ARCH}}"

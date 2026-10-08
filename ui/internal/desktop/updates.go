@@ -51,8 +51,8 @@ type provider struct{ client *releases.Client }
 func (p *provider) Name() string { return "github" }
 
 // Check returns the newest ui release when it is newer than the running app and
-// has a file for this platform, and nothing otherwise. A release published
-// before its files are uploaded has no file, which reads as no update yet
+// has a checked file for this platform, and nothing otherwise. A release published
+// before its files and checksums are uploaded reads as no update yet
 func (p *provider) Check(ctx context.Context, req updater.CheckRequest) (*updater.Release, error) {
 	rel, err := p.client.Latest(ctx)
 	if errors.Is(err, releases.ErrNone) {
@@ -81,6 +81,12 @@ func (p *provider) Check(ctx context.Context, req updater.CheckRequest) (*update
 	if v.Signature != nil {
 		v.SignatureAlgo = "ed25519"
 	}
+	// A file with no digest and no signature has nothing to be checked against.
+	// That is a release whose checksums are still being written, so it is not
+	// offered yet rather than installed unchecked
+	if v.Digest == nil && v.Signature == nil {
+		return nil, nil
+	}
 	out := &updater.Release{
 		Version:     rel.Version,
 		Name:        rel.Name,
@@ -95,9 +101,7 @@ func (p *provider) Check(ctx context.Context, req updater.CheckRequest) (*update
 		},
 		Metadata: map[string]any{"assetURL": asset.URL, "pageURL": rel.URL},
 	}
-	if v.Digest != nil || v.Signature != nil {
-		out.Verification = v
-	}
+	out.Verification = v
 	return out, nil
 }
 

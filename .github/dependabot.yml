@@ -12,6 +12,19 @@ updates:
         patterns:
           - "*"
 
+  # Go dependencies for the ui module, which includes the pinned Wails release
+  # and its CLI. Wails v3 is a beta, so a bump is never merged unreviewed and has
+  # to pass the full platform matrix.
+  - package-ecosystem: gomod
+    directory: /ui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
   # GitHub Actions used by the workflows in .github/workflows.
   - package-ecosystem: github-actions
     directory: /

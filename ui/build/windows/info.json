@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.0.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.0.0",
+			"CompanyName": "Owen Devine",
+			"FileDescription": "Renders Magic: The Gathering cards",
+			"LegalCopyright": "Copyright Owen Devine",
+			"ProductName": "Mimic",
+			"Comments": "(c) 2026 Owen Devine"
+		}
+	}
+}

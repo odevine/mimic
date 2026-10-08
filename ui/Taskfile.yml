@@ -1,0 +1,63 @@
+# Builds and packages the app. Run it through the Wails CLI the module pins, so
+# nothing has to be installed first:
+#
+#   go tool wails3 task build
+#   go tool wails3 task package VERSION=1.0.0
+#
+# build makes the binary for this machine, and package makes what a release
+# ships for it: the dmg and zip on macOS, the installer and zip on Windows, the
+# AppImage, deb and rpm on Linux. Every platform's files land in bin/. A package
+# run stamps VERSION into the build assets first, so run it on a throwaway
+# checkout, which CI does, or revert build/ afterward
+version: '3'
+
+vars:
+  APP_NAME: mimic
+  PRODUCT: Mimic
+  BIN_DIR: bin
+  # The version a release carries, without the ui/v prefix. A plain build is dev
+  VERSION: '{{.VERSION | default "dev"}}'
+  # The engine release the module pins, stamped so a shipped app keeps real
+  # template-compatibility gating rather than the unstamped dev that renders
+  # anything. CI builds with GOWORK=off so this is the pin, not a workspace
+  ENGINE_VERSION:
+    sh: 'go list -m -f "{{`{{.Version}}`}}" github.com/odevine/mimic/engine'
+  # The Ed25519 public key releases are signed with, base64. Empty builds trust
+  # releases by their digest alone
+  UPDATE_KEY: '{{.UPDATE_KEY | default ""}}'
+  # What every release build stamps in, and strips
+  LDFLAGS: '-s -w -X github.com/odevine/mimic/ui/internal/buildinfo.Version={{.VERSION}} -X github.com/odevine/mimic/engine/version.Version={{.ENGINE_VERSION}} -X github.com/odevine/mimic/ui/internal/desktop.updateKey={{.UPDATE_KEY}}'
+  GOOS: '{{.GOOS | default OS}}'
+
+includes:
+  darwin: ./build/darwin/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the app for this machine into bin/
+    cmds:
+      - task: '{{.GOOS}}:build'
+
+  package:
+    summary: Packages a release build for this machine into bin/
+    preconditions:
+      - sh: 'test -n "{{.ENGINE_VERSION}}"'
+        msg: 'The engine version is empty, which a workspace causes. Package with GOWORK=off so the build uses the engine release the module pins.'
+    cmds:
+      - task: stamp
+      - task: '{{.GOOS}}:package'
+
+  stamp:
+    summary: Writes VERSION into the build assets
+    internal: true
+    status:
+      - test "{{.VERSION}}" = "dev"
+    cmds:
+      - go run ./cmd/pkgtool stamp -version "{{.VERSION}}" -dir build
+
+  run:
+    summary: Runs the app from source
+    cmds:
+      - go run {{if eq .GOOS "linux"}}-tags gtk3{{end}} .

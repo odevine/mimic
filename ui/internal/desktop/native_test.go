@@ -141,6 +141,10 @@ func TestProviderSaysNothingWhenThereIsNothingToInstall(t *testing.T) {
 	if check(releaseServer(t, uiRelease("ui/v1.0.0")), "0.9.2", "darwin", "arm64") != nil {
 		t.Error("a release with no files was offered")
 	}
+	// The file is up but the checksums are not, so there is nothing to check it by
+	if check(releaseServer(t, uiRelease("ui/v1.0.0", "Mimic-1.0.0-macos-universal.zip")), "0.9.2", "darwin", "arm64") != nil {
+		t.Error("a file with no checksum was offered")
+	}
 	if check(releaseServer(t, uiRelease("engine/v1.0.0")), "0.9.2", "darwin", "arm64") != nil {
 		t.Error("an engine release counted as an update")
 	}

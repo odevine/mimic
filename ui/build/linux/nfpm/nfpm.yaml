@@ -1,0 +1,34 @@
+# The deb and rpm packages. nfpm expands the environment variables below, which
+# the packaging task sets: GOARCH from the build, MIMIC_VERSION from the release
+# tag. The app is built against GTK 3 and WebKitGTK 4.1 (the gtk3 build tag)
+name: "mimic"
+arch: ${GOARCH}
+platform: "linux"
+version: ${MIMIC_VERSION}
+section: "graphics"
+priority: "optional"
+maintainer: "Owen Devine"
+description: "Renders Magic: The Gathering cards"
+vendor: "Owen Devine"
+homepage: "https://github.com/odevine/mimic"
+
+contents:
+  - src: "./bin/mimic"
+    dst: "/usr/bin/mimic"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/1024x1024/apps/mimic.png"
+  - src: "./build/linux/mimic.desktop"
+    dst: "/usr/share/applications/mimic.desktop"
+
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+
+overrides:
+  rpm:
+    depends:
+      - gtk3
+      - webkit2gtk4.1
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

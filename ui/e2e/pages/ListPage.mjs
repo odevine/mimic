@@ -68,7 +68,7 @@ export class ListPage {
   }
 
   inspectorField(key) {
-    return this.page.locator(`#inspector-form #f-${key}`);
+    return this.page.locator(`#f-inspector-${key}`);
   }
 
   // bulk runs an item of the Actions menu, such as "Set a field…", which acts on

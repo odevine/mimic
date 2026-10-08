@@ -25,10 +25,8 @@ export class SinglePage {
   }
 
   // field is the input for one editor field, by its key such as name or flavor.
-  // The list inspector builds the same fields with the same ids, so the lookup
-  // starts from the editor's own form
   field(key) {
-    return this.page.locator(`#editor-form #f-${key}`);
+    return this.page.locator(`#f-single-${key}`);
   }
 
   // fieldRow is the whole row of a field, which carries the dirty mark

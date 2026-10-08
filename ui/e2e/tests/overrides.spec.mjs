@@ -22,13 +22,13 @@ test("a global rule changes the fields of the cards it matches and leaves the ot
   await page.locator("#search-input").fill("llanowar elves");
   await page.locator("#search-input").press("Enter");
   await page.locator("#results .result:not(.recent)").first().click();
-  await expect(page.locator('#editor-form #f-power')).toHaveValue("9");
+  await expect(page.locator('#f-single-power')).toHaveValue("9");
   await expect(page.locator('#editor-form .field[data-field="power"]')).toHaveClass(/ruled/);
 
   await page.locator("#search-input").fill("sol ring");
   await page.locator("#search-input").press("Enter");
   await page.locator("#results .result:not(.recent)").first().click();
-  await expect(page.locator('#editor-form #f-power')).toHaveValue("");
+  await expect(page.locator('#f-single-power')).toHaveValue("");
 });
 
 test("rules are kept across a reload and can all be switched off", async ({ overrides, page }) => {

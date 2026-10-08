@@ -78,9 +78,11 @@ export const isDirty = (f, edits, base) => (isColorField(f) ? normColors(edits[f
 // card, which says whether it is split, and edits the field values as strings.
 // reference holds the values an edit is measured against and a revert returns
 // to, and ruled, when given, the fields a rule set. onEnter runs when the user
-// presses Enter in a one-line field or submits the form. mount fills a form
-// element with the fields, and dirty says whether any field differs
+// presses Enter in a one-line field or submits the form. idPrefix names the
+// editor in its fields' ids, which two editors on one page must not share. mount
+// fills a form element with the fields, and dirty says whether any field differs
 export function createCardEditor(ctx) {
+  if (!ctx.idPrefix) throw new Error("an editor needs an idPrefix so its field ids stay unique");
   ctx.setEdit = (f, value) => {
     ctx.edits.value = { ...ctx.edits.peek(), [f]: value };
   };
@@ -147,7 +149,7 @@ export function createCardEditor(ctx) {
   }
 
   function buildField(spec) {
-    const id = `f-${spec.f}`;
+    const id = `f-${ctx.idPrefix}-${spec.f}`;
     const revert = h(
       "button",
       {

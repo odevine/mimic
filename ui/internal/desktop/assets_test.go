@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -82,8 +83,10 @@ func TestAssetHandlerServesImagesAndFrontend(t *testing.T) {
 	if rec := serve(h, "GET", "/"); rec.Code != 200 || rec.Body.String() != "<title>Mimic</title>" {
 		t.Errorf("frontend: %d %q", rec.Code, rec.Body)
 	}
-	if rec := serve(h, "GET", "/smoke.html"); rec.Code != 404 {
-		t.Errorf("the launch check page is served outside a launch check: %d", rec.Code)
+	for _, path := range []string{"/smoke.html", "/smoke.js"} {
+		if rec := serve(h, "GET", path); rec.Code != 404 {
+			t.Errorf("%s is served outside a launch check: %d", path, rec.Code)
+		}
 	}
 }
 
@@ -102,8 +105,21 @@ func TestAssetHandlerSymbolRevalidates(t *testing.T) {
 }
 
 func TestAssetHandlerServesTheLaunchCheckOnlyWhenAsked(t *testing.T) {
-	h := assetHandler(fakeImages{}, fstest.MapFS{}, true)
-	if rec := serve(h, "GET", "/smoke.html"); rec.Code != 200 || rec.Body.Len() == 0 {
-		t.Errorf("launch check page: %d", rec.Code)
+	h := assetHandler(fakeImages{}, fstest.MapFS{"index.html": {Data: []byte("<title>Mimic</title>")}}, true)
+	rec := serve(h, "GET", "/smoke.html")
+	if rec.Code != 200 || rec.Body.String() != `<title>Mimic</title><script type="module" src="/smoke.js"></script>` {
+		t.Errorf("launch check page: %d %q", rec.Code, rec.Body)
+	}
+	rec = serve(h, "GET", "/smoke.js")
+	if rec.Code != 200 || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(rec.Body.String(), "async function flows") {
+		t.Errorf("launch check flows: %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+}
+
+func TestTheLaunchCheckScriptGoesBeforeTheClosingBodyTag(t *testing.T) {
+	got := string(withLaunchCheck([]byte("<body><p>page</p></body>")))
+	want := `<body><p>page</p><script type="module" src="/smoke.js"></script></body>`
+	if got != want {
+		t.Errorf("page = %q, want %q", got, want)
 	}
 }

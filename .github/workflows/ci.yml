@@ -177,7 +177,8 @@ jobs:
 
   # ui-desktop builds the app itself on each operating system, since the webview
   # needs the platform's own toolchain and libraries, and then starts it with
-  # --smoke to prove the window, the bridge and the image routes work
+  # --smoke to prove the window, the bridge, the image routes and a few scripted
+  # flows work in the platform's own webview
   ui-desktop:
     name: ui-desktop (${{ matrix.os }})
     strategy:

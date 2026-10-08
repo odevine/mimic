@@ -49,7 +49,7 @@ func pageCalls(t *testing.T) []string {
 	}
 	read("../../frontend/js/api.js", regexp.MustCompile(`rpc\("(\w+)", "(\w+)"`), "")
 	read("../../frontend/js/api.js", regexp.MustCompile(`rpc\(SYSTEM, "(\w+)"`), "System")
-	read("smoke.html", regexp.MustCompile(`internal/desktop\.(\w+)\.(\w+)`), "")
+	read("smoke.js", regexp.MustCompile(`internal/desktop\.(\w+)\.(\w+)`), "")
 	return calls
 }
 

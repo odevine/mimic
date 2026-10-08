@@ -31,8 +31,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-//go:embed smoke.html
-var smokeHTML []byte
+//go:embed smoke.js
+var smokeJS []byte
 
 // smokeTimeout is how long the launch check has to report
 const smokeTimeout = 90 * time.Second
@@ -136,7 +136,7 @@ func Launch(o Options) error {
 		Description: "Mimic renders Magic: The Gathering cards.",
 		Services:    bound,
 		Assets: application.AssetOptions{
-			Handler:        assetHandler(img, o.Frontend, o.Smoke),
+			Handler:        assetHandler(img, o.Frontend, o.Smoke || buildinfo.TestBuild),
 			DisableLogging: true,
 		},
 		Mac:        application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},

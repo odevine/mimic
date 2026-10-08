@@ -31,9 +31,20 @@ type Images interface {
 func assetHandler(img Images, frontend fs.FS, smoke bool) http.Handler {
 	mux := http.NewServeMux()
 	if smoke {
+		// The launch check is the real page with its script added, so it runs in the
+		// page itself, where the runtime delivers events
 		mux.HandleFunc("GET /smoke.html", func(w http.ResponseWriter, r *http.Request) {
+			index, err := fs.ReadFile(frontend, "index.html")
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write(smokeHTML)
+			w.Write(withLaunchCheck(index))
+		})
+		mux.HandleFunc("GET /smoke.js", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			w.Write(smokeJS)
 		})
 	}
 	mux.HandleFunc("GET /img/render/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -114,4 +125,14 @@ func writePNG(w http.ResponseWriter, m image.Image) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Length", strconv.Itoa(b.Len()))
 	w.Write(b.Bytes())
+}
+
+// withLaunchCheck adds the launch check's script to a page, before its closing
+// body tag when it has one
+func withLaunchCheck(index []byte) []byte {
+	script := []byte(`<script type="module" src="/smoke.js"></script>`)
+	if i := bytes.LastIndex(index, []byte("</body>")); i >= 0 {
+		return append(append(append([]byte{}, index[:i]...), script...), index[i:]...)
+	}
+	return append(append([]byte{}, index...), script...)
 }

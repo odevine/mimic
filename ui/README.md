@@ -42,7 +42,8 @@ Flags:
   per role, ahead of every other font source.
 - `-smoke` runs the launch check against a scratch config folder and exits. It
   opens the window, boots the page, renders a card through the bridge, loads the
-  images and exits zero when all of that works.
+  images, drives a few flows in the page (a popover, the settings dialog, a
+  rendered list and the Single preview) and exits zero when all of that works.
 
 A build made with `-tags dev` turns on the webview's developer tools.
 

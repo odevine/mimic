@@ -125,7 +125,7 @@ jobs:
       GOWORK: "off"
       # Wails v3 builds against GTK 4 on Linux unless told otherwise, and Ubuntu
       # 22.04 ships GTK 3 and WebKitGTK 4.1
-      TAGS: ${{ runner.os == 'Linux' && 'gtk3' || '' }}
+      TAGS: ${{ startsWith(matrix.os, 'ubuntu') && 'gtk3' || '' }}
     steps:
       - uses: actions/checkout@v7
 

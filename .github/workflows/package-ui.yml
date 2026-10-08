@@ -84,6 +84,9 @@ jobs:
       # Build against the pinned engine module, not a workspace, so the release
       # is hermetic and the stamped engine version is the real one
       GOWORK: "off"
+      # The Wails CLI the module pins is itself built from Go on the runner, and
+      # on Linux it defaults to GTK 4, so it is built against GTK 3 like the app
+      GOFLAGS: ${{ startsWith(matrix.runner, 'ubuntu') && '-tags=gtk3' || '' }}
       VERSION: ${{ needs.meta.outputs.version }}
       UPDATE_KEY: ${{ vars.MIMIC_UPDATE_PUBLIC_KEY }}
       # Whether the signing key is set, which is all the step condition can see

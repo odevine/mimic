@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/odevine/mimic/ui/internal/rules"
 )
 
 // data is the on-disk shape: the recent-search list, the last chosen
@@ -34,7 +37,37 @@ type data struct {
 	// LastUpdateCheck is when the app last asked for a newer release, in Unix
 	// seconds, so the check at launch runs at most once a day
 	LastUpdateCheck int64 `json:"lastUpdateCheck,omitempty"`
+	// GlobalRules are the override rules applied to every render, in order
+	GlobalRules []rules.Rule `json:"globalRules,omitempty"`
+	// Presets are the saved bundles of rules and render settings
+	Presets []Preset `json:"presets,omitempty"`
 	Settings
+}
+
+// PresetVersion is the shape a preset is saved in. A later release that changes
+// what a preset holds raises it and migrates the older ones when they load
+const PresetVersion = 1
+
+// Preset is a named bundle of the global rules and the render settings, which is
+// everything that decides how a card turns out apart from the template. It
+// carries a version, so a later release can read one an earlier release saved
+type Preset struct {
+	Name    string       `json:"name"`
+	Version int          `json:"version"`
+	Rules   []rules.Rule `json:"rules"`
+	Render  PresetRender `json:"render"`
+}
+
+// PresetRender is the render settings a preset holds: the two resolutions as
+// dpi, with zero meaning the template's own for the output, the image format
+// and PNG compression, and the MPC Autofill stock and foil choice
+type PresetRender struct {
+	PreviewDPI     int    `json:"previewDpi,omitempty"`
+	OutputDPI      int    `json:"outputDpi,omitempty"`
+	ImageFormat    string `json:"imageFormat,omitempty"`
+	PNGCompression string `json:"pngCompression,omitempty"`
+	MPCStock       string `json:"mpcStock,omitempty"`
+	MPCFoil        bool   `json:"mpcFoil,omitempty"`
 }
 
 // Window is the main window's last size and position in screen coordinates, and
@@ -243,6 +276,58 @@ func (s *Store) SetLastUpdateCheck(t time.Time) {
 	defer s.mu.Unlock()
 	s.data.LastUpdateCheck = t.Unix()
 	s.save()
+}
+
+// Rules returns a copy of the global override rules
+func (s *Store) Rules() []rules.Rule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]rules.Rule(nil), s.data.GlobalRules...)
+}
+
+// SetRules stores the global override rules and persists them
+func (s *Store) SetRules(list []rules.Rule) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.GlobalRules = append([]rules.Rule(nil), list...)
+	s.save()
+}
+
+// Presets returns a copy of the saved presets, in the order they were first saved
+func (s *Store) Presets() []Preset {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Preset(nil), s.data.Presets...)
+}
+
+// SetPreset saves a preset, replacing the one of the same name, which is matched
+// without regard to case
+func (s *Store) SetPreset(p Preset) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, have := range s.data.Presets {
+		if strings.EqualFold(have.Name, p.Name) {
+			s.data.Presets[i] = p
+			s.save()
+			return
+		}
+	}
+	s.data.Presets = append(s.data.Presets, p)
+	s.save()
+}
+
+// DeletePreset removes the preset of that name, and reports whether there was one
+func (s *Store) DeletePreset(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, have := range s.data.Presets {
+		if strings.EqualFold(have.Name, name) {
+			s.data.Presets = append(s.data.Presets[:i], s.data.Presets[i+1:]...)
+			s.save()
+			return true
+		}
+	}
+	return false
 }
 
 // FaceTemplates returns a copy of the per-shape template preferences

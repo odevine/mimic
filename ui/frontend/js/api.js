@@ -150,6 +150,23 @@ export const api = {
 
   search: (q, signal) => abortable(rpc("Cards", "Search", q), signal),
   recents: () => rpc("Cards", "Recents"),
+
+  // The global override rules, in the order they apply. saveRules resolves to
+  // the rules kept, or rejects naming the first rule that does not check.
+  // ruleMatches counts, for each rule, how many of the rows it holds for, where
+  // a row is { base, fields }. applyRules resolves to { fields, applied }, what
+  // the saved rules change on a card, leaving alone the fields given as the ones
+  // the user set
+  rules: () => rpc("Overrides", "Rules"),
+  saveRules: (list) => rpc("Overrides", "SaveRules", list),
+  ruleMatches: (list, rows) => rpc("Overrides", "Matches", list, rows),
+  applyRules: (base, fields) => rpc("Overrides", "Apply", base, fields || {}),
+  // Presets bundle the rules and the render settings. applyPreset resolves to
+  // { rules, settings }, and the page reloads what it shows from those
+  presets: () => rpc("Overrides", "Presets"),
+  savePreset: (name) => rpc("Overrides", "SavePreset", name),
+  applyPreset: (name) => rpc("Overrides", "ApplyPreset", name),
+  deletePreset: (name) => rpc("Overrides", "DeletePreset", name),
   printings: (name, signal) => abortable(rpc("Cards", "Printings", name), signal),
   symbolURL: (code, px = 36) => `/img/symbol?code=${encodeURIComponent(code)}&px=${px}`,
 

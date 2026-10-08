@@ -11,6 +11,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/jobs"
+	"github.com/odevine/mimic/ui/internal/rules"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -60,7 +61,7 @@ func (s *Service) Start(req Request) (batch.View, error) {
 	if len(req.Rows) > cardlist.MaxRows {
 		return batch.View{}, apierr.Newf(apierr.BadRequest, "a run takes at most %d cards", cardlist.MaxRows)
 	}
-	rows := batch.ExpandFaces(req.Rows)
+	rows := batch.ExpandFaces(s.applyRules(req.Rows))
 	var project *batch.Project
 	if req.MPC != nil && len(rows) > 0 {
 		var err error
@@ -69,6 +70,23 @@ func (s *Service) Start(req Request) (batch.View, error) {
 		}
 	}
 	return s.start(rows, req.OutDir, req.Label, project)
+}
+
+// applyRules lays the global override rules under each row's own fields, so a
+// field the list set itself keeps its value and a rule fills in the rest. The
+// result is what the run renders, and what its report records
+func (s *Service) applyRules(rows []batch.Row) []batch.Row {
+	list := s.ws.Prefs.Rules()
+	if len(list) == 0 {
+		return rows
+	}
+	out := make([]batch.Row, len(rows))
+	for i, row := range rows {
+		res := rules.ApplyToCard(list, &row.Base, row.Fields)
+		row.Fields = rules.Merge(row.Fields, res.Fields)
+		out[i] = row
+	}
+	return out
 }
 
 // Retry starts a fresh run from the cards that failed in the latest one, into

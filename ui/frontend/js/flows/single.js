@@ -5,73 +5,11 @@ import { openPopover, closePopover } from "../components/popover.js";
 import { renderPips, symbolPalette, insertAtCursor } from "../components/symbols.js";
 import { setZoom } from "../components/preview.js";
 import { faceUnsupportedBy } from "../supports.js";
+import { createCardEditor, ALL_FIELDS, valuesOf, isDirty } from "../components/cardEditor.js";
 
 // Flow 1: search a card, adjust anything about it, render, download. The
 // browser holds the fetched card as the base and the form values as edits, so
 // every field knows whether it differs from what Scryfall returned
-
-// FIELDS pairs each editable field with its card.Data key. kind picks the
-// control: text, area for multi-line, mana for a cost with pips, rules for
-// rules text with pips, and colors for the WUBRG toggles
-const FIELDS = [
-  { f: "name", key: "Name", label: "Name", kind: "text" },
-  { f: "manaCost", key: "ManaCost", label: "Cost", kind: "mana", placeholder: "{2}{U}{U}" },
-  { f: "colors", key: "Colors", label: "Colors", kind: "colors" },
-  { f: "typeLine", key: "TypeLine", label: "Type", kind: "text" },
-  { f: "oracle", key: "OracleText", label: "Rules", kind: "rules", rows: 6 },
-  { f: "flavor", key: "FlavorText", label: "Flavor", kind: "area", rows: 3 },
-  { f: "power", key: "Power", label: "P / T", kind: "text", group: "pt" },
-  { f: "toughness", key: "Toughness", label: "", kind: "text", group: "pt" },
-  { f: "loyalty", key: "Loyalty", label: "Loyalty", kind: "text", group: "pt" },
-  { f: "artist", key: "Artist", label: "Artist", kind: "text" },
-  { f: "setCode", key: "SetCode", label: "Set", kind: "text", group: "details" },
-  { f: "collector", key: "CollectorNumber", label: "Collector #", kind: "text", group: "details" },
-  { f: "rarity", key: "Rarity", label: "Rarity", kind: "text", group: "details" },
-  { f: "released", key: "ReleasedAt", label: "Released", kind: "text", group: "details", placeholder: "YYYY-MM-DD" },
-  { f: "language", key: "Language", label: "Language", kind: "text", group: "details" },
-];
-
-// HALF_FIELDS are the fields of each half of a split card, read from its faces
-// and edited under the same names the app's Edits carries. A split card
-// draws only its halves, so these stand in for the top-level face fields
-const HALF_FIELDS = [1, 2].flatMap((n) => [
-  { f: `half${n}Name`, key: "Name", half: n, label: "Name", kind: "text" },
-  { f: `half${n}ManaCost`, key: "ManaCost", half: n, label: "Cost", kind: "mana", placeholder: "{2}{U}{U}" },
-  { f: `half${n}Colors`, key: "Colors", half: n, label: "Colors", kind: "colors" },
-  { f: `half${n}TypeLine`, key: "TypeLine", half: n, label: "Type", kind: "text" },
-  { f: `half${n}Oracle`, key: "OracleText", half: n, label: "Rules", kind: "rules", rows: 5 },
-  { f: `half${n}Flavor`, key: "FlavorText", half: n, label: "Flavor", kind: "area", rows: 2 },
-]);
-const ALL_FIELDS = [...FIELDS, ...HALF_FIELDS];
-
-// FACE_FIELDS are the top-level fields a split card does not draw, which its
-// halves replace
-const FACE_FIELDS = new Set(["name", "manaCost", "colors", "typeLine", "oracle", "flavor", "power", "toughness", "loyalty"]);
-
-const isSplit = (card) => !!card && card.Layout === "split" && (card.Faces || []).length >= 2;
-
-const COLORS = [
-  ["W", "White", "--mana-w"],
-  ["U", "Blue", "--mana-u"],
-  ["B", "Black", "--mana-b"],
-  ["R", "Red", "--mana-r"],
-  ["G", "Green", "--mana-g"],
-];
-const COLOR_ORDER = "WUBRGC";
-
-const normColors = (s) =>
-  [...new Set((s || "").toUpperCase())].filter((c) => COLOR_ORDER.includes(c)).sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)).join("");
-
-// valuesOf reads a card into the form's string values. A half's fields read from
-// its face, and are empty for a card that is not split
-function valuesOf(card) {
-  const out = {};
-  for (const { f, key, half } of ALL_FIELDS) {
-    const src = half ? (isSplit(card) ? card.Faces[half - 1] : {}) : card;
-    out[f] = key === "Colors" ? normColors((src.Colors || []).join("")) : src[key] || "";
-  }
-  return out;
-}
 
 const store = {
   results: signal([]), // [{ name, cards: [card...] }]
@@ -80,6 +18,10 @@ const store = {
   selected: signal(-1),
   base: signal(null),
   edits: signal(null),
+  // reference is what edits are measured against: the fetched card with the
+  // global rules' changes on it, and ruled is those changes alone
+  reference: signal({}),
+  ruled: signal({}),
   rendered: signal(null), // the edits JSON the preview on screen was rendered from
   printings: signal(null), // null while loading, [] when none
   activity: signal({ state: "idle", title: "", step: "", frac: 0 }),
@@ -106,13 +48,19 @@ function faceTitle() {
 }
 let saving = false;
 
-const baseValues = () => (store.base.peek() ? valuesOf(store.base.peek()) : {});
-const isColorField = (f) => f === "colors" || /^half\d+Colors$/.test(f);
-const isDirty = (f, edits, base) => (isColorField(f) ? normColors(edits[f]) !== normColors(base[f]) : edits[f] !== base[f]);
-
-function setEdit(f, value) {
-  store.edits.value = { ...store.edits.peek(), [f]: value };
+// ruledFields asks which fields the global rules change on a card. A failure
+// reads as none, since a card is still worth showing when the rules cannot be read
+async function ruledFields(card, fields) {
+  try {
+    return (await api.applyRules(card, fields)).fields || {};
+  } catch {
+    return {};
+  }
 }
+
+// adoptSeq counts the cards taken up, so a slow answer about one that has been
+// replaced since is dropped
+let adoptSeq = 0;
 
 // --- search and results ---
 
@@ -247,14 +195,21 @@ function renderResults() {
   $("results-count").textContent = n ? `${n} ${n === 1 ? "result" : "results"}` : "Type a query and press Enter";
 }
 
-function selectResult(i) {
+async function selectResult(i) {
   const g = store.results.peek()[i];
   if (!g) return;
+  leaveRow();
   const card = g.cards[0];
+  store.selected.value = i;
+  const seq = ++adoptSeq;
+  const ruled = await ruledFields(card, {});
+  if (seq !== adoptSeq) return;
+  const reference = { ...valuesOf(card), ...ruled };
   batch(() => {
-    store.selected.value = i;
     store.base.value = card;
-    store.edits.value = valuesOf(card);
+    store.ruled.value = ruled;
+    store.reference.value = reference;
+    store.edits.value = reference;
     store.face.value = 0;
   });
   loadPrintings(card.Name, g.cards.length > 1 ? g.cards : null);
@@ -345,204 +300,88 @@ function openPrintings() {
   openPopover($("printing-trigger"), content, { cls: "printing-menu" });
 }
 
-// choosePrinting swaps the base card. Fields the user has not edited follow the
-// new printing, and edited ones keep their edit
-function choosePrinting(card) {
-  const oldBase = baseValues();
-  const next = valuesOf(card);
+// retarget points the editor at a card with the rules' changes on it. Fields the
+// user has not edited follow the new reference, and edited ones keep their edit
+function retarget(card, ruled) {
+  const old = store.reference.peek();
+  const reference = { ...valuesOf(card), ...ruled };
   const edits = store.edits.peek();
   const merged = {};
-  for (const { f } of ALL_FIELDS) merged[f] = isDirty(f, edits, oldBase) ? edits[f] : next[f];
+  for (const { f } of ALL_FIELDS) merged[f] = isDirty(f, edits, old) ? edits[f] : reference[f];
   batch(() => {
     store.base.value = card;
+    store.ruled.value = ruled;
+    store.reference.value = reference;
     store.edits.value = merged;
     if (store.face.peek() >= faceCount(card)) store.face.value = 0;
   });
+}
+
+// choosePrinting swaps the base card
+async function choosePrinting(card) {
+  const seq = ++adoptSeq;
+  const ruled = await ruledFields(card, {});
+  if (seq !== adoptSeq) return;
+  retarget(card, ruled);
   renderIfSupported();
 }
 
-// --- editor ---
+// --- editing a list row ---
 
-function colorToggles(f) {
-  const wrap = h("div", { class: "color-toggles", role: "group", "aria-label": "Colors" });
-  const chips = {};
-  for (const [c, name, tok] of COLORS) {
-    chips[c] = h(
-      "button",
-      {
-        type: "button",
-        class: "chip color-chip",
-        style: `--swatch: var(${tok})`,
-        "aria-pressed": "false",
-        "aria-label": name,
-        onclick: () => {
-          let cur = normColors(store.edits.peek()[f]).replace("C", "");
-          cur = cur.includes(c) ? cur.replace(c, "") : cur + c;
-          setEdit(f, normColors(cur));
-        },
-      },
-      h("span", { class: "swatch" }),
-      c,
-    );
-    wrap.append(chips[c]);
-  }
-  chips.C = h(
-    "button",
-    {
-      type: "button",
-      class: "chip color-chip",
-      style: "--swatch: var(--mana-c)",
-      "aria-pressed": "false",
-      "aria-label": "Colorless",
-      onclick: () => setEdit(f, normColors(store.edits.peek()[f]) === "C" ? "" : "C"),
-    },
-    h("span", { class: "swatch" }),
-    "Colorless",
-  );
-  wrap.append(chips.C);
-  effect(() => {
-    const e = store.edits.value;
-    if (!e) return;
-    const v = normColors(e[f]);
-    for (const [c, el] of Object.entries(chips)) el.setAttribute("aria-pressed", String(v.includes(c)));
-  });
-  return [wrap, h("p", { class: "note" }, "Colors pick the frame. Lands take theirs from the mana they produce.")];
+// fromRow is the list row being edited here, with what to do with its edits. The
+// card and the row's own fields are on screen as in any other card, and the bar
+// above the editor sends the edits back
+let fromRow = null;
+
+function leaveRow() {
+  fromRow = null;
+  $("row-return").hidden = true;
 }
 
-function paletteButton(input) {
-  return h(
-    "button",
-    {
-      type: "button",
-      class: "btn subtle icon-only",
-      "aria-label": "Insert a mana symbol",
-      "data-tip": "Insert a mana symbol",
-      onclick: (e) => openPopover(e.currentTarget, symbolPalette((code) => insertAtCursor(input, code)), { align: "end" }),
-    },
-    icon("symbols"),
-  );
+// openRow loads a list row's card with the fields the row sets, so the preview
+// shows what the render of that row will draw
+async function openRow({ card, fields, label, onApply }) {
+  const seq = ++adoptSeq;
+  const ruled = await ruledFields(card, fields);
+  if (seq !== adoptSeq) return;
+  const reference = { ...valuesOf(card), ...ruled };
+  fromRow = { onApply };
+  batch(() => {
+    store.selected.value = -1;
+    store.base.value = card;
+    store.ruled.value = ruled;
+    store.reference.value = reference;
+    store.edits.value = { ...reference, ...(fields || {}) };
+    store.face.value = 0;
+  });
+  $("row-return-name").textContent = label || card.Name;
+  $("row-return").hidden = false;
+  loadPrintings(card.Name, null);
+  renderIfSupported();
 }
 
-function buildField(spec) {
-  const id = `f-${spec.f}`;
-  const revert = h(
-    "button",
-    {
-      type: "button",
-      class: "revert",
-      "aria-label": `Revert ${spec.label || spec.f}`,
-      "data-tip": "Revert to the fetched card",
-      onclick: () => setEdit(spec.f, baseValues()[spec.f]),
-    },
-    icon("revert"),
-  );
-  const label = h(spec.kind === "colors" ? "span" : "label", { class: spec.kind === "colors" ? "label" : null, for: spec.kind === "colors" ? null : id }, h("span", { class: "dirty-dot" }), revert, spec.label);
-  const control = h("div", { class: "control" });
-  const el = h("div", { class: "field", dataset: { field: spec.f } }, label, control);
-
-  if (spec.kind === "colors") {
-    control.append(...colorToggles(spec.f));
-    return el;
-  }
-
-  const multi = spec.kind === "area" || spec.kind === "rules";
-  const input = h(multi ? "textarea" : "input", {
-    id,
-    rows: spec.rows,
-    placeholder: spec.placeholder || "",
-    spellcheck: multi ? "true" : "false",
-    class: spec.kind === "mana" ? "mono" : null,
-    oninput: (e) => setEdit(spec.f, e.target.value),
-  });
-  if (!multi) {
-    // Enter in a single-line field renders, multi-line fields keep it for newlines
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing) {
-        e.preventDefault();
-        render();
-      }
-    });
-  }
-
-  if (spec.kind === "mana" || spec.kind === "rules") {
-    control.append(h("div", { class: "control-row" }, input, paletteButton(input)));
-    const pips = h("div", { class: "pips", "aria-live": "polite" });
-    control.append(pips);
-    effect(() => {
-      const e = store.edits.value;
-      if (e) renderPips(pips, e[spec.f], { distinct: spec.kind === "rules", label: spec.kind === "rules" ? "Symbols" : "" });
-    });
-  } else {
-    control.append(input);
-  }
-
-  // Keep the input in step with the store without fighting the caret while typing
-  effect(() => {
-    const e = store.edits.value;
-    if (e && input.value !== e[spec.f]) input.value = e[spec.f];
-  });
-  return el;
+// applyToRow hands the fields that differ from the card, with the rules' changes
+// counted as part of it, back to the row
+function applyToRow() {
+  if (!fromRow) return;
+  const edits = store.edits.peek();
+  const reference = store.reference.peek();
+  const fields = {};
+  for (const { f } of ALL_FIELDS) if (isDirty(f, edits, reference)) fields[f] = edits[f];
+  const { onApply } = fromRow;
+  leaveRow();
+  location.hash = "list";
+  onApply(fields);
 }
 
-function buildEditor() {
-  const form = $("editor-form");
-  const main = FIELDS.filter((s) => !s.group);
-  const pt = FIELDS.filter((s) => s.group === "pt");
-  const details = FIELDS.filter((s) => s.group === "details");
-
-  const grid = h("div", { class: "field-grid" });
-  for (const s of main) {
-    grid.append(buildField(s));
-    if (s.f === "flavor") grid.append(h("div", { class: "field-pair" }, ...pt.map(buildField)));
-  }
-  const more = h(
-    "details",
-    { class: "disclosure" },
-    h("summary", {}, icon("chevron-down"), "Printing details"),
-    h("div", { class: "field-grid" }, ...details.map(buildField)),
-  );
-  // A split card draws its two halves, so their fields replace the face fields
-  // of the whole card, which would edit nothing it prints
-  const halves = [1, 2].map((n) => {
-    const title = h("h3", { class: "half-title" });
-    effect(() => {
-      const e = store.edits.value;
-      const name = e && e[`half${n}Name`];
-      title.textContent = `${n === 1 ? "First" : "Second"} half${name ? ` · ${name}` : ""}`;
-    });
-    return h(
-      "section",
-      { class: "half-fields", hidden: true, "aria-label": `${n === 1 ? "First" : "Second"} half` },
-      title,
-      h("div", { class: "field-grid" }, ...HALF_FIELDS.filter((s) => s.half === n).map(buildField)),
-    );
-  });
-  const faceEls = [...grid.children].filter((el) => el.classList.contains("field-pair") || FACE_FIELDS.has(el.dataset.field));
-  effect(() => {
-    const split = isSplit(store.base.value);
-    for (const el of faceEls) el.hidden = split;
-    for (const el of halves) el.hidden = !split;
-  });
-  form.replaceChildren(...halves, grid, more);
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    render();
-  });
-
-  // Dirty marks, one effect for the whole form since every field reads edits
-  effect(() => {
-    const e = store.edits.value;
-    const b = store.base.value;
-    if (!e || !b) return;
-    const base = valuesOf(b);
-    let any = false;
-    for (const el of form.querySelectorAll(".field[data-field]")) {
-      const dirty = isDirty(el.dataset.field, e, base);
-      el.classList.toggle("dirty", dirty);
-      any ||= dirty;
-    }
-    $("revert-all").hidden = !any;
-  });
+// The rules changed, so the card on screen takes the new ones
+async function reapplyRules() {
+  const card = store.base.peek();
+  if (!card) return;
+  const seq = ++adoptSeq;
+  const ruled = await ruledFields(card, {});
+  if (seq !== adoptSeq) return;
+  retarget(card, ruled);
 }
 
 // --- activity ---
@@ -718,6 +557,7 @@ async function writeFile(jobId, name, size) {
 export const single = {
   render,
   save,
+  openRow,
   focusSearch() {
     const input = $("search-input");
     input.focus();
@@ -725,8 +565,20 @@ export const single = {
   },
 };
 
+let editor = null;
+
 export function initSingle() {
-  buildEditor();
+  editor = createCardEditor({ base: store.base, edits: store.edits, reference: store.reference, ruled: store.ruled, onEnter: render });
+  editor.mount($("editor-form"));
+  effect(() => {
+    $("revert-all").hidden = !editor.dirty.value;
+  });
+  document.addEventListener("mimic:rules-changed", reapplyRules);
+  $("row-return-apply").addEventListener("click", applyToRow);
+  $("row-return-cancel").addEventListener("click", () => {
+    leaveRow();
+    location.hash = "list";
+  });
 
   $("search-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -748,7 +600,7 @@ export function initSingle() {
   $("printing-trigger").addEventListener("click", openPrintings);
   $("recents-btn").addEventListener("click", openRecents);
   $("revert-all").addEventListener("click", () => {
-    store.edits.value = baseValues();
+    store.edits.value = store.reference.peek();
   });
 
   effect(renderResults);

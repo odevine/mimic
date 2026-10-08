@@ -474,3 +474,140 @@ footer wraps once even a short path no longer fits */
     width: calc(100vw - 32px);
   }
 }
+
+/* The row inspector: the card field editor beside the review table */
+.inspector {
+  width: 380px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.inspector[hidden] {
+  display: none;
+}
+
+.inspector-inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inspector-title h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-tools .spacer {
+  flex: 1;
+}
+
+.inspector-qty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspector-qty input {
+  width: 64px;
+}
+
+.inspector-form {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.row-edit {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* The bar in Single that brings an edited list row back */
+.row-return {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.row-return[hidden] {
+  display: none;
+}
+
+.row-return .spacer {
+  flex: 1;
+}
+
+.bulk-menu {
+  min-width: 260px;
+}
+
+.bulk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.bulk-panel .line {
+  display: flex;
+  gap: 6px;
+}
+
+.bulk-panel .line > * {
+  min-width: 0;
+}
+
+.bulk-panel input {
+  flex: 1;
+}
+
+.bulk-section {
+  display: flex;
+  align-items: center;
+}
+
+.bulk-section .menu-item {
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .inspector {
+    width: auto;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}

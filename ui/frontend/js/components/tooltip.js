@@ -13,7 +13,11 @@ const LEVELS = {
 
 const DELAY = 350;
 let timer = 0;
+// current is the element whose tip is showing, and pending the one whose tip is
+// waiting out the delay. Both are the element the pointer is on, which is how a
+// pointer that moves elsewhere before the delay ends is told from one that stays
 let current = null;
+let pending = null;
 
 function tipFor(el) {
   const reason = el.dataset.gateReason;
@@ -47,6 +51,7 @@ function show(el) {
   box.style.top = `${top}px`;
   box.style.left = `${left}px`;
   current = el;
+  pending = null;
 }
 
 export function hideTooltip() {
@@ -54,12 +59,14 @@ export function hideTooltip() {
   const box = $("tooltip");
   if (box.matches(":popover-open")) box.hidePopover();
   current = null;
+  pending = null;
 }
 
 // showTooltipNow shows el's tip immediately, used when a gated control is
 // clicked so the click never silently does nothing
 export function showTooltipNow(el) {
   clearTimeout(timer);
+  pending = null;
   show(el);
 }
 
@@ -68,10 +75,19 @@ const target = (e) => e.target.closest?.("[data-tip], [data-gate-reason]");
 export function initTooltips() {
   document.addEventListener("mouseover", (e) => {
     const el = target(e);
-    if (el === current) return;
+    // Still on the element whose tip is showing or on its way
+    if (el && (el === current || el === pending)) return;
+    // Anywhere else, including somewhere with no tip at all, ends whatever was
+    // showing or waiting, so a tip never appears for an element the pointer has left
     hideTooltip();
-    if (el) timer = setTimeout(() => show(el), DELAY);
+    if (!el) return;
+    pending = el;
+    timer = setTimeout(() => {
+      if (pending === el && el.isConnected) show(el);
+    }, DELAY);
   });
+  // The pointer leaving the window sends no mouseover to anything
+  document.documentElement.addEventListener("mouseleave", hideTooltip);
   document.addEventListener("focusin", (e) => {
     const el = target(e);
     hideTooltip();

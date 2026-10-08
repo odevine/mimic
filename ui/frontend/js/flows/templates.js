@@ -179,7 +179,14 @@ function showTab(next) {
   tab = next;
   for (const chip of document.querySelectorAll("#mode-templates [data-tab]")) chip.setAttribute("aria-pressed", String(chip.dataset.tab === tab));
   for (const panel of document.querySelectorAll("#mode-templates [data-tab-panel]")) panel.hidden = panel.dataset.tabPanel !== tab;
+  document.dispatchEvent(new CustomEvent("mimic:templates-tab", { detail: tab }));
   refresh();
+}
+
+// showOverrides opens the Overrides tab, from the chip in the top bar
+export function showOverrides() {
+  location.hash = "templates";
+  showTab("overrides");
 }
 
 function refresh() {

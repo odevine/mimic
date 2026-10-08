@@ -20,6 +20,7 @@ var boundTypes = map[string]reflect.Type{
 	"Run":       reflect.TypeFor[*Run](),
 	"Templates": reflect.TypeFor[*Templates](),
 	"Settings":  reflect.TypeFor[*Settings](),
+	"Overrides": reflect.TypeFor[*Overrides](),
 	"Data":      reflect.TypeFor[*Data](),
 	"Updates":   reflect.TypeFor[*Updates](),
 	"System":    reflect.TypeFor[*System](),

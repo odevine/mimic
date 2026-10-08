@@ -84,6 +84,11 @@ jobs:
       - name: Test
         run: go test -race $(cat "$RUNNER_TEMP/core.txt")
 
+      # The frontend has no build step, so its tests run on Node as it is, with
+      # the Wails runtime and the document stubbed
+      - name: Test the frontend
+        run: node --test frontend/test/*.test.mjs
+
       - name: Cross-compile the core for all targets
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do

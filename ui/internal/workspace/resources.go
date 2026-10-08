@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/resource"
 )
 
@@ -88,4 +89,14 @@ func (w *Workspace) LayerCacheName() string {
 // automatic, sized to this computer's memory and processors
 func (w *Workspace) AutoConcurrency() int {
 	return resource.Workers(ReadMemory(), w.RenderBytes(), CPUCount(), resource.CacheBytes(w.LayerCacheName()))
+}
+
+// ClampOutputDPI keeps a stored output resolution inside what the template can
+// render, preserving zero as "the template's own" so the preference tracks a
+// later template rather than pinning this one's number
+func ClampOutputDPI(m *template.Manifest, dpi int) int {
+	if dpi <= 0 || dpi >= m.NativeDPI() {
+		return 0
+	}
+	return m.ClampDPI(dpi)
 }

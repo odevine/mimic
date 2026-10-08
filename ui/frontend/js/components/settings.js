@@ -206,6 +206,7 @@ async function save() {
     };
     app.settings.value = await api.saveSettings(next);
     applyTheme(app.settings.peek().theme);
+    document.dispatchEvent(new CustomEvent("mimic:settings-saved"));
     $("settings-dialog").close();
     toast("Settings saved", "ok");
     if (resChanged) document.dispatchEvent(new CustomEvent("mimic:resolution-changed"));

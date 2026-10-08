@@ -7,10 +7,12 @@ import { scenes } from "../../bridge/scenes.mjs";
 // Every scene is scanned with axe-core in both themes for the violations that
 // matter most, serious and critical ones. A known violation sits in
 // a11y-allowlist.json with the reason it is still there, and the list is expected
-// to shrink: an entry that no longer matches fails the test until it is removed.
-// An entry names the rule, the target selector exactly as axe reports it, and the
-// scenes it holds in, or * for all of them. Setting A11Y_DUMP writes what a run found to
-// .scratch/a11y-found.json, for building the list
+// to shrink: an entry that no longer matches fails the test until it is removed,
+// unless it is marked optional, which means the platform's own drawing decides
+// whether it appears. An entry names the rule, the target selector exactly as axe
+// reports it, and the scenes it holds in, or * for all of them. Setting
+// A11Y_DUMP writes what a run found to .scratch/a11y-found.json, for building the
+// list
 // The row of a list is named by its position, which is not part of what a rule
 // says about it
 const generic = (target) => target.replace(/tbody\[data-id="\d+"\]/g, "tbody");
@@ -54,6 +56,6 @@ for (const theme of ["dark", "light"]) {
 test("every allowlisted violation is still found", async () => {
   test.skip(!!process.env.A11Y_DUMP);
   // The scenes run in their own tests before this one, in one worker
-  const stale = allowlist.filter((_, i) => !used.has(i)).map((a) => `${a.rule} at ${a.target}`);
+  const stale = allowlist.filter((a, i) => !a.optional && !used.has(i)).map((a) => `${a.rule} at ${a.target}`);
   expect(stale, "allowlist entries that match nothing: remove them").toEqual([]);
 });

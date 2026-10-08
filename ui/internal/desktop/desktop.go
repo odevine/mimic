@@ -65,11 +65,22 @@ type Options struct {
 	// exits when it reports. It uses no remembered window, takes no single
 	// instance lock, and sends no notification or update check
 	Smoke bool
+	// ScriptedDialogs, in a test build, is a folder that answers the dialogs and
+	// links instead of the native ones. Empty uses the native ones
+	ScriptedDialogs string
 }
 
 // OpenPath shows a file or folder in the system file manager. The services that
 // open folders take it, and it works once the app exists
-func OpenPath(path string) error { return application.Get().Browser.OpenFile(path) }
+func OpenPath(path string) error {
+	if s := openHook.Load(); s != nil {
+		return s.openPath(path)
+	}
+	return application.Get().Browser.OpenFile(path)
+}
+
+// openHook, when set, takes the place of the file manager in a test build
+var openHook atomic.Pointer[scripted]
 
 // shell is the running app: the Wails application, its window and the services
 // the native pieces reach into
@@ -88,6 +99,10 @@ type shell struct {
 // returns the check's verdict
 func Launch(o Options) error {
 	sh := &shell{svc: o.Services, smoke: o.Smoke, sys: &System{}}
+	if o.ScriptedDialogs != "" {
+		sh.sys.scripted = &scripted{dir: o.ScriptedDialogs}
+		openHook.Store(sh.sys.scripted)
+	}
 	if o.Smoke {
 		sh.sys.smoke = &smoke{done: make(chan error, 1)}
 	}

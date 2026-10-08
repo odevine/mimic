@@ -1,0 +1,24 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0001",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0001",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Lightning Bolt",
+  "mana_cost": "{R}",
+  "cmc": 1,
+  "type_line": "Instant",
+  "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+  "flavor_text": "The sparkmage shrieked, calling on the rage of the storms of his youth.",
+  "colors": ["R"],
+  "color_identity": ["R"],
+  "rarity": "common",
+  "collector_number": "117",
+  "set": "2x2",
+  "set_name": "Double Masters 2022",
+  "released_at": "2022-07-08",
+  "artist": "Christopher Moeller",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/lightning-bolt-2x2.jpg"
+  }
+}

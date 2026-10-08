@@ -61,3 +61,46 @@ tasks:
     summary: Runs the app from source
     cmds:
       - go run {{if eq .GOOS "linux"}}-tags gtk3{{end}} .
+
+  dev:server:
+    desc: Runs the app as a headless test server with a fake Scryfall and prints its address
+    summary: |
+      Builds the app with the server tag and serves it on a free port, or the one
+      given as ARGS="-port 4173". Open the address in any browser to look at the
+      page. Everything runs against a scratch folder and the fake Scryfall in
+      internal/fakeupstream, so nothing touches your settings or the network
+    cmds:
+      - go run ./cmd/testserver {{.ARGS}}
+
+  test:e2e:install:
+    desc: Installs the end to end tests' dependencies and browsers
+    dir: e2e
+    cmds:
+      - npm ci
+      - npx playwright install chromium webkit
+
+  test:e2e:
+    desc: Drives the page in headless Chromium and WebKit against the test server
+    summary: |
+      Passes ARGS to Playwright, such as ARGS='-g "writes a PNG"' for one test or
+      ARGS=--project=chromium for one browser. A failure leaves a trace in
+      e2e/test-results and an HTML report in e2e/report
+    dir: e2e
+    preconditions:
+      - sh: test -d node_modules/@playwright
+        msg: Run test:e2e:install first
+    cmds:
+      - npx playwright test {{.ARGS}}
+
+  test:e2e:shot:
+    desc: Takes a screenshot of the page and prints the PNG's path
+    summary: |
+      For example: test:e2e:shot ARGS='--search "lightning bolt" --select "Lightning Bolt" --render'
+      The options are --search, --select, --render, --theme, --size and --out,
+      described in e2e/shot.mjs
+    dir: e2e
+    preconditions:
+      - sh: test -d node_modules/@playwright
+        msg: Run test:e2e:install first
+    cmds:
+      - node shot.mjs {{.ARGS}}

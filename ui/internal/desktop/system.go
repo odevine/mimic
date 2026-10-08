@@ -16,6 +16,8 @@ type System struct {
 	app    *application.App
 	window application.Window
 	smoke  *smoke
+	// scripted stands in for the native dialogs and links in a test build
+	scripted *scripted
 }
 
 // VersionInfo names the builds the app is made of
@@ -54,6 +56,9 @@ type PickRequest struct {
 // PickFile shows an open or save dialog attached to the window and returns the
 // chosen path, or an empty string when the user cancelled
 func (s *System) PickFile(req PickRequest) (string, error) {
+	if s.scripted != nil {
+		return s.scripted.pickFile(req)
+	}
 	if req.Save {
 		d := s.app.Dialog.SaveFile().AttachToWindow(s.window).SetMessage(req.Title).SetFilename(req.Name).CanCreateDirectories(true)
 		if req.Dir != "" {
@@ -77,6 +82,9 @@ func (s *System) PickFile(req PickRequest) (string, error) {
 // PickFolder shows a folder dialog attached to the window and returns the chosen
 // path, or an empty string when the user cancelled
 func (s *System) PickFolder(req PickRequest) (string, error) {
+	if s.scripted != nil {
+		return s.scripted.pickFolder(req)
+	}
 	d := s.app.Dialog.OpenFile().AttachToWindow(s.window).SetTitle(req.Title).CanChooseFiles(false).CanChooseDirectories(true).CanCreateDirectories(true)
 	if req.Dir != "" {
 		d.SetDirectory(req.Dir)
@@ -104,6 +112,9 @@ type ConfirmRequest struct {
 // Confirm asks a yes or no question in a native dialog attached to the window
 // and reports whether the user agreed. The webview has no confirm() of its own
 func (s *System) Confirm(req ConfirmRequest) bool {
+	if s.scripted != nil {
+		return s.scripted.confirm(req)
+	}
 	answer := make(chan bool, 1)
 	d := s.app.Dialog.Question().AttachToWindow(s.window).SetTitle(req.Title).SetMessage(req.Message)
 	yes := d.AddButton(req.Accept).OnClick(func() { answer <- true })
@@ -120,6 +131,9 @@ func (s *System) OpenURL(link string) error {
 	u, err := url.Parse(link)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return apierr.Newf(apierr.BadRequest, "%q is not a web link", link)
+	}
+	if s.scripted != nil {
+		return s.scripted.openURL(link)
 	}
 	return s.app.Browser.OpenURL(link)
 }

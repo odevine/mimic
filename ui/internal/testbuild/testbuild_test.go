@@ -1,7 +1,9 @@
 package testbuild
 
 import (
+	"context"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,10 +11,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/ui/internal/fakeupstream"
 	"github.com/odevine/mimic/ui/internal/pipeline"
+	"github.com/odevine/mimic/ui/internal/scryfall"
 	"github.com/odevine/mimic/ui/internal/services/settings"
 	"github.com/odevine/mimic/ui/internal/workspace"
+	"github.com/odevine/mimic/ui/testassets"
 )
 
 // restoreGlobals puts back what Apply changes, since it works on process state
@@ -179,5 +186,38 @@ func TestReleaseRecipesBuildWithoutTheTestTags(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The paced client the app searches with, redirected to the fake upstream, reads
+// the fixture cards and their art, which is what every end to end test relies on
+func TestThePacedClientReadsCardsAndArtFromTheFakeUpstream(t *testing.T) {
+	restoreGlobals(t)
+	cards, err := fs.Sub(testassets.Scryfall, "scryfall")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, err := fakeupstream.New(cards)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(fake)
+	defer srv.Close()
+	Redirect(strings.TrimPrefix(srv.URL, "http://"))
+
+	client := card.NewClient(card.WithHTTPClient(scryfall.NewHTTPClient(10 * time.Second)))
+	found, err := client.Search(context.Background(), "lightning bolt")
+	if err != nil || len(found) != 2 {
+		t.Fatalf("Search = %d cards, %v, want the two printings", len(found), err)
+	}
+	if found[0].Name != "Lightning Bolt" || found[0].ManaCost != "{R}" || found[0].ArtworkURL == "" {
+		t.Errorf("first card = %+v", found[0])
+	}
+	if img, err := client.FetchArt(context.Background(), found[0]); err != nil || img.Bounds().Dx() == 0 {
+		t.Errorf("FetchArt = %v, %v", img, err)
+	}
+	delver, err := client.Search(context.Background(), `!"Delver of Secrets"`)
+	if err != nil || len(delver) != 1 || len(delver[0].Faces) != 2 {
+		t.Errorf("a double-faced card = %v, %v, want one card with two faces", delver, err)
 	}
 }

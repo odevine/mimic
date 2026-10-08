@@ -1,0 +1,13 @@
+{
+  "name": "mimic-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End to end tests that drive the page in a headless browser against the test server. Nothing here is read by the app or its release",
+  "scripts": {
+    "test": "playwright test",
+    "shot": "node shot.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0"
+  }
+}

@@ -9,6 +9,11 @@ name: Update visual baselines
 
 on:
   workflow_dispatch:
+  # Temporary: a manual run only starts a workflow that is on the default branch,
+  # so until this file is there a push to its own file on this branch starts it
+  push:
+    branches: [test/ui-testing]
+    paths: [.github/workflows/update-visual-baselines.yml]
 
 permissions:
   contents: read

@@ -1,0 +1,47 @@
+name: Update visual baselines
+
+# Makes the screenshots the visual tests compare against. They are drawn by the
+# runner's own Chromium and fonts, so they are made here and not on a developer's
+# machine. A run uploads them as an artifact. Download it, put the files in
+# ui/testassets/visual, and commit them with the change that altered the page:
+#
+#   gh run download <run id> --name visual-baselines --dir ui/testassets/visual
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ui/e2e
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/e2e/package-lock.json
+
+      - name: Install the test dependencies
+        run: npm ci
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Make the baselines
+        run: npx playwright test -c playwright.page.config.mjs --project=chromium-visual --update-snapshots=all
+
+      - name: Keep the baselines
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines
+          path: ui/testassets/visual
+          if-no-files-found: error
+          retention-days: 14

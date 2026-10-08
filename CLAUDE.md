@@ -68,6 +68,22 @@ stale after a change to what the bridge returns, run `test:e2e:capture`. Reach
 for a page test when a state needs a reply the fake upstream cannot produce, and
 for a test against the test server when the real services should answer.
 
+Two more checks run from the same bridge scenes in `e2e/bridge/scenes.mjs`, the
+states of the page a reviewer would look at. `tests/page/a11y.spec.mjs` scans each
+in both themes with axe-core and fails on a serious or critical violation that is
+not in `e2e/a11y-allowlist.json`. An entry names the rule, the exact target and
+the reason, and the test fails when an entry stops matching, so fixing a
+violation means deleting its line. `A11Y_DUMP=1` writes what a run found to
+`e2e/.scratch/a11y-found.json`. `tests/visual/visual.spec.mjs` compares a
+screenshot of each scene in both themes with a baseline in `testassets/visual`.
+The baselines are drawn by the runner's own browser and fonts, so they are made by
+the Update visual baselines workflow on Linux and the comparison runs only there.
+After a change that alters the page on purpose, run that workflow, download its
+artifact into `testassets/visual` and commit the files with the change. To look at
+the comparison on another machine, set `MIMIC_VISUAL_LOCAL=1`, which keeps a
+private set in `e2e/.scratch/visual` made with `--update-snapshots=all`. A new
+scene belongs in `scenes.mjs`, where both checks pick it up.
+
 Each test gets the fake upstream, a scratch dialogs folder and a guard that fails
 it if the page reaches outside the machine, through the fixtures in
 `e2e/fixtures.mjs`. The `fake` fixture changes what Scryfall, GitHub and the

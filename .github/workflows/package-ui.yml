@@ -84,9 +84,6 @@ jobs:
       # Build against the pinned engine module, not a workspace, so the release
       # is hermetic and the stamped engine version is the real one
       GOWORK: "off"
-      # The Wails CLI the module pins is itself built from Go on the runner, and
-      # on Linux it defaults to GTK 4, so it is built against GTK 3 like the app
-      GOFLAGS: ${{ startsWith(matrix.runner, 'ubuntu') && '-tags=gtk3' || '' }}
       VERSION: ${{ needs.meta.outputs.version }}
       UPDATE_KEY: ${{ vars.MIMIC_UPDATE_PUBLIC_KEY }}
       # Whether the signing key is set, which is all the step condition can see
@@ -113,7 +110,18 @@ jobs:
           choco install nsis -y --no-progress
           echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
 
+      # The Wails CLI the module pins is built from Go on the runner. On Linux
+      # its cgo files want GTK 4 and WebKitGTK 6, which Ubuntu 22.04 does not
+      # have, and the CLI needs no cgo, so it is built without. The app build
+      # task turns cgo on for itself
       - name: Package
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: "0"
+        run: go tool wails3 task package VERSION="$VERSION"
+
+      - name: Package
+        if: runner.os != 'Linux'
         run: go tool wails3 task package VERSION="$VERSION" ${{ matrix.arch && format('ARCH={0}', matrix.arch) || '' }}
 
       # The updater verifies the digest it computes while downloading against

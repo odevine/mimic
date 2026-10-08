@@ -3,13 +3,13 @@ import { $, h, icon, modKey } from "../dom.js";
 import { app, signal, effect, batch } from "../state.js";
 import { keyedRows } from "../components/keyed.js";
 import { syncChips } from "../components/chips.js";
-import { openFolderPicker } from "../components/folderPicker.js";
+import { openFolderMenu } from "../components/folderMenu.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { toast } from "../components/toast.js";
 import { unsupportedBy, partlyUnsupportedBy, faceSupport } from "../supports.js";
 
 // Flow 2: paste a list, check what it matched, render the lot to a folder. The
-// server parses and resolves, the browser holds the rows. Each row keeps its
+// app parses and resolves, the browser holds the rows. Each row keeps its
 // state in its own signal, so a resolved row redraws only itself
 
 const FORMAT_LABEL = {
@@ -46,7 +46,7 @@ const renderable = (s) => !s.excluded && resolved(s) && !unsupportedBy(s.card);
 const store = {
   rows: signal([]), // [{ id, line, text, qty, group, fields, key, state: signal }]
   version: signal(0), // bumped on any row change, for counts and filters
-  format: signal(""), // what the server read the list as
+  format: signal(""), // what the app read the list as
   resolving: signal(null), // { done, total } while a resolve streams
   filter: signal("all"), // all, attention, custom, or group:<name>
   query: signal(""),
@@ -459,7 +459,7 @@ async function render() {
   let mpcOpts;
   if (mpcMode()) {
     // A double-faced card prints its own back, so only single faces need one.
-    // A card sent without shapes is left to the server, which knows its faces
+    // A card sent without shapes is left to the app, which knows its faces
     if (!mpc.peek()) await loadMPC();
     const info = mpc.peek();
     const needsBack = rows.some((r) => r.base.shapes?.length === 1);
@@ -485,7 +485,7 @@ async function render() {
 
 function pickFolder() {
   const s = app.settings.peek();
-  openFolderPicker($("list-output"), {
+  openFolderMenu($("list-output"), {
     start: s.outputDir || "",
     recent: s.recentOutputDirs || [],
     onChoose: (dir) => rememberOutputDir(dir),
@@ -494,7 +494,7 @@ function pickFolder() {
 
 // --- MPC Autofill project ---
 
-const mpc = signal(null); // GET /api/mpc: { stocks, maxCards, cardback }
+const mpc = signal(null); // Run.MPCInfo: { stocks, maxCards, cardback }
 
 // loadMPC reads the project options, and is tried again wherever they are
 // needed, so one failed load at startup does not stick
@@ -502,7 +502,7 @@ async function loadMPC() {
   try {
     mpc.value = await api.mpc();
   } catch {
-    // The server checks every project it is sent, so this only costs the options
+    // The app checks every project it is sent, so this only costs the options
   }
 }
 
@@ -583,22 +583,16 @@ function mpcOptions(onChange) {
     },
   });
 
-  const file = h("input", {
-    type: "file",
-    accept: "image/png,image/jpeg",
-    hidden: true,
-    onChange: async (e) => {
-      const f = e.target.files[0];
-      e.target.value = "";
-      if (!f) return;
-      try {
-        mpc.value = await api.putCardback(f);
-        onChange();
-      } catch (err) {
-        toast(err.message, "err", 6000);
-      }
-    },
-  });
+  async function choose() {
+    try {
+      const next = await api.chooseCardback();
+      if (!next) return;
+      mpc.value = next;
+      onChange();
+    } catch (err) {
+      toast(err.message, "err", 6000);
+    }
+  }
   const cb = info.cardback;
   const cardback = h(
     "div",
@@ -609,8 +603,7 @@ function mpcOptions(onChange) {
       { class: "control" },
       cb ? h("span", { class: "truncate" }, cb.name) : h("span", { class: "faint" }, "None chosen"),
       cb ? h("span", { class: "note tabular" }, `${cb.width} × ${cb.height} px · ${cb.dpi} dpi`) : null,
-      h("button", { class: "btn subtle", type: "button", onClick: () => file.click() }, icon("upload"), cb ? "Change…" : "Choose image…"),
-      file,
+      h("button", { class: "btn subtle", type: "button", onClick: choose }, icon("upload"), cb ? "Change…" : "Choose image…"),
     ),
   );
 
@@ -643,19 +636,18 @@ async function openMPCOptions() {
 
 // --- source ---
 
-function loadFile(file) {
-  if (!file) return;
-  if (file.size > 2 << 20) {
-    toast("That file is too large to be a list", "err");
+// loadFile reads a list from the file at path, which an open dialog or a drop
+// supplied, and resolves it. The source is named for the file
+async function loadFile(path) {
+  if (!path) return;
+  try {
+    $("list-input").value = await api.readListFile(path);
+  } catch (err) {
+    toast(err.message, "err", 6000);
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    $("list-input").value = String(reader.result);
-    store.source.value = file.name.replace(/\.[^.]+$/, "");
-    resolve();
-  };
-  reader.readAsText(file);
+  store.source.value = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+  resolve();
 }
 
 function initSource() {
@@ -670,20 +662,21 @@ function initSource() {
   input.addEventListener("input", () => {
     store.source.value = "Pasted list";
   });
-  input.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    input.classList.add("drop");
-  });
+  // The window reports a dropped file as a path. The input is marked as the
+  // drop target in index.html, and the highlight follows the drag over it
+  input.addEventListener("dragover", () => input.classList.add("drop"));
   input.addEventListener("dragleave", () => input.classList.remove("drop"));
-  input.addEventListener("drop", (e) => {
-    e.preventDefault();
+  input.addEventListener("drop", () => input.classList.remove("drop"));
+  api.onFilesDropped((files) => {
     input.classList.remove("drop");
-    loadFile(e.dataTransfer.files[0]);
+    if (app.mode.peek() === "list") loadFile(files[0]);
   });
-  $("list-open").addEventListener("click", () => $("list-file").click());
-  $("list-file").addEventListener("change", (e) => {
-    loadFile(e.target.files[0]);
-    e.target.value = "";
+  $("list-open").addEventListener("click", async () => {
+    try {
+      loadFile(await api.chooseListFile());
+    } catch (err) {
+      toast(err.message, "err", 6000);
+    }
   });
   $("list-resolve").addEventListener("click", resolve);
   $("list-format").addEventListener("change", () => {
@@ -779,7 +772,7 @@ function initReview() {
     const skipped = c.total - c.render - store.rows.peek().filter((r) => r.state.peek().excluded).length;
     $("list-render-label").textContent = c.faces ? `Render ${c.faces} ${c.faces === 1 ? "card" : "cards"}` : "Render";
     // An MPC Autofill project counts copies, and needs every face of a card,
-    // so the server refuses a project too big or with a face no template renders
+    // so the app refuses a project too big or with a face no template renders
     const max = mpcMode() && mpc.value ? mpc.value.maxCards : 0;
     const over = max > 0 && c.cards > max;
     const partial = max > 0 ? c.partialIncluded : 0;

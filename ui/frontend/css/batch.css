@@ -206,50 +206,9 @@
   max-width: min(460px, 45vw);
 }
 
-/* Output folder picker */
+/* Output folder menu */
 .folder-popover {
   width: 420px;
-}
-
-.folder-picker {
-  display: flex;
-  flex-direction: column;
-  max-height: min(520px, 80vh);
-}
-
-.folder-bar,
-.folder-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-}
-
-.folder-bar {
-  border-bottom: 1px solid var(--border);
-}
-
-.folder-foot {
-  border-top: 1px solid var(--border);
-}
-
-.folder-foot .spacer {
-  flex: 1;
-}
-
-.folder-list {
-  flex: 1;
-  min-height: 120px;
-  overflow: auto;
-}
-
-.folder-note {
-  padding: 0 10px;
-  font-size: 12px;
-}
-
-.folder-note:empty {
-  display: none;
 }
 
 /* MPC Autofill options. The folder path truncates before these do, and the

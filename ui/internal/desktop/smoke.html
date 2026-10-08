@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mimic launch check</title>
+<script type="module">
+// The launch check loads the real api.js and runs one pass over the bridge, the
+// job events and the image routes, then reports to System.SmokeResult
+import { Call } from "/wails/runtime.js";
+import { api } from "/js/api.js";
+
+const report = "github.com/odevine/mimic/ui/internal/desktop.System.SmokeResult";
+const notes = [];
+async function check() {
+  const v = await api.version();
+  if (!v.ui || !v.engine) throw new Error("System.Version answered " + JSON.stringify(v));
+  notes.push("version " + v.ui + " engine " + v.engine);
+
+  const caps = await api.capabilities();
+  if (!caps["flow.single"]) throw new Error("capabilities lack flow.single");
+
+  const index = await fetch("/");
+  if (!index.ok || !(await index.text()).includes("<title>")) throw new Error("the embedded page did not load");
+  const script = await fetch("/js/app.js");
+  if (!script.ok) throw new Error("the embedded scripts did not load");
+
+  const { jobId } = await api.render({ name: "Launch Check", typeLine: "Creature" }, {}, "preview", 0);
+  let steps = 0;
+  const done = await api.renderEvents(jobId, () => steps++);
+  if (done.error) throw new Error(done.error);
+  notes.push("render job " + jobId + " ended after " + steps + " progress events");
+
+  const img = await fetch(api.renderImageURL(jobId));
+  const blob = await img.blob();
+  if (!img.ok || blob.type !== "image/png" || blob.size < 1000) throw new Error("render image answered " + img.status + " " + blob.type + " " + blob.size);
+
+  const pip = await fetch(api.symbolURL("W", 24));
+  if (!pip.ok) throw new Error("symbol answered " + pip.status);
+
+  if ((await api.latestRun()) !== null) throw new Error("a run existed before any started");
+  // The real page boots in a frame, which means every call it makes on the way
+  // up (capabilities, settings, template, resolution) has answered
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;left:0;top:0;width:1280px;height:800px;border:0;visibility:hidden";
+  frame.src = "/";
+  document.body.append(frame);
+  const deadline = Date.now() + 30000;
+  while (!frame.contentDocument?.documentElement.classList.contains("booted")) {
+    if (Date.now() > deadline) {
+      const why = frame.contentDocument?.body?.innerText?.trim().slice(0, 200) || "no output";
+      throw new Error("the page did not finish booting: " + why);
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  notes.push("the page booted");
+  frame.remove();
+
+  let rejected = "";
+  try {
+    await api.stopRun("run-nope");
+  } catch (e) {
+    rejected = e && e.message ? e.message : String(e);
+  }
+  if (!rejected) throw new Error("a failing call did not reject");
+  notes.push("errors reject with: " + rejected);
+}
+
+try {
+  await check();
+  await Call.ByName(report, true, notes.join("; "));
+} catch (e) {
+  await Call.ByName(report, false, e && e.message ? e.message : String(e));
+}
+</script>

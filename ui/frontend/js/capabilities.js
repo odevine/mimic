@@ -2,7 +2,7 @@ import { icon, h } from "./dom.js";
 import { showTooltipNow } from "./components/tooltip.js";
 import { app } from "./state.js";
 
-// Applies the server's gate map to the DOM. Three attributes carry a feature
+// Applies the app's gate map to the DOM. Three attributes carry a feature
 // key: data-feature gates a single control, data-feature-section overlays a
 // whole region, and data-feature-indicator marks a control with a lock while
 // leaving it usable, which is how a gated mode stays openable from the rail
@@ -13,7 +13,7 @@ const GATE_TEXT = {
   "needs-template": "Needs template",
 };
 
-// A key the server does not list is treated as not built, so a typo in markup
+// A key the app does not list is treated as not built, so a typo in markup
 // shows up as a gate rather than as a live control that does nothing
 const MISSING = { state: "planned", reason: "Not available in this build" };
 

@@ -24,7 +24,6 @@ const SOURCE_TEXT = {
 };
 
 let status = null; // the last GET /api/fonts
-let pendingRole = ""; // the role folder the file picker is choosing for
 
 const fontName = (r) => [r.family, r.style].filter(Boolean).join(" ") || r.file || "Unknown font";
 
@@ -82,20 +81,13 @@ async function refresh() {
   draw();
 }
 
-function choose(folder) {
-  pendingRole = folder;
-  const input = $("fonts-file");
-  input.value = "";
-  input.click();
-}
-
-async function upload() {
-  const file = $("fonts-file").files[0];
-  if (!file || !pendingRole) return;
+async function choose(folder) {
   try {
-    status = await api.addFont(pendingRole, file);
+    const next = await api.addFont(folder);
+    if (!next) return;
+    status = next;
     draw();
-    toast(`${file.name} added`, "ok");
+    toast(`${status.roles.find((r) => r.folder === folder)?.file || "The font"} added`, "ok");
   } catch (err) {
     toast(err.message, "err", 6000);
   }
@@ -111,7 +103,7 @@ async function remove(r) {
 }
 
 async function resetAll() {
-  if (!confirm("Remove every font you added? Each role goes back to its default.")) return;
+  if (!(await api.confirm("Remove added fonts", "Remove every font you added? Each role goes back to its default.", "Remove"))) return;
   try {
     for (const r of status.roles.filter((r) => r.source === "user")) status = await api.removeFont(r.folder);
   } catch (err) {
@@ -122,8 +114,7 @@ async function resetAll() {
 
 async function openFolder() {
   try {
-    const resp = await api.openFonts();
-    if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText);
+    await api.openFonts();
   } catch (err) {
     toast(err.message, "err");
   }
@@ -135,7 +126,6 @@ export function openFonts() {
 }
 
 export function initFonts() {
-  $("fonts-file").addEventListener("change", upload);
   $("fonts-open").addEventListener("click", openFolder);
   $("fonts-reset").addEventListener("click", resetAll);
 }

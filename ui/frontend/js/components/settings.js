@@ -4,7 +4,6 @@ import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
 import { openFonts, initFonts } from "./fonts.js";
-import { tintFavicon } from "./favicon.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
 // them against the active template, and the interface settings go through
@@ -18,7 +17,6 @@ export function applyTheme(theme) {
   } catch {
     // a blocked store only costs the pre-paint theme on the next load
   }
-  tintFavicon();
 }
 
 // sizeLabel is how a resolution reads everywhere: the pixels it produces, with
@@ -32,13 +30,13 @@ export async function loadResolution() {
   try {
     app.resolution.value = await api.resolution();
   } catch {
-    // The server clamps whatever it is sent, so stale settings are harmless
+    // The app clamps whatever it is sent, so stale settings are harmless
   }
 }
 
 // chosenResolution is the resolution a picker currently describes: a preset, or
 // the size a custom dpi works out to against the template's own, clamped the
-// way the server clamps it
+// way the app clamps it
 function chosenResolution(which) {
   const res = app.resolution.peek();
   const presets = (res && res.presets) || [];
@@ -90,7 +88,7 @@ function bytesLabel(bytes) {
 
 // loadResources reads this computer's memory and what a render costs when the
 // layer cache is the named size, or the saved one for no name. It is null when
-// the server cannot say
+// the app cannot say
 async function loadResources(cache) {
   try {
     return await api.resources(cache);
@@ -110,7 +108,7 @@ function fillLayerCache(r) {
 }
 
 // fillConcurrency lists automatic and each preset count with the memory it is
-// expected to use, so a choice shows its cost. The server owns the estimate and
+// expected to use, so a choice shows its cost. The app owns the estimate and
 // hands over the numbers, which keeps the model in one place. Without them the
 // choice is plain counts. A saved count outside the presets stays listed, so
 // opening the panel never changes it

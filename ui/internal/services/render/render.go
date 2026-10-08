@@ -108,6 +108,16 @@ func (s *Service) Image(jobID string) (image.Image, string, error) {
 	return img, name, nil
 }
 
+// SuggestedFilename is the name a save dialog offers for a finished render, the
+// card's name as a safe .png filename
+func (s *Service) SuggestedFilename(jobID string) (string, error) {
+	_, name, err := s.Image(jobID)
+	if err != nil {
+		return "", err
+	}
+	return Filename(name), nil
+}
+
 // Save writes a finished render to path as a PNG
 func (s *Service) Save(jobID, path string) error {
 	img, _, err := s.Image(jobID)

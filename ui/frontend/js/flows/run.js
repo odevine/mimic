@@ -7,7 +7,7 @@ import { toast } from "../components/toast.js";
 
 // The Run Console: watches a batch while it renders and stays readable after.
 // It only reports, and the actions it offers start new work from what it found.
-// The server keeps the latest run, so a reloaded page picks it back up and the
+// The app keeps the latest run, so a reloaded page picks it back up and the
 // event stream replays the run from its start
 
 const GLYPH = {

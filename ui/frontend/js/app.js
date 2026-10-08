@@ -8,6 +8,7 @@ import { initSettings, applyTheme, loadResolution } from "./components/settings.
 import { initPreview, setZoom } from "./components/preview.js";
 import { initSplitters } from "./components/splitter.js";
 import { popoverOpen } from "./components/popover.js";
+import { toast } from "./components/toast.js";
 import { initSingle, single } from "./flows/single.js";
 import { initList, list } from "./flows/list.js";
 import { initRun } from "./flows/run.js";
@@ -157,6 +158,18 @@ function initKeyboard() {
   });
 }
 
+// Web links open in the user's browser, since the window has no tabs of its own.
+// One handler catches every link, so a link in a card's text or a template's
+// notes behaves the same
+function initLinks() {
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || !/^https?:\/\//i.test(a.href)) return;
+    e.preventDefault();
+    api.openURL(a.href).catch((err) => toast(err.message, "err"));
+  });
+}
+
 async function boot() {
   await Promise.all([loadCapabilities(), loadSettings(), loadActiveTemplate(), loadResolution()]);
   applyTheme(app.settings.peek().theme);
@@ -173,6 +186,7 @@ async function boot() {
   initRun();
   initTemplates();
   initKeyboard();
+  initLinks();
   initSplitters(document.querySelector("#mode-single .regions"), (app.settings.peek().splits || {}).single, (w) =>
     persistSplits("single", w),
   );

@@ -26,14 +26,18 @@ installed, cards render with placeholder frame layers.
 
 ## Building from source
 
-Building needs Go at the version named in `ui/go.mod`. The app is pure Go with
-its frontend embedded, so there is no Node or npm step, and it builds with
-`CGO_ENABLED=0`.
+Building needs Go at the version named in `ui/go.mod`. The frontend is embedded,
+so there is no Node or npm step. The window uses the system webview, so macOS
+needs the Xcode command line tools, Linux needs a C compiler with the GTK 3 and
+WebKitGTK 4.1 development packages (`libgtk-3-dev` and `libwebkit2gtk-4.1-dev`
+on Debian and Ubuntu), and Windows needs only Go and the WebView2 runtime that
+ships with Windows 11 and current Windows 10.
 
 ```
 git clone https://github.com/odevine/mimic
 cd mimic/ui
-go run .
+go run .            # macOS and Windows
+go run -tags gtk3 . # Linux
 ```
 
 ## How the repository is laid out
@@ -43,12 +47,12 @@ The repository holds two Go modules, each versioned and released on its own.
 | Directory      | Contents                                                        |
 | -------------- | --------------------------------------------------------------- |
 | `engine/`      | The renderer: Scryfall lookups, templates, text layout          |
-| `ui/`          | The `mimic` app: the local server and its embedded web frontend |
+| `ui/`          | The `mimic` desktop app and its embedded web frontend           |
 | `local-fonts/` | A drop folder for real card fonts, which are not tracked        |
 
 The [engine README](engine/README.md) covers the rendering library and the
 `rendercard` command, and the [ui README](ui/README.md) covers the app, its
-settings, and the JSON API it serves.
+settings, and how it is built.
 
 `ui` depends on a released `engine` through the pin in its `go.mod`, and CI
 builds against that pin. To work across both modules at once, create a Go

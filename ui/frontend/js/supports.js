@@ -1,4 +1,4 @@
-// Whether some installed template can render a card's faces. The server
+// Whether some installed template can render a card's faces. The app
 // classifies every card it sends into shapes, one per image it renders to, and
 // reports which template renders each shape, so this only compares the two
 

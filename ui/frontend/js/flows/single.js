@@ -32,7 +32,7 @@ const FIELDS = [
 ];
 
 // HALF_FIELDS are the fields of each half of a split card, read from its faces
-// and edited under the same names the server's Edits carries. A split card
+// and edited under the same names the app's Edits carries. A split card
 // draws only its halves, so these stand in for the top-level face fields
 const HALF_FIELDS = [1, 2].flatMap((n) => [
   { f: `half${n}Name`, key: "Name", half: n, label: "Name", kind: "text" },
@@ -89,7 +89,7 @@ const store = {
 let searchAbort = null;
 let printingsAbort = null;
 let renderJob = null;
-let renderJobId = ""; // the server job behind renderJob
+let renderJobId = ""; // the app job behind renderJob
 let renderSeq = 0; // counts renders started, so a slow start can tell it was superseded
 let liveTimer = 0;
 let preview = null; // { jobId, dpi, face } of the preview on screen
@@ -596,7 +596,7 @@ function outputDPI() {
 // Edits redraw the preview once typing pauses for this long
 const LIVE_DELAY_MS = 350;
 
-// abandonRender stops following the render in flight and tells the server to
+// abandonRender stops following the render in flight and tells the app to
 // stop working on it
 function abandonRender() {
   renderSeq++;
@@ -669,14 +669,7 @@ function renderIfSupported() {
   $("stage-placeholder").hidden = false;
 }
 
-function download(jobId) {
-  const a = h("a", { href: api.renderImageURL(jobId, true), download: "" });
-  document.body.append(a);
-  a.click();
-  a.remove();
-}
-
-// save downloads at the output resolution. The preview was rendered smaller,
+// save writes the card at the output resolution. The preview was rendered smaller,
 // so this renders again at full size unless the two agree and the preview on
 // screen is current
 async function save() {
@@ -687,8 +680,7 @@ async function save() {
   const res = app.resolution.peek();
   const size = compactSize(res && res.output);
   if (preview && preview.dpi === outputDPI() && preview.face === face && store.rendered.peek() === snapshot()) {
-    download(preview.jobId);
-    finish("done", `Saved ${name}.png`, "Handed to the browser as a download", size);
+    await writeFile(preview.jobId, name, size);
     return;
   }
   abandonRender();
@@ -699,14 +691,25 @@ async function save() {
   try {
     const { jobId } = await api.render(base, store.edits.peek(), "output", face);
     await api.renderEvents(jobId, progress);
-    download(jobId);
-    finish("done", `Saved ${name}.png`, "Handed to the browser as a download");
+    await writeFile(jobId, name, size);
   } catch (err) {
     finish("error", "Save failed", err.message);
   } finally {
     saving = false;
     $("save-btn").disabled = !store.base.peek();
     $("render-btn").disabled = !store.base.peek();
+  }
+}
+
+// writeFile asks where to put a finished render and writes it there, ending the
+// activity with the file's path, or quietly when the user cancels the dialog
+async function writeFile(jobId, name, size) {
+  try {
+    const path = await api.saveRender(jobId, app.settings.peek().outputDir || "");
+    if (path) finish("done", `Saved ${name}.png`, path, size);
+    else finish("idle", "", "");
+  } catch (err) {
+    finish("error", "Save failed", err.message);
   }
 }
 

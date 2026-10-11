@@ -460,32 +460,38 @@ func layerNode(ctx context.Context, loads *frameLoads, t *template.Template, req
 	mirror := e.Mirror != nil && e.Mirror.Condition.Met(k, req.Features)
 	assets := t.Assets()
 
-	// An entry that is neither blended from several colors nor mirrored is only
-	// composited, so its image goes to the compositor as it is, shared and with
-	// its index of visible pixels, and no float buffer is built for it
-	if blended == nil && !mirror {
+	// An entry that is not mirrored is only composited, so its image goes to the
+	// compositor as it is, shared and with its index of visible pixels, and no float
+	// buffer is built for it. A blend is built once as an image and shared the same way
+	if !mirror {
 		return &canvas.Layer{Mode: e.Mode, Opacity: float32(opacity), LoadImage: func() (image.Image, image.Point, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, image.Point{}, err
 			}
 			loads.started()
+			if blended != nil {
+				return template.LoadBlendedImage(assets, blended, blender, scale, at.X, at.Y, authored.X, authored.Y, true)
+			}
 			return template.LoadLayerImage(assets, asset, scale, at.X, at.Y, authored.X, authored.Y)
 		}}, nil
 	}
 
-	// Blending several colors writes new pixels and a mirror rewrites them, so
-	// these two build a buffer of their own
+	// A mirror rewrites pixels, so it works on a buffer of its own
 	return &canvas.Layer{Mode: e.Mode, Opacity: float32(opacity), Load: func() (*raster.Buffer, image.Point, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, image.Point{}, err
 		}
 		loads.started()
 		if blended != nil {
-			buf, origin, err := template.LoadBlendedLayer(assets, blended, blender, scale, at.X, at.Y, authored.X, authored.Y)
-			return mirrored(buf, origin, err, mirror, e, geo, scale)
+			img, origin, err := template.LoadBlendedImage(assets, blended, blender, scale, at.X, at.Y, authored.X, authored.Y, false)
+			if err != nil || img == nil {
+				return nil, origin, err
+			}
+			buf, err := raster.FromImage(img)
+			return mirrored(buf, origin, err, true, e, geo, scale)
 		}
 		buf, origin, err := template.LoadLayerAt(assets, asset, scale, at.X, at.Y, authored.X, authored.Y)
-		return mirrored(buf, origin, err, mirror, e, geo, scale)
+		return mirrored(buf, origin, err, true, e, geo, scale)
 	}}, nil
 }
 

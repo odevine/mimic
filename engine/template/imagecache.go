@@ -45,9 +45,12 @@ type CachedAssets struct {
 }
 
 type cachedImage struct {
-	img   image.Image
-	bytes int64
-	last  uint64
+	img image.Image
+	// origin is where a built layer belongs in the document, which a decoded one
+	// does not have
+	origin image.Point
+	bytes  int64
+	last   uint64
 	// index is built the first time the layer is asked for with one, and goes
 	// when the layer does. It is small beside the pixels, so it is not counted
 	// against the budget
@@ -56,9 +59,10 @@ type cachedImage struct {
 }
 
 type decoding struct {
-	done chan struct{}
-	img  image.Image
-	err  error
+	done   chan struct{}
+	img    image.Image
+	origin image.Point
+	err    error
 }
 
 // CacheStats describes a CachedAssets. Hits are loads served without a decode,
@@ -84,41 +88,64 @@ func NewCachedAssets(p AssetProvider, budget int64) *CachedAssets {
 // LoadImage returns the decoded layer at relPath, decoding it only when no
 // other load has
 func (c *CachedAssets) LoadImage(relPath string) (image.Image, error) {
+	img, _, err := c.fetch(relPath, func() (image.Image, image.Point, error) {
+		img, err := decodeImage(c.AssetProvider, relPath)
+		return img, image.Point{}, err
+	})
+	return img, err
+}
+
+// LoadBlended returns a layer built from other layers, such as two colors mixed
+// across a frame, and where it belongs in the document. key says what it was built
+// from, so a layer asked for again under the same key is not built again, and loads
+// of one key that overlap share one build. It is kept and aged like a decoded
+// layer, and with indexed set it comes back as a *blend.Indexed when it is resident
+func (c *CachedAssets) LoadBlended(key string, indexed bool, build func() (image.Image, image.Point, error)) (image.Image, image.Point, error) {
+	img, at, err := c.fetch(key, build)
+	if err != nil || !indexed {
+		return img, at, err
+	}
+	return c.indexedIfResident(key, img), at, nil
+}
+
+// fetch is what every load goes through: the layer under key, produced by produce
+// when no other load has, and kept if it fits
+func (c *CachedAssets) fetch(key string, produce func() (image.Image, image.Point, error)) (image.Image, image.Point, error) {
 	c.mu.Lock()
 	if c.budget <= 0 {
 		c.mu.Unlock()
-		return decodeImage(c.AssetProvider, relPath)
+		return produce()
 	}
-	c.count(relPath)
-	if e, ok := c.resident[relPath]; ok {
+	c.count(key)
+	if e, ok := c.resident[key]; ok {
 		c.hits++
 		c.tick++
 		e.last = c.tick
 		c.mu.Unlock()
-		return e.img, nil
+		return e.img, e.origin, nil
 	}
-	if d, ok := c.inflight[relPath]; ok {
+	if d, ok := c.inflight[key]; ok {
 		c.hits++
 		c.mu.Unlock()
 		<-d.done
-		return d.img, d.err
+		return d.img, d.origin, d.err
 	}
 	d := &decoding{done: make(chan struct{}), err: errors.New("template: layer decode did not finish")}
-	c.inflight[relPath] = d
+	c.inflight[key] = d
 	c.misses++
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
-		delete(c.inflight, relPath)
+		delete(c.inflight, key)
 		if d.err == nil {
-			c.admit(relPath, d.img)
+			c.admit(key, d.img, d.origin)
 		}
 		c.mu.Unlock()
 		close(d.done)
 	}()
-	d.img, d.err = decodeImage(c.AssetProvider, relPath)
-	return d.img, d.err
+	d.img, d.origin, d.err = produce()
+	return d.img, d.origin, d.err
 }
 
 // LoadIndexed is LoadImage for a layer that is only composited. A resident
@@ -131,18 +158,24 @@ func (c *CachedAssets) LoadIndexed(relPath string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.indexedIfResident(relPath, img), nil
+}
+
+// indexedIfResident returns img as a *blend.Indexed when it is the NRGBA layer
+// held under key, and as it is otherwise
+func (c *CachedAssets) indexedIfResident(key string, img image.Image) image.Image {
 	n, ok := img.(*image.NRGBA)
 	if !ok {
-		return img, nil
+		return img
 	}
 	c.mu.Lock()
-	e, resident := c.resident[relPath]
+	e, resident := c.resident[key]
 	c.mu.Unlock()
 	if !resident || e.img != image.Image(n) {
-		return img, nil
+		return img
 	}
 	e.index.Do(func() { e.indexed = blend.Index(n) })
-	return e.indexed, nil
+	return e.indexed
 }
 
 // count records a load of path and ages every count once per agePeriod loads
@@ -163,7 +196,7 @@ func (c *CachedAssets) count(path string) {
 
 // admit keeps img if it fits, evicting the least used layers to make room. It
 // declines when making room would evict a layer used more often than path
-func (c *CachedAssets) admit(path string, img image.Image) {
+func (c *CachedAssets) admit(path string, img image.Image, origin image.Point) {
 	size := imageBytes(img)
 	if size > c.budget {
 		return
@@ -191,7 +224,7 @@ func (c *CachedAssets) admit(path string, img image.Image) {
 		}
 	}
 	c.tick++
-	c.resident[path] = &cachedImage{img: img, bytes: size, last: c.tick}
+	c.resident[path] = &cachedImage{img: img, origin: origin, bytes: size, last: c.tick}
 	c.used += size
 }
 

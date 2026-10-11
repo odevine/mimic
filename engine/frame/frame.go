@@ -8,6 +8,7 @@ package frame
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -19,121 +20,43 @@ import (
 // can want dual pinlines while its name box stays gold, and an artifact can want
 // an artifact background while its pinlines stay colored
 type Keys struct {
-	Background string // frame body and edge: mono/dual/gold/artifact/vehicle/colorless/land
-	Pinlines   string // pinlines and rules textbox: mono/dual/gold/artifact/colorless/land
-	Twins      string // name and type boxes: mono/gold/artifact/colorless/land (never dual)
-	PTBox      string // twins plus a vehicle variant
-	Crown      string // legendary crown: mono/dual/gold/artifact/colorless/land
-	// Indicator is the color indicator's key, its WUBRG colors lowercased in
-	// canonical order such as "u" or "ubr", or "" for a face with none
-	Indicator string
-	// TransformIcon names the icon a double-faced face prints in its corner,
-	// such as "sunmoondfc", or "" for a single-faced card
-	TransformIcon string
-
-	Land      bool
-	Legendary bool
-	Creature  bool // has printed power and toughness, which covers Vehicles
-	Nyx       bool // enchantment, so the nyx frame stands in for the background
+	Background Material // frame body and edge: mono, dual, gold, artifact, vehicle, colorless, or land
+	Pinlines   Material // pinlines and rules textbox: mono, dual, gold, artifact, colorless, or land
+	Twins      Material // name and type boxes: mono, gold, artifact, colorless, or land, never dual
+	PTBox      Material // twins plus a vehicle variant
+	Crown      Material // legendary crown: mono, dual, gold, artifact, colorless, or land
+	// Indicator is the color indicator's art, named for its colors in WUBRG order
+	// such as "u" or "ubr", or none for a face with no indicator
+	Indicator Material
+	// TransformIcon names the icon a double-faced face prints in its corner, such as
+	// "sunmoondfc", or is none for a single-faced card
+	TransformIcon Material
+	Land          bool
+	Legendary     bool
+	Creature      bool // has printed power and toughness, which covers Vehicles
+	Nyx           bool // enchantment, so the nyx frame stands in for the background
+	Companion     bool // printed with the companion frame
 	// Front and Back mark which face of a double-faced card is rendering. A
 	// single-faced card is neither
 	Front, Back bool
-	// Fuse marks a fuse split card, which prints a bar across both halves. The
-	// bar blends the halves' pinline colors, each half's letters in order, so a
-	// red half beside a white one is "rw". FuseKey colors its textbox, gold when
-	// the blend has more than three colors, and FusePinKey colors its pinline,
-	// which blends up to four. Both are empty for any other card
 	// SetSymbol marks a card whose set symbol draws, which the renderer sets once
 	// it knows the symbol and the manifest's place for it. The type line reads it
 	// to give up the room the symbol takes
-	SetSymbol  bool
+	SetSymbol bool
+	// Fuse marks a fuse split card, which prints a bar across both halves. The bar
+	// runs the halves' pinline colors, each half's colors in order, so a red half
+	// beside a white one is red then white. FuseKey colors its textbox, gold when
+	// the run has more than three colors, and FusePinKey colors its pinline, which
+	// runs up to four. Both are none for any other card
 	Fuse       bool
-	FuseKey    string
-	FusePinKey string
-}
-
-// Slot returns the color key for one of these keys' named slots: background,
-// pinlines, twins, ptBox, crown, indicator, or transform_icon. It reports ""
-// for any other name, including a layer's empty ColorSlot, so an any-only
-// layer's lookup misses and falls back to its "any" variant the same way a
-// slot with no key for this card would
-func (k Keys) Slot(name string) string {
-	switch name {
-	case "background":
-		return k.Background
-	case "pinlines":
-		return k.Pinlines
-	case "twins":
-		return k.Twins
-	case "ptBox":
-		return k.PTBox
-	case "crown":
-		return k.Crown
-	case "indicator":
-		return k.Indicator
-	case "transform_icon":
-		return k.TransformIcon
-	case "fuse":
-		return k.FuseKey
-	case "fuse_pinlines":
-		return k.FusePinKey
-	default:
-		return ""
-	}
-}
-
-// ConditionMet reports whether a layer's or text box's condition, drawn from
-// the engine's fixed condition vocabulary, holds for the card these keys were
-// derived from. Every WUBRG frame template shares this vocabulary rather than
-// defining its own, the same way it shares the slot keys. A comma-separated
-// list, such as "back,land", holds when every entry does. Conditions the engine
-// does not yet drive (nyx, companion, hollow_crown, fullart, divider, pt_dark)
-// render off through the default case
-func (k Keys) ConditionMet(condition string) bool {
-	if strings.Contains(condition, ",") {
-		for _, c := range strings.Split(condition, ",") {
-			if !k.ConditionMet(strings.TrimSpace(c)) {
-				return false
-			}
-		}
-		return true
-	}
-	switch condition {
-	case "":
-		return true
-	case "land":
-		return k.Land
-	case "nonland":
-		return !k.Land
-	case "legendary":
-		return k.Legendary
-	case "nonlegendary":
-		return !k.Legendary
-	case "creature":
-		return k.Creature
-	case "color_indicator":
-		return k.Indicator != ""
-	case "front":
-		return k.Front
-	case "back":
-		return k.Back
-	case "fuse":
-		return k.Fuse
-	case "set_symbol":
-		return k.SetSymbol
-	case "icon_left":
-		return k.TransformIcon != "" && !k.iconRight()
-	case "icon_right":
-		return k.iconRight()
-	default:
-		return false
-	}
+	FuseKey    Material
+	FusePinKey Material
 }
 
 // iconRight reports whether the transform icon sits at the right end of the
 // title bar, which a triangle back face prints in place of the left corner
 func (k Keys) iconRight() bool {
-	return k.Back && k.TransformIcon == triangleIcon
+	return k.Back && k.TransformIcon == Named(triangleIcon)
 }
 
 // Side is which face of a card is rendering, which a double-faced frame reads
@@ -163,16 +86,17 @@ func DeriveFace(d *card.Data, side Side) Keys {
 	pureHybrid := len(colors) == 2 && allHybrid(d.ManaCost)
 
 	k := Keys{
-		Background: backgroundKey(isLand, isVehicle, isArtifact, colors, pureHybrid),
-		Pinlines:   pinlineKey(isLand, isArtifact, colors),
-		Twins:      twinsKey(isLand, isVehicle, isArtifact, colors, pureHybrid, false),
-		PTBox:      twinsKey(isLand, isVehicle, isArtifact, colors, pureHybrid, true),
-		Crown:      crownKey(isLand, isArtifact, colors),
-		Indicator:  indicatorKey(d.ColorIndicator),
+		Background: backgroundMaterial(isLand, isVehicle, isArtifact, colors, pureHybrid),
+		Pinlines:   pinlineMaterial(isLand, isArtifact, colors),
+		Twins:      twinsMaterial(isLand, isVehicle, isArtifact, colors, pureHybrid, false),
+		PTBox:      twinsMaterial(isLand, isVehicle, isArtifact, colors, pureHybrid, true),
+		Crown:      crownMaterial(isLand, isArtifact, colors),
+		Indicator:  ColorSet(wubrgOnly(d.ColorIndicator)),
 		Land:       isLand,
 		Legendary:  strings.Contains(tl, "legendary"),
 		Creature:   d.Power != "" && d.Toughness != "",
 		Nyx:        strings.Contains(tl, "enchantment"),
+		Companion:  slices.Contains(d.FrameEffects, "companion"),
 		Front:      side == Front,
 		Back:       side == Back,
 		Fuse:       d.HasFuse(),
@@ -181,65 +105,34 @@ func DeriveFace(d *card.Data, side Side) Keys {
 		k.FuseKey, k.FusePinKey = fuseKeys(d)
 	}
 	if side != Single {
-		k.TransformIcon = transformIcon(d.FrameEffects)
+		k.TransformIcon = Named(transformIcon(d.FrameEffects))
 	}
 	return k
 }
 
 // fuseKeys are the colors of a fuse bar, the pinline colors of the two halves in
-// order. A half with no pinline of letters, such as a colorless one, makes the
-// bar gold, and so does a textbox blend of more than three colors
-func fuseKeys(d *card.Data) (textbox, pinlines string) {
+// order. A half with no pinline of colors, such as a colorless one, makes the bar
+// gold, and so does a textbox run of more than three colors
+func fuseKeys(d *card.Data) (textbox, pinlines Material) {
 	var merged string
 	for i := 0; i < 2; i++ {
 		h := d.Half(i)
 		tl := strings.ToLower(h.TypeLine)
-		key := pinlineKey(strings.Contains(tl, "land"), strings.Contains(tl, "artifact"), frameColors(h, strings.Contains(tl, "land")))
-		if !isColorLetters(key) {
-			return "gold", "gold"
+		m := pinlineMaterial(strings.Contains(tl, "land"), strings.Contains(tl, "artifact"), frameColors(h, strings.Contains(tl, "land")))
+		if k := m.Kind(); k != KindMono && k != KindRun {
+			return Gold, Gold
 		}
-		key = runOrder(key)
-		if i == 0 || key != merged {
-			merged += key
+		if run := m.String(); i == 0 || run != merged {
+			merged += run
 		}
 	}
 	if len(merged) > 4 {
-		return "gold", "gold"
+		return Gold, Gold
 	}
 	if len(merged) > 3 {
-		return "gold", merged
+		return Gold, fromLetters(merged)
 	}
-	return merged, merged
-}
-
-// runOrder is a dual's colors in the order its frame runs them from left to right,
-// which is WUBRG order except for the three the printed frames name the other
-// way round, green and white, red and white, and green and blue
-func runOrder(key string) string {
-	switch key {
-	case "wg":
-		return "gw"
-	case "wr":
-		return "rw"
-	case "ug":
-		return "gu"
-	}
-	return key
-}
-
-func isColorLetters(s string) bool {
-	for _, r := range s {
-		if !strings.ContainsRune("wubrg", r) {
-			return false
-		}
-	}
-	return s != ""
-}
-
-// indicatorKey is the key a color indicator's art is filed under, its colors
-// lowercased in WUBRG order, so a blue-black indicator is "ub"
-func indicatorKey(colors []card.Color) string {
-	return dualKey(wubrgOnly(colors))
+	return fromLetters(merged), fromLetters(merged)
 }
 
 // transformIcons maps the Scryfall frame effects that name a double-faced
@@ -322,110 +215,110 @@ func namedBasicColors(lowerOracle string) []card.Color {
 	return out
 }
 
-func backgroundKey(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid bool) string {
+func backgroundMaterial(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid bool) Material {
 	switch {
 	case isLand:
 		// The land frame body stays a land at any color count, and the pinlines
 		// and name box carry the gold of a land that makes three or more colors
-		return "land"
+		return Land
 	case isVehicle:
-		return "vehicle"
+		return Vehicle
 	case isArtifact:
-		return "artifact"
+		return Artifact
 	}
 	switch len(colors) {
 	case 0:
-		return "colorless"
+		return Colorless
 	case 1:
-		return monoKey(colors[0])
+		return Mono(colors[0])
 	case 2:
 		if pureHybrid {
-			return dualKey(colors)
+			return Dual(colors)
 		}
-		return "gold"
+		return Gold
 	default:
-		return "gold"
+		return Gold
 	}
 }
 
-// pinlineKey colors the pinlines and rules textbox, which are dual for any
+// pinlineMaterial colors the pinlines and rules textbox, which are dual for any
 // two-color card, hybrid or gold. Only a colorless card falls to artifact or
-// colorless.
-func pinlineKey(isLand, isArtifact bool, colors []card.Color) string {
+// colorless
+func pinlineMaterial(isLand, isArtifact bool, colors []card.Color) Material {
 	switch len(colors) {
 	case 0:
 		switch {
 		case isLand:
-			return "land"
+			return Land
 		case isArtifact:
-			return "artifact"
+			return Artifact
 		default:
-			return "colorless"
+			return Colorless
 		}
 	case 1:
-		return monoKey(colors[0])
+		return Mono(colors[0])
 	case 2:
-		return dualKey(colors)
+		return Dual(colors)
 	default:
-		return "gold"
+		return Gold
 	}
 }
 
-// twinsKey colors the name, type, and P/T boxes, which have no dual variant. A
-// pure-hybrid two-color card reads as colorless here, a gold two-color card as
+// twinsMaterial colors the name, type, and P/T boxes, which have no dual variant.
+// A pure-hybrid two-color card reads as colorless here, a gold two-color card as
 // gold, and a two-color land as a land. ptBox is true for the P/T box, which
-// alone has a vehicle variant.
-func twinsKey(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid, ptBox bool) string {
+// alone has a vehicle variant
+func twinsMaterial(isLand, isVehicle, isArtifact bool, colors []card.Color, pureHybrid, ptBox bool) Material {
 	if isVehicle {
 		if ptBox {
-			return "vehicle"
+			return Vehicle
 		}
-		return "artifact"
+		return Artifact
 	}
 	switch len(colors) {
 	case 0:
 		switch {
 		case isLand:
-			return "land"
+			return Land
 		case isArtifact:
-			return "artifact"
+			return Artifact
 		default:
-			return "colorless"
+			return Colorless
 		}
 	case 1:
-		return monoKey(colors[0])
+		return Mono(colors[0])
 	case 2:
 		switch {
 		case isLand:
-			return "land"
+			return Land
 		case pureHybrid:
-			return "colorless"
+			return Colorless
 		}
-		return "gold"
+		return Gold
 	default:
-		return "gold"
+		return Gold
 	}
 }
 
-// crownKey colors the legendary crown, which has dual variants, so a two-color
-// legendary gets a dual crown rather than gold.
-func crownKey(isLand, isArtifact bool, colors []card.Color) string {
+// crownMaterial colors the legendary crown, which has dual variants, so a
+// two-color legendary gets a dual crown rather than gold
+func crownMaterial(isLand, isArtifact bool, colors []card.Color) Material {
 	switch len(colors) {
 	case 0:
 		switch {
 		case isArtifact:
-			return "artifact"
+			return Artifact
 		case isLand:
-			return "land"
+			return Land
 		default:
-			return "colorless"
+			return Colorless
 		}
 	case 1:
-		return monoKey(colors[0])
+		return Mono(colors[0])
 	case 2:
-		return dualKey(colors)
+		return Dual(colors)
 	default:
-		return "gold"
+		return Gold
 	}
 }
 
@@ -482,14 +375,4 @@ func canonical(colors []card.Color) []card.Color {
 	out := append([]card.Color(nil), colors...)
 	sort.SliceStable(out, func(i, j int) bool { return wubrgOrder[out[i]] < wubrgOrder[out[j]] })
 	return out
-}
-
-func monoKey(c card.Color) string { return strings.ToLower(string(c)) }
-
-func dualKey(colors []card.Color) string {
-	var b strings.Builder
-	for _, c := range canonical(colors) {
-		b.WriteString(strings.ToLower(string(c)))
-	}
-	return b.String()
 }

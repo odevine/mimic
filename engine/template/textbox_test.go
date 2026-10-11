@@ -88,8 +88,8 @@ func TestResolveTextBoxes(t *testing.T) {
 	}{
 		{"front", frame.Keys{Front: true}, 1, 3, true},
 		{"back", frame.Keys{Back: true}, 2, 5, true},
-		{"back with an indicator takes the most specific match", frame.Keys{Back: true, Indicator: "u"}, 2, 6, true},
-		{"front with an indicator", frame.Keys{Front: true, Indicator: "u"}, 1, 4, true},
+		{"back with an indicator takes the most specific match", frame.Keys{Back: true, Indicator: frame.Named("u")}, 2, 6, true},
+		{"front with an indicator", frame.Keys{Front: true, Indicator: frame.Named("u")}, 1, 4, true},
 		{"single has no title here", frame.Keys{}, 0, 3, false},
 	}
 	for _, c := range cases {
@@ -125,8 +125,8 @@ func TestResolveTextBoxesSetSymbol(t *testing.T) {
 	}{
 		{"symbol", frame.Keys{SetSymbol: true}, 2100},
 		{"no symbol takes the full width", frame.Keys{}, 2531},
-		{"symbol and color indicator", frame.Keys{SetSymbol: true, Indicator: "u"}, 1971},
-		{"color indicator and no symbol", frame.Keys{Indicator: "u"}, 2402},
+		{"symbol and color indicator", frame.Keys{SetSymbol: true, Indicator: frame.Named("u")}, 1971},
+		{"color indicator and no symbol", frame.Keys{Indicator: frame.Named("u")}, 2402},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

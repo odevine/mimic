@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 )
 
 func TestClearOf(t *testing.T) {
@@ -51,12 +52,10 @@ func TestClearOf(t *testing.T) {
 }
 
 func TestMoveToRow(t *testing.T) {
-	m := &Manifest{TextBoxes: map[string]TextBoxSpec{
-		"artist": {Y: 900},
-	}}
+	rows := map[string]TextBoxSpec{"artist": {Y: 900}}
 	box := TextBoxSpec{X: 10, Y: 800, Width: 100}
 
-	moved := MoveToRow(box, m, "artist")
+	moved := MoveToRow(box, rows, "artist")
 	if moved.Y != 900 {
 		t.Errorf("Y = %d, want the artist row's 900", moved.Y)
 	}
@@ -64,60 +63,68 @@ func TestMoveToRow(t *testing.T) {
 		t.Error("MoveToRow changed more than Y")
 	}
 
-	// A manifest missing the named row leaves box where it was.
-	same := MoveToRow(box, m, "missing")
+	// A layout missing the named row leaves box where it was.
+	same := MoveToRow(box, rows, "missing")
 	if same != box {
 		t.Errorf("MoveToRow with an absent row = %+v, want box unchanged %+v", same, box)
 	}
 }
 
-func TestResolveTextBoxes(t *testing.T) {
-	boxes := map[string]TextBoxSpec{
-		"title":           {X: 1, Condition: "front"},
-		"title_back":      {X: 2, Box: "title", Condition: "back"},
-		"type":            {X: 3},
-		"type_shift":      {X: 4, Box: "type", Condition: "color_indicator"},
-		"type_back":       {X: 5, Box: "type", Condition: "back"},
-		"type_back_shift": {X: 6, Box: "type", Condition: "back,color_indicator"},
+// override builds the override a manifest's "when" entry decodes to
+func override(cond string, x, width int) manifest.Override {
+	return manifest.Override{Condition: cond, Box: &manifest.TextBox{Rect: manifest.Rect{X: x, Width: width}}}
+}
+
+func boxWith(x, width int, when ...manifest.Override) *Box {
+	b, err := compileBox("type", manifest.TextBox{Rect: manifest.Rect{X: x, Width: width}, When: when})
+	if err != nil {
+		panic(err)
 	}
+	return b
+}
+
+// widthFor is the width a box draws at for a card, the way a render picks it
+func widthFor(b *Box, k frame.Keys) int {
+	if i, ok := b.Pick(func(c frame.Condition) bool { return c.Met(k, nil) }); ok {
+		return b.Overrides[i].Box.Rect.Width
+	}
+	return b.Base.Rect.Width
+}
+
+// A transform card's type line moves for a color indicator on either face, and the
+// override that names the most conditions wins
+func TestBoxOverridesTakeTheMostSpecificMatch(t *testing.T) {
+	b := boxWith(0, 3,
+		override("back", 0, 5),
+		override("color_indicator", 0, 4),
+		override("back,color_indicator", 0, 6),
+	)
 	cases := []struct {
-		name        string
-		keys        frame.Keys
-		title, typ  int
-		wantTitleOK bool
+		name string
+		keys frame.Keys
+		want int
 	}{
-		{"front", frame.Keys{Front: true}, 1, 3, true},
-		{"back", frame.Keys{Back: true}, 2, 5, true},
-		{"back with an indicator takes the most specific match", frame.Keys{Back: true, Indicator: frame.Named("u")}, 2, 6, true},
-		{"front with an indicator", frame.Keys{Front: true, Indicator: frame.Named("u")}, 1, 4, true},
-		{"single has no title here", frame.Keys{}, 0, 3, false},
+		{"front", frame.Keys{Front: true}, 3},
+		{"back", frame.Keys{Back: true}, 5},
+		{"back with an indicator takes the most specific match", frame.Keys{Back: true, Indicator: frame.Named("u")}, 6},
+		{"front with an indicator", frame.Keys{Front: true, Indicator: frame.Named("u")}, 4},
+		{"single", frame.Keys{}, 3},
 	}
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got := ResolveTextBoxes(boxes, c.keys)
-			title, ok := got["title"]
-			if ok != c.wantTitleOK || title.X != c.title {
-				t.Errorf("title = %+v (present %v), want X %d", title, ok, c.title)
-			}
-			if got["type"].X != c.typ {
-				t.Errorf("type X = %d, want %d", got["type"].X, c.typ)
-			}
-			for _, alias := range []string{"title_back", "type_shift", "type_back", "type_back_shift"} {
-				if _, ok := got[alias]; ok {
-					t.Errorf("resolved boxes kept the spec key %q", alias)
-				}
-			}
-		})
+		if got := widthFor(b, c.keys); got != c.want {
+			t.Errorf("%s: width = %d, want %d", c.name, got, c.want)
+		}
 	}
 }
 
-func TestResolveTextBoxesSetSymbol(t *testing.T) {
-	boxes := map[string]TextBoxSpec{
-		"type":            {Width: 2100, Condition: "set_symbol"},
-		"type_full":       {Box: "type", Width: 2531},
-		"type_shift":      {Box: "type", Width: 1971, Condition: "color_indicator,set_symbol"},
-		"type_shift_full": {Box: "type", Width: 2402, Condition: "color_indicator"},
-	}
+// The type line gives up room for the set symbol and for a color indicator, in
+// four combinations
+func TestBoxOverridesForTheSetSymbolAndAnIndicator(t *testing.T) {
+	b := boxWith(0, 2531,
+		override("set_symbol", 0, 2100),
+		override("color_indicator,set_symbol", 0, 1971),
+		override("color_indicator", 0, 2402),
+	)
 	tests := []struct {
 		name string
 		keys frame.Keys
@@ -129,11 +136,22 @@ func TestResolveTextBoxesSetSymbol(t *testing.T) {
 		{"color indicator and no symbol", frame.Keys{Indicator: frame.Named("u")}, 2402},
 	}
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := ResolveTextBoxes(boxes, tc.keys)
-			if len(got) != 1 || got["type"].Width != tc.want {
-				t.Errorf("type width = %d in %v, want %d", got["type"].Width, got, tc.want)
-			}
-		})
+		if got := widthFor(b, tc.keys); got != tc.want {
+			t.Errorf("%s: width = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestOverridesWithTheSameNumberOfConditionsKeepTheirWrittenOrder(t *testing.T) {
+	b := boxWith(0, 1, override("land", 0, 2), override("legendary", 0, 3))
+	if got := widthFor(b, frame.Keys{Land: true, Legendary: true}); got != 2 {
+		t.Errorf("width = %d, want the first written override", got)
+	}
+}
+
+func TestACompiledBoxNeedsItsOverridesMerged(t *testing.T) {
+	_, err := compileBox("title", manifest.TextBox{When: []manifest.Override{{Condition: "land"}}})
+	if err == nil {
+		t.Error("an override that was never merged compiled")
 	}
 }

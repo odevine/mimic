@@ -15,15 +15,16 @@ import (
 	"github.com/odevine/mimic/engine/template"
 )
 
-// setSymbolSpec is the manifest's place for the card's set symbol, and whether
-// the symbol draws at all: the request must carry one, the manifest must give it
-// a box, and the spec's own condition must hold for the card
-func setSymbolSpec(req template.RenderRequest, m *template.Manifest, f frame.Keys) (template.SymbolSpec, bool) {
-	spec, ok := m.Symbols[template.SymbolSet]
+// setSymbolSpec is the layout's place for the card's set symbol, and whether the
+// symbol draws at all: the request must carry one, the layout must give it a box,
+// and the symbol's own condition must hold for the card
+func setSymbolSpec(req template.RenderRequest, l *template.Layout, geo *template.Geometry, f frame.Keys) (template.SymbolSpec, bool) {
+	sym, ok := l.Symbols[template.SymbolSet]
+	spec := geo.Symbols[template.SymbolSet]
 	if !ok || req.SetSymbol == nil || req.SetSymbol.Icon == nil || spec.Width <= 0 || spec.Height <= 0 {
 		return spec, false
 	}
-	return spec, f.ConditionMet(spec.Condition)
+	return spec, sym.Condition.Met(f, req.Features)
 }
 
 // symbolNode draws a set symbol into its box. The symbol is scaled to fit the

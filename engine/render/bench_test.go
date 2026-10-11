@@ -14,27 +14,31 @@ import (
 )
 
 // benchTemplateEnv names a directory holding a template's manifest and layers.
-// Without it the benchmarks read ../../assets/normal, the developer's local
-// copy, and skip when neither exists
+// Without it the benchmarks read ../../assets/m15, the developer's local copy, and
+// skip when neither exists or it is not a template this engine reads
 const benchTemplateEnv = "MIMIC_BENCH_TEMPLATE"
 
 // benchRequests are the cards the benchmarks render in turn, with synthetic art
 // and a warm layer cache, so a figure is the engine's own cost with no network
 // and no disk
-func benchRequests(b *testing.B) []template.RenderRequest {
+func benchRequests(b *testing.B) (*template.Template, []template.RenderRequest) {
 	b.Helper()
 	if testing.Short() {
 		b.Skip("renders at the template's full size")
 	}
 	dir := os.Getenv(benchTemplateEnv)
 	if dir == "" {
-		dir = filepath.Join("..", "..", "assets", "normal")
+		dir = filepath.Join("..", "..", "assets", "m15")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
 		b.Skipf("no template at %s, set %s", dir, benchTemplateEnv)
 	}
 	assets := template.NewCachedAssets(template.NewFSAssetProvider(dir), 2<<30)
 	b.Cleanup(func() { assets.Close() })
+	tmpl, _, err := template.Load(assets)
+	if err != nil {
+		b.Skipf("%s is not a template this engine reads: %v", dir, err)
+	}
 
 	art := image.NewRGBA(image.Rect(0, 0, 626, 457))
 	for y := 0; y < 457; y++ {
@@ -52,15 +56,15 @@ func benchRequests(b *testing.B) []template.RenderRequest {
 		if err != nil {
 			b.Fatal(err)
 		}
-		reqs = append(reqs, template.RenderRequest{Card: d, Art: art, Assets: assets})
+		reqs = append(reqs, template.RenderRequest{Card: d, Art: art})
 	}
 	// Decode every layer these cards use before timing starts
 	for _, req := range reqs {
-		if _, err := New("normal").Render(context.Background(), req); err != nil {
+		if _, err := Render(context.Background(), tmpl, req); err != nil {
 			b.Fatal(err)
 		}
 	}
-	return reqs
+	return tmpl, reqs
 }
 
 // BenchmarkRenderNormal renders cards from one goroutine, which is one card's
@@ -73,12 +77,11 @@ func BenchmarkRenderNormal(b *testing.B) {
 			name = "render+ycbcr"
 		}
 		b.Run(name, func(b *testing.B) {
-			reqs := benchRequests(b)
-			tmpl := New("normal")
+			tmpl, reqs := benchRequests(b)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				buf, err := tmpl.Render(context.Background(), reqs[i%len(reqs)])
+				buf, err := Render(context.Background(), tmpl, reqs[i%len(reqs)])
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -95,14 +98,13 @@ func BenchmarkRenderNormal(b *testing.B) {
 // way a batch does, so it measures throughput when every core is busy. Run it
 // with -cpu to vary the worker count
 func BenchmarkRenderNormalParallel(b *testing.B) {
-	reqs := benchRequests(b)
-	tmpl := New("normal")
+	tmpl, reqs := benchRequests(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 	var next atomic.Int64
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			buf, err := tmpl.Render(context.Background(), reqs[int(next.Add(1))%len(reqs)])
+			buf, err := Render(context.Background(), tmpl, reqs[int(next.Add(1))%len(reqs)])
 			if err != nil {
 				b.Error(err)
 				return

@@ -34,44 +34,67 @@ func writeTestPNG(t *testing.T, path string, docW, docH int, rect image.Rectangl
 	}
 }
 
-func TestAvoidRect(t *testing.T) {
+func TestEntryBounds(t *testing.T) {
 	dir := t.TempDir()
 	writeTestPNG(t, filepath.Join(dir, "pt_box.png"), 100, 100, image.Rect(60, 70, 90, 95))
 	p := NewFSAssetProvider(dir)
 
-	layers := map[string]LayerSpec{
-		"pt_box": {
-			Name:      "pt_box",
-			Condition: "creature",
-			ColorSlot: "ptBox",
-			ColorVariants: map[string]LayerAsset{
-				"gold": {Path: "pt_box.png"},
-			},
+	cond, err := frame.Compile("creature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Entry{
+		ID:        "pt_box",
+		Condition: cond,
+		Part: &Part{
+			Name: "pt_box", Slot: frame.SlotPTBox,
+			Variants: map[string]string{"gold": "pt_box.png"},
 		},
 	}
-	f := frame.Keys{Creature: true, PTBox: frame.Gold}
+	creature := frame.Keys{Creature: true, PTBox: frame.Gold}
 
-	r, ok := AvoidRect(p, layers, f, "pt_box", 1, 0, 0)
+	r, ok := EntryBounds(p, e, creature, nil, 1, 0, 0)
 	if !ok {
-		t.Fatal("AvoidRect reported false for a creature with a matching variant")
+		t.Fatal("EntryBounds reported false for a creature with a matching variant")
 	}
 	if want := image.Rect(60, 70, 90, 95); r != want {
 		t.Errorf("rect = %v, want %v", r, want)
 	}
 
-	// The layer's own condition gates it: a noncreature never draws pt_box, so
+	// The entry's own condition gates it: a noncreature never draws pt_box, so
 	// nothing needs avoiding.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: false, PTBox: frame.Gold}, "pt_box", 1, 0, 0); ok {
-		t.Error("AvoidRect reported true for a noncreature, want false")
+	if _, ok := EntryBounds(p, e, frame.Keys{Creature: false, PTBox: frame.Gold}, nil, 1, 0, 0); ok {
+		t.Error("EntryBounds reported true for a noncreature, want false")
 	}
 
-	// No color variant resolves for this key and there is no "any" fallback.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: true, PTBox: frame.Colorless}, "pt_box", 1, 0, 0); ok {
-		t.Error("AvoidRect reported true with no matching or \"any\" variant, want false")
+	// No variant resolves for this key and there is no "any" fallback.
+	if _, ok := EntryBounds(p, e, frame.Keys{Creature: true, PTBox: frame.Colorless}, nil, 1, 0, 0); ok {
+		t.Error("EntryBounds reported true with no matching or \"any\" variant, want false")
 	}
 
-	// A name absent from the layer map reports false rather than panicking.
-	if _, ok := AvoidRect(p, layers, f, "missing", 1, 0, 0); ok {
-		t.Error("AvoidRect reported true for an unknown layer name, want false")
+	// A feature the entry's condition reads decides it too
+	gated := *e
+	if gated.Condition, err = frame.Compile("feature:ptStyle=dark"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := EntryBounds(p, &gated, creature, frame.Features{"ptStyle": "light"}, 1, 0, 0); ok {
+		t.Error("EntryBounds reported true with the feature on another value")
+	}
+	if _, ok := EntryBounds(p, &gated, creature, frame.Features{"ptStyle": "dark"}, 1, 0, 0); !ok {
+		t.Error("EntryBounds reported false with the feature on its value")
+	}
+
+	// An entry placed with At is measured where it sits, not at its part's origin
+	moved := *e
+	moved.At = &image.Point{X: 10, Y: 20}
+	if r, ok := EntryBounds(p, &moved, creature, nil, 1, 0, 0); !ok || r != image.Rect(70, 90, 100, 115) {
+		t.Errorf("a placed entry's rect = %v, %v, want 70,90 to 100,115", r, ok)
+	}
+
+	// An image that is not there reports false rather than panicking
+	missing := *e
+	missing.Part = &Part{Slot: frame.SlotPTBox, Variants: map[string]string{"gold": "nope.png"}}
+	if _, ok := EntryBounds(p, &missing, creature, nil, 1, 0, 0); ok {
+		t.Error("EntryBounds reported true for an image that does not exist")
 	}
 }

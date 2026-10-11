@@ -1,14 +1,10 @@
 package template
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
 )
-
-var testSupports = Supports{Roles: []Role{RoleSingle}, Kinds: []Kind{KindStandard}}
 
 func TestClassify(t *testing.T) {
 	faces := func(front, back string) []card.Face {
@@ -72,72 +68,6 @@ func TestClassify(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSupportsAllows(t *testing.T) {
-	s := Supports{Roles: []Role{RoleTransformFront, RoleTransformBack}, Kinds: []Kind{KindPlaneswalker}}
-	if !s.Allows(Shape{Role: RoleTransformBack, Kind: KindPlaneswalker}) {
-		t.Error("a listed role and kind should be allowed")
-	}
-	if s.Allows(Shape{Role: RoleSingle, Kind: KindPlaneswalker}) {
-		t.Error("a plain planeswalker should not match a transform-only template")
-	}
-	if s.Allows(Shape{Role: RoleTransformFront, Kind: KindStandard}) {
-		t.Error("a standard face should not match a planeswalker-only template")
-	}
-}
-
-func TestSupportsValidate(t *testing.T) {
-	bad := []Supports{
-		{},
-		{Roles: []Role{RoleSingle}},
-		{Roles: []Role{RoleUnknown}, Kinds: []Kind{KindStandard}},
-		{Roles: []Role{RoleSingle}, Kinds: []Kind{"sticker"}},
-	}
-	for _, s := range bad {
-		if s.validate() == nil {
-			t.Errorf("validate(%+v) should fail", s)
-		}
-	}
-	if err := testSupports.validate(); err != nil {
-		t.Errorf("validate(testSupports) = %v", err)
-	}
-}
-
-func TestGetRefusesUnsupportedFace(t *testing.T) {
-	Register("fake-guard", "a fake template for tests", testSupports, func() Template { return fakeTemplate{name: "fake-guard"} })
-	tmpl, err := Get("fake-guard")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-
-	if _, err := tmpl.Render(ctx, RenderRequest{Card: &card.Data{TypeLine: "Instant"}}); err != nil {
-		t.Errorf("a standard card should render: %v", err)
-	}
-
-	_, err = tmpl.Render(ctx, RenderRequest{Card: &card.Data{TypeLine: "Legendary Planeswalker — Jace"}})
-	var unsupported *UnsupportedError
-	if !errors.As(err, &unsupported) || unsupported.Shape != (Shape{Role: RoleSingle, Kind: KindPlaneswalker}) {
-		t.Errorf("a planeswalker should be refused with UnsupportedError, got %v", err)
-	}
-
-	dfc := &card.Data{Layout: "transform", Faces: []card.Face{{TypeLine: "Creature"}, {TypeLine: "Creature"}}}
-	if _, err := tmpl.Render(ctx, RenderRequest{Card: dfc, Face: 2}); err == nil || errors.As(err, &unsupported) {
-		t.Errorf("an out of range face should fail as out of range, got %v", err)
-	}
-	if _, err := tmpl.Render(ctx, RenderRequest{}); err == nil {
-		t.Error("a request with no card should fail")
-	}
-}
-
-func TestRegisterPanicsOnBadSupports(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Error("Register with empty supports should panic")
-		}
-	}()
-	Register("fake-bad-supports", "a fake template for tests", Supports{}, func() Template { return fakeTemplate{} })
 }
 
 func TestFaceCard(t *testing.T) {

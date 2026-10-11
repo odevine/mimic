@@ -13,12 +13,19 @@ import (
 
 // memAssets serves PNGs from memory and counts how many times each is opened
 type memAssets struct {
-	files  map[string][]byte
-	opens  atomic.Int64
-	closed bool
+	files map[string][]byte
+	// manifest is what ReadManifest returns, and nil is a provider with none
+	manifest []byte
+	opens    atomic.Int64
+	closed   bool
 }
 
-func (m *memAssets) Manifest() (*Manifest, error) { return &Manifest{}, nil }
+func (m *memAssets) ReadManifest() ([]byte, error) {
+	if m.manifest == nil {
+		return nil, errors.New("no manifest")
+	}
+	return m.manifest, nil
+}
 
 func (m *memAssets) Open(p string) (io.ReadCloser, error) {
 	m.opens.Add(1)

@@ -6,25 +6,24 @@ import (
 	"github.com/odevine/mimic/engine/frame"
 )
 
-// AvoidRect reports where a named layer's art draws, so a text box that names
-// it as AvoidLayer can keep its ink clear of it, in the manifest's own document
-// coordinates. It resolves the layer the same way the main compositing pass
-// would, so it reports false when the layer's Condition does not hold for this
-// card, when no color variant of it resolves, or when the resolved asset is
-// fully transparent. That means a box can name an AvoidLayer unconditionally: it
-// only ever narrows for a card whose render actually draws that layer. The
-// rectangle comes back in the scaled document's coordinates, so it lines up
-// with the text boxes that consult it. docW and docH are the authored document's
-// size, which a layer cut to its bounds is placed within, and zero reads as the
-// asset's own size
-func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name string, s Scale, docW, docH int) (image.Rectangle, bool) {
-	spec, ok := layers[name]
-	if !ok || !f.ConditionMet(spec.Condition) {
+// EntryBounds reports where a stack entry's art draws for a card, so a text box
+// that names it as its AvoidLayer can keep its ink clear of it, in the layout's
+// own document coordinates. It resolves the entry the way the main compositing
+// pass would, so it reports false when the entry's condition does not hold for the
+// card, when no image of its part applies, or when the image is fully
+// transparent. That means a box can name an entry unconditionally: it only ever
+// narrows for a card whose render actually draws that entry. k is the keys of the
+// face the entry reads. The rectangle comes back in the scaled document's
+// coordinates, so it lines up with the text boxes that consult it. docW and docH
+// are the authored document's size, which an image cut to its bounds is placed
+// within, and zero reads as the image's own size
+func EntryBounds(p AssetProvider, e *Entry, k frame.Keys, features frame.Features, s Scale, docW, docH int) (image.Rectangle, bool) {
+	if !e.Condition.Met(k, features) {
 		return image.Rectangle{}, false
 	}
-	path := spec.ColorVariants[f.MaterialNamed(spec.ColorSlot).Key()].Path
+	path := e.Part.Variants[k.Material(e.Part.Slot).Key()]
 	if path == "" {
-		path = spec.ColorVariants["any"].Path
+		path = e.Part.Variants["any"]
 	}
 	if path == "" {
 		return image.Rectangle{}, false
@@ -36,10 +35,11 @@ func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name 
 	if b := img.Bounds(); docW <= 0 || docH <= 0 {
 		docW, docH = b.Dx(), b.Dy()
 	}
-	scaled, at := s.ImageAt(img, spec.X, spec.Y, docW, docH)
+	at := e.Origin()
+	scaled, origin := s.ImageAt(img, at.X, at.Y, docW, docH)
 	b := OpaqueBounds(scaled)
 	if b.Empty() {
 		return image.Rectangle{}, false
 	}
-	return b.Add(at), true
+	return b.Add(origin), true
 }

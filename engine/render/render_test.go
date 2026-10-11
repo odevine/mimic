@@ -9,12 +9,13 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -25,7 +26,7 @@ var placeholderDir string
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "render-test-")
 	if err == nil {
-		err = WritePlaceholderAssets(dir, "test")
+		err = WritePlaceholderAssets(dir, "mimic.test")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "writing placeholder assets:", err)
@@ -37,8 +38,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// renderBolt renders a synthetic Lightning Bolt against generated placeholder
-// assets, with no network involved.
+// renderBolt is a request for a synthetic Lightning Bolt, with no network involved
 func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 	t.Helper()
 	return &template.RenderRequest{
@@ -50,28 +50,21 @@ func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
 			Colors:        []card.Color{card.Red},
 			ColorIdentity: []card.Color{card.Red},
 		},
-		Art:    art,
-		Assets: template.NewFSAssetProvider(placeholderDir),
+		Art: art,
 	}
 }
 
 // atMinDPI sets req to render at the smallest resolution a template allows, for
 // tests that sample pixels rather than check size, and returns the scale that
 // maps a native coordinate into the smaller render
-func atMinDPI(t *testing.T, req *template.RenderRequest) template.Scale {
-	t.Helper()
-	m, err := req.Assets.Manifest()
-	if err != nil {
-		t.Fatalf("Manifest: %v", err)
-	}
+func atMinDPI(tmpl *template.Template, req *template.RenderRequest) template.Scale {
 	req.DPI = template.MinDPI
-	return m.ScaleForDPI(req.DPI)
+	return tmpl.Primary().ScaleForDPI(req.DPI)
 }
 
 func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
-	req := renderBolt(t, nil)
-	tmpl := New("test")
-	buf, err := tmpl.Render(context.Background(), *req)
+	tmpl := placeholderTemplate(t)
+	buf, err := Render(context.Background(), tmpl, *renderBolt(t, nil))
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -81,9 +74,36 @@ func TestRenderProducesCorrectlySizedBuffer(t *testing.T) {
 	}
 }
 
+func TestRenderRefusesWhatItCannotDraw(t *testing.T) {
+	tmpl := placeholderTemplate(t)
+	ctx := context.Background()
+
+	_, err := Render(ctx, tmpl, template.RenderRequest{Card: &card.Data{TypeLine: "Legendary Planeswalker — Jace"}})
+	var unsupported *template.UnsupportedError
+	want := frame.Shape{Role: frame.RoleSingle, Kind: frame.KindPlaneswalker}
+	if !errors.As(err, &unsupported) || unsupported.Shape != want || unsupported.Template != "mimic.test" {
+		t.Errorf("a planeswalker should be refused with an UnsupportedError for the template, got %v", err)
+	}
+
+	dfc := &card.Data{Layout: "transform", Faces: []card.Face{{TypeLine: "Creature"}, {TypeLine: "Creature"}}}
+	if _, err := Render(ctx, tmpl, template.RenderRequest{Card: dfc, Face: 2}); err == nil || errors.As(err, &unsupported) {
+		t.Errorf("an out of range face should fail as out of range, got %v", err)
+	}
+	if _, err := Render(ctx, tmpl, template.RenderRequest{Card: dfc, Face: -1}); err == nil {
+		t.Error("a negative face should fail")
+	}
+	if _, err := Render(ctx, tmpl, template.RenderRequest{}); err == nil {
+		t.Error("a request with no card should fail")
+	}
+	if _, err := Render(ctx, nil, *renderBolt(t, nil)); err == nil {
+		t.Error("a render with no template should fail")
+	}
+}
+
 func TestRenderReportsProgress(t *testing.T) {
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, nil)
-	atMinDPI(t, req)
+	atMinDPI(tmpl, req)
 	var steps []string
 	last := -1.0
 	req.Progress = func(step string, frac float64) {
@@ -99,7 +119,7 @@ func TestRenderReportsProgress(t *testing.T) {
 		}
 	}
 
-	if _, err := New("test").Render(context.Background(), *req); err != nil {
+	if _, err := Render(context.Background(), tmpl, *req); err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	if len(steps) == 0 {
@@ -124,9 +144,10 @@ func containsStep(steps []string, want string) bool {
 func TestRenderPicksColorKeyedBackground(t *testing.T) {
 	// The top-left pixel is bare background, so a red card must show the red
 	// background fill there rather than another color's.
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, nil)
-	s := atMinDPI(t, req)
-	buf, err := New("test").Render(context.Background(), *req)
+	s := atMinDPI(tmpl, req)
+	buf, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -147,9 +168,10 @@ func TestRenderPlacesArt(t *testing.T) {
 			art.SetNRGBA(x, y, magenta)
 		}
 	}
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, art)
-	s := atMinDPI(t, req)
-	buf, err := New("test").Render(context.Background(), *req)
+	s := atMinDPI(tmpl, req)
+	buf, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -162,11 +184,12 @@ func TestRenderPlacesArt(t *testing.T) {
 }
 
 func TestRenderCancelledContext(t *testing.T) {
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, nil)
-	atMinDPI(t, req)
+	atMinDPI(tmpl, req)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := New("test").Render(ctx, *req); err == nil {
+	if _, err := Render(ctx, tmpl, *req); err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
 }
@@ -185,16 +208,14 @@ func closeColor(a, b color.NRGBA) bool {
 }
 
 func TestRenderAtReducedDPI(t *testing.T) {
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, nil)
-	m, err := req.Assets.Manifest()
-	if err != nil {
-		t.Fatalf("Manifest: %v", err)
-	}
 	// Half the placeholder's authored resolution, whatever that works out to
-	half := m.Resolution(m.NativeDPI() / 2)
+	l := tmpl.Primary()
+	half := l.Resolution(l.NativeDPI() / 2)
 	req.DPI = half.DPI
 
-	buf, err := New("test").Render(context.Background(), *req)
+	buf, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -205,12 +226,12 @@ func TestRenderAtReducedDPI(t *testing.T) {
 }
 
 func TestRenderClampsDPIToNative(t *testing.T) {
-	req := renderBolt(t, nil)
 	// Asking past the authored resolution renders at it rather than resampling
 	// every layer up
+	req := renderBolt(t, nil)
 	req.DPI = 100000
 
-	buf, err := New("test").Render(context.Background(), *req)
+	buf, err := Render(context.Background(), placeholderTemplate(t), *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -223,23 +244,14 @@ func TestRenderClampsDPIToNative(t *testing.T) {
 // A frame layer decodes when the compositor reaches it, so a missing PNG fails
 // the render rather than the node list, and the error still names the path
 func TestRenderReportsAMissingFrameLayer(t *testing.T) {
-	req := renderBolt(t, nil)
-	atMinDPI(t, req)
-	m, err := req.Assets.Manifest()
-	if err != nil {
-		t.Fatalf("Manifest: %v", err)
-	}
-	if len(m.Layers) == 0 {
-		t.Fatal("placeholder manifest has no layers")
-	}
-	broken := *m
-	broken.Layers = append([]template.LayerSpec(nil), m.Layers...)
-	first := broken.Layers[0]
-	first.ColorVariants = map[string]template.LayerAsset{"any": {Path: "nope/missing.png"}}
-	broken.Layers[0] = first
-	req.Assets = manifestAssets{AssetProvider: req.Assets, m: &broken}
+	base := template.NewFSAssetProvider(placeholderDir)
+	m := readManifest(t, base)
+	m.Parts["background"] = manifest.Part{Slot: "background", Variants: anyImage("nope/missing.png")}
+	tmpl := mustLoad(t, withManifest(t, base, m, nil))
 
-	_, err = New("test").Render(context.Background(), *req)
+	req := renderBolt(t, nil)
+	atMinDPI(tmpl, req)
+	_, err := Render(context.Background(), tmpl, *req)
 	if err == nil {
 		t.Fatal("expected an error for a layer whose PNG is missing")
 	}
@@ -248,18 +260,11 @@ func TestRenderReportsAMissingFrameLayer(t *testing.T) {
 	}
 }
 
-// manifestAssets serves a replacement manifest over another provider's files
-type manifestAssets struct {
-	template.AssetProvider
-	m *template.Manifest
-}
-
-func (a manifestAssets) Manifest() (*template.Manifest, error) { return a.m, nil }
-
 // Cancelling while layers are loading stops the render with the context's error
 func TestRenderStopsWhenCancelledDuringFrameLoad(t *testing.T) {
+	tmpl := placeholderTemplate(t)
 	req := renderBolt(t, nil)
-	atMinDPI(t, req)
+	atMinDPI(tmpl, req)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// The frame band is reported as layers load, which is after the text is laid
@@ -269,38 +274,26 @@ func TestRenderStopsWhenCancelledDuringFrameLoad(t *testing.T) {
 			cancel()
 		}
 	}
-	_, err := New("test").Render(ctx, *req)
+	_, err := Render(ctx, tmpl, *req)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Render = %v, want context.Canceled", err)
 	}
 }
 
-// overlayAssets serves one extra file over another provider's
-type overlayAssets struct {
-	template.AssetProvider
-	m    *template.Manifest
-	path string
-	data []byte
-}
-
-func (a overlayAssets) Manifest() (*template.Manifest, error) { return a.m, nil }
-
-func (a overlayAssets) Open(rel string) (io.ReadCloser, error) {
-	if rel == a.path {
-		return io.NopCloser(bytes.NewReader(a.data)), nil
-	}
-	return a.AssetProvider.Open(rel)
-}
-
-// The nyx frame stands in for the background and loads where its own layer
-// says, not where the background's does
+// The nyx frame stands in for the background, and loads where its own part says,
+// not where the background's does
 func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
-	req := renderBolt(t, nil)
-	req.Card.TypeLine = "Enchantment"
-	m, err := req.Assets.Manifest()
-	if err != nil {
-		t.Fatal(err)
+	base := template.NewFSAssetProvider(placeholderDir)
+	m := readManifest(t, base)
+	l := m.Layouts["normal"]
+	l.Stack[0].Condition = "nonnyx"
+	l.Stack = append(l.Stack, manifest.Entry{Part: "nyx", Condition: "nyx"})
+	m.Layouts["normal"] = l
+	m.Parts["nyx"] = manifest.Part{
+		Slot: "background", Origin: manifest.Point{X: 100, Y: 200},
+		Variants: map[string]manifest.Variant{"r": {Path: "nyx/r.png"}},
 	}
+
 	blue := color.NRGBA{0, 0, 0xFF, 0xFF}
 	patch := image.NewNRGBA(image.Rect(0, 0, 40, 30))
 	draw.Draw(patch, patch.Bounds(), image.NewUniform(blue), image.Point{}, draw.Src)
@@ -308,17 +301,11 @@ func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
 	if err := png.Encode(&png_, patch); err != nil {
 		t.Fatal(err)
 	}
-	withNyx := *m
-	withNyx.Layers = append(append([]template.LayerSpec(nil), m.Layers...), template.LayerSpec{
-		Name:          "nyx",
-		Condition:     "nyx",
-		ColorVariants: map[string]template.LayerAsset{"r": {Path: "nyx/r.png"}},
-		X:             100,
-		Y:             200,
-	})
-	req.Assets = overlayAssets{AssetProvider: req.Assets, m: &withNyx, path: "nyx/r.png", data: png_.Bytes()}
+	tmpl := mustLoad(t, withManifest(t, base, m, map[string][]byte{"nyx/r.png": png_.Bytes()}))
 
-	buf, err := New("test").Render(context.Background(), *req)
+	req := renderBolt(t, nil)
+	req.Card.TypeLine = "Enchantment"
+	buf, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,6 +316,104 @@ func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
 	if _, _, _, a := img.At(10, 10).RGBA(); a != 0 {
 		t.Errorf("outside the nyx patch has alpha %d, so the background drew too", a)
 	}
+
+	// A card that is not an enchantment keeps the ordinary background
+	plain := renderBolt(t, nil)
+	buf, err = Render(context.Background(), tmpl, *plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := color.NRGBAModel.Convert(buf.ToImage(8).At(10, 10)).(color.NRGBA); !closeColor(got, placeholderColors["r"]) {
+		t.Errorf("a plain card's background = %v, want red", got)
+	}
+}
+
+// featureTemplate is the placeholder with the background's opacity driven by a
+// range feature and a crown entry that a bool feature switches on
+func featureTemplate(t *testing.T) *template.Template {
+	t.Helper()
+	base := template.NewFSAssetProvider(placeholderDir)
+	m := readManifest(t, base)
+	m.Features = map[string]manifest.Feature{
+		"strength": {Type: "range", Min: 0, Max: 1, Step: 0.05},
+		"banner":   {Type: "bool"},
+	}
+	l := m.Layouts["normal"]
+	l.Stack[0].OpacityFeature = "strength"
+	l.Stack[2].Condition = "feature:banner"
+	m.Layouts["normal"] = l
+	return mustLoad(t, withManifest(t, base, m, nil))
+}
+
+func TestRenderAppliesAnEntrysOpacity(t *testing.T) {
+	base := template.NewFSAssetProvider(placeholderDir)
+	m := readManifest(t, base)
+	half := 0.5
+	l := m.Layouts["normal"]
+	l.Stack[0].Opacity = &half
+	m.Layouts["normal"] = l
+	tmpl := mustLoad(t, withManifest(t, base, m, nil))
+
+	req := renderBolt(t, nil)
+	s := atMinDPI(tmpl, req)
+	buf, err := Render(context.Background(), tmpl, *req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := color.NRGBAModel.Convert(buf.ToImage(8).At(s.Px(4), s.Px(4))).(color.NRGBA)
+	if got.A < 125 || got.A > 131 {
+		t.Errorf("a background at half opacity has alpha %d, want about 128", got.A)
+	}
+}
+
+func TestRenderTakesAnEntrysOpacityFromAFeature(t *testing.T) {
+	tmpl := featureTemplate(t)
+	alphaAt := func(features frame.Features) uint8 {
+		t.Helper()
+		req := renderBolt(t, nil)
+		req.Features = features
+		s := atMinDPI(tmpl, req)
+		buf, err := Render(context.Background(), tmpl, *req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return color.NRGBAModel.Convert(buf.ToImage(8).At(s.Px(4), s.Px(4))).(color.NRGBA).A
+	}
+	if a := alphaAt(frame.Features{"strength": 0.25}); a < 61 || a > 67 {
+		t.Errorf("a feature of 0.25 gives alpha %d, want about 64", a)
+	}
+	if a := alphaAt(nil); a != 255 {
+		t.Errorf("a feature with no value gives alpha %d, want opaque", a)
+	}
+	if a := alphaAt(frame.Features{"strength": 7.0}); a != 255 {
+		t.Errorf("a feature past its range gives alpha %d, want it held at opaque", a)
+	}
+	if a := alphaAt(frame.Features{"strength": 0.0}); a != 0 {
+		t.Errorf("a feature of 0 gives alpha %d, want the entry left out", a)
+	}
+}
+
+func TestRenderDrawsAnEntryWhenItsFeatureIsOn(t *testing.T) {
+	tmpl := featureTemplate(t)
+	crownAt := func(on bool) bool {
+		t.Helper()
+		req := renderBolt(t, nil)
+		req.Features = frame.Features{"banner": on}
+		s := atMinDPI(tmpl, req)
+		buf, err := Render(context.Background(), tmpl, *req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The crown strip sits at the top, in a darker gold than any background
+		got := color.NRGBAModel.Convert(buf.ToImage(8).At(s.Px(300), s.Px(70))).(color.NRGBA)
+		return closeColor(got, color.NRGBA{0xA0, 0x7E, 0x2A, 0xFF})
+	}
+	if !crownAt(true) {
+		t.Error("the crown did not draw with its feature on")
+	}
+	if crownAt(false) {
+		t.Error("the crown drew with its feature off")
+	}
 }
 
 // A render through a layer cache composites each layer's image with its index of
@@ -336,22 +421,22 @@ func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
 // Both, on a first render and on one that reuses the cached layers, must give the
 // same pixels, at native size and scaled
 func TestRenderThroughACacheMatchesAPlainProvider(t *testing.T) {
+	plain := placeholderTemplate(t)
 	for _, dpi := range []int{0, 150} {
 		plainReq := renderBolt(t, nil)
 		plainReq.Card.TypeLine = "Legendary Creature — Elf"
 		plainReq.Card.Power, plainReq.Card.Toughness = "2", "2"
 		plainReq.DPI = dpi
-		want, err := New("test").Render(context.Background(), *plainReq)
+		want, err := Render(context.Background(), plain, *plainReq)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		cached := template.NewCachedAssets(template.NewFSAssetProvider(placeholderDir), 1<<30)
 		defer cached.Close()
-		req := *plainReq
-		req.Assets = cached
+		tmpl := mustLoad(t, cached)
 		for pass := 1; pass <= 2; pass++ {
-			got, err := New("test").Render(context.Background(), req)
+			got, err := Render(context.Background(), tmpl, *plainReq)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -366,6 +451,38 @@ func TestRenderThroughACacheMatchesAPlainProvider(t *testing.T) {
 		}
 		if s := cached.Stats(); s.Hits == 0 {
 			t.Errorf("dpi %d: the second render found nothing in the cache: %+v", dpi, s)
+		}
+	}
+}
+
+// Renders of one template from many goroutines, with the template replaced in a
+// library while they run, all complete with the template each started with
+func TestRendersKeepTheTemplateTheyStartedWith(t *testing.T) {
+	lib := template.NewLibrary()
+	lib.Add(placeholderTemplate(t))
+	errs := make(chan error, 12)
+	for i := 0; i < 6; i++ {
+		go func() {
+			tmpl, ok := lib.Get("mimic.test")
+			if !ok {
+				errs <- errors.New("template missing from the library")
+				return
+			}
+			req := renderBolt(t, nil)
+			req.DPI = template.MinDPI
+			_, err := Render(context.Background(), tmpl, *req)
+			errs <- err
+		}()
+	}
+	for i := 0; i < 6; i++ {
+		go func() {
+			lib.Add(placeholderTemplate(t))
+			errs <- nil
+		}()
+	}
+	for i := 0; i < 12; i++ {
+		if err := <-errs; err != nil {
+			t.Error(err)
 		}
 	}
 }

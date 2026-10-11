@@ -10,6 +10,7 @@ import (
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/card/svgpath"
 	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -151,67 +152,90 @@ func TestSymbolNodeNothingToDraw(t *testing.T) {
 
 func TestSetSymbolSpec(t *testing.T) {
 	sym := mustSymbol(t, wideSymbol)
-	box := template.SymbolSpec{Width: 10, Height: 10}
-	manifest := func(spec template.SymbolSpec) *template.Manifest {
-		return &template.Manifest{Symbols: map[string]template.SymbolSpec{template.SymbolSet: spec}}
+	// layoutWith loads a template whose layout holds the symbol, or none
+	layoutWith := func(spec *manifest.Symbol) (*template.Layout, *template.Geometry) {
+		l := manifest.Layout{Stack: []manifest.Entry{{Part: "p"}}}
+		if spec != nil {
+			l.Symbols = map[string]manifest.Symbol{template.SymbolSet: *spec}
+		}
+		m := testManifest(l, map[string]manifest.Part{"p": {Variants: anyImage("p.png")}})
+		tmpl := mustLoad(t, overlay{manifest: marshal(t, m)})
+		layout := tmpl.Primary()
+		return layout, layout.Geometry(0)
 	}
+	box := &manifest.Symbol{Width: 10, Height: 10}
 	tests := []struct {
 		name string
 		req  template.RenderRequest
-		m    *template.Manifest
+		spec *manifest.Symbol
 		f    frame.Keys
 		want bool
 	}{
-		{"draws", template.RenderRequest{SetSymbol: sym}, manifest(box), frame.Keys{}, true},
-		{"no symbol", template.RenderRequest{}, manifest(box), frame.Keys{}, false},
-		{"symbol with no icon", template.RenderRequest{SetSymbol: &card.SetSymbol{}}, manifest(box), frame.Keys{}, false},
-		{"manifest has no place", template.RenderRequest{SetSymbol: sym}, &template.Manifest{}, frame.Keys{}, false},
-		{"empty box", template.RenderRequest{SetSymbol: sym}, manifest(template.SymbolSpec{}), frame.Keys{}, false},
-		{"condition holds", template.RenderRequest{SetSymbol: sym}, manifest(template.SymbolSpec{Width: 10, Height: 10, Condition: "land"}), frame.Keys{Land: true}, true},
-		{"condition fails", template.RenderRequest{SetSymbol: sym}, manifest(template.SymbolSpec{Width: 10, Height: 10, Condition: "land"}), frame.Keys{}, false},
+		{"draws", template.RenderRequest{SetSymbol: sym}, box, frame.Keys{}, true},
+		{"no symbol", template.RenderRequest{}, box, frame.Keys{}, false},
+		{"symbol with no icon", template.RenderRequest{SetSymbol: &card.SetSymbol{}}, box, frame.Keys{}, false},
+		{"the layout has no place", template.RenderRequest{SetSymbol: sym}, nil, frame.Keys{}, false},
+		{"condition holds", template.RenderRequest{SetSymbol: sym}, &manifest.Symbol{Width: 10, Height: 10, Condition: "land"}, frame.Keys{Land: true}, true},
+		{"condition fails", template.RenderRequest{SetSymbol: sym}, &manifest.Symbol{Width: 10, Height: 10, Condition: "land"}, frame.Keys{}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, got := setSymbolSpec(tc.req, tc.m, tc.f); got != tc.want {
+			l, geo := layoutWith(tc.spec)
+			if _, got := setSymbolSpec(tc.req, l, geo, tc.f); got != tc.want {
 				t.Errorf("draws = %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
-// symbolAssets is the placeholder frame with a place for the set symbol and a
-// type line that gives way to it
-type symbolAssets struct{ template.AssetProvider }
-
-func (s symbolAssets) Manifest() (*template.Manifest, error) {
-	m, err := s.AssetProvider.Manifest()
-	if err != nil {
-		return nil, err
+func TestSetSymbolSpecFollowsAFeature(t *testing.T) {
+	sym := mustSymbol(t, wideSymbol)
+	m := testManifest(manifest.Layout{
+		Stack:   []manifest.Entry{{Part: "p"}},
+		Symbols: map[string]manifest.Symbol{template.SymbolSet: {Width: 10, Height: 10, Condition: "feature:on"}},
+	}, map[string]manifest.Part{"p": {Variants: anyImage("p.png")}})
+	m.Features = map[string]manifest.Feature{"on": {Type: "bool"}}
+	l := mustLoad(t, overlay{manifest: marshal(t, m)}).Primary()
+	geo := l.Geometry(0)
+	if _, got := setSymbolSpec(template.RenderRequest{SetSymbol: sym, Features: frame.Features{"on": true}}, l, geo, frame.Keys{}); !got {
+		t.Error("the symbol did not draw with its feature on")
 	}
-	m.Symbols = map[string]template.SymbolSpec{
+	if _, got := setSymbolSpec(template.RenderRequest{SetSymbol: sym, Features: frame.Features{"on": false}}, l, geo, frame.Keys{}); got {
+		t.Error("the symbol drew with its feature off")
+	}
+	if _, got := setSymbolSpec(template.RenderRequest{SetSymbol: sym}, l, geo, frame.Keys{}); got {
+		t.Error("the symbol drew with no value for its feature")
+	}
+}
+
+// symbolTemplate is the placeholder frame with a place for the set symbol and a
+// type line that gives way to it
+func symbolTemplate(t *testing.T) *template.Template {
+	t.Helper()
+	base := template.NewFSAssetProvider(placeholderDir)
+	m := readManifest(t, base)
+	l := m.Layouts["normal"]
+	l.Symbols = map[string]manifest.Symbol{
 		template.SymbolSet: {X: 620, Y: 560, Width: 70, Height: 44, Align: "right"},
 	}
-	narrow := m.TextBoxes["type"]
-	narrow.Condition = "set_symbol"
-	narrow.Width = 540
-	full := m.TextBoxes["type"]
-	full.Box = "type"
-	m.TextBoxes["type"] = narrow
-	m.TextBoxes["type_full"] = full
-	return m, nil
+	typ := l.TextBoxes["type"]
+	typ.When = []manifest.Override{when("set_symbol", `{"rect":{"width":540}}`)}
+	l.TextBoxes["type"] = typ
+	m.Layouts["normal"] = l
+	return mustLoad(t, withManifest(t, base, m, nil))
 }
 
 func TestRenderDrawsSetSymbol(t *testing.T) {
+	tmpl := symbolTemplate(t)
 	req := renderBolt(t, nil)
-	req.Assets = symbolAssets{req.Assets}
-	scale := atMinDPI(t, req)
+	scale := atMinDPI(tmpl, req)
 
-	without, err := New("test").Render(context.Background(), *req)
+	without, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
 	req.SetSymbol = mustSymbol(t, wideSymbol)
-	with, err := New("test").Render(context.Background(), *req)
+	with, err := Render(context.Background(), tmpl, *req)
 	if err != nil {
 		t.Fatalf("Render with symbol: %v", err)
 	}

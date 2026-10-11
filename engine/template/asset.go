@@ -5,110 +5,22 @@ import (
 	"io"
 )
 
-// AssetProvider supplies the two things impasto has no opinion about: where a
-// template's layer PNGs live, and where things go on the canvas. Keeping it an
-// interface means a filesystem layout is not baked into every template, so an
-// embed.FS-backed or remote-bundle-backed provider can stand in later without
-// any template code changing
+// AssetProvider supplies the two things impasto has no opinion about: the bytes
+// of a template's resolved manifest, and where its images live. Keeping it an
+// interface means a filesystem layout is not baked into every template, so a
+// directory, a bundle, or an in-memory set can stand in without any template
+// code changing
 type AssetProvider interface {
-	Manifest() (*Manifest, error)
+	// ReadManifest returns the bytes of the template's resolved manifest. Load
+	// decodes and checks them
+	ReadManifest() ([]byte, error)
+	// Open returns a reader for the image at a slash separated path relative to
+	// the template's root, and fails for one that would leave it
 	Open(relPath string) (io.ReadCloser, error)
 }
 
-// Manifest ties a template's PNG layers to a layout. Its JSON tags are the
-// on-disk manifest.json schema an FSAssetProvider reads
-type Manifest struct {
-	Template  string                 `json:"template"`
-	Width     int                    `json:"width"`
-	Height    int                    `json:"height"`
-	DPI       int                    `json:"dpi,omitempty"` // zero infers from width
-	Layers    []LayerSpec            `json:"layers"`        // bottom to top
-	TextBoxes map[string]TextBoxSpec `json:"textBoxes"`
-	// Art is the one art window of a single-faced frame. A manifest with Arts
-	// leaves it empty
-	Art ArtSlot `json:"art"`
-	// Arts is one art window per half of a split card, first half first. The
-	// card's one art image is cut in half, left then right, one half to each
-	Arts []ArtSlot `json:"arts,omitempty"`
-	// Symbols are the places a card's set symbol can draw, keyed by name. Only "set"
-	// is drawn today. A manifest without it draws no symbol
-	Symbols map[string]SymbolSpec `json:"symbols,omitempty"`
-	// Rotate turns the finished composite this many degrees clockwise, a multiple
-	// of 90, so a frame authored on its side delivers upright. Everything above
-	// is laid out in the authored canvas, and only a TextBoxSpec with Space
-	// "output" is laid out after the turn
-	Rotate int `json:"rotate,omitempty"`
-}
-
-// LayerSpec is one frame layer. Layers are an ordered slice, not a map,
-// because z-order matters and a map has none. The order is bottom to top,
-// matching the order layers are appended into a canvas group
-type LayerSpec struct {
-	Name string `json:"name"`
-	// Condition is one of the engine's fixed vocabulary: "", "legendary",
-	// "nonlegendary", "land", "nonland", "creature", "color_indicator",
-	// "front", "back", "fuse", "set_symbol" (a set symbol draws for the card),
-	// "icon_left", "icon_right" (which side of the title bar
-	// the transform icon sits on), or a value the engine does not yet drive (nyx,
-	// companion, hollow_crown, fullart, divider, pt_dark), which renders the
-	// layer off. A comma-separated list such as "back,land" holds when every
-	// entry does
-	Condition string `json:"condition,omitempty"`
-	// ColorSlot names which of a WUBRG frame's slots (background, pinlines,
-	// twins, ptBox, crown, indicator, transform_icon, fuse) this layer's color key
-	// comes from, see engine/frame. Empty means the layer carries only a
-	// color-invariant "any" variant, such as a border or a divider
-	ColorSlot string `json:"colorSlot,omitempty"`
-	// ColorVariants is keyed by color key ("w", "gold", "land", ...). The key
-	// "any" is the color-invariant fallback
-	ColorVariants map[string]LayerAsset `json:"colorVariants"`
-	Blend         string                `json:"blend,omitempty"` // blend.Mode name, default "normal"
-	// Mirror flips part of the layer left to right when its condition holds,
-	// so one cut can draw a frame whose icon sits on either end of the title bar
-	Mirror *LayerMirror `json:"mirror,omitempty"`
-	// ColorBlend lets a layer whose color key is several color letters, such as
-	// "rw", draw each letter's own variant across the layer when no variant is
-	// keyed by the whole key. The colors follow one another from left to right in
-	// the authored canvas, blending where BlendStops puts the seams
-	ColorBlend bool `json:"colorBlend,omitempty"`
-	// Half scopes the layer to one half of a split card, 1 for the first and 2 for
-	// the second, so its condition and color slot read that half's own face. Zero
-	// is the whole card, which is every layer of a single-faced frame
-	Half int `json:"half,omitempty"`
-	// X and Y place the layer's PNG in the document, so one cut smaller than the
-	// document can draw at either half. Zero places it at the origin, where a
-	// document-sized PNG belongs
-	X int `json:"x,omitempty"`
-	Y int `json:"y,omitempty"`
-}
-
-// LayerMirror is a left to right flip of a layer about the canvas's vertical
-// center. The region is given on the left half in document coordinates, and
-// each pixel in it trades places with its mirror image on the right, so the
-// rest of the layer keeps its own art. A zero width or height flips the whole
-// layer
-type LayerMirror struct {
-	Condition string `json:"condition,omitempty"`
-	X         int    `json:"x,omitempty"`
-	Y         int    `json:"y,omitempty"`
-	Width     int    `json:"width,omitempty"`
-	Height    int    `json:"height,omitempty"`
-}
-
-// Region is the mirror's rectangle, or the empty rectangle for the whole layer
-func (m LayerMirror) Region() image.Rectangle {
-	if m.Width <= 0 || m.Height <= 0 {
-		return image.Rectangle{}
-	}
-	return image.Rect(m.X, m.Y, m.X+m.Width, m.Y+m.Height)
-}
-
-// LayerAsset points at one PNG within the provider's root
-type LayerAsset struct {
-	Path string `json:"path"`
-}
-
-// TextBoxSpec is where and how one named text box draws
+// TextBoxSpec is where and how one text box draws, in the flat form the text layout
+// reads. A layout compiles each of its manifest text boxes into one
 type TextBoxSpec struct {
 	X        int     `json:"x"`
 	Y        int     `json:"y"`
@@ -178,19 +90,6 @@ type TextBoxSpec struct {
 	// Both must be set for either to take effect
 	DuckLayer string `json:"duckLayer,omitempty"`
 	DuckRow   string `json:"duckRow,omitempty"`
-	// Box names the logical box this spec fills, such as "title", so several
-	// specs can offer one box under different conditions. Empty means the
-	// spec's own key in TextBoxes
-	Box string `json:"box,omitempty"`
-	// Condition is a layer condition (see LayerSpec.Condition) that must hold
-	// for this spec to fill its box. Of the specs filling one box, the one
-	// drawn is the first whose condition holds, trying those naming the most
-	// conditions first and then in sorted key order, so a spec with no
-	// condition is the fallback when none of the others hold
-	Condition string `json:"condition,omitempty"`
-	// Half scopes the box to one half of a split card, as LayerSpec.Half does, so
-	// it draws that face's text and resolves its condition against that face
-	Half int `json:"half,omitempty"`
 	// Space is "output" for a box laid out after the manifest's Rotate, in the
 	// delivered canvas's own coordinates, such as a legal line that reads upright
 	// on a card turned from its authored side. Empty is the authored canvas
@@ -209,16 +108,7 @@ type ArtSlot struct {
 // SpaceOutput is the TextBoxSpec.Space of a box laid out after the rotation
 const SpaceOutput = "output"
 
-// ArtSlots is the art windows of the manifest in order, the single Art or each
-// of Arts
-func (m *Manifest) ArtSlots() []ArtSlot {
-	if len(m.Arts) > 0 {
-		return m.Arts
-	}
-	return []ArtSlot{m.Art}
-}
-
-// SymbolSet is the key of the set expansion symbol in Manifest.Symbols
+// SymbolSet is the key of the set expansion symbol in a layout's symbols
 const SymbolSet = "set"
 
 // SymbolSpec is where a symbol draws. The symbol arrives colored for the card's
@@ -238,7 +128,4 @@ type SymbolSpec struct {
 	// Scale shrinks the fitted symbol to this fraction of the box. Zero or less
 	// means 1
 	Scale float64 `json:"scale,omitempty"`
-	// Condition is a layer condition (see LayerSpec.Condition) that must hold for
-	// the symbol to draw
-	Condition string `json:"condition,omitempty"`
 }

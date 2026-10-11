@@ -1,7 +1,6 @@
 package template
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/odevine/mimic/engine/card"
@@ -42,45 +41,6 @@ const (
 	KindPlane        = frame.KindPlane
 	KindUnknown      = frame.KindUnknown
 )
-
-// Supports is what a template can render. A face is supported when its role is
-// in Roles and its kind is in Kinds, so a template covering several roles or
-// kinds covers every pairing of them
-type Supports struct {
-	Roles []Role `json:"roles"`
-	Kinds []Kind `json:"kinds"`
-}
-
-// Allows reports whether a face of shape s can render with this template
-func (s Supports) Allows(sh Shape) bool {
-	roleOK, kindOK := false, false
-	for _, r := range s.Roles {
-		roleOK = roleOK || r == sh.Role
-	}
-	for _, k := range s.Kinds {
-		kindOK = kindOK || k == sh.Kind
-	}
-	return roleOK && kindOK
-}
-
-// validate rejects an empty list and any role or kind outside the engine's
-// vocabulary, including the unknown ones, which no template may claim
-func (s Supports) validate() error {
-	if len(s.Roles) == 0 || len(s.Kinds) == 0 {
-		return fmt.Errorf("supports needs at least one role and one kind")
-	}
-	for _, r := range s.Roles {
-		if !frame.KnownRole(r) {
-			return fmt.Errorf("unknown role %q", r)
-		}
-	}
-	for _, k := range s.Kinds {
-		if !frame.KnownKind(k) {
-			return fmt.Errorf("unknown kind %q", k)
-		}
-	}
-	return nil
-}
 
 // layoutKinds are the Scryfall layouts that name a single-faced card's kind
 // outright, where the type line alone would not
@@ -166,18 +126,6 @@ func typeLineKind(typeLine string) Kind {
 		return KindBasicLand
 	}
 	return KindStandard
-}
-
-// UnsupportedError is what a registered template's Render returns for a face
-// its Supports does not allow, so a batch can tell a card no template here
-// renders from one that failed partway through
-type UnsupportedError struct {
-	Template string
-	Shape    Shape
-}
-
-func (e *UnsupportedError) Error() string {
-	return fmt.Sprintf("template %q does not render %s faces", e.Template, e.Shape)
 }
 
 // FaceCard is the card data the requested face prints. A double-faced card's

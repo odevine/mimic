@@ -58,6 +58,7 @@ func TestEachMistakeIsReportedAtItsPath(t *testing.T) {
 		{"a seam off the canvas", []change{{"parts.pinlines.blend.seams.2[0].center", 99999}}, "parts.pinlines.blend.seams.2[0].center", Error, "off the canvas"},
 		{"seams for a run of five", []change{{"parts.pinlines.blend.seams.5", []any{map[string]any{"width": 1}}}}, "parts.pinlines.blend.seams.5", Error, "not a number of colors"},
 		{"seams that are not a count", []change{{"parts.pinlines.blend.seams.many", []any{}}}, "parts.pinlines.blend.seams.many", Error, "not a number of colors"},
+		{"seams that overlap", []change{{"parts.pinlines.blend.seams.3", []any{map[string]any{"center": 0, "width": 1000}, map[string]any{"center": 100, "width": 100}}}}, "parts.pinlines.blend.seams.3[1]", Error, "before the one before it ends"},
 		{"the wrong number of seams", []change{{"parts.pinlines.blend.seams.3", []any{map[string]any{"width": 1}}}}, "parts.pinlines.blend.seams.3", Error, "has 2 seams, and there are 1"},
 		{"a blend that does nothing", []change{{"parts.pt_box.blend", map[string]any{"end": 0.9}}}, "parts.pt_box.blend", Warning, "never reads a run"},
 		{"a part nothing uses", []change{{"parts.spare", map[string]any{"variants": map[string]any{"any": map[string]any{"path": "a.png"}}}}}, "parts.spare", Warning, "no layout uses"},

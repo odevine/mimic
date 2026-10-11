@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"strconv"
 
 	"github.com/odevine/impasto/blend"
 	"github.com/odevine/impasto/canvas"
@@ -97,10 +98,9 @@ func Mirror(buf *raster.Buffer, region image.Rectangle) {
 // creature's rules and flavor text. The divider asset bakes a thin graphic into
 // an otherwise transparent full-document image, so this crops that strip to its
 // opaque bounds and places its center at centerY, the document Y a text layout
-// reported for the divider. It returns nil when the manifest carries no
-// "divider" layer, so a template without one still renders
-func Divider(p AssetProvider, m *Manifest, centerY int, s Scale) (*canvas.Layer, error) {
-	path := LayerAssetPath(m, "divider")
+// reported for the divider. It returns nil when path is empty, so a template
+// without a divider still renders
+func Divider(p AssetProvider, path string, centerY int, s Scale) (*canvas.Layer, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -126,17 +126,6 @@ func Divider(p AssetProvider, m *Manifest, centerY int, s Scale) (*canvas.Layer,
 		return nil, fmt.Errorf("template: wrapping divider: %w", err)
 	}
 	return &canvas.Layer{Content: buf, Origin: image.Pt(strip.Min.X, centerY-strip.Dy()/2), Mode: blend.Normal}, nil
-}
-
-// LayerAssetPath returns the color-invariant "any" asset path for a named
-// layer, or "" when the layer or that variant is absent
-func LayerAssetPath(m *Manifest, name string) string {
-	for _, l := range m.Layers {
-		if l.Name == name {
-			return l.ColorVariants["any"].Path
-		}
-	}
-	return ""
 }
 
 // OpaqueBounds is the smallest rectangle covering every pixel of img with any
@@ -309,50 +298,97 @@ func HalfOfArt(img image.Image, i, n int) image.Image {
 	return sub.SubImage(image.Rect(x0, b.Min.Y, x1, b.Max.Y))
 }
 
-// BlendStops are the seams of a layer that blends n colors left to right, as
-// fractions of the document's width, each color's hold then the blend into the
-// next, such as a fuse bar whose halves run in different colors. The seams for
-// two and three colors are the printed card's, and four add the middle one
-func BlendStops(n int) []float64 {
-	switch n {
-	case 2:
-		return []float64{.50, .54}
-	case 3:
-		return []float64{.28, .33, .71, .76}
-	case 4:
-		return []float64{.28, .33, .50, .54, .71, .76}
-	}
-	return nil
+// Blender mixes a run of colors from left to right across a layer. Each seam is
+// a transition between two neighbouring colors, and the weight of each color at a
+// position follows from the seams before and after it
+type Blender struct {
+	seams  []seamSpan
+	smooth bool
+	end    float64
 }
 
-// blendWeights is how much of each of n colors shows at a document fraction t,
-// where each color holds until its seam starts and fades into the next across it
-func blendWeights(stops []float64, n int, t float64, w []float64) {
-	for i := range w {
-		w[i] = 0
+// seamSpan is where one transition runs, as fractions of the authored document's
+// width
+type seamSpan struct{ from, to float64 }
+
+// defaultSeam is where a pair's transition runs when a part gives none: centered,
+// 650 pixels wide
+var defaultSeam = manifest.Seam{Center: 0, Width: 650}
+
+// NewBlender builds the mix of a run of n colors for a part's blend, in an authored
+// document docW wide. A pair with no seams takes the default one, and it reports
+// false for a longer run the part gives no seams for, which has no mix to draw
+func NewBlender(n int, b *manifest.Blend, docW int) (Blender, bool) {
+	bl := Blender{smooth: true, end: 1}
+	var seams []manifest.Seam
+	if b != nil {
+		bl.smooth = b.Shape != "linear"
+		if b.End > 0 {
+			bl.end = b.End
+		}
+		seams = b.Seams[strconv.Itoa(n)]
 	}
-	k := 0
-	for k < n-1 && t >= stops[2*k+1] {
-		k++
+	if len(seams) == 0 && n == 2 {
+		seams = []manifest.Seam{defaultSeam}
 	}
-	if k == n-1 || t < stops[2*k] {
-		w[k] = 1
-		return
+	if n < 2 || n > 4 || len(seams) != n-1 || docW <= 0 {
+		return Blender{}, false
 	}
-	mix := (t - stops[2*k]) / (stops[2*k+1] - stops[2*k])
-	w[k], w[k+1] = 1-mix, mix
+	w := float64(docW)
+	for _, s := range seams {
+		from := (w/2 + s.Center - s.Width/2) / w
+		bl.seams = append(bl.seams, seamSpan{from: from, to: from + s.Width/w})
+	}
+	return bl, true
+}
+
+// Weights is how much of each color shows at a fraction f of the document's width,
+// written into w, which holds one weight per color and sums to 1. The far right
+// shows End of the last color, and the rest goes to the one before it
+func (bl Blender) Weights(f float64, w []float64) {
+	// t[k] is how far the transition after color k has come, so a color's weight is
+	// how far the one before it has come minus how far the one after it has
+	var t [3]float64
+	for k, seam := range bl.seams {
+		t[k] = bl.ramp(seam, f)
+	}
+	if n := len(bl.seams); n > 0 {
+		t[n-1] *= bl.end
+	}
+	for k := range w {
+		lo, hi := 1.0, 0.0
+		if k > 0 {
+			lo = t[k-1]
+		}
+		if k < len(bl.seams) {
+			hi = t[k]
+		}
+		w[k] = lo - hi
+	}
+}
+
+// ramp is how far a transition has come at fraction f, from 0 to 1
+func (bl Blender) ramp(s seamSpan, f float64) float64 {
+	if s.to <= s.from {
+		if f >= s.to {
+			return 1
+		}
+		return 0
+	}
+	v := math.Max(0, math.Min(1, (f-s.from)/(s.to-s.from)))
+	if bl.smooth {
+		v = v * v * (3 - 2*v)
+	}
+	return v
 }
 
 // LoadBlendedLayer decodes several color variants of one layer and blends them
-// left to right at the seams BlendStops gives, for a layer that belongs at
-// (x, y) in an authored document of docW by docH. It returns the blended buffer
-// at the variants' own size with its origin in the scaled document, so a bar
-// costs the size of the bar rather than of the document. They must be the same size
-func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH int) (*raster.Buffer, image.Point, error) {
-	stops := BlendStops(len(paths))
-	if stops == nil {
-		return nil, image.Point{}, fmt.Errorf("template: cannot blend %d colors", len(paths))
-	}
+// left to right with the blender, for a layer that belongs at (x, y) in an authored
+// document of docW by docH, such as a fuse bar whose halves run in different
+// colors. It returns the blended buffer at the variants' own size with its origin in
+// the scaled document, so a bar costs the size of the bar rather than of the
+// document. They must be the same size
+func LoadBlendedLayer(p AssetProvider, paths []string, bl Blender, s Scale, x, y, docW, docH int) (*raster.Buffer, image.Point, error) {
 	var bufs []*raster.Buffer
 	var origin image.Point
 	for _, path := range paths {
@@ -376,7 +412,7 @@ func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH
 	out := raster.MustNewBuffer(bufs[0].Width, bufs[0].Height)
 	weights := make([]float64, len(bufs))
 	for sx := 0; sx < out.Width; sx++ {
-		blendWeights(stops, len(bufs), (float64(origin.X+sx)+0.5)/float64(w), weights)
+		bl.Weights((float64(origin.X+sx)+0.5)/float64(w), weights)
 		for sy := 0; sy < out.Height; sy++ {
 			i := (sy*out.Width + sx) * 4
 			for c := 0; c < 4; c++ {
@@ -394,17 +430,17 @@ func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH
 // BlendedPaths lists the variants a run of colors blends, one per color in the
 // order they run, or nil when the material is not a run or a color has no variant
 // of its own
-func BlendedPaths(variants map[string]LayerAsset, m frame.Material) []string {
+func BlendedPaths(variants map[string]string, m frame.Material) []string {
 	if m.Kind() != frame.MatRun {
 		return nil
 	}
 	var paths []string
 	for _, l := range m.Letters() {
-		v, ok := variants[l]
+		path, ok := variants[l]
 		if !ok {
 			return nil
 		}
-		paths = append(paths, v.Path)
+		paths = append(paths, path)
 	}
 	return paths
 }

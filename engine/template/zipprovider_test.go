@@ -3,11 +3,14 @@ package template
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/version"
 )
 
@@ -44,41 +47,67 @@ func writeBundle(t *testing.T, dir string, entries []bundleEntry) string {
 	return path
 }
 
-const testManifestJSON = `{
-	"template": "normal",
-	"width": 744,
-	"height": 1039,
-	"layers": [
-		{"name": "background", "colorVariants": {"any": {"path": "background/any.png"}}}
-	],
-	"art": {"x": 5, "y": 5, "width": 200, "height": 150, "after": "background"}
+// minimalManifestJSON is the smallest template that loads: one part, one layout
+const minimalManifestJSON = `{
+	"contract": "1.0",
+	"id": "mimic.minimal",
+	"name": "Minimal",
+	"description": "The least a template needs",
+	"parts": {"background": {"variants": {"any": {"path": "background/any.png"}}}},
+	"layouts": {"normal": {
+		"serves": [{"role": "single", "kind": "standard"}],
+		"canvas": {"width": 744, "height": 1039},
+		"stack": [{"part": "background"}],
+		"textBoxes": {},
+		"art": [{"x": 5, "y": 5, "width": 200, "height": 150, "after": "background"}]
+	}}
 }`
 
 // goodBundle is a well-formed bundle for the happy-path cases
 func goodBundle(t *testing.T, dir string) string {
 	return writeBundle(t, dir, []bundleEntry{
-		{"bundle.json", zip.Deflate, `{"format":1,"template":"normal","version":"0.1.0","minEngine":"0.3.0"}`},
-		{"manifest.json", zip.Deflate, testManifestJSON},
+		{"bundle.json", zip.Deflate, `{"format":2,"id":"mimic.minimal","version":"0.1.0","minEngine":"0.3.0"}`},
+		{"manifest.json", zip.Deflate, minimalManifestJSON},
 		{"background/any.png", zip.Store, "fake-png-bytes"},
 	})
 }
 
-func TestZipManifestParsesAndValidates(t *testing.T) {
+func TestZipReadManifestLoads(t *testing.T) {
 	p, err := NewZipAssetProvider(goodBundle(t, t.TempDir()))
 	if err != nil {
 		t.Fatalf("NewZipAssetProvider: %v", err)
 	}
 	defer p.Close()
 
-	m, err := p.Manifest()
+	raw, err := p.ReadManifest()
 	if err != nil {
-		t.Fatalf("Manifest: %v", err)
+		t.Fatalf("ReadManifest: %v", err)
 	}
-	if m.Template != "normal" || m.Width != 744 || m.Height != 1039 {
-		t.Errorf("header = %q %dx%d, want normal 744x1039", m.Template, m.Width, m.Height)
+	if string(raw) != minimalManifestJSON {
+		t.Errorf("ReadManifest = %q, want the bundle's manifest", raw)
 	}
-	if len(m.Layers) != 1 || m.Layers[0].ColorVariants["any"].Path != "background/any.png" {
-		t.Fatalf("layers not parsed: %+v", m.Layers)
+	tmpl, ds, err := Load(p)
+	if err != nil || len(ds) != 0 {
+		t.Fatalf("Load = %v, %v", ds, err)
+	}
+	if tmpl.ID() != "mimic.minimal" {
+		t.Errorf("id = %q, want mimic.minimal", tmpl.ID())
+	}
+}
+
+func TestZipRefusesAManifestOverTheLimit(t *testing.T) {
+	path := writeBundle(t, t.TempDir(), []bundleEntry{
+		{"bundle.json", zip.Deflate, `{"format":2,"id":"mimic.minimal","version":"0.1.0","minEngine":"0.3.0"}`},
+		// Spaces deflate to almost nothing, so the file is small and what it claims to hold is not
+		{"manifest.json", zip.Deflate, strings.Repeat(" ", manifest.MaxBytes+10)},
+	})
+	p, err := NewZipAssetProvider(path)
+	if err != nil {
+		t.Fatalf("NewZipAssetProvider: %v", err)
+	}
+	defer p.Close()
+	if _, err := p.ReadManifest(); err == nil {
+		t.Fatal("expected an oversized manifest to be refused, got nil error")
 	}
 }
 
@@ -112,13 +141,15 @@ func TestZipOpenRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestZipRejectsNewerFormat(t *testing.T) {
-	path := writeBundle(t, t.TempDir(), []bundleEntry{
-		{"bundle.json", zip.Deflate, `{"format":2,"template":"normal","version":"0.1.0","minEngine":"0.3.0"}`},
-		{"manifest.json", zip.Deflate, testManifestJSON},
-	})
-	if _, err := NewZipAssetProvider(path); err == nil {
-		t.Fatal("expected a newer format to be rejected, got nil error")
+func TestZipRejectsAFormatItDoesNotRead(t *testing.T) {
+	for _, format := range []int{1, 3} {
+		path := writeBundle(t, t.TempDir(), []bundleEntry{
+			{"bundle.json", zip.Deflate, fmt.Sprintf(`{"format":%d,"id":"mimic.minimal","version":"0.1.0","minEngine":"0.3.0"}`, format)},
+			{"manifest.json", zip.Deflate, minimalManifestJSON},
+		})
+		if _, err := NewZipAssetProvider(path); err == nil {
+			t.Errorf("format %d was accepted", format)
+		}
 	}
 }
 
@@ -130,8 +161,8 @@ func TestZipRejectsMinEngineTooHigh(t *testing.T) {
 	defer func() { version.Version = old }()
 
 	path := writeBundle(t, t.TempDir(), []bundleEntry{
-		{"bundle.json", zip.Deflate, `{"format":1,"template":"normal","version":"2.0.0","minEngine":"0.4.0"}`},
-		{"manifest.json", zip.Deflate, testManifestJSON},
+		{"bundle.json", zip.Deflate, `{"format":2,"id":"mimic.minimal","version":"2.0.0","minEngine":"0.4.0"}`},
+		{"manifest.json", zip.Deflate, minimalManifestJSON},
 	})
 	if _, err := NewZipAssetProvider(path); err == nil {
 		t.Fatal("expected minEngine gate to reject, got nil error")
@@ -149,7 +180,7 @@ func TestZipMatchesFSProvider(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(loose, "background"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(loose, "manifest.json"), []byte(testManifestJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(loose, "manifest.json"), []byte(minimalManifestJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(loose, "background", "any.png"), []byte("fake-png-bytes"), 0o644); err != nil {
@@ -163,17 +194,16 @@ func TestZipMatchesFSProvider(t *testing.T) {
 	}
 	defer zp.Close()
 
-	fsM, err := fs.Manifest()
+	fsM, err := fs.ReadManifest()
 	if err != nil {
-		t.Fatalf("FS Manifest: %v", err)
+		t.Fatalf("FS ReadManifest: %v", err)
 	}
-	zpM, err := zp.Manifest()
+	zpM, err := zp.ReadManifest()
 	if err != nil {
-		t.Fatalf("Zip Manifest: %v", err)
+		t.Fatalf("Zip ReadManifest: %v", err)
 	}
-	if fsM.Template != zpM.Template || fsM.Width != zpM.Width || fsM.Height != zpM.Height ||
-		len(fsM.Layers) != len(zpM.Layers) {
-		t.Errorf("manifests differ: fs=%+v zip=%+v", fsM, zpM)
+	if !bytes.Equal(fsM, zpM) {
+		t.Errorf("manifests differ: fs=%q zip=%q", fsM, zpM)
 	}
 
 	fsBytes := readAll(t, fs, "background/any.png")

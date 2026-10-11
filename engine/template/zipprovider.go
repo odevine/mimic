@@ -10,16 +10,16 @@ import (
 	"github.com/odevine/mimic/engine/version"
 )
 
-// bundleFormat is the highest .mimic container schema this reader understands.
-// bundle.json carries the format a bundle was written with; a higher one means
-// the structure changed incompatibly and this engine cannot read it
-const bundleFormat = 1
+// bundleFormat is the .mimic container schema this reader understands.
+// bundle.json carries the format a bundle was written with, and any other one
+// means the structure differs and this engine cannot read it
+const bundleFormat = 2
 
 // bundleHeader is bundle.json, read first so an incompatible container is
 // rejected before the larger manifest or any layer is touched
 type bundleHeader struct {
 	Format    int    `json:"format"`
-	Template  string `json:"template"`
+	ID        string `json:"id"`
 	Version   string `json:"version"`
 	MinEngine string `json:"minEngine"`
 }
@@ -80,8 +80,8 @@ func (p *ZipAssetProvider) readHeader() error {
 	if err := json.Unmarshal(raw, &p.header); err != nil {
 		return fmt.Errorf("template: decoding bundle header: %w", err)
 	}
-	if p.header.Format > bundleFormat {
-		return fmt.Errorf("template: bundle format %d is newer than this engine understands (%d); update the engine",
+	if p.header.Format != bundleFormat {
+		return fmt.Errorf("template: bundle format %d is not one this engine reads, which reads format %d",
 			p.header.Format, bundleFormat)
 	}
 	if !version.Satisfies(p.header.MinEngine) {
@@ -91,21 +91,18 @@ func (p *ZipAssetProvider) readHeader() error {
 	return nil
 }
 
-// Manifest reads and validates manifest.json, the same schema and checks as
-// FSAssetProvider so a bundle the engine packs is one it renders
-func (p *ZipAssetProvider) Manifest() (*Manifest, error) {
-	raw, err := p.read("manifest.json")
+// ReadManifest reads manifest.json, which is no larger than a manifest may be
+func (p *ZipAssetProvider) ReadManifest() ([]byte, error) {
+	entry, ok := p.byName["manifest.json"]
+	if !ok {
+		return nil, fmt.Errorf("template: reading manifest: \"manifest.json\" not found in bundle")
+	}
+	rc, err := entry.Open()
 	if err != nil {
 		return nil, fmt.Errorf("template: reading manifest: %w", err)
 	}
-	var m Manifest
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("template: decoding manifest: %w", err)
-	}
-	if err := validateManifest(&m); err != nil {
-		return nil, err
-	}
-	return &m, nil
+	defer rc.Close()
+	return readManifest(rc)
 }
 
 // Open returns a reader for a layer PNG at relPath, guarded against a name that

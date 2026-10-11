@@ -1,19 +1,15 @@
 package template
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-)
 
-// maxDimension caps a manifest's width or height. A manifest's numbers become
-// buffer dimensions downstream, so they are validated before anything sized
-// from them is allocated
-const maxDimension = 20000
+	"github.com/odevine/mimic/engine/manifest"
+)
 
 // FSAssetProvider reads manifest.json and layer PNGs from a directory on disk.
 // It is the only AssetProvider today. The interface exists so other backings
@@ -28,20 +24,14 @@ func NewFSAssetProvider(dir string) *FSAssetProvider {
 	return &FSAssetProvider{root: dir}
 }
 
-// Manifest reads and validates the manifest
-func (p *FSAssetProvider) Manifest() (*Manifest, error) {
-	raw, err := os.ReadFile(filepath.Join(p.root, "manifest.json"))
+// ReadManifest reads manifest.json, which is no larger than a manifest may be
+func (p *FSAssetProvider) ReadManifest() ([]byte, error) {
+	f, err := os.Open(filepath.Join(p.root, "manifest.json"))
 	if err != nil {
 		return nil, fmt.Errorf("template: reading manifest: %w", err)
 	}
-	var m Manifest
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("template: decoding manifest: %w", err)
-	}
-	if err := validateManifest(&m); err != nil {
-		return nil, err
-	}
-	return &m, nil
+	defer f.Close()
+	return readManifest(f)
 }
 
 // Open returns a reader for a layer PNG at relPath, joined against the root and
@@ -86,28 +76,16 @@ func safeRelPath(relPath string) (string, error) {
 	return clean, nil
 }
 
-func validateManifest(m *Manifest) error {
-	if m.Width <= 0 || m.Height <= 0 {
-		return fmt.Errorf("template: manifest has non-positive dimensions %dx%d", m.Width, m.Height)
+// readManifest reads a manifest from r, and fails for one over the size a manifest
+// may be, so a file or a bundle entry that claims to be one cannot make the engine
+// read without end
+func readManifest(r io.Reader) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(r, manifest.MaxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("template: reading manifest: %w", err)
 	}
-	if m.Width > maxDimension || m.Height > maxDimension {
-		return fmt.Errorf("template: manifest dimensions %dx%d exceed %d limit", m.Width, m.Height, maxDimension)
+	if len(raw) > manifest.MaxBytes {
+		return nil, fmt.Errorf("template: the manifest is over the %d byte limit", manifest.MaxBytes)
 	}
-	if m.Rotate%90 != 0 || m.Rotate < 0 || m.Rotate >= 360 {
-		return fmt.Errorf("template: manifest rotate %d is not 0, 90, 180, or 270", m.Rotate)
-	}
-	for _, l := range m.Layers {
-		if l.Half < 0 || l.Half > 2 {
-			return fmt.Errorf("template: layer %q has half %d, want 0, 1, or 2", l.Name, l.Half)
-		}
-	}
-	for name, b := range m.TextBoxes {
-		if b.Half < 0 || b.Half > 2 {
-			return fmt.Errorf("template: text box %q has half %d, want 0, 1, or 2", name, b.Half)
-		}
-		if b.Space != "" && b.Space != SpaceOutput {
-			return fmt.Errorf("template: text box %q has space %q, want \"\" or %q", name, b.Space, SpaceOutput)
-		}
-	}
-	return nil
+	return raw, nil
 }

@@ -2,7 +2,6 @@ package render
 
 import (
 	"context"
-	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
@@ -11,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 )
 
@@ -46,52 +47,49 @@ func writeSolid(t *testing.T, dir, name string, w, h int, c color.NRGBA) {
 	}
 }
 
-func splitAssets(t *testing.T) *template.FSAssetProvider {
+func splitTemplate(t *testing.T) *template.Template {
 	t.Helper()
 	dir := t.TempDir()
 	writeSolid(t, dir, "red.png", halfW, halfH, red)
 	writeSolid(t, dir, "blue.png", halfW, halfH, blue)
 	writeSolid(t, dir, "bar_r.png", 900, 40, red)
 	writeSolid(t, dir, "bar_u.png", 900, 40, blue)
-	variants := func(r, u string) map[string]template.LayerAsset {
-		return map[string]template.LayerAsset{"r": {Path: r}, "u": {Path: u}}
+	title := func(x, y, w int, face string) manifest.TextBox {
+		b := box(x, y, w, 40, 30)
+		b.Draws, b.Face = "title", face
+		return b
 	}
-	black := func(x, y, w int, half int) template.TextBoxSpec {
-		return template.TextBoxSpec{
-			X: x, Y: y, Width: w, Height: 40, FontSize: 30, Color: "#000000", Half: half, Box: "title",
-		}
-	}
-	m := template.Manifest{
-		Template: "test", Width: authoredW, Height: authoredH, Rotate: 270,
-		Layers: []template.LayerSpec{
-			{Name: "bg_1", Half: 1, X: 50, Y: 50, ColorSlot: "background", ColorVariants: variants("red.png", "blue.png")},
-			{Name: "bg_2", Half: 2, X: 550, Y: 50, ColorSlot: "background", ColorVariants: variants("red.png", "blue.png")},
-			{
-				Name: "bar", Condition: "fuse", X: 50, Y: 550, ColorSlot: "fuse", ColorBlend: true,
-				ColorVariants: map[string]template.LayerAsset{"r": {Path: "bar_r.png"}, "u": {Path: "bar_u.png"}},
-			},
+	legal := box(10, 940, 500, 40, 30)
+	legal.Draws, legal.Space = "copyright", template.SpaceOutput
+	legal.Text.Color = "#FFFFFF"
+	// The bar runs two colors with a seam where the old fixed table put it: from
+	// half the canvas to fifty-four hundredths, which is 40 pixels wide about 20
+	// right of the middle
+	bar := manifest.Blend{Shape: "linear", Seams: map[string][]manifest.Seam{"2": {{Center: 20, Width: 40}}}}
+	writeManifestFile(t, dir, testManifest(manifest.Layout{
+		Canvas: manifest.Canvas{Width: authoredW, Height: authoredH, Rotate: 270},
+		Stack: []manifest.Entry{
+			{ID: "bg_1", Part: "half", Face: "first", At: &manifest.Point{X: 50, Y: 50}},
+			{ID: "bg_2", Part: "half", Face: "second", At: &manifest.Point{X: 550, Y: 50}},
+			{ID: "bar", Part: "bar", Condition: "fuse"},
 		},
-		Arts: []template.ArtSlot{
-			{X: 60, Y: 60, Width: 100, Height: 100, After: "bg_2"},
-			{X: 560, Y: 60, Width: 100, Height: 100, After: "bg_2"},
+		Art: []manifest.ArtWindow{
+			{X: 60, Y: 60, Width: 100, Height: 100, After: "bg_2", Face: "first"},
+			{X: 560, Y: 60, Width: 100, Height: 100, After: "bg_2", Face: "second"},
 		},
-		TextBoxes: map[string]template.TextBoxSpec{
-			"title_1": black(60, 400, 300, 1),
-			"title_2": black(560, 400, 300, 2),
-			"legal": {
-				X: 10, Y: 940, Width: 500, Height: 40, FontSize: 30, Color: "#FFFFFF",
-				Box: "copyright", Space: template.SpaceOutput,
-			},
+		TextBoxes: map[string]manifest.TextBox{
+			"title_1": title(60, 400, 300, "first"),
+			"title_2": title(560, 400, 300, "second"),
+			"legal":   legal,
 		},
-	}
-	raw, err := json.Marshal(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return template.NewFSAssetProvider(dir)
+	}, map[string]manifest.Part{
+		"half": {Slot: "background", Variants: map[string]manifest.Variant{"r": {Path: "red.png"}, "u": {Path: "blue.png"}}},
+		"bar": {
+			Slot: "fuse", Origin: manifest.Point{X: 50, Y: 550}, Blend: &bar,
+			Variants: map[string]manifest.Variant{"r": {Path: "bar_r.png"}, "u": {Path: "bar_u.png"}},
+		},
+	}, frame.Shape{Role: frame.RoleSplit, Kind: frame.KindStandard}))
+	return mustLoad(t, template.NewFSAssetProvider(dir))
 }
 
 // artImage is 200 by 100 with a green left half and a magenta right half, so a
@@ -112,9 +110,7 @@ func artImage() image.Image {
 
 func renderSplit(t *testing.T, d *card.Data) image.Image {
 	t.Helper()
-	buf, err := New("test").Render(context.Background(), template.RenderRequest{
-		Card: d, Assets: splitAssets(t), Art: artImage(),
-	})
+	buf, err := Render(context.Background(), splitTemplate(t), template.RenderRequest{Card: d, Art: artImage()})
 	if err != nil {
 		t.Fatal(err)
 	}

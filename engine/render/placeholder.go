@@ -8,7 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/odevine/mimic/engine/template"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 )
 
 // Placeholder canvas size. It is a stand-in at a demo resolution, not a real
@@ -38,19 +39,19 @@ var placeholderColors = map[string]color.NRGBA{
 // before a template's real frame art exists. The layers are a coarse WUBRG
 // frame at demo resolution: a color-keyed background, a text panel, and a
 // legendary crown
-func WritePlaceholderAssets(dir, name string) error {
+func WritePlaceholderAssets(dir, id string) error {
 	layersDir := filepath.Join(dir, "layers")
 	if err := os.MkdirAll(layersDir, 0o755); err != nil {
 		return err
 	}
 
-	bg := make(map[string]template.LayerAsset, len(placeholderColors))
+	bg := make(map[string]manifest.Variant, len(placeholderColors))
 	for key, col := range placeholderColors {
 		path := filepath.Join("layers", "bg_"+key+".png")
 		if err := writeFlat(filepath.Join(dir, path), fullRect(), col); err != nil {
 			return err
 		}
-		bg[key] = template.LayerAsset{Path: filepath.ToSlash(path)}
+		bg[key] = manifest.Variant{Path: filepath.ToSlash(path)}
 	}
 
 	// A translucent panel behind the rules text, and a crown strip at the top.
@@ -65,27 +66,45 @@ func WritePlaceholderAssets(dir, name string) error {
 		return err
 	}
 
-	m := template.Manifest{
-		Template: name,
-		Width:    placeholderWidth,
-		Height:   placeholderHeight,
-		Layers: []template.LayerSpec{
-			{Name: "background", ColorSlot: "background", ColorVariants: bg},
-			{Name: "textbox", ColorVariants: map[string]template.LayerAsset{
-				"any": {Path: "layers/textbox.png"},
-			}},
-			{Name: "crown", Condition: "legendary", ColorVariants: map[string]template.LayerAsset{
-				"any": {Path: "layers/crown.png"},
-			}},
+	text := func(x, y, w, h int, size float64, font, align string) manifest.TextBox {
+		return manifest.TextBox{
+			Rect: manifest.Rect{X: x, Y: y, Width: w, Height: h},
+			Text: manifest.TextStyle{FontSize: size, Font: font, Color: "#111111", Align: align},
+		}
+	}
+	title := text(48, 40, 520, 52, 38, "title", "left")
+	title.Flow.ClearOf = "mana"
+	mana := text(500, 46, 208, 44, 28, "", "right")
+	mana.Text.MinFontSize = 28
+	m := manifest.Manifest{
+		Contract:    manifest.Contract,
+		ID:          id,
+		Name:        "Placeholder",
+		Description: "Flat colors where a frame's art goes",
+		Parts: map[string]manifest.Part{
+			"background": {Slot: "background", Variants: bg},
+			"textbox":    {Variants: map[string]manifest.Variant{"any": {Path: "layers/textbox.png"}}},
+			"crown":      {Variants: map[string]manifest.Variant{"any": {Path: "layers/crown.png"}}},
 		},
-		TextBoxes: map[string]template.TextBoxSpec{
-			"title":  {X: 48, Y: 40, Width: 520, Height: 52, FontSize: 38, Align: "left", Color: "#111111", Font: "title", ClearOf: "mana"},
-			"mana":   {X: 500, Y: 46, Width: 208, Height: 44, FontSize: 28, MinFontSize: 28, Align: "right", Color: "#111111"},
-			"type":   {X: 48, Y: 566, Width: 648, Height: 34, FontSize: 24, Align: "left", Color: "#111111", Font: "title"},
-			"oracle": {X: 72, Y: 636, Width: 600, Height: 320, FontSize: 24, Align: "left", Color: "#111111"},
-			"pt":     {X: 596, Y: 946, Width: 112, Height: 56, FontSize: 34, Align: "center", Color: "#111111", Font: "title"},
+		Layouts: map[string]manifest.Layout{
+			"normal": {
+				Serves: []frame.Shape{{Role: frame.RoleSingle, Kind: frame.KindStandard}},
+				Canvas: manifest.Canvas{Width: placeholderWidth, Height: placeholderHeight},
+				Stack: []manifest.Entry{
+					{Part: "background"},
+					{Part: "textbox"},
+					{Part: "crown", Condition: "legendary"},
+				},
+				TextBoxes: map[string]manifest.TextBox{
+					"title":  title,
+					"mana":   mana,
+					"type":   text(48, 566, 648, 34, 24, "title", "left"),
+					"oracle": text(72, 636, 600, 320, 24, "", "left"),
+					"pt":     text(596, 946, 112, 56, 34, "title", "center"),
+				},
+				Art: []manifest.ArtWindow{{X: 60, Y: 132, Width: 624, Height: 424, After: "background"}},
+			},
 		},
-		Art: template.ArtSlot{X: 60, Y: 132, Width: 624, Height: 424, After: "background"},
 	}
 
 	raw, err := json.MarshalIndent(m, "", "  ")

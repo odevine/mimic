@@ -300,6 +300,10 @@ func (v *validator) blend(path string, slot frame.Slot, b *Blend) {
 			if s.Center < -MaxDimension || s.Center > MaxDimension {
 				v.c.errorf(sp+".center", "%g is off the canvas", s.Center)
 			}
+			// Each seam starts after the one before it ends, or a color's weight would go negative
+			if i > 0 && s.Center-s.Width/2 < seams[i-1].Center+seams[i-1].Width/2 {
+				v.c.errorf(sp, "the seam starts before the one before it ends")
+			}
 		}
 	}
 }

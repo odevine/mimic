@@ -1,46 +1,70 @@
 package template
 
 import (
-	"encoding/json"
 	"image"
 	"image/color"
 	"reflect"
+	"sync"
 	"testing"
+
+	"github.com/odevine/mimic/engine/manifest"
 )
 
-// nativeManifest is a stand-in for the normal template's authored geometry: a
-// 1200 dpi canvas with one text box and an art slot
-func nativeManifest() *Manifest {
-	pad := 12
-	return &Manifest{
-		Template: "test",
-		Width:    3264,
-		Height:   4440,
-		Art:      ArtSlot{X: 356, Y: 607, Width: 2552, Height: 1856, After: "background"},
-		TextBoxes: map[string]TextBoxSpec{
+// testLayout compiles a layout from its manifest form, the way a template does
+func testLayout(t *testing.T, ml manifest.Layout) *Layout {
+	t.Helper()
+	l, err := compileLayout("normal", ml, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+// nativeLayout is a stand-in for the normal template's authored geometry: a
+// 1200 dpi canvas with one text box and an art window
+func nativeLayout(t *testing.T) *Layout {
+	return testLayout(t, manifest.Layout{
+		Canvas: manifest.Canvas{Width: 3264, Height: 4440},
+		Art:    []manifest.ArtWindow{{X: 356, Y: 607, Width: 2552, Height: 1856, After: "background"}},
+		TextBoxes: map[string]manifest.TextBox{
 			"title": {
-				X: 386, Y: 510, Width: 2400, Height: 200,
-				FontSize: 156, MinFontSize: 120, Padding: 20, PaddingX: &pad,
-				LineSpacing: 1.1, Tracking: 125, ClearGap: 0.5,
-				Avoid: image.Rect(100, 200, 300, 400),
+				Rect: manifest.Rect{X: 386, Y: 510, Width: 2400, Height: 200},
+				Text: manifest.TextStyle{FontSize: 156, MinFontSize: 120, PaddingX: 12, PaddingY: 20, LineSpacing: 1.1, Tracking: 125},
+				Flow: manifest.Flow{ClearGap: 0.5},
 			},
 		},
-	}
+		Symbols: map[string]manifest.Symbol{
+			SymbolSet: {X: 400, Y: 600, Width: 200, Height: 100, Scale: 0.9},
+		},
+	})
 }
 
 func TestNativeDPI(t *testing.T) {
-	m := nativeManifest()
-	if got := m.NativeDPI(); got != 1200 {
+	l := nativeLayout(t)
+	if got := l.NativeDPI(); got != 1200 {
 		t.Errorf("inferred NativeDPI = %d, want 1200", got)
 	}
-	m.DPI = 800
-	if got := m.NativeDPI(); got != 800 {
+	l.Canvas.DPI = 800
+	if got := l.NativeDPI(); got != 800 {
 		t.Errorf("stated NativeDPI = %d, want 800", got)
 	}
 }
 
+func TestNativeDPIOfATurnedLayoutReadsTheDeliveredWidth(t *testing.T) {
+	l := testLayout(t, manifest.Layout{Canvas: manifest.Canvas{Width: 4440, Height: 3264, Rotate: 270}})
+	if !l.Turned() || l.DeliveredWidth() != 3264 || l.DeliveredHeight() != 4440 {
+		t.Errorf("turned layout delivers %dx%d, turned = %v", l.DeliveredWidth(), l.DeliveredHeight(), l.Turned())
+	}
+	if got := l.NativeDPI(); got != 1200 {
+		t.Errorf("NativeDPI = %d, want 1200 from the delivered width", got)
+	}
+	if got := l.Resolution(300); got != (Resolution{DPI: 300, Width: 816, Height: 1110}) {
+		t.Errorf("Resolution(300) = %+v, want the delivered 816x1110", got)
+	}
+}
+
 func TestClampDPI(t *testing.T) {
-	m := nativeManifest()
+	l := nativeLayout(t)
 	tests := []struct {
 		name string
 		dpi  int
@@ -55,7 +79,7 @@ func TestClampDPI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := m.ClampDPI(tt.dpi); got != tt.want {
+			if got := l.ClampDPI(tt.dpi); got != tt.want {
 				t.Errorf("ClampDPI(%d) = %d, want %d", tt.dpi, got, tt.want)
 			}
 		})
@@ -63,34 +87,34 @@ func TestClampDPI(t *testing.T) {
 }
 
 func TestScaleForDPI(t *testing.T) {
-	m := nativeManifest()
-	if got := m.ScaleForDPI(300); got != 0.25 {
+	l := nativeLayout(t)
+	if got := l.ScaleForDPI(300); got != 0.25 {
 		t.Errorf("ScaleForDPI(300) = %v, want 0.25", got)
 	}
 	// Native and out-of-range both render at the authored size rather than
 	// resampling assets up
 	for _, dpi := range []int{0, 1200, 2400} {
-		if got := m.ScaleForDPI(dpi); !got.Native() {
+		if got := l.ScaleForDPI(dpi); !got.Native() {
 			t.Errorf("ScaleForDPI(%d) = %v, want native", dpi, got)
 		}
 	}
 }
 
 func TestResolution(t *testing.T) {
-	m := nativeManifest()
-	got := m.Resolution(300)
+	l := nativeLayout(t)
+	got := l.Resolution(300)
 	want := Resolution{DPI: 300, Width: 816, Height: 1110}
 	if got != want {
 		t.Errorf("Resolution(300) = %+v, want %+v", got, want)
 	}
-	if got := m.Resolution(0); !got.Native || got.Width != 3264 || got.DPI != 1200 {
+	if got := l.Resolution(0); !got.Native || got.Width != 3264 || got.DPI != 1200 {
 		t.Errorf("Resolution(0) = %+v, want the native 3264-wide 1200 dpi size", got)
 	}
 }
 
 func TestPresets(t *testing.T) {
-	m := nativeManifest()
-	got := m.Presets()
+	l := nativeLayout(t)
+	got := l.Presets()
 	want := []Resolution{
 		{DPI: 150, Width: 408, Height: 555},
 		{DPI: 300, Width: 816, Height: 1110},
@@ -103,8 +127,8 @@ func TestPresets(t *testing.T) {
 
 	// A template authored below a preset drops that preset rather than
 	// offering an upscale, and always ends with its own resolution
-	m.DPI = 400
-	got = m.Presets()
+	l.Canvas.DPI = 400
+	got = l.Presets()
 	if len(got) != 3 {
 		t.Fatalf("Presets() at 400 dpi = %+v, want 150, 300 and the native 400", got)
 	}
@@ -113,57 +137,87 @@ func TestPresets(t *testing.T) {
 	}
 }
 
-func TestScaledManifest(t *testing.T) {
-	m := nativeManifest()
-	s := m.ScaleForDPI(300)
-	out := m.Scaled(s)
+func TestGeometryScalesEveryMeasurement(t *testing.T) {
+	l := nativeLayout(t)
+	g := l.Geometry(300)
 
-	if out.Width != 816 || out.Height != 1110 {
-		t.Errorf("scaled canvas = %dx%d, want 816x1110", out.Width, out.Height)
+	if g.Width != 816 || g.Height != 1110 || g.DeliveredWidth != 816 || g.DeliveredHeight != 1110 {
+		t.Errorf("scaled canvas = %dx%d delivering %dx%d, want 816x1110 both ways", g.Width, g.Height, g.DeliveredWidth, g.DeliveredHeight)
 	}
-	if out.DPI != 300 {
-		t.Errorf("scaled DPI = %d, want 300", out.DPI)
-	}
-	if want := (ArtSlot{X: 89, Y: 152, Width: 638, Height: 464, After: "background"}); out.Art != want {
-		t.Errorf("scaled art slot = %+v, want %+v", out.Art, want)
+	if want := (ArtSlot{X: 89, Y: 152, Width: 638, Height: 464, After: "background"}); len(g.Art) != 1 || g.Art[0] != want {
+		t.Errorf("scaled art = %+v, want %+v", g.Art, want)
 	}
 
-	box := out.TextBoxes["title"]
+	box := g.Boxes["title"].Base
 	if box.X != 97 || box.Y != 128 || box.Width != 600 || box.Height != 50 {
 		t.Errorf("scaled box geometry = (%d,%d %dx%d), want (97,128 600x50)", box.X, box.Y, box.Width, box.Height)
 	}
 	if box.FontSize != 39 || box.MinFontSize != 30 {
 		t.Errorf("scaled font sizes = %v/%v, want 39/30", box.FontSize, box.MinFontSize)
 	}
-	if box.Padding != 5 || box.PaddingX == nil || *box.PaddingX != 3 {
-		t.Errorf("scaled padding = %d/%v, want 5/3", box.Padding, box.PaddingX)
-	}
-	if want := image.Rect(25, 50, 75, 100); box.Avoid != want {
-		t.Errorf("scaled avoid = %v, want %v", box.Avoid, want)
+	if box.PaddingX == nil || *box.PaddingX != 3 || box.PaddingY == nil || *box.PaddingY != 5 {
+		t.Errorf("scaled padding = %v/%v, want 3/5", box.PaddingX, box.PaddingY)
 	}
 	// Ratios are resolution independent, so they carry over untouched
 	if box.LineSpacing != 1.1 || box.Tracking != 125 || box.ClearGap != 0.5 {
 		t.Errorf("ratios changed: spacing %v, tracking %v, gap %v", box.LineSpacing, box.Tracking, box.ClearGap)
 	}
 
-	// Scaling leaves the original alone, so one manifest serves a preview and an
-	// export from the same provider
-	if m.Width != 3264 || m.TextBoxes["title"].FontSize != 156 {
-		t.Error("Scaled mutated the manifest it was called on")
+	sym := g.Symbols[SymbolSet]
+	if sym.X != 100 || sym.Y != 150 || sym.Width != 50 || sym.Height != 25 {
+		t.Errorf("scaled symbol = %d,%d %dx%d, want 100,150 50x25", sym.X, sym.Y, sym.Width, sym.Height)
 	}
-	// The padding pointer is a copy, not the original's
-	if box.PaddingX == m.TextBoxes["title"].PaddingX {
-		t.Error("scaled box shares its PaddingX pointer with the original")
+	if sym.Scale != 0.9 {
+		t.Errorf("symbol Scale = %v, want the fraction untouched", sym.Scale)
+	}
+
+	// Scaling leaves the authored layout alone, so one template serves a preview
+	// and an export
+	if l.Canvas.Width != 3264 || l.Boxes[0].Base.Text.FontSize != 156 {
+		t.Error("Geometry changed the layout it was built from")
 	}
 }
 
-func TestScaledNativeIsFree(t *testing.T) {
-	m := nativeManifest()
-	if out := m.Scaled(1); out != m {
-		t.Error("Scaled(1) copied the manifest, want the original back untouched")
+func TestGeometryIsBuiltOncePerResolution(t *testing.T) {
+	l := nativeLayout(t)
+	if l.Geometry(300) != l.Geometry(300) {
+		t.Error("two asks for the same resolution built two geometries")
 	}
-	if out := m.Scaled(0); out != m {
-		t.Error("Scaled(0) copied the manifest, want the original back untouched")
+	if l.Geometry(300) == l.Geometry(600) {
+		t.Error("two resolutions shared a geometry")
+	}
+	// A dpi that clamps to native is the native geometry, however it was asked for
+	if l.Geometry(0) != l.Geometry(1200) || l.Geometry(0) != l.Geometry(9999) {
+		t.Error("native geometry was built more than once")
+	}
+}
+
+func TestGeometryIsSafeForConcurrentRenders(t *testing.T) {
+	l := nativeLayout(t)
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(dpi int) {
+			defer wg.Done()
+			if g := l.Geometry(dpi); g == nil || g.Boxes["title"].Base.Width == 0 {
+				t.Errorf("no geometry at %d dpi", dpi)
+			}
+		}(150 * (1 + i%4))
+	}
+	wg.Wait()
+}
+
+func TestNativeGeometryIsAsAuthored(t *testing.T) {
+	g := nativeLayout(t).Geometry(0)
+	if !g.Scale.Native() || g.Width != 3264 || g.Boxes["title"].Base.FontSize != 156 || g.Boxes["title"].Base.X != 386 {
+		t.Errorf("native geometry = %+v", g)
+	}
+}
+
+func TestScaleBoxScalesTheAvoidRectangle(t *testing.T) {
+	got := scaleBox(TextBoxSpec{Avoid: image.Rect(100, 200, 300, 400), FontSize: 100}, 0.25)
+	if want := image.Rect(25, 50, 75, 100); got.Avoid != want {
+		t.Errorf("scaled avoid = %v, want %v", got.Avoid, want)
 	}
 }
 
@@ -240,41 +294,6 @@ func TestBoxScaleKeepsTransparentColorOut(t *testing.T) {
 	}
 	if r != 0 || b != 0 {
 		t.Errorf("transparent half carried color rgb(%d,_,%d), want none", r>>8, b>>8)
-	}
-}
-
-func TestScaledSymbols(t *testing.T) {
-	m := &Manifest{
-		Width: 1000, Height: 2000, DPI: 1000,
-		Symbols: map[string]SymbolSpec{
-			SymbolSet: {
-				X: 400, Y: 600, Width: 200, Height: 100, Scale: 0.9,
-			},
-		},
-	}
-	got := m.Scaled(0.5).Symbols[SymbolSet]
-	if got.X != 200 || got.Y != 300 || got.Width != 100 || got.Height != 50 {
-		t.Errorf("box = %d,%d %dx%d, want 200,300 100x50", got.X, got.Y, got.Width, got.Height)
-	}
-	if got.Scale != 0.9 {
-		t.Errorf("Scale = %v, want the fraction untouched", got.Scale)
-	}
-	// Scaling copies, so the authored manifest keeps its own numbers
-	if orig := m.Symbols[SymbolSet]; orig.Width != 200 {
-		t.Errorf("Scaled changed the original: %+v", orig)
-	}
-}
-
-func TestManifestSymbolsRoundTrip(t *testing.T) {
-	raw := `{"template":"t","width":10,"height":10,"layers":[],"textBoxes":{},"art":{},
-		"symbols":{"set":{"x":1,"y":2,"width":3,"height":4,"align":"right","scale":0.9,"condition":"land"}}}`
-	var m Manifest
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		t.Fatal(err)
-	}
-	s := m.Symbols[SymbolSet]
-	if s.X != 1 || s.Y != 2 || s.Width != 3 || s.Height != 4 || s.Align != "right" || s.Scale != 0.9 || s.Condition != "land" {
-		t.Fatalf("symbol = %+v", s)
 	}
 }
 

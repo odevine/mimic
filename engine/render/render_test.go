@@ -10,6 +10,7 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -484,5 +485,93 @@ func TestRendersKeepTheTemplateTheyStartedWith(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+// pairTemplate is a frame whose pinlines come as one flat image per color, so a card
+// of two colors has none of its own to draw and the engine mixes its two
+func pairTemplate(t *testing.T, pair bool) (*template.Template, string) {
+	t.Helper()
+	dir := t.TempDir()
+	red, blue, green := color.NRGBA{0xE0, 0x20, 0x20, 0xFF}, color.NRGBA{0x20, 0x20, 0xE0, 0xFF}, color.NRGBA{0x20, 0xE0, 0x20, 0xFF}
+	for name, c := range map[string]color.NRGBA{"r": red, "u": blue, "ur": green} {
+		if err := writeFlat(filepath.Join(dir, name+".png"), fullRect(), c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	variants := map[string]manifest.Variant{"r": {Path: "r.png"}, "u": {Path: "u.png"}}
+	if pair {
+		variants["ur"] = manifest.Variant{Path: "ur.png"}
+	}
+	writeManifestFile(t, dir, testManifest(manifest.Layout{
+		Stack: []manifest.Entry{{Part: "pinlines"}},
+	}, map[string]manifest.Part{"pinlines": {Slot: "pinlines", Variants: variants}}))
+	return mustLoad(t, template.NewFSAssetProvider(dir)), dir
+}
+
+func izzet() *card.Data {
+	return &card.Data{Name: "Izzet Charm", ManaCost: "{U}{R}", TypeLine: "Instant", Colors: []card.Color{card.Blue, card.Red}}
+}
+
+func TestRenderMixesAPairFromItsTwoColors(t *testing.T) {
+	tmpl, _ := pairTemplate(t, false)
+	buf, err := Render(context.Background(), tmpl, template.RenderRequest{Card: izzet()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := buf.ToImage(8)
+	at := func(x int) color.NRGBA {
+		return color.NRGBAModel.Convert(img.At(x, 500)).(color.NRGBA)
+	}
+	// Blue and red run left to right for this pair, and meet in the middle
+	if got := at(20); !closeColor(got, color.NRGBA{0x20, 0x20, 0xE0, 0xFF}) {
+		t.Errorf("left = %v, want blue", got)
+	}
+	if got := at(placeholderWidth - 20); !closeColor(got, color.NRGBA{0xE0, 0x20, 0x20, 0xFF}) {
+		t.Errorf("right = %v, want red", got)
+	}
+	if got := at(placeholderWidth / 2); !closeColor(got, color.NRGBA{0x80, 0x20, 0x80, 0xFF}) {
+		t.Errorf("middle = %v, want an even mix", got)
+	}
+}
+
+func TestRenderPrefersAPairImageToAMix(t *testing.T) {
+	tmpl, _ := pairTemplate(t, true)
+	buf, err := Render(context.Background(), tmpl, template.RenderRequest{Card: izzet()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	green := color.NRGBA{0x20, 0xE0, 0x20, 0xFF}
+	for _, x := range []int{20, placeholderWidth / 2, placeholderWidth - 20} {
+		if got := color.NRGBAModel.Convert(buf.ToImage(8).At(x, 500)).(color.NRGBA); !closeColor(got, green) {
+			t.Errorf("x %d = %v, want the pair image's green", x, got)
+		}
+	}
+}
+
+// A batch of cards of the same two colors blends them once
+func TestRenderBlendsAPairOnceForABatch(t *testing.T) {
+	_, dir := pairTemplate(t, false)
+	cached := template.NewCachedAssets(template.NewFSAssetProvider(dir), 1<<30)
+	defer cached.Close()
+	tmpl := mustLoad(t, cached)
+
+	if _, err := Render(context.Background(), tmpl, template.RenderRequest{Card: izzet()}); err != nil {
+		t.Fatal(err)
+	}
+	first := cached.Stats()
+	for i := 0; i < 3; i++ {
+		other := izzet()
+		other.Name = fmt.Sprintf("Another %d", i)
+		if _, err := Render(context.Background(), tmpl, template.RenderRequest{Card: other}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	later := cached.Stats()
+	if later.Misses != first.Misses {
+		t.Errorf("misses went from %d to %d, so a later card built or decoded again", first.Misses, later.Misses)
+	}
+	if later.Hits <= first.Hits {
+		t.Errorf("hits went from %d to %d, want the later cards to find the blend", first.Hits, later.Hits)
 	}
 }

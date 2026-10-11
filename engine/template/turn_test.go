@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/odevine/impasto/raster"
+	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/frame"
 )
 
 // numbered is a w by h buffer whose pixel at (x, y) holds the red value y*w+x
@@ -147,12 +149,24 @@ func TestBlendWeights(t *testing.T) {
 
 func TestBlendedPaths(t *testing.T) {
 	v := map[string]LayerAsset{"r": {Path: "r.png"}, "w": {Path: "w.png"}, "gold": {Path: "g.png"}}
-	if got := BlendedPaths(v, "rw"); len(got) != 2 || got[0] != "r.png" || got[1] != "w.png" {
-		t.Errorf("rw blends %v", got)
+	runs := map[string]frame.Material{
+		"red then white":     frame.Run(card.Red, card.White),
+		"red and white dual": frame.Dual([]card.Color{card.White, card.Red}),
 	}
-	for _, key := range []string{"", "r", "ru", "gold"} {
-		if got := BlendedPaths(v, key); got != nil {
-			t.Errorf("%q blends %v, want nothing", key, got)
+	for name, m := range runs {
+		if got := BlendedPaths(v, m); len(got) != 2 || got[0] != "r.png" || got[1] != "w.png" {
+			t.Errorf("%s blends %v, want r.png then w.png", name, got)
+		}
+	}
+	none := map[string]frame.Material{
+		"none":              {},
+		"one color":         frame.Mono(card.Red),
+		"a missing variant": frame.Run(card.Red, card.Blue),
+		"gold":              frame.Gold,
+	}
+	for name, m := range none {
+		if got := BlendedPaths(v, m); got != nil {
+			t.Errorf("%s blends %v, want nothing", name, got)
 		}
 	}
 }

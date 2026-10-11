@@ -9,6 +9,7 @@ import (
 	"github.com/odevine/impasto/blend"
 	"github.com/odevine/impasto/canvas"
 	"github.com/odevine/impasto/raster"
+	"github.com/odevine/mimic/engine/frame"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -421,15 +422,16 @@ func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH
 	return out, origin, nil
 }
 
-// BlendedPaths lists the variants a blended color key draws, one per letter, or
-// nil when the key is not several letters each with a variant of its own
-func BlendedPaths(variants map[string]LayerAsset, key string) []string {
-	if len(key) < 2 {
+// BlendedPaths lists the variants a run of colors blends, one per color in the
+// order they run, or nil when the material is not a run or a color has no variant
+// of its own
+func BlendedPaths(variants map[string]LayerAsset, m frame.Material) []string {
+	if m.Kind() != frame.KindRun {
 		return nil
 	}
 	var paths []string
-	for _, r := range key {
-		v, ok := variants[string(r)]
+	for _, l := range m.Letters() {
+		v, ok := variants[l]
 		if !ok {
 			return nil
 		}

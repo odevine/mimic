@@ -22,7 +22,7 @@ func AvoidRect(p AssetProvider, layers map[string]LayerSpec, f frame.Keys, name 
 	if !ok || !f.ConditionMet(spec.Condition) {
 		return image.Rectangle{}, false
 	}
-	path := spec.ColorVariants[f.Slot(spec.ColorSlot)].Path
+	path := spec.ColorVariants[f.MaterialNamed(spec.ColorSlot).Key()].Path
 	if path == "" {
 		path = spec.ColorVariants["any"].Path
 	}

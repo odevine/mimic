@@ -117,11 +117,11 @@ func TestDerive(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := Derive(&c.data)
 			for _, check := range []struct{ slot, got, want string }{
-				{"background", f.Background, c.bg},
-				{"pinlines", f.Pinlines, c.pin},
-				{"twins", f.Twins, c.twins},
-				{"ptBox", f.PTBox, c.pt},
-				{"crown", f.Crown, c.crown},
+				{"background", f.Background.Key(), c.bg},
+				{"pinlines", f.Pinlines.Key(), c.pin},
+				{"twins", f.Twins.Key(), c.twins},
+				{"ptBox", f.PTBox.Key(), c.pt},
+				{"crown", f.Crown.Key(), c.crown},
 			} {
 				if check.got != check.want {
 					t.Errorf("%s = %q, want %q", check.slot, check.got, check.want)
@@ -143,7 +143,7 @@ func TestDerive(t *testing.T) {
 func TestConditionMet(t *testing.T) {
 	k := Keys{Land: true, Legendary: true, Creature: true}
 	yes := []string{"", "land", "legendary", "creature"}
-	no := []string{"nonland", "nonlegendary", "nyx", "companion", "fullart", "pt_dark", "color_indicator"}
+	no := []string{"nonland", "nonlegendary", "nyx", "companion", "color_indicator", "hollow_crown", "pt_dark", "no_such_condition"}
 	for _, c := range yes {
 		if !k.ConditionMet(c) {
 			t.Errorf("ConditionMet(%q) = false, want true", c)
@@ -156,8 +156,8 @@ func TestConditionMet(t *testing.T) {
 	}
 }
 
-func TestSlot(t *testing.T) {
-	k := Keys{Background: "gold", Pinlines: "wg", Twins: "colorless", PTBox: "vehicle", Crown: "wg"}
+func TestMaterialNamed(t *testing.T) {
+	k := Keys{Background: Gold, Pinlines: Dual(wubrg(card.White, card.Green)), Twins: Colorless, PTBox: Vehicle, Crown: Dual(wubrg(card.White, card.Green))}
 	cases := map[string]string{
 		"background": "gold",
 		"pinlines":   "wg",
@@ -165,11 +165,11 @@ func TestSlot(t *testing.T) {
 		"ptBox":      "vehicle",
 		"crown":      "wg",
 		"":           "",
-		"border":     "", // an any-only layer's empty ColorSlot
+		"border":     "", // an unknown name has no material
 	}
 	for name, want := range cases {
-		if got := k.Slot(name); got != want {
-			t.Errorf("Slot(%q) = %q, want %q", name, got, want)
+		if got := k.MaterialNamed(name).Key(); got != want {
+			t.Errorf("MaterialNamed(%q) = %q, want %q", name, got, want)
 		}
 	}
 }
@@ -234,7 +234,7 @@ func TestIndicatorSlot(t *testing.T) {
 	}
 	for _, c := range cases {
 		k := Derive(&card.Data{TypeLine: "Creature", ColorIndicator: c.colors})
-		if got := k.Slot("indicator"); got != c.want {
+		if got := k.Material(SlotIndicator).Key(); got != c.want {
 			t.Errorf("indicator for %v = %q, want %q", c.colors, got, c.want)
 		}
 		if got := k.ConditionMet("color_indicator"); got != (c.want != "") {
@@ -256,11 +256,11 @@ func TestTransformIconSlot(t *testing.T) {
 	}
 	for _, c := range cases {
 		d := &card.Data{TypeLine: "Creature", FrameEffects: c.effects}
-		if got := DeriveFace(d, Back).Slot("transform_icon"); got != c.want {
+		if got := DeriveFace(d, Back).Material(SlotTransformIcon).Key(); got != c.want {
 			t.Errorf("icon for %v = %q, want %q", c.effects, got, c.want)
 		}
 	}
-	if got := Derive(&card.Data{FrameEffects: []string{"sunmoondfc"}}).Slot("transform_icon"); got != "" {
+	if got := Derive(&card.Data{FrameEffects: []string{"sunmoondfc"}}).Material(SlotTransformIcon).Key(); got != "" {
 		t.Errorf("single-faced icon = %q, want empty", got)
 	}
 }
@@ -314,10 +314,10 @@ func TestFuseKeys(t *testing.T) {
 	}
 	for _, c := range cases {
 		k := Derive(&c.data)
-		if k.Fuse != c.fuse || k.FuseKey != c.key || k.FusePinKey != c.pinline {
-			t.Errorf("%s: Fuse = %v, keys %q and %q, want %v, %q and %q", c.name, k.Fuse, k.FuseKey, k.FusePinKey, c.fuse, c.key, c.pinline)
+		if k.Fuse != c.fuse || k.FuseKey.String() != c.key || k.FusePinKey.String() != c.pinline {
+			t.Errorf("%s: Fuse = %v, keys %q and %q, want %v, %q and %q", c.name, k.Fuse, k.FuseKey.String(), k.FusePinKey.String(), c.fuse, c.key, c.pinline)
 		}
-		if k.ConditionMet("fuse") != c.fuse || k.Slot("fuse") != c.key || k.Slot("fuse_pinlines") != c.pinline {
+		if k.ConditionMet("fuse") != c.fuse || k.Material(SlotFuse).String() != c.key || k.Material(SlotFusePinlines).String() != c.pinline {
 			t.Errorf("%s: the fuse condition and slots do not follow the keys", c.name)
 		}
 	}
@@ -331,11 +331,11 @@ func TestConditionMetSetSymbol(t *testing.T) {
 	}
 	// It combines with the other conditions, as a type line that gives way to
 	// both a color indicator and a symbol needs
-	both := Keys{SetSymbol: true, Indicator: "u"}
+	both := Keys{SetSymbol: true, Indicator: Named("u")}
 	if !both.ConditionMet("color_indicator,set_symbol") {
 		t.Error("color_indicator,set_symbol should hold when both do")
 	}
-	if (Keys{Indicator: "u"}).ConditionMet("color_indicator,set_symbol") {
+	if (Keys{Indicator: Named("u")}).ConditionMet("color_indicator,set_symbol") {
 		t.Error("color_indicator,set_symbol held without a symbol")
 	}
 }

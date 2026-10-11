@@ -49,7 +49,7 @@ func TestAvoidRect(t *testing.T) {
 			},
 		},
 	}
-	f := frame.Keys{Creature: true, PTBox: "gold"}
+	f := frame.Keys{Creature: true, PTBox: frame.Gold}
 
 	r, ok := AvoidRect(p, layers, f, "pt_box", 1, 0, 0)
 	if !ok {
@@ -61,12 +61,12 @@ func TestAvoidRect(t *testing.T) {
 
 	// The layer's own condition gates it: a noncreature never draws pt_box, so
 	// nothing needs avoiding.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: false, PTBox: "gold"}, "pt_box", 1, 0, 0); ok {
+	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: false, PTBox: frame.Gold}, "pt_box", 1, 0, 0); ok {
 		t.Error("AvoidRect reported true for a noncreature, want false")
 	}
 
 	// No color variant resolves for this key and there is no "any" fallback.
-	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: true, PTBox: "colorless"}, "pt_box", 1, 0, 0); ok {
+	if _, ok := AvoidRect(p, layers, frame.Keys{Creature: true, PTBox: frame.Colorless}, "pt_box", 1, 0, 0); ok {
 		t.Error("AvoidRect reported true with no matching or \"any\" variant, want false")
 	}
 

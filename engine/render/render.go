@@ -409,8 +409,9 @@ func layerNode(ctx context.Context, loads *frameLoads, req template.RenderReques
 			variants, at = nyx.ColorVariants, nyx
 		}
 	}
-	key := f.Slot(layer.ColorSlot)
-	blended := blendedPaths(layer, variants, key)
+	material := f.MaterialNamed(layer.ColorSlot)
+	key := material.Key()
+	blended := blendedPaths(layer, variants, material)
 	var asset template.LayerAsset
 	if blended == nil {
 		var ok bool
@@ -563,15 +564,15 @@ func sortedKeys(m map[string]template.TextBoxSpec) []string {
 	return keys
 }
 
-// blendedPaths is the variants a layer blends for a color key of several
-// letters that has no variant of its own, or nil for a layer that does not blend
-// or a key that is not such a blend
-func blendedPaths(layer template.LayerSpec, variants map[string]template.LayerAsset, key string) []string {
+// blendedPaths is the variants a layer blends for a run of colors that has no
+// variant of its own, or nil for a layer that does not blend or a material that is
+// not such a run
+func blendedPaths(layer template.LayerSpec, variants map[string]template.LayerAsset, m frame.Material) []string {
 	if !layer.ColorBlend {
 		return nil
 	}
-	if _, whole := variants[key]; whole {
+	if _, whole := variants[m.Key()]; whole {
 		return nil
 	}
-	return template.BlendedPaths(variants, key)
+	return template.BlendedPaths(variants, m)
 }

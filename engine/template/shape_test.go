@@ -19,45 +19,45 @@ func TestClassify(t *testing.T) {
 		card card.Data
 		want []Shape
 	}{
-		{"instant", card.Data{Layout: "normal", TypeLine: "Instant"}, []Shape{{RoleSingle, KindStandard}}},
-		{"typed in by hand", card.Data{TypeLine: "Creature — Bear"}, []Shape{{RoleSingle, KindStandard}}},
-		{"planeswalker", card.Data{Layout: "normal", TypeLine: "Legendary Planeswalker — Jace"}, []Shape{{RoleSingle, KindPlaneswalker}}},
-		{"basic land", card.Data{Layout: "normal", TypeLine: "Basic Land — Forest"}, []Shape{{RoleSingle, KindBasicLand}}},
-		{"snow basic", card.Data{Layout: "normal", TypeLine: "Basic Snow Land — Island"}, []Shape{{RoleSingle, KindBasicLand}}},
-		{"nonbasic land", card.Data{Layout: "normal", TypeLine: "Land"}, []Shape{{RoleSingle, KindStandard}}},
-		{"saga by layout", card.Data{Layout: "saga", TypeLine: "Enchantment — Saga"}, []Shape{{RoleSingle, KindSaga}}},
-		{"saga typed in", card.Data{TypeLine: "Enchantment — Saga"}, []Shape{{RoleSingle, KindSaga}}},
-		{"class", card.Data{Layout: "class", TypeLine: "Enchantment — Class"}, []Shape{{RoleSingle, KindClass}}},
-		{"mutate", card.Data{Layout: "mutate", TypeLine: "Creature — Beast"}, []Shape{{RoleSingle, KindMutate}}},
-		{"token", card.Data{Layout: "token", TypeLine: "Token Creature — Goblin"}, []Shape{{RoleSingle, KindToken}}},
-		{"plane", card.Data{Layout: "planar", TypeLine: "Plane — Dominaria"}, []Shape{{RoleSingle, KindPlane}}},
-		{"split", card.Data{Layout: "split", Faces: faces("Instant", "Instant")}, []Shape{{RoleSplit, KindStandard}}},
-		{"fuse", card.Data{Layout: "split", Keywords: []string{"Fuse"}, Faces: faces("Instant", "Instant")}, []Shape{{RoleSplit, KindStandard}}},
-		{"aftermath by keyword", card.Data{Layout: "split", Keywords: []string{"Aftermath"}, Faces: faces("Sorcery", "Sorcery")}, []Shape{{RoleAftermath, KindStandard}}},
+		{"instant", card.Data{Layout: "normal", TypeLine: "Instant"}, []Shape{{Role: RoleSingle, Kind: KindStandard}}},
+		{"typed in by hand", card.Data{TypeLine: "Creature — Bear"}, []Shape{{Role: RoleSingle, Kind: KindStandard}}},
+		{"planeswalker", card.Data{Layout: "normal", TypeLine: "Legendary Planeswalker — Jace"}, []Shape{{Role: RoleSingle, Kind: KindPlaneswalker}}},
+		{"basic land", card.Data{Layout: "normal", TypeLine: "Basic Land — Forest"}, []Shape{{Role: RoleSingle, Kind: KindBasicLand}}},
+		{"snow basic", card.Data{Layout: "normal", TypeLine: "Basic Snow Land — Island"}, []Shape{{Role: RoleSingle, Kind: KindBasicLand}}},
+		{"nonbasic land", card.Data{Layout: "normal", TypeLine: "Land"}, []Shape{{Role: RoleSingle, Kind: KindStandard}}},
+		{"saga by layout", card.Data{Layout: "saga", TypeLine: "Enchantment — Saga"}, []Shape{{Role: RoleSingle, Kind: KindSaga}}},
+		{"saga typed in", card.Data{TypeLine: "Enchantment — Saga"}, []Shape{{Role: RoleSingle, Kind: KindSaga}}},
+		{"class", card.Data{Layout: "class", TypeLine: "Enchantment — Class"}, []Shape{{Role: RoleSingle, Kind: KindClass}}},
+		{"mutate", card.Data{Layout: "mutate", TypeLine: "Creature — Beast"}, []Shape{{Role: RoleSingle, Kind: KindMutate}}},
+		{"token", card.Data{Layout: "token", TypeLine: "Token Creature — Goblin"}, []Shape{{Role: RoleSingle, Kind: KindToken}}},
+		{"plane", card.Data{Layout: "planar", TypeLine: "Plane — Dominaria"}, []Shape{{Role: RoleSingle, Kind: KindPlane}}},
+		{"split", card.Data{Layout: "split", Faces: faces("Instant", "Instant")}, []Shape{{Role: RoleSplit, Kind: KindStandard}}},
+		{"fuse", card.Data{Layout: "split", Keywords: []string{"Fuse"}, Faces: faces("Instant", "Instant")}, []Shape{{Role: RoleSplit, Kind: KindStandard}}},
+		{"aftermath by keyword", card.Data{Layout: "split", Keywords: []string{"Aftermath"}, Faces: faces("Sorcery", "Sorcery")}, []Shape{{Role: RoleAftermath, Kind: KindStandard}}},
 		{
 			"aftermath by reminder", card.Data{Layout: "split", Faces: []card.Face{{TypeLine: "Sorcery"}, {TypeLine: "Sorcery", OracleText: "Aftermath (Cast this spell only from your graveyard.)"}}},
-			[]Shape{{RoleAftermath, KindStandard}},
+			[]Shape{{Role: RoleAftermath, Kind: KindStandard}},
 		},
-		{"room", card.Data{Layout: "split", TypeLine: "Enchantment — Room // Enchantment — Room", Faces: faces("Enchantment — Room", "Enchantment — Room")}, []Shape{{RoleSplit, KindRoom}}},
-		{"adventure", card.Data{Layout: "adventure", Faces: faces("Creature — Human", "Sorcery — Adventure")}, []Shape{{RoleAdventure, KindStandard}}},
+		{"room", card.Data{Layout: "split", TypeLine: "Enchantment — Room // Enchantment — Room", Faces: faces("Enchantment — Room", "Enchantment — Room")}, []Shape{{Role: RoleSplit, Kind: KindRoom}}},
+		{"adventure", card.Data{Layout: "adventure", Faces: faces("Creature — Human", "Sorcery — Adventure")}, []Shape{{Role: RoleAdventure, Kind: KindStandard}}},
 		{
 			"transform", card.Data{Layout: "transform", Faces: faces("Creature — Human Wizard", "Creature — Human Insect")},
-			[]Shape{{RoleTransformFront, KindStandard}, {RoleTransformBack, KindStandard}},
+			[]Shape{{Role: RoleTransformFront, Kind: KindStandard}, {Role: RoleTransformBack, Kind: KindStandard}},
 		},
 		{
 			"planeswalker back", card.Data{Layout: "transform", Faces: faces("Legendary Creature — Human", "Legendary Planeswalker — Nissa")},
-			[]Shape{{RoleTransformFront, KindStandard}, {RoleTransformBack, KindPlaneswalker}},
+			[]Shape{{Role: RoleTransformFront, Kind: KindStandard}, {Role: RoleTransformBack, Kind: KindPlaneswalker}},
 		},
 		{
 			"mdfc", card.Data{Layout: "modal_dfc", Faces: faces("Instant", "Land")},
-			[]Shape{{RoleMDFCFront, KindStandard}, {RoleMDFCBack, KindStandard}},
+			[]Shape{{Role: RoleMDFCFront, Kind: KindStandard}, {Role: RoleMDFCBack, Kind: KindStandard}},
 		},
 		{
 			"battle", card.Data{Layout: "battle", Faces: faces("Battle — Siege", "Legendary Creature — Phyrexian")},
-			[]Shape{{RoleTransformFront, KindBattle}, {RoleTransformBack, KindStandard}},
+			[]Shape{{Role: RoleTransformFront, Kind: KindBattle}, {Role: RoleTransformBack, Kind: KindStandard}},
 		},
-		{"flip", card.Data{Layout: "flip", Faces: faces("Creature", "Creature")}, []Shape{{RoleUnknown, KindUnknown}}},
-		{"transform missing a face", card.Data{Layout: "transform"}, []Shape{{RoleUnknown, KindUnknown}}},
+		{"flip", card.Data{Layout: "flip", Faces: faces("Creature", "Creature")}, []Shape{{Role: RoleUnknown, Kind: KindUnknown}}},
+		{"transform missing a face", card.Data{Layout: "transform"}, []Shape{{Role: RoleUnknown, Kind: KindUnknown}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -76,13 +76,13 @@ func TestClassify(t *testing.T) {
 
 func TestSupportsAllows(t *testing.T) {
 	s := Supports{Roles: []Role{RoleTransformFront, RoleTransformBack}, Kinds: []Kind{KindPlaneswalker}}
-	if !s.Allows(Shape{RoleTransformBack, KindPlaneswalker}) {
+	if !s.Allows(Shape{Role: RoleTransformBack, Kind: KindPlaneswalker}) {
 		t.Error("a listed role and kind should be allowed")
 	}
-	if s.Allows(Shape{RoleSingle, KindPlaneswalker}) {
+	if s.Allows(Shape{Role: RoleSingle, Kind: KindPlaneswalker}) {
 		t.Error("a plain planeswalker should not match a transform-only template")
 	}
-	if s.Allows(Shape{RoleTransformFront, KindStandard}) {
+	if s.Allows(Shape{Role: RoleTransformFront, Kind: KindStandard}) {
 		t.Error("a standard face should not match a planeswalker-only template")
 	}
 }
@@ -118,7 +118,7 @@ func TestGetRefusesUnsupportedFace(t *testing.T) {
 
 	_, err = tmpl.Render(ctx, RenderRequest{Card: &card.Data{TypeLine: "Legendary Planeswalker — Jace"}})
 	var unsupported *UnsupportedError
-	if !errors.As(err, &unsupported) || unsupported.Shape != (Shape{RoleSingle, KindPlaneswalker}) {
+	if !errors.As(err, &unsupported) || unsupported.Shape != (Shape{Role: RoleSingle, Kind: KindPlaneswalker}) {
 		t.Errorf("a planeswalker should be refused with UnsupportedError, got %v", err)
 	}
 

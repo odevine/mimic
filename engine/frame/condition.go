@@ -128,6 +128,30 @@ func isNameChar(c byte) bool {
 	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
+// FeatureRef is a reference to a template feature inside a condition. Op is empty
+// for a bare reference, which asks whether the feature is on, and otherwise one
+// of =, <, <=, > or >= with the value written after it. Number is the value read
+// as a number when it is one
+type FeatureRef struct {
+	Name     string
+	Op       string
+	Value    string
+	Number   float64
+	IsNumber bool
+}
+
+// FeatureRefs lists the features a condition refers to, in the order written, so
+// a manifest can be checked against the features it declares
+func (c Condition) FeatureRefs() []FeatureRef {
+	var out []FeatureRef
+	for _, t := range c.terms {
+		if t.feature != "" {
+			out = append(out, FeatureRef{Name: t.feature, Op: t.op, Value: t.value, Number: t.num, IsNumber: t.isNum})
+		}
+	}
+	return out
+}
+
 // String is the expression as it was written
 func (c Condition) String() string { return c.src }
 

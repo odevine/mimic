@@ -29,7 +29,7 @@ func TestDualRunsEveryPairTheWayThePrintedFramesDo(t *testing.T) {
 	for _, c := range cases {
 		for _, in := range [][]card.Color{{c.a, c.b}, {c.b, c.a}} {
 			m := Dual(in)
-			if m.Kind() != KindRun || m.String() != c.run || m.Key() != c.key {
+			if m.Kind() != MatRun || m.String() != c.run || m.Key() != c.key {
 				t.Errorf("Dual(%v) = %v %q key %q, want a run %q key %q", in, m.Kind(), m.String(), m.Key(), c.run, c.key)
 			}
 		}
@@ -46,7 +46,7 @@ func TestDualNeedsExactlyTwoColors(t *testing.T) {
 
 func TestRunKeepsTheOrderItIsGiven(t *testing.T) {
 	m := Run(card.Green, card.White, card.Red)
-	if m.Kind() != KindRun || m.String() != "gwr" || m.Key() != "wrg" {
+	if m.Kind() != MatRun || m.String() != "gwr" || m.Key() != "wrg" {
 		t.Errorf("Run = %v %q key %q, want a run gwr with key wrg", m.Kind(), m.String(), m.Key())
 	}
 	if got := m.Letters(); len(got) != 3 || got[0] != "g" || got[1] != "w" || got[2] != "r" {
@@ -64,25 +64,25 @@ func TestMaterialKeysAndLetters(t *testing.T) {
 	cases := []struct {
 		name    string
 		m       Material
-		kind    Kind
+		kind    MaterialKind
 		key     string
 		letters []string
 	}{
-		{"none", Material{}, KindNone, "", nil},
-		{"mono", Mono(card.Blue), KindMono, "u", []string{"u"}},
-		{"gold", Gold, KindGold, "gold", nil},
-		{"artifact", Artifact, KindArtifact, "artifact", nil},
-		{"colorless", Colorless, KindColorless, "colorless", nil},
-		{"land", Land, KindLand, "land", nil},
-		{"vehicle", Vehicle, KindVehicle, "vehicle", nil},
-		{"named", Named("sunmoondfc"), KindNamed, "sunmoondfc", nil},
-		{"an indicator's colors", ColorSet([]card.Color{card.Red, card.Black, card.Blue}), KindNamed, "ubr", nil},
+		{"none", Material{}, MatNone, "", nil},
+		{"mono", Mono(card.Blue), MatMono, "u", []string{"u"}},
+		{"gold", Gold, MatGold, "gold", nil},
+		{"artifact", Artifact, MatArtifact, "artifact", nil},
+		{"colorless", Colorless, MatColorless, "colorless", nil},
+		{"land", Land, MatLand, "land", nil},
+		{"vehicle", Vehicle, MatVehicle, "vehicle", nil},
+		{"named", Named("sunmoondfc"), MatNamed, "sunmoondfc", nil},
+		{"an indicator's colors", ColorSet([]card.Color{card.Red, card.Black, card.Blue}), MatNamed, "ubr", nil},
 	}
 	for _, c := range cases {
 		if c.m.Kind() != c.kind || c.m.Key() != c.key || len(c.m.Letters()) != len(c.letters) {
 			t.Errorf("%s: kind %v key %q letters %v, want %v %q %v", c.name, c.m.Kind(), c.m.Key(), c.m.Letters(), c.kind, c.key, c.letters)
 		}
-		if c.m.IsNone() != (c.kind == KindNone) {
+		if c.m.IsNone() != (c.kind == MatNone) {
 			t.Errorf("%s: IsNone = %v", c.name, c.m.IsNone())
 		}
 	}

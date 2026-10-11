@@ -1,0 +1,153 @@
+{
+  "contract": "1.0",
+  "id": "mimic.test",
+  "name": "Test frame",
+  "description": "A small template that uses every part of the format",
+  "author": { "name": "Mimic", "url": "https://example.com" },
+  "license": "CC0-1.0",
+  "credits": [{ "name": "A. Artist", "url": "https://example.com/a", "note": "pinline art" }],
+  "features": {
+    "ptStyle": { "type": "choice", "label": "Power and toughness", "values": ["light", "dark"], "default": "light" },
+    "textless": { "type": "bool", "label": "Textless" },
+    "texture": { "type": "range", "label": "Texture strength", "min": 0, "max": 1, "step": 0.05, "default": 1 }
+  },
+  "parts": {
+    "background": {
+      "slot": "background",
+      "origin": { "x": 100, "y": 50 },
+      "variants": {
+        "w": { "path": "background/w.png" },
+        "u": { "path": "background/u.png" },
+        "gold": { "path": "background/gold.png" }
+      }
+    },
+    "pinlines": {
+      "slot": "pinlines",
+      "blend": { "seams": { "2": [{ "center": 0, "width": 650 }], "3": [{ "center": -600, "width": 160 }, { "center": 700, "width": 160 }] }, "shape": "smooth", "end": 0.94 },
+      "variants": {
+        "w": { "path": "pinlines/w.png" },
+        "u": { "path": "pinlines/u.png" },
+        "wu": { "path": "pinlines/wu.png" },
+        "gold": { "path": "pinlines/gold.png" }
+      }
+    },
+    "pt_box": {
+      "slot": "ptBox",
+      "variants": { "gold": { "path": "pt/gold.png" }, "w": { "path": "pt/w.png" } }
+    },
+    "border": { "variants": { "any": { "path": "border/any.png" } } },
+    "divider": { "variants": { "any": { "path": "divider/any.png" } } },
+    "icon": {
+      "slot": "transform_icon",
+      "variants": { "sunmoondfc": { "path": "icon/sunmoondfc.png" }, "convertdfc": { "path": "icon/convertdfc.png" } }
+    },
+    "indicator": {
+      "slot": "indicator",
+      "variants": { "u": { "path": "indicator/u.png" }, "ub": { "path": "indicator/ub.png" } }
+    }
+  },
+  "layouts": {
+    "normal": {
+      "serves": [{ "role": "single", "kind": "standard" }],
+      "canvas": { "width": 3264, "height": 4440 },
+      "stack": [
+        { "part": "background" },
+        { "part": "pinlines" },
+        { "id": "pt", "part": "pt_box", "condition": "creature,feature:ptStyle=dark", "opacityFeature": "texture" },
+        { "part": "border", "mode": "multiply", "opacity": 0.5 },
+        { "part": "indicator", "condition": "color_indicator", "mirror": { "condition": "icon_right", "width": 800, "height": 200 } }
+      ],
+      "textBoxes": {
+        "title": {
+          "rect": { "x": 386, "y": 510, "width": 2400, "height": 200 },
+          "text": { "fontSize": 156, "font": "title", "color": "#000000", "align": "left", "vAlign": "baseline" },
+          "flow": { "clearOf": "mana" },
+          "when": [{ "condition": "color_indicator", "rect": { "x": 514, "width": 1971 } }]
+        },
+        "mana": {
+          "rect": { "x": 2047, "y": 506, "width": 866, "height": 200 },
+          "text": { "fontSize": 179, "minFontSize": 179, "align": "right", "vAlign": "baseline", "shadow": { "distance": 0.09, "angle": 25 } }
+        },
+        "type": {
+          "rect": { "x": 385, "y": 2650, "width": 2100, "height": 200 },
+          "text": { "fontSize": 132, "font": "title", "vAlign": "baseline" },
+          "when": [
+            { "condition": "color_indicator", "rect": { "x": 514, "width": 1971 } },
+            { "condition": "color_indicator,set_symbol", "rect": { "x": 514, "width": 1800 } }
+          ]
+        },
+        "oracle": {
+          "rect": { "x": 347, "y": 2750, "width": 2569, "height": 1244 },
+          "text": { "fontSize": 150, "vAlign": "center", "lineSpacing": 1, "paddingX": 40, "paddingY": 40 },
+          "flow": { "avoidLayer": "pt", "divider": "divider" }
+        },
+        "pt": {
+          "rect": { "x": 2490, "y": 4030, "width": 474, "height": 200 },
+          "text": { "fontSize": 159, "font": "title", "align": "center", "vAlign": "baseline" },
+          "condition": "creature"
+        },
+        "artist": {
+          "rect": { "x": 730, "y": 4176, "width": 2100, "height": 120 },
+          "text": { "fontSize": 77, "font": "small-caps", "color": "#FFFFFF", "vAlign": "baseline" }
+        },
+        "copyright": {
+          "rect": { "x": 1500, "y": 4102, "width": 1437, "height": 120 },
+          "text": { "fontSize": 68, "align": "right", "color": "#FFFFFF", "tracking": 40 },
+          "flow": { "duck": { "layer": "pt", "row": "artist" } }
+        }
+      },
+      "art": [{ "x": 356, "y": 607, "width": 2552, "height": 1856, "after": "background" }],
+      "symbols": { "set": { "x": 2400, "y": 2650, "width": 160, "height": 160, "align": "right", "condition": "set_symbol" } }
+    },
+    "split": {
+      "serves": [{ "role": "split", "kind": "standard" }],
+      "canvas": { "width": 4440, "height": 3264, "dpi": 1200, "rotate": 270 },
+      "stack": [
+        { "id": "background_1", "part": "background", "face": "first", "at": { "x": 425, "y": 237 } },
+        { "id": "background_2", "part": "background", "face": "second", "at": { "x": 2337, "y": 237 } }
+      ],
+      "textBoxes": {
+        "title_1": {
+          "draws": "title",
+          "rect": { "x": 576, "y": 395, "width": 779, "height": 140 },
+          "text": { "fontSize": 120, "font": "title" },
+          "face": "first"
+        },
+        "title_2": {
+          "draws": "title",
+          "rect": { "x": 2489, "y": 395, "width": 779, "height": 140 },
+          "text": { "fontSize": 120, "font": "title" },
+          "face": "second"
+        },
+        "copyright": {
+          "rect": { "x": 100, "y": 3000, "width": 1200, "height": 100 },
+          "text": { "fontSize": 60, "color": "#FFFFFF" },
+          "space": "output"
+        }
+      },
+      "art": [
+        { "x": 547, "y": 601, "width": 1623, "height": 1127, "after": "background_1", "face": "first" },
+        { "x": 2459, "y": 601, "width": 1623, "height": 1127, "after": "background_2", "face": "second" }
+      ]
+    },
+    "transform": {
+      "serves": [
+        { "role": "transform_front", "kind": "standard" },
+        { "role": "transform_back", "kind": "standard" }
+      ],
+      "canvas": { "width": 3264, "height": 4440 },
+      "stack": [
+        { "id": "background_front", "part": "background", "condition": "front" },
+        { "id": "background_back", "part": "background", "condition": "back" },
+        { "part": "icon", "condition": "front,icon_left" }
+      ],
+      "textBoxes": {
+        "title": {
+          "rect": { "x": 386, "y": 510, "width": 2400, "height": 200 },
+          "text": { "fontSize": 156, "font": "title" }
+        }
+      },
+      "art": [{ "x": 356, "y": 607, "width": 2552, "height": 1856, "after": "background_back" }]
+    }
+  }
+}

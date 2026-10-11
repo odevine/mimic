@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"image"
 	"math"
-	"strings"
 
 	"github.com/odevine/impasto/blend"
 	"github.com/odevine/impasto/canvas"
 	"github.com/odevine/impasto/raster"
 	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -249,42 +249,11 @@ func FitArt(src image.Image, w, h int) image.Image {
 // Normal, an unrecognized one is an error so a manifest typo is not silently
 // composited the wrong way
 func BlendMode(name string) (blend.Mode, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "normal":
-		return blend.Normal, nil
-	case "multiply":
-		return blend.Multiply, nil
-	case "screen":
-		return blend.Screen, nil
-	case "overlay":
-		return blend.Overlay, nil
-	case "softlight":
-		return blend.SoftLight, nil
-	case "hardlight":
-		return blend.HardLight, nil
-	case "colordodge":
-		return blend.ColorDodge, nil
-	case "colorburn":
-		return blend.ColorBurn, nil
-	case "darken":
-		return blend.Darken, nil
-	case "lighten":
-		return blend.Lighten, nil
-	case "difference":
-		return blend.Difference, nil
-	case "exclusion":
-		return blend.Exclusion, nil
-	case "hue":
-		return blend.Hue, nil
-	case "saturation":
-		return blend.Saturation, nil
-	case "color":
-		return blend.Color, nil
-	case "luminosity":
-		return blend.Luminosity, nil
-	default:
-		return blend.Normal, fmt.Errorf("template: unknown blend mode %q", name)
+	m, err := manifest.ParseMode(name)
+	if err != nil {
+		return blend.Normal, fmt.Errorf("template: %w", err)
 	}
+	return m, nil
 }
 
 // Rotate returns buf turned clockwise by degrees, a multiple of 90. A quarter
@@ -426,7 +395,7 @@ func LoadBlendedLayer(p AssetProvider, paths []string, s Scale, x, y, docW, docH
 // order they run, or nil when the material is not a run or a color has no variant
 // of its own
 func BlendedPaths(variants map[string]LayerAsset, m frame.Material) []string {
-	if m.Kind() != frame.KindRun {
+	if m.Kind() != frame.MatRun {
 		return nil
 	}
 	var paths []string

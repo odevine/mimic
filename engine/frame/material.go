@@ -7,33 +7,33 @@ import (
 	"github.com/odevine/mimic/engine/card"
 )
 
-// Kind says what a Material is made of
-type Kind uint8
+// MaterialKind says what a Material is made of
+type MaterialKind uint8
 
 const (
-	// KindNone is the value of a slot a card has nothing for, so only a layer's
+	// MatNone is the value of a slot a card has nothing for, so only a layer's
 	// color-invariant "any" image can draw
-	KindNone Kind = iota
-	// KindMono is one color, such as red
-	KindMono
-	// KindRun is two or more colors that run left to right across a frame, such
+	MatNone MaterialKind = iota
+	// MatMono is one color, such as red
+	MatMono
+	// MatRun is two or more colors that run left to right across a frame, such
 	// as the pair on a two-color card or the halves of a fuse bar
-	KindRun
-	KindGold
-	KindArtifact
-	KindColorless
-	KindLand
-	KindVehicle
-	// KindNamed is a key that is not a color, such as the name of a transform icon
+	MatRun
+	MatGold
+	MatArtifact
+	MatColorless
+	MatLand
+	MatVehicle
+	// MatNamed is a key that is not a color, such as the name of a transform icon
 	// or the colors a color indicator shows
-	KindNamed
+	MatNamed
 )
 
 // Material is what one slot of a frame is made of for a card. It names the image
 // a layer draws for the slot and, for a run of colors, the order they run in. A
 // Material is comparable and usable as a map key
 type Material struct {
-	kind Kind
+	kind MaterialKind
 	// letters is the lowercase WUBRG letters of a mono or run in the order they run
 	// left to right, and the key of a named material
 	letters string
@@ -41,16 +41,16 @@ type Material struct {
 
 // The materials that are not made of colors
 var (
-	Gold      = Material{kind: KindGold}
-	Artifact  = Material{kind: KindArtifact}
-	Colorless = Material{kind: KindColorless}
-	Land      = Material{kind: KindLand}
-	Vehicle   = Material{kind: KindVehicle}
+	Gold      = Material{kind: MatGold}
+	Artifact  = Material{kind: MatArtifact}
+	Colorless = Material{kind: MatColorless}
+	Land      = Material{kind: MatLand}
+	Vehicle   = Material{kind: MatVehicle}
 )
 
 // Mono is the material of one color
 func Mono(c card.Color) Material {
-	return Material{kind: KindMono, letters: letter(c)}
+	return Material{kind: MatMono, letters: letter(c)}
 }
 
 // Run is the material of colors that run left to right in the order given. One
@@ -66,7 +66,7 @@ func Run(colors ...card.Color) Material {
 	for _, c := range colors {
 		b.WriteString(letter(c))
 	}
-	return Material{kind: KindRun, letters: b.String()}
+	return Material{kind: MatRun, letters: b.String()}
 }
 
 // Dual is the material of two colors in the order a printed frame runs them. That
@@ -94,7 +94,7 @@ func Named(key string) Material {
 	if key == "" {
 		return Material{}
 	}
-	return Material{kind: KindNamed, letters: key}
+	return Material{kind: MatNamed, letters: key}
 }
 
 // ColorSet is the named material of a set of colors, filed under their letters in
@@ -109,29 +109,29 @@ func ColorSet(colors []card.Color) Material {
 }
 
 // Kind reports what the material is made of
-func (m Material) Kind() Kind { return m.kind }
+func (m Material) Kind() MaterialKind { return m.kind }
 
 // IsNone reports whether the slot has no material for the card
-func (m Material) IsNone() bool { return m.kind == KindNone }
+func (m Material) IsNone() bool { return m.kind == MatNone }
 
 // Key is the name of the image that depicts the whole material, such as "w" or
 // "gold", or "" for none. The colors of a run are in WUBRG order here, so a pair
 // is filed as "wg" whichever way it runs
 func (m Material) Key() string {
 	switch m.kind {
-	case KindMono, KindNamed:
+	case MatMono, MatNamed:
 		return m.letters
-	case KindRun:
+	case MatRun:
 		return sortedLetters(m.letters)
-	case KindGold:
+	case MatGold:
 		return "gold"
-	case KindArtifact:
+	case MatArtifact:
 		return "artifact"
-	case KindColorless:
+	case MatColorless:
 		return "colorless"
-	case KindLand:
+	case MatLand:
 		return "land"
-	case KindVehicle:
+	case MatVehicle:
 		return "vehicle"
 	}
 	return ""
@@ -140,7 +140,7 @@ func (m Material) Key() string {
 // Letters are the lowercase letters of the colors in the order they run left to
 // right, one per color, or nil for a material that is not made of colors
 func (m Material) Letters() []string {
-	if m.kind != KindMono && m.kind != KindRun {
+	if m.kind != MatMono && m.kind != MatRun {
 		return nil
 	}
 	out := make([]string, len(m.letters))
@@ -153,7 +153,7 @@ func (m Material) Letters() []string {
 // String is the material as it reads in a message: the colors in the order they
 // run, or the key of one that is not made of colors
 func (m Material) String() string {
-	if m.kind == KindMono || m.kind == KindRun {
+	if m.kind == MatMono || m.kind == MatRun {
 		return m.letters
 	}
 	return m.Key()
@@ -166,9 +166,9 @@ func fromLetters(s string) Material {
 	case 0:
 		return Material{}
 	case 1:
-		return Material{kind: KindMono, letters: s}
+		return Material{kind: MatMono, letters: s}
 	}
-	return Material{kind: KindRun, letters: s}
+	return Material{kind: MatRun, letters: s}
 }
 
 func letter(c card.Color) string { return strings.ToLower(string(c)) }

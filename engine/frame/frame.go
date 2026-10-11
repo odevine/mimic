@@ -119,7 +119,7 @@ func fuseKeys(d *card.Data) (textbox, pinlines Material) {
 		h := d.Half(i)
 		tl := strings.ToLower(h.TypeLine)
 		m := pinlineMaterial(strings.Contains(tl, "land"), strings.Contains(tl, "artifact"), frameColors(h, strings.Contains(tl, "land")))
-		if k := m.Kind(); k != KindMono && k != KindRun {
+		if k := m.Kind(); k != MatMono && k != MatRun {
 			return Gold, Gold
 		}
 		if run := m.String(); i == 0 || run != merged {
@@ -142,6 +142,20 @@ var transformIcons = map[string]string{
 	"sunmoondfc": "sunmoondfc", "compasslanddfc": "compasslanddfc", "originpwdfc": "originpwdfc",
 	"mooneldrazidfc": "mooneldrazidfc", "convertdfc": "convertdfc", "upsidedowndfc": "upsidedowndfc",
 	"fandfc": "fandfc", "waxingandwaningmoondfc": "sunmoondfc",
+}
+
+// TransformIconNames lists the icons a transform slot can be keyed by, sorted
+func TransformIconNames() []string {
+	seen := map[string]bool{triangleIcon: true}
+	for _, v := range transformIcons {
+		seen[v] = true
+	}
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // triangleIcon is the up and down triangle, filed under convertdfc. It stands

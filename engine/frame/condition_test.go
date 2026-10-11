@@ -199,3 +199,27 @@ func TestNyxConditionsFollowTheType(t *testing.T) {
 		t.Error("an angel should be nonnyx and not nyx")
 	}
 }
+
+func TestFeatureRefsListsEachReferenceInOrder(t *testing.T) {
+	c, err := Compile("land,feature:textless,feature:ptStyle=dark,feature:texture>=0.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []FeatureRef{
+		{Name: "textless"},
+		{Name: "ptStyle", Op: "=", Value: "dark"},
+		{Name: "texture", Op: ">=", Value: "0.5", Number: 0.5, IsNumber: true},
+	}
+	got := c.FeatureRefs()
+	if len(got) != len(want) {
+		t.Fatalf("FeatureRefs = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ref %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	if refs := (Condition{}).FeatureRefs(); refs != nil {
+		t.Errorf("an empty condition refers to %+v", refs)
+	}
+}

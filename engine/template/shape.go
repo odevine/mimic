@@ -8,69 +8,40 @@ import (
 	"github.com/odevine/mimic/engine/frame"
 )
 
-// Role is where a face sits on the physical card. A template frame is drawn for
-// one role, since a transform front carries a flip icon a single card does not,
-// and a split card lays two halves into one frame
-type Role string
+// Role, Kind, and Shape are the engine's vocabulary for where a face sits and
+// what frame it needs, defined beside the rest of a card's frame rules
+type (
+	Role  = frame.Role
+	Kind  = frame.Kind
+	Shape = frame.Shape
+)
 
 const (
-	RoleSingle         Role = "single"
-	RoleSplit          Role = "split"
-	RoleAftermath      Role = "aftermath"
-	RoleAdventure      Role = "adventure"
-	RoleTransformFront Role = "transform_front"
-	RoleTransformBack  Role = "transform_back"
-	RoleMDFCFront      Role = "mdfc_front"
-	RoleMDFCBack       Role = "mdfc_back"
-	// RoleUnknown is a layout the engine does not classify yet, such as flip or
-	// meld. No template may declare it, so no template renders one
-	RoleUnknown Role = "unknown"
+	RoleSingle         = frame.RoleSingle
+	RoleSplit          = frame.RoleSplit
+	RoleAftermath      = frame.RoleAftermath
+	RoleAdventure      = frame.RoleAdventure
+	RoleTransformFront = frame.RoleTransformFront
+	RoleTransformBack  = frame.RoleTransformBack
+	RoleMDFCFront      = frame.RoleMDFCFront
+	RoleMDFCBack       = frame.RoleMDFCBack
+	RoleUnknown        = frame.RoleUnknown
+
+	KindStandard     = frame.KindStandard
+	KindBasicLand    = frame.KindBasicLand
+	KindPlaneswalker = frame.KindPlaneswalker
+	KindSaga         = frame.KindSaga
+	KindClass        = frame.KindClass
+	KindCase         = frame.KindCase
+	KindRoom         = frame.KindRoom
+	KindLeveler      = frame.KindLeveler
+	KindMutate       = frame.KindMutate
+	KindPrototype    = frame.KindPrototype
+	KindBattle       = frame.KindBattle
+	KindToken        = frame.KindToken
+	KindPlane        = frame.KindPlane
+	KindUnknown      = frame.KindUnknown
 )
-
-// Kind is the frame a face needs, independent of where it sits on the card
-type Kind string
-
-const (
-	KindStandard     Kind = "standard"
-	KindBasicLand    Kind = "basic_land"
-	KindPlaneswalker Kind = "planeswalker"
-	KindSaga         Kind = "saga"
-	KindClass        Kind = "class"
-	KindCase         Kind = "case"
-	KindRoom         Kind = "room"
-	KindLeveler      Kind = "leveler"
-	KindMutate       Kind = "mutate"
-	KindPrototype    Kind = "prototype"
-	KindBattle       Kind = "battle"
-	KindToken        Kind = "token"
-	KindPlane        Kind = "plane"
-	// KindUnknown is a card the engine does not classify yet, such as a scheme
-	// or an emblem. No template may declare it, so no template renders one
-	KindUnknown Kind = "unknown"
-)
-
-var (
-	knownRoles = map[Role]bool{
-		RoleSingle: true, RoleSplit: true, RoleAftermath: true, RoleAdventure: true,
-		RoleTransformFront: true, RoleTransformBack: true,
-		RoleMDFCFront: true, RoleMDFCBack: true,
-	}
-	knownKinds = map[Kind]bool{
-		KindStandard: true, KindBasicLand: true, KindPlaneswalker: true,
-		KindSaga: true, KindClass: true, KindCase: true, KindRoom: true, KindLeveler: true,
-		KindMutate: true, KindPrototype: true, KindBattle: true,
-		KindToken: true, KindPlane: true,
-	}
-)
-
-// Shape is one renderable face's role and kind, the pair a template's Supports
-// is checked against
-type Shape struct {
-	Role Role `json:"role"`
-	Kind Kind `json:"kind"`
-}
-
-func (s Shape) String() string { return string(s.Kind) + " (" + string(s.Role) + ")" }
 
 // Supports is what a template can render. A face is supported when its role is
 // in Roles and its kind is in Kinds, so a template covering several roles or
@@ -99,12 +70,12 @@ func (s Supports) validate() error {
 		return fmt.Errorf("supports needs at least one role and one kind")
 	}
 	for _, r := range s.Roles {
-		if !knownRoles[r] {
+		if !frame.KnownRole(r) {
 			return fmt.Errorf("unknown role %q", r)
 		}
 	}
 	for _, k := range s.Kinds {
-		if !knownKinds[k] {
+		if !frame.KnownKind(k) {
 			return fmt.Errorf("unknown kind %q", k)
 		}
 	}
@@ -136,28 +107,28 @@ func Classify(d *card.Data) []Shape {
 		if !ok {
 			kind = typeLineKind(d.TypeLine)
 		}
-		return []Shape{{RoleSingle, kind}}
+		return []Shape{{Role: RoleSingle, Kind: kind}}
 	case "split":
 		return []Shape{splitShape(d)}
 	case "adventure":
-		return []Shape{{RoleAdventure, KindStandard}}
+		return []Shape{{Role: RoleAdventure, Kind: KindStandard}}
 	case "transform", "battle", "double_faced_token":
 		return doubleFaced(d, RoleTransformFront, RoleTransformBack)
 	case "modal_dfc":
 		return doubleFaced(d, RoleMDFCFront, RoleMDFCBack)
 	}
-	return []Shape{{RoleUnknown, KindUnknown}}
+	return []Shape{{Role: RoleUnknown, Kind: KindUnknown}}
 }
 
 // doubleFaced classifies each face of a two-faced card by its own type line,
 // so a planeswalker back or a saga front gets its own frame
 func doubleFaced(d *card.Data, front, back Role) []Shape {
 	if len(d.Faces) != 2 {
-		return []Shape{{RoleUnknown, KindUnknown}}
+		return []Shape{{Role: RoleUnknown, Kind: KindUnknown}}
 	}
 	return []Shape{
-		{front, typeLineKind(d.Faces[0].TypeLine)},
-		{back, typeLineKind(d.Faces[1].TypeLine)},
+		{Role: front, Kind: typeLineKind(d.Faces[0].TypeLine)},
+		{Role: back, Kind: typeLineKind(d.Faces[1].TypeLine)},
 	}
 }
 
@@ -220,19 +191,6 @@ func (r RenderRequest) FaceCard() *card.Data {
 	return r.Card.Face(r.Face)
 }
 
-// Side reports which face of a double-faced card a shape is, from its role. A
-// face on one side of the card, such as a single, split, or adventure card, is
-// frame.Single
-func (s Shape) Side() frame.Side {
-	switch {
-	case strings.HasSuffix(string(s.Role), "_front"):
-		return frame.Front
-	case strings.HasSuffix(string(s.Role), "_back"):
-		return frame.Back
-	}
-	return frame.Single
-}
-
 // FaceSide is the side of the card the requested face prints on, which a
 // double-faced frame reads through frame.DeriveFace
 func (r RenderRequest) FaceSide() frame.Side {
@@ -250,11 +208,11 @@ func (r RenderRequest) FaceSide() frame.Side {
 func splitShape(d *card.Data) Shape {
 	for _, k := range d.Keywords {
 		if strings.EqualFold(k, "aftermath") {
-			return Shape{RoleAftermath, KindStandard}
+			return Shape{Role: RoleAftermath, Kind: KindStandard}
 		}
 	}
 	if len(d.Faces) > 1 && strings.HasPrefix(d.Faces[1].OracleText, "Aftermath (") {
-		return Shape{RoleAftermath, KindStandard}
+		return Shape{Role: RoleAftermath, Kind: KindStandard}
 	}
-	return Shape{RoleSplit, typeLineKind(d.TypeLine)}
+	return Shape{Role: RoleSplit, Kind: typeLineKind(d.TypeLine)}
 }

@@ -49,6 +49,13 @@ func TextFor(name string, d *Data) string {
 	}
 }
 
+// TextBoxNames lists the box names the engine fills with card text, sorted. The
+// oracle and copyright boxes are built from more than TextFor's lookup, and are
+// listed with the rest
+func TextBoxNames() []string {
+	return []string{"artist", "collector", "copyright", "flipside_pt", "fuse", "mana", "oracle", "pt", "set", "title", "type"}
+}
+
 // CollectorLine formats the rarity and collector number, as "R 0177". Real
 // cards print the set total after the number ("0177/302"), which Scryfall's
 // card data does not carry, so it is left out

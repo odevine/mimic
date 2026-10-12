@@ -1,6 +1,9 @@
 package frame
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Role is where a face sits on the physical card. A template frame is drawn for
 // one role, since a transform front carries a flip icon a single card does not,
@@ -82,6 +85,21 @@ func (s Shape) Side() Side {
 // KnownRole reports whether a template may declare the role, which excludes the
 // unknown role the engine gives a layout it does not classify
 func KnownRole(r Role) bool { return knownRoles[r] }
+
+// Roles lists the roles a template may declare, sorted
+func Roles() []Role { return sortedKeys(knownRoles) }
+
+// Kinds lists the kinds a template may declare, sorted
+func Kinds() []Kind { return sortedKeys(knownKinds) }
+
+func sortedKeys[K ~string](m map[K]bool) []K {
+	out := make([]K, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
 
 // KnownKind reports whether a template may declare the kind, which excludes the
 // unknown kind the engine gives a card it does not classify

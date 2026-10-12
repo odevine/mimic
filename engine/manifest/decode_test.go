@@ -193,3 +193,17 @@ func TestDiagnosticsReadAsText(t *testing.T) {
 		t.Error("Err() should be nil without an error")
 	}
 }
+
+func TestDecodeStrictRefusesAFieldTheContractLacks(t *testing.T) {
+	raw := edit(t, func(root map[string]any) { set(t, root, "surprise", true) })
+	if _, ds := Decode(raw); ds.HasErrors() {
+		t.Fatalf("a loader refused an unknown field: %v", ds)
+	}
+	m, ds := DecodeStrict(raw)
+	if m != nil || !ds.HasErrors() || !strings.Contains(ds.Err().Error(), "surprise") {
+		t.Errorf("strict decode: %v %v", m, ds)
+	}
+	if _, ds := DecodeStrict(smallJSON(t)); ds.HasErrors() {
+		t.Errorf("strict decode refused a good manifest: %v", ds)
+	}
+}

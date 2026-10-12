@@ -32,14 +32,26 @@ var contractRe = regexp.MustCompile(`^(\d+)\.(\d+)$`)
 // whenever the JSON could be read into one, so a tool can show it beside its
 // diagnostics, and a loader refuses it when the diagnostics hold an error. A
 // manifest of a different contract major is not returned
-func Decode(data []byte) (*Manifest, Diagnostics) {
+func Decode(data []byte) (*Manifest, Diagnostics) { return decode(data, false) }
+
+// DecodeStrict is Decode for a tool that checks a manifest an author wrote, and it
+// refuses a field the contract does not have, where a loader skips it
+func DecodeStrict(data []byte) (*Manifest, Diagnostics) { return decode(data, true) }
+
+func decode(data []byte, strict bool) (*Manifest, Diagnostics) {
 	var c collector
 	if len(data) > MaxBytes {
 		c.errorf("", "the manifest is %d bytes, over the %d byte limit", len(data), MaxBytes)
 		return nil, c.ds
 	}
 	var m Manifest
-	if err := json.Unmarshal(data, &m); err != nil {
+	var err error
+	if strict {
+		err = decodeStrict(data, &m)
+	} else {
+		err = json.Unmarshal(data, &m)
+	}
+	if err != nil {
 		c.errorf("", "%s", describeJSONError(err))
 		return nil, c.ds
 	}

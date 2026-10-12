@@ -71,6 +71,9 @@ type Pipeline struct {
 	// features returns the values chosen for a template's features. Nil means
 	// none are chosen
 	features func(id string) map[string]any
+	// standIn lets the stand-in render, for a launch check that tests the app's own
+	// plumbing and not a template
+	standIn bool
 	// checked is when the loose folders were last compared with what was loaded
 	checked time.Time
 	// fontDir is the font override directory every render uses, "" for the
@@ -83,6 +86,20 @@ type Pipeline struct {
 // the preferred template for each face shape, and may be nil
 func New(client *card.Client, preferences func() map[string]prefs.TemplateChoice) *Pipeline {
 	return &Pipeline{client: client, preferences: preferences}
+}
+
+// SetStandInRenders makes the stand-in template count as one that renders, which
+// the launch check needs, since it runs with nothing installed
+func (p *Pipeline) SetStandInRenders(on bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.standIn = on
+}
+
+func (p *Pipeline) standInRenders() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.standIn
 }
 
 // SetFeatures sets where the values chosen for a template's features come from.

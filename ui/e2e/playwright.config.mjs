@@ -5,8 +5,8 @@ import { snapshotDir, visualEnabled } from "./visual.mjs";
 
 // The test servers run for the whole run, described in servers.mjs. Each project
 // names the server its tests use in its metadata
-const webServer = ({ port, fake, home }, name) => ({
-  command: `go run ../cmd/testserver -port ${port} -fake-port ${fake} -version 1.0.0 -home ${home} -clean -log .scratch/${name}.log`,
+const webServer = ({ port, fake, home, template }, name) => ({
+  command: `go run ../cmd/testserver -port ${port} -fake-port ${fake} -version 1.0.0 -home ${home} -clean ${template ? "-template " : ""}-log .scratch/${name}.log`,
   url: `http://127.0.0.1:${port}`,
   reuseExistingServer: false,
   timeout: 240_000,

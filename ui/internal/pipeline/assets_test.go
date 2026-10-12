@@ -364,3 +364,60 @@ func TestARenderReadsTheFeaturesChosenForItsTemplate(t *testing.T) {
 		t.Error("the banner is not drawn once it is on")
 	}
 }
+
+func TestTheStandInRendersNothingAndIsNotATemplate(t *testing.T) {
+	withEmptyAssetChain(t)
+	at, source, err := Resolve(catalogtest.ID)
+	if err != nil || source != SourcePlaceholder {
+		t.Fatalf("resolve = %v, %d", err, source)
+	}
+	p := New(nil, nil)
+	defer p.Close()
+	p.Install(at)
+
+	if !at.IsPlaceholder() {
+		t.Fatal("the stand-in does not say it is one")
+	}
+	if c, ok := p.Choose(PrimaryShape); ok {
+		t.Errorf("chose %+v to render standard cards", c)
+	}
+	if faces := p.FaceTemplates(); len(faces) != 0 {
+		t.Errorf("faces are rendered by %v, want none", faces)
+	}
+	d := &card.Data{Name: "Plain", TypeLine: "Instant", Layout: "normal"}
+	if err := p.Unsupported(d, 0); !IsUnsupported(err) {
+		t.Errorf("unsupported = %v", err)
+	}
+	if _, err := p.Render(context.Background(), d, 0, nil, 72, nil); !IsUnsupported(err) {
+		t.Errorf("render = %v, want a card no template renders", err)
+	}
+	if got := Display(p.Title(at.Name), at.Version); got != NoTemplateLabel {
+		t.Errorf("label = %q", got)
+	}
+}
+
+func TestTitlesComeFromTheManifest(t *testing.T) {
+	tmp := withEmptyAssetChain(t)
+	LooseDirBases = []string{filepath.Join(tmp, "assets")}
+	templatetest.Spec{ID: catalogtest.ID, Name: "Pretty name"}.WriteLoose(t, filepath.Join(tmp, "assets", "frame"))
+	at, _, err := Resolve(catalogtest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(nil, nil)
+	defer p.Close()
+	p.Install(at)
+	if got := p.Title(catalogtest.ID); got != "Pretty name" {
+		t.Errorf("title = %q", got)
+	}
+	if got := p.Title("test.absent"); got != "test.absent" {
+		t.Errorf("an unknown template is called %q", got)
+	}
+	if got := Display(p.Title(catalogtest.ID), at.Version); got != "Pretty name · local" {
+		t.Errorf("label = %q", got)
+	}
+	rows := p.FaceRows()
+	if rows[0].Using != "Pretty name · local" || rows[0].Options[0].Title != "Pretty name" {
+		t.Errorf("rows = %+v", rows[0])
+	}
+}

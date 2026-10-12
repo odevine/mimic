@@ -4,6 +4,12 @@
 
 import { app } from "./state.js";
 
+// noTemplateInstalled reports whether the app is running with nothing to render
+// with, which the app calls the placeholder
+export function noTemplateInstalled() {
+  return app.template.peek()?.source === "placeholder";
+}
+
 // describeShape names a face's shape the way a person would, for "normal does
 // not render planeswalker cards" or "transform front faces"
 export function describeShape(sh) {
@@ -35,7 +41,7 @@ export function faceSupport(card) {
 export function unsupportedBy(card) {
   const f = faceSupport(card);
   if (f.renderable > 0) return "";
-  return `No installed template renders ${describeShape(f.missing[0])}`;
+  return noTemplateInstalled() ? "No template is installed" : `No installed template renders ${describeShape(f.missing[0])}`;
 }
 
 // partlyUnsupportedBy says which face of a card will be skipped when another
@@ -52,7 +58,7 @@ export function faceUnsupportedBy(card, face) {
   const sh = card && card.shapes && card.shapes[face];
   const faces = app.template.peek()?.faces;
   if (!sh || !faces || faces[shapeKey(sh)]) return "";
-  return `No installed template renders ${describeShape(sh)}`;
+  return noTemplateInstalled() ? "No template is installed" : `No installed template renders ${describeShape(sh)}`;
 }
 
 // The card layouts a template can render, grouped the way a person thinks of

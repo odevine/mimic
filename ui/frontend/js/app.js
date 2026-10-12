@@ -96,6 +96,14 @@ function initShell() {
     el.hidden = p === null;
     if (p !== null) el.firstElementChild.style.width = `${p * 100}%`;
   });
+  // With no template installed there is nothing to render with, so every mode but
+  // Templates says so and offers the way to one
+  effect(() => {
+    $("no-template-strip").hidden = !(app.template.value?.source === "placeholder" && app.mode.value !== "templates");
+  });
+  $("no-template-action").addEventListener("click", () => {
+    location.hash = "templates";
+  });
   effect(() => {
     const t = app.template.value;
     if (!t) return;
@@ -105,7 +113,7 @@ function initShell() {
     state.classList.toggle("warn", t.source === "placeholder");
     state.dataset.tip =
       t.source === "placeholder"
-        ? "No template assets are available, so frames render as placeholders"
+        ? "No template is installed. Install one from the Templates tab to render cards"
         : t.source === "local"
           ? "Rendering from a local developer directory"
           : "Rendering from a downloaded template bundle";

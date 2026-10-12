@@ -28,12 +28,13 @@ type Service struct{ ws *workspace.Workspace }
 // New returns the service over a workspace
 func New(ws *workspace.Workspace) *Service { return &Service{ws: ws} }
 
-// Startup keeps the default template up to date in the background so launch
-// never blocks on a large download. A loose developer directory and an
-// explicitly restored selection are the user's choice, so neither is
+// Startup keeps a template that is installed up to date in the background so
+// launch never blocks on a large download. Nothing is installed that the person has
+// not asked for, so an app with no template waits to be given one. A loose developer
+// directory and an explicitly restored selection are the user's choice, so neither is
 // auto-updated
 func (s *Service) Startup() {
-	if src := s.ws.Startup.Source; src == pipeline.SourceBundle || src == pipeline.SourcePlaceholder {
+	if s.ws.Startup.Source == pipeline.SourceBundle {
 		go s.updateInBackground(s.ws.Startup.Name)
 	}
 }
@@ -69,7 +70,9 @@ type VersionView struct {
 
 // TemplateView is one template block: its id, its description, and its versions
 type TemplateView struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Title is what a person calls the template, when it is known
+	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 	// Standard reports whether the template renders standard single cards,
 	// which is what selecting it as the active template is for. A template
@@ -140,11 +143,14 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 	for _, in := range pipeline.InstalledTemplates() {
 		installed[in.ID] = in
 	}
-	rows := buildTemplateRows(idx, slices.Collect(maps.Values(installed)), func(id string) bool { return pipeline.LooseDir(id) != "" }, catalog.IsCached)
+	rows := buildTemplateRows(idx, slices.Collect(maps.Values(installed)), func(id string) bool { return pipeline.LooseDir(id) != "" }, catalog.IsCached, func(id string) []string {
+		v, _ := catalog.CachedVersions(id)
+		return v
+	})
 
 	views := make([]TemplateView, 0, len(rows))
 	for _, row := range rows {
-		tv := TemplateView{Name: row.name, Description: row.description, Standard: row.standard, Shapes: row.shapes}
+		tv := TemplateView{Name: row.name, Title: row.title, Description: row.description, Standard: row.standard, Shapes: row.shapes}
 		if in, ok := installed[row.name]; ok {
 			tv.Details = s.details(in)
 		}
@@ -193,7 +199,7 @@ func (s *Service) Active() ActiveView {
 	return ActiveView{
 		Name:    name,
 		Version: version,
-		Label:   pipeline.Display(name, version),
+		Label:   pipeline.Display(s.ws.Pipe.Title(name), version),
 		Source:  templateSource(name, version),
 		Shapes:  s.ws.Pipe.Active().Shapes(),
 		Faces:   s.ws.Pipe.FaceTemplates(),

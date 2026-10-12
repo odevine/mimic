@@ -1,8 +1,9 @@
-import { test, expect } from "../../bridge-fixtures.mjs";
+import { test, expect, noTemplate } from "../../bridge-fixtures.mjs";
 
 test("the page boots from the replies of the real app", async ({ bridge, page }) => {
+  noTemplate(bridge);
   await bridge.boot();
-  await expect(page.locator("#template-label")).toHaveText("mimic.placeholder (placeholder)");
+  await expect(page.locator("#template-label")).toHaveText("No template installed");
   await expect(page.locator("#search-input")).toBeFocused();
   await expect(page.locator("#single-empty")).toBeVisible();
   await expect(page.locator("#boot-error")).toBeHidden();

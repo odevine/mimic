@@ -26,13 +26,19 @@ func WithEmptyAssetChain(t *testing.T) string {
 	return tmp
 }
 
-// New builds a workspace over the placeholder template. It is enough for
-// everything the resolution and settings services touch
+// ActiveID is the id of the template a workspace from New starts on
+const ActiveID = "test.active"
+
+// New builds a workspace over a standard template installed as a loose developer
+// folder. It is enough for everything the resolution and settings services touch
 func New(t *testing.T) *workspace.Workspace {
 	t.Helper()
-	WithEmptyAssetChain(t)
+	tmp := WithEmptyAssetChain(t)
+	assets := filepath.Join(tmp, "assets")
+	templatetest.Spec{ID: ActiveID}.WriteLoose(t, filepath.Join(assets, "active"))
+	pipeline.LooseDirBases = []string{assets}
 
-	at, _, err := pipeline.Resolve(pipeline.DefaultTemplate)
+	at, _, err := pipeline.Resolve(ActiveID)
 	if err != nil {
 		t.Fatalf("pipeline.Resolve: %v", err)
 	}
@@ -62,9 +68,7 @@ var TransformTemplate = templatetest.Spec{ID: "test.transform", Shapes: template
 func NewWithTransform(t *testing.T) *workspace.Workspace {
 	t.Helper()
 	ws := NewSmall(t)
-	assets := filepath.Join(t.TempDir(), "assets")
-	TransformTemplate.WriteLoose(t, filepath.Join(assets, "transform"))
-	pipeline.LooseDirBases = []string{assets}
+	TransformTemplate.WriteLoose(t, filepath.Join(pipeline.LooseDirBases[0], "transform"))
 	t.Cleanup(ws.Pipe.Close)
 	return ws
 }

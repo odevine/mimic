@@ -4,7 +4,7 @@ import { app, signal, effect, batch } from "../state.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { renderPips, symbolPalette, insertAtCursor } from "../components/symbols.js";
 import { setZoom } from "../components/preview.js";
-import { faceUnsupportedBy } from "../supports.js";
+import { faceUnsupportedBy, noTemplateInstalled } from "../supports.js";
 import { createCardEditor, ALL_FIELDS, valuesOf, isDirty } from "../components/cardEditor.js";
 
 // Flow 1: search a card, adjust anything about it, render, download. The
@@ -703,7 +703,11 @@ export function initSingle() {
     let { state, title, step } = a;
     let meta = "";
 
-    if (!has && state !== "working") {
+    if (noTemplateInstalled() && state !== "working") {
+      state = "warn";
+      title = "No template is installed";
+      step = "Install one from the Templates tab to render cards";
+    } else if (!has && state !== "working") {
       state = "idle";
       title = "No card selected";
       step = "Search for a card and pick a result to render it here";

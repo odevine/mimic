@@ -219,7 +219,7 @@
   "Templates.Active": {
     "name": "mimic.placeholder",
     "version": "",
-    "label": "mimic.placeholder (placeholder)",
+    "label": "No template installed",
     "source": "placeholder",
     "shapes": [
       {
@@ -227,9 +227,7 @@
         "kind": "standard"
       }
     ],
-    "faces": {
-      "single/standard": "mimic.placeholder"
-    }
+    "faces": {}
   },
   "Templates.List": [],
   "Templates.Faces": [
@@ -241,7 +239,7 @@
       "chosen": {
         "name": "mimic.placeholder"
       },
-      "using": "mimic.placeholder (placeholder)",
+      "using": "No template installed",
       "primary": true
     }
   ],

@@ -52,6 +52,7 @@ func run() error {
 	logPath := flag.String("log", "", "file for the app's own output, standard error when empty")
 	fakePort := flag.Int("fake-port", 0, "port for the fake upstream's control paths, 0 for a free one")
 	version := flag.String("version", os.Getenv(testbuild.EnvVersion), "the version the app reports, a development build when empty")
+	withTemplate := flag.Bool("template", false, "start with a template installed, where the app otherwise has none to render with")
 	caps := flag.String("capabilities", os.Getenv(testbuild.EnvCapabilities), "feature keys to report live, separated by commas")
 	flag.Parse()
 	if *mode != "server" && *mode != "mcp" {
@@ -130,6 +131,9 @@ func run() error {
 		testbuild.EnvCapabilities+"="+*caps,
 		testbuild.EnvVersion+"="+*version,
 	)
+	if *withTemplate {
+		env = append(env, testbuild.EnvTemplate+"=1")
+	}
 	var token string
 	var url string
 	if *mode == "server" {

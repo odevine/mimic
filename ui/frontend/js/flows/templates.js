@@ -146,7 +146,7 @@ async function loadLibrary() {
         h(
           "div",
           { class: "tp-head" },
-          h("div", { class: "tp-title" }, h("span", { class: "tp-name" }, (t.details && t.details.title) || t.name), t.details && t.details.title && t.details.title !== t.name ? h("span", { class: "tp-id" }, t.name) : null),
+          h("div", { class: "tp-title" }, h("span", { class: "tp-name" }, t.title || t.name), t.title && t.title !== t.name ? h("span", { class: "tp-id" }, t.name) : null),
           t.description ? h("div", { class: "tp-desc" }, t.description) : null,
           ...(t.details ? aboutTemplate(t.details) : []),
           layoutsOf(t),
@@ -218,8 +218,9 @@ async function loadDefaults() {
       // offers exact versions and no automatic choice
       if (!row.primary) select.append(new Option(`Automatic · ${row.using || "none"}`, ""));
       for (const o of row.options) {
-        if (!row.primary) select.append(new Option(`${o.name} · newest installed`, `${o.name}@`));
-        for (const v of o.versions) select.append(new Option(`${o.name} · ${v}`, `${o.name}@${v}`));
+        const title = o.title || o.name;
+        if (!row.primary) select.append(new Option(`${title} · newest installed`, `${o.name}@`));
+        for (const v of o.versions) select.append(new Option(`${title} · ${v}`, `${o.name}@${v}`));
       }
       const current = choiceValue(row.chosen);
       // An active template with nothing installed, such as placeholders, still

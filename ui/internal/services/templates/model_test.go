@@ -35,6 +35,9 @@ func findVer(rows []versionRow, version string) (versionRow, bool) {
 	return versionRow{}, false
 }
 
+// noneCached stands for a cache with nothing in it, whatever this computer holds
+func noneCached(string) []string { return nil }
+
 func installedInfo(id, desc string, shapes ...template.Shape) pipeline.Installed {
 	return pipeline.Installed{ID: id, Info: template.Info{ID: id, Description: desc, Shapes: shapes}}
 }
@@ -53,7 +56,7 @@ func TestBuildTemplateRows(t *testing.T) {
 		{Name: "mimic.old", Latest: "1.0.0", Versions: []catalog.Version{
 			{Version: "1.0.0", Format: 1, MinEngine: "0.3.0"}, // a format this engine does not read
 		}},
-		{Name: "mimic.walkers", Shapes: []template.Shape{{Role: "single", Kind: "planeswalker"}}, Latest: "1.0.0", Versions: []catalog.Version{
+		{Name: "mimic.walkers", Title: "Walker frames", Shapes: []template.Shape{{Role: "single", Kind: "planeswalker"}}, Latest: "1.0.0", Versions: []catalog.Version{
 			{Version: "1.0.0", Format: 2, MinEngine: "0.3.0", Size: 41_300_000},
 		}},
 	}}
@@ -61,7 +64,7 @@ func TestBuildTemplateRows(t *testing.T) {
 	hasLocal := func(n string) bool { return false }
 	isCached := func(n, v string) bool { return n == "mimic.m15" && v == "0.1.0" }
 
-	rows := buildTemplateRows(idx, installed, hasLocal, isCached)
+	rows := buildTemplateRows(idx, installed, hasLocal, isCached, noneCached)
 
 	row, ok := findRow(rows, "mimic.m15")
 	if !ok {
@@ -86,6 +89,9 @@ func TestBuildTemplateRows(t *testing.T) {
 	if !ok || walkers.standard {
 		t.Errorf("walkers = %+v, want a row that does not render standard cards", walkers)
 	}
+	if walkers.title != "Walker frames" {
+		t.Errorf("walkers title = %q, want the catalog's", walkers.title)
+	}
 	if len(walkers.shapes) != 1 || walkers.shapes[0].Kind != "planeswalker" {
 		t.Errorf("walkers shapes = %v, want the catalog's", walkers.shapes)
 	}
@@ -98,7 +104,7 @@ func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
 	idx := oneTemplate("mimic.m15", catalog.Version{Version: "0.1.0", Format: 2, MinEngine: "0.3.0"})
 	rows := buildTemplateRows(idx, []pipeline.Installed{installedInfo("mimic.m15", "", pipeline.PrimaryShape)},
 		func(n string) bool { return n == "mimic.m15" },
-		func(n, v string) bool { return false })
+		func(n, v string) bool { return false }, noneCached)
 
 	row, ok := findRow(rows, "mimic.m15")
 	if !ok {
@@ -116,7 +122,7 @@ func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
 func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
 	rows := buildTemplateRows(nil, []pipeline.Installed{installedInfo("mimic.m15", "mine", pipeline.PrimaryShape)},
 		func(n string) bool { return n == "mimic.m15" },
-		func(n, v string) bool { return false })
+		func(n, v string) bool { return false }, noneCached)
 
 	row, ok := findRow(rows, "mimic.m15")
 	if !ok || len(row.versions) != 1 || row.versions[0].version != pipeline.LocalVersion || row.description != "mine" {

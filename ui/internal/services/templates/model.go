@@ -28,6 +28,7 @@ type versionRow struct {
 // else from the installed copy
 type templateRow struct {
 	name        string
+	title       string
 	description string
 	standard    bool
 	// shapes are the faces the template renders, when they are known: from its
@@ -42,8 +43,9 @@ type templateRow struct {
 // UI. A version is selectable when the engine satisfies its minEngine, and a
 // version in a bundle format the engine does not read is not listed. A loose
 // developer directory contributes a synthetic local version, and an installed
-// template with no catalog entry still appears, so an offline developer sees it
-func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLocal func(id string) bool, isCached func(id, ver string) bool) []templateRow {
+// template with no catalog entry still appears, so an offline developer sees it.
+// cachedVersions lists the versions of a template that are in the cache
+func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLocal func(id string) bool, isCached func(id, ver string) bool, cachedVersions func(id string) []string) []templateRow {
 	byID := make(map[string]pipeline.Installed, len(installed))
 	for _, in := range installed {
 		byID[in.ID] = in
@@ -53,12 +55,12 @@ func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLo
 	seen := map[string]bool{}
 	if idx != nil {
 		for _, t := range idx.Templates {
-			row := templateRow{name: t.Name, description: t.Description, standard: true, shapes: t.Shapes}
+			row := templateRow{name: t.Name, title: t.Title, description: t.Description, standard: true, shapes: t.Shapes}
 			if len(t.Shapes) > 0 {
 				row.standard = slices.Contains(t.Shapes, pipeline.PrimaryShape)
 			}
 			if in, ok := byID[t.Name]; ok {
-				row.description, row.standard, row.shapes = in.Description, slices.Contains(in.Shapes, pipeline.PrimaryShape), in.Shapes
+				row.title, row.description, row.standard, row.shapes = in.Name, in.Description, slices.Contains(in.Shapes, pipeline.PrimaryShape), in.Shapes
 			}
 			if hasLocal(t.Name) {
 				row.versions = append(row.versions, localRow())
@@ -81,12 +83,11 @@ func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLo
 		if seen[in.ID] {
 			continue
 		}
-		row := templateRow{name: in.ID, description: in.Description, standard: slices.Contains(in.Shapes, pipeline.PrimaryShape), shapes: in.Shapes}
+		row := templateRow{name: in.ID, title: in.Name, description: in.Description, standard: slices.Contains(in.Shapes, pipeline.PrimaryShape), shapes: in.Shapes}
 		if hasLocal(in.ID) {
 			row.versions = append(row.versions, localRow())
 		}
-		cached, _ := catalog.CachedVersions(in.ID)
-		for _, v := range cached {
+		for _, v := range cachedVersions(in.ID) {
 			row.versions = append(row.versions, versionRow{version: v, cached: true, selectable: true})
 		}
 		rows = append(rows, row)

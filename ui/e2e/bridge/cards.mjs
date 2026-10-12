@@ -33,3 +33,13 @@ export const done = (seq, extra = {}) => ({ seq, frac: 1, done: true, ...extra }
 
 // A resolved list row, as the resolver reports it
 export const matched = (index, name, extra) => ({ index, status: "matched", card: card(name, extra) });
+
+// An installed template, as the app reports the active one when a bundle is in use
+export const installedTemplate = {
+  name: "mimic.m15",
+  version: "0.1.0",
+  label: "Modern frame (M15) · 0.1.0",
+  source: "cached",
+  shapes: [{ role: "single", kind: "standard" }],
+  faces: { "single/standard": "mimic.m15" },
+};

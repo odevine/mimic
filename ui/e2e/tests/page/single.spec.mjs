@@ -1,4 +1,4 @@
-import { test, expect } from "../../bridge-fixtures.mjs";
+import { test, expect, noTemplate } from "../../bridge-fixtures.mjs";
 import { SinglePage } from "../../pages/SinglePage.mjs";
 import { done, progress, result } from "../../bridge/cards.mjs";
 
@@ -72,4 +72,26 @@ test("a save dialog that is cancelled leaves the card unsaved and quiet", async 
 
   await expect(single.activity).toHaveAttribute("data-state", "idle");
   expect(bridge.calledWith("Render.Save")).toHaveLength(0);
+});
+
+test("with no template installed the page says so and points to the Templates tab", async ({ bridge, page }) => {
+  noTemplate(bridge);
+  bridge.reply("Cards.Search", [result("Sol Ring")]);
+  bridge.reply("Cards.Printings", []);
+  await bridge.boot();
+  await expect(page.locator("#template-label")).toHaveText("No template installed");
+  await expect(page.locator("#no-template-strip")).toBeVisible();
+  await expect(page.locator("#activity-title")).toHaveText("No template is installed");
+
+  // A card can be found and edited, but there is nothing to draw it with
+  const single = new SinglePage(page);
+  await single.search("sol ring");
+  await single.select("Sol Ring");
+  await expect(page.locator("#activity-title")).toHaveText("No template is installed");
+  await expect(page.locator("#activity-step")).toContainText("Templates tab");
+
+  // The strip leads to the library, and is not shown there
+  await page.locator("#no-template-action").click();
+  await expect(page.locator("#tm-library")).toBeVisible();
+  await expect(page.locator("#no-template-strip")).toBeHidden();
 });

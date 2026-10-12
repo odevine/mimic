@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"sync"
 	"testing"
 
@@ -350,5 +351,24 @@ func TestABlendThatLandsOnNoPixelIsNil(t *testing.T) {
 	}
 	if img != nil {
 		t.Errorf("a layer off the document is %v, want nil", img.Bounds())
+	}
+}
+
+func TestBlenderShiftedMovesItsSeams(t *testing.T) {
+	bl, ok := NewBlender(2, &manifest.Blend{Shape: "linear"}, 1000)
+	if !ok {
+		t.Fatal("no blender")
+	}
+	moved := bl.Shifted(200, 1000)
+	var a, b [2]float64
+	for _, f := range []float64{0.1, 0.45, 0.5, 0.62, 0.9} {
+		bl.Weights(f, a[:])
+		moved.Weights(f+0.2, b[:])
+		if math.Abs(a[0]-b[0]) > 1e-9 {
+			t.Errorf("weights at %v = %v, shifted at %v = %v", f, a, f+0.2, b)
+		}
+	}
+	if same := bl.Shifted(0, 1000); same.seams[0] != bl.seams[0] {
+		t.Error("a shift of zero moved the seams")
 	}
 }

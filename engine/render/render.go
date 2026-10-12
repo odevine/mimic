@@ -461,7 +461,7 @@ func layerNode(ctx context.Context, loads *frameLoads, t *template.Template, req
 	if _, whole := variants[material.Key()]; !whole {
 		if paths := template.BlendedPaths(variants, material); paths != nil {
 			if bl, ok := template.NewBlender(len(paths), e.Part.Blend, authored.X); ok {
-				blended, blender = paths, bl
+				blended, blender = paths, bl.Shifted(e.Origin().X-e.Part.Origin.X, authored.X)
 			}
 		}
 	}

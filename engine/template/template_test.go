@@ -292,14 +292,6 @@ func TestLoadRefusesWhatTheEngineDoesNotDrawYet(t *testing.T) {
 			e.Rotate = 90
 			m.Layouts["normal"].Stack[0] = e
 		},
-		"layouts.normal.textBoxes.title.rotate": func(m *manifest.Manifest) {
-			b := m.Layouts["normal"].TextBoxes["title"]
-			b.Rotate = 90
-			m.Layouts["normal"].TextBoxes["title"] = b
-		},
-		"layouts.normal.art[0].rotate": func(m *manifest.Manifest) {
-			m.Layouts["normal"].Art[0].Rotate = 180
-		},
 	}
 	for path, edit := range cases {
 		tmpl, ds, err := editedSmall(t, edit)

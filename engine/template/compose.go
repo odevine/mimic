@@ -275,6 +275,20 @@ func Rotate(buf *raster.Buffer, degrees int) *raster.Buffer {
 	return out
 }
 
+// TurnRect returns r turned clockwise by degrees, a multiple of 90, about the point
+// at half of (cx2, cy2). The center is given doubled so a box with an odd side can
+// turn about its middle
+func TurnRect(r image.Rectangle, cx2, cy2, degrees int) image.Rectangle {
+	for turns := ((degrees/90)%4 + 4) % 4; turns > 0; turns-- {
+		// A quarter turn sends (x, y) to (cx - (y - cy), cy + (x - cx))
+		r = image.Rect(
+			(cx2-(2*r.Max.Y-cy2))/2, (cy2+(2*r.Min.X-cx2))/2,
+			(cx2-(2*r.Min.Y-cy2))/2, (cy2+(2*r.Max.X-cx2))/2,
+		)
+	}
+	return r
+}
+
 // HalfOfArt is the i-th of n equal vertical strips of an art image, counted from
 // the left. A split card's art crop holds both halves side by side, and each
 // half's art window takes its own strip

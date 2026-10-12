@@ -132,11 +132,16 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 			if len(geo.Art) > 1 {
 				src = template.HalfOfArt(req.Art, slotIdx, len(geo.Art))
 			}
-			art := template.FitArt(src, slot.Width, slot.Height)
+			fw, fh := slot.Width, slot.Height
+			if quarter(slot.Rotate) {
+				fw, fh = fh, fw
+			}
+			art := template.FitArt(src, fw, fh)
 			artBuf, err := raster.FromImage(art)
 			if err != nil {
 				return nil, fmt.Errorf("render: wrapping art: %w", err)
 			}
+			artBuf = template.Rotate(artBuf, slot.Rotate)
 			nodes = append(nodes, &canvas.Layer{Content: artBuf, Origin: image.Pt(slot.X, slot.Y), Mode: blend.Normal})
 		}
 	}
@@ -378,6 +383,13 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 			box.Avoid = r
 		}
 	}
+	// A turned box lays its text out in the rect turned a quarter about its middle,
+	// and the finished text is turned back about that same middle
+	cx2, cy2 := 2*box.X+box.Width, 2*box.Y+box.Height
+	if quarter(box.Rotate) {
+		box.Width, box.Height = box.Height, box.Width
+		box.X, box.Y = (cx2-box.Width)/2, (cy2-box.Height)/2
+	}
 	res, err := template.RenderTextBox(box, docW, docH, parts...)
 	if err != nil {
 		return nil, fmt.Errorf("render: rendering text box %q: %w", job.key, err)
@@ -386,7 +398,12 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 	if err != nil {
 		return nil, fmt.Errorf("render: wrapping text box %q: %w", job.key, err)
 	}
-	text := &canvas.Layer{Content: buf, Origin: res.Image.Bounds().Min, Mode: blend.Normal}
+	origin := res.Image.Bounds().Min
+	if box.Rotate != 0 {
+		buf = template.Rotate(buf, box.Rotate)
+		origin = template.TurnRect(res.Image.Bounds(), cx2, cy2, box.Rotate).Min
+	}
+	text := &canvas.Layer{Content: buf, Origin: origin, Mode: blend.Normal}
 	if box.Shadow != nil {
 		text.Effects = []effects.Effect{box.Shadow.Effect(box.FontSize)}
 	}
@@ -407,6 +424,9 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 	}
 	return out, nil
 }
+
+// quarter reports whether a turn of degrees swaps width and height
+func quarter(degrees int) bool { return (degrees/90)%2 != 0 }
 
 // lerp reports the cumulative fraction at item i of n across a phase spanning
 // [from, to], stepping to the end as items complete. n <= 0 yields from

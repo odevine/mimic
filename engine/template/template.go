@@ -136,16 +136,6 @@ func unsupported(m *manifest.Manifest) manifest.Diagnostics {
 				add(fmt.Sprintf("layouts.%s.stack[%d].rotate", ln, i), "turning an entry")
 			}
 		}
-		for bn, b := range l.TextBoxes {
-			if b.Rotate != 0 {
-				add(fmt.Sprintf("layouts.%s.textBoxes.%s.rotate", ln, bn), "turning a text box")
-			}
-		}
-		for i, a := range l.Art {
-			if a.Rotate != 0 {
-				add(fmt.Sprintf("layouts.%s.art[%d].rotate", ln, i), "turning an art window")
-			}
-		}
 	}
 	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
 	return ds

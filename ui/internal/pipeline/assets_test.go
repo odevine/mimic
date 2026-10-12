@@ -421,3 +421,24 @@ func TestTitlesComeFromTheManifest(t *testing.T) {
 		t.Errorf("rows = %+v", rows[0])
 	}
 }
+
+// The launch check tests the app's plumbing with nothing installed, so it lets the stand-in render
+func TestTheStandInRendersWhenAskedTo(t *testing.T) {
+	withEmptyAssetChain(t)
+	at, _, err := Resolve(catalogtest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(nil, nil)
+	defer p.Close()
+	p.Install(at)
+	p.SetStandInRenders(true)
+
+	if c, ok := p.Choose(PrimaryShape); !ok || c.Name != at.Name {
+		t.Fatalf("chose %+v, %v", c, ok)
+	}
+	d := &card.Data{Name: "Plain", TypeLine: "Instant", Layout: "normal"}
+	if _, err := p.Render(context.Background(), d, 0, nil, 72, nil); err != nil {
+		t.Errorf("render = %v", err)
+	}
+}

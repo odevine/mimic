@@ -5,9 +5,11 @@
 import { app } from "./state.js";
 
 // noTemplateInstalled reports whether the app is running with nothing to render
-// with, which the app calls the placeholder
+// with, which the app calls the placeholder. The launch check lets the placeholder
+// render, and then it renders faces like any template
 export function noTemplateInstalled() {
-  return app.template.peek()?.source === "placeholder";
+  const t = app.template.peek();
+  return t?.source === "placeholder" && Object.keys(t.faces || {}).length === 0;
 }
 
 // describeShape names a face's shape the way a person would, for "normal does

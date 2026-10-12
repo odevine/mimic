@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { $, isTyping, modKey } from "./dom.js";
 import { app, effect } from "./state.js";
+import { noTemplateInstalled } from "./supports.js";
 import { applyCapabilities, initGateGuard } from "./capabilities.js";
 import { initTooltips } from "./components/tooltip.js";
 import { initTemplatePicker, loadActiveTemplate } from "./components/templatePicker.js";
@@ -99,7 +100,8 @@ function initShell() {
   // With no template installed there is nothing to render with, so every mode but
   // Templates says so and offers the way to one
   effect(() => {
-    $("no-template-strip").hidden = !(app.template.value?.source === "placeholder" && app.mode.value !== "templates");
+    app.template.value;
+    $("no-template-strip").hidden = !(noTemplateInstalled() && app.mode.value !== "templates");
   });
   $("no-template-action").addEventListener("click", () => {
     location.hash = "templates";

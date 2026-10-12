@@ -95,6 +95,9 @@ test("with no template installed every face says so, not that some shape is miss
   assert.equal(noTemplateInstalled(), true);
   assert.equal(faceUnsupportedBy({ shapes: [single] }, 0), "No template is installed");
   assert.equal(unsupportedBy({ shapes: [single] }), "No template is installed");
+  // The launch check lets the placeholder render, and then it has faces like any template
+  app.template.value = { name: "mimic.placeholder", source: "placeholder", faces: { "single/standard": "mimic.placeholder" } };
+  assert.equal(noTemplateInstalled(), false);
   // Once a template is installed the message names the shape again
   app.template.value = { name: "mimic.m15", source: "cached", faces: { "single/standard": "mimic.m15" } };
   assert.equal(noTemplateInstalled(), false);

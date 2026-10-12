@@ -67,6 +67,9 @@ type Options struct {
 	// FontDir is the -fonts flag, a font override directory that wins over
 	// every other source. Empty means the usual lookup
 	FontDir string
+	// StandInRenders lets the built-in stand-in render when nothing is installed,
+	// for the launch check, which tests the app and not a template
+	StandInRenders bool
 }
 
 // Workspace is the shared, concurrency-safe state behind the services. Each
@@ -123,6 +126,7 @@ func New(o Options) *Workspace {
 	fd := fontdir.Resolve(o.FontDir, ManagedFontsDir())
 	pipe.SetFontDir(fd.Path)
 	pipe.SetFeatures(p.Features)
+	pipe.SetStandInRenders(o.StandInRenders)
 	catalog.RemoveLegacy()
 
 	at, source := startupTemplate(p)

@@ -56,7 +56,7 @@ func launch() error {
 		smokeOut = filepath.Join(scratch, "out")
 	}
 
-	ws := workspace.New(workspace.Options{FontDir: *fontDir})
+	ws := workspace.New(workspace.Options{FontDir: *fontDir, StandInRenders: *smoke})
 	defer ws.Close()
 	if smokeOut != "" {
 		settings := ws.Prefs.Settings()

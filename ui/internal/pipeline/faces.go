@@ -47,7 +47,7 @@ func (p *Pipeline) Choose(sh template.Shape) (prefs.TemplateChoice, bool) {
 			return c, true
 		}
 	}
-	if at := p.active.Load(); !at.IsPlaceholder() && at.Serves(sh) {
+	if at := p.active.Load(); (!at.IsPlaceholder() || p.standInRenders()) && at.Serves(sh) {
 		return prefs.TemplateChoice{Name: at.Name, Version: at.Version}, true
 	}
 	for _, in := range installed {

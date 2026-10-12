@@ -2,7 +2,7 @@
 
 A desktop app for the mimic card renderer. It opens a window that shows an
 embedded web frontend through the system webview, searches Scryfall, previews a
-card through the normal template, and saves the result. The frontend and the Go
+card through the active template, and saves the result. The frontend and the Go
 services talk through the window, so nothing listens on the network.
 
 The frontend is embedded with `//go:embed`, so there is no Node or npm step. The

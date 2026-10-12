@@ -3,45 +3,25 @@
 package catalogtest
 
 import (
-	"archive/zip"
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/odevine/mimic/ui/internal/templatetest"
 )
 
-// Bundle builds a minimal valid .mimic for normal 0.1.0 in memory and returns
-// its bytes and SHA-256, mirroring the producer layout so the catalog download
-// and the ZipAssetProvider both accept it
+// ID is the id of the template the catalog lists
+const ID = "test.frame"
+
+// Bundle builds a valid .mimic for ID 0.1.0 and returns its bytes and SHA-256
 func Bundle(t *testing.T) ([]byte, string) {
 	t.Helper()
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	add := func(name string, method uint16, body string) {
-		w, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: method})
-		if err != nil {
-			t.Fatalf("adding %q: %v", name, err)
-		}
-		if _, err := io.WriteString(w, body); err != nil {
-			t.Fatalf("writing %q: %v", name, err)
-		}
-	}
-	add("bundle.json", zip.Deflate, `{"format":1,"template":"normal","version":"0.1.0","minEngine":"0.3.0"}`)
-	add("manifest.json", zip.Deflate, `{"template":"normal","width":744,"height":1039,"layers":[]}`)
-	add("background/any.png", zip.Store, "fake-png-bytes")
-	if err := zw.Close(); err != nil {
-		t.Fatalf("closing bundle: %v", err)
-	}
-	sum := sha256.Sum256(buf.Bytes())
-	return buf.Bytes(), hex.EncodeToString(sum[:])
+	return templatetest.Spec{ID: ID, Version: "0.1.0"}.Bundle(t)
 }
 
-// Server is a running catalog that lists Bundle as normal 0.1.0
+// Server is a running catalog that lists Bundle as ID 0.1.0
 type Server struct {
 	// IndexURL is the catalog to point catalog.IndexURL at
 	IndexURL string
@@ -64,7 +44,7 @@ func Serve(t *testing.T) *Server {
 	s := &Server{SHA: sha}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/normal.mimic", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/"+ID+".mimic", func(w http.ResponseWriter, r *http.Request) {
 		s.downloads.Add(1)
 		w.Write(bundle)
 	})
@@ -72,10 +52,11 @@ func Serve(t *testing.T) *Server {
 		json.NewEncoder(w).Encode(map[string]any{
 			"schema": 1,
 			"templates": []map[string]any{{
-				"name":   "normal",
+				"name":   ID,
 				"latest": "0.1.0",
 				"versions": []map[string]any{{
 					"version":   "0.1.0",
+					"format":    2,
 					"minEngine": "0.3.0",
 					"url":       s.BundleURL,
 					"size":      len(bundle),
@@ -87,6 +68,6 @@ func Serve(t *testing.T) *Server {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	s.IndexURL = srv.URL + "/index.json"
-	s.BundleURL = srv.URL + "/normal.mimic"
+	s.BundleURL = srv.URL + "/" + ID + ".mimic"
 	return s
 }

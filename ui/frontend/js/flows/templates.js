@@ -53,6 +53,59 @@ function versionRow(t, v) {
   return row;
 }
 
+// aboutTemplate says who made an installed template, under what licence, and
+// whose art it is cut from. Links open in the browser through the page's one handler
+function aboutTemplate(d) {
+  const by = [];
+  if (d.title) by.push(d.title);
+  if (d.author && d.author.name) by.push(d.author.url ? h("span", {}, "by ", h("a", { href: d.author.url }, d.author.name)) : `by ${d.author.name}`);
+  if (d.license) by.push(`${d.license} licence`);
+  const lines = [h("div", { class: "tp-desc" }, ...by.flatMap((part, i) => (i ? [" · ", part] : [part])))];
+  if (d.credits && d.credits.length) {
+    const credits = d.credits.map((c) => (c.url ? h("a", { href: c.url, title: c.note || "" }, c.name) : h("span", { title: c.note || "" }, c.name)));
+    lines.push(h("div", { class: "tp-desc" }, "Art from ", ...credits.flatMap((el, i) => (i ? [", ", el] : [el]))));
+  }
+  return lines;
+}
+
+// featureControl draws the control for one choice a template offers: a switch for
+// on or off, a menu for one of several, and a slider for a number. Each keeps its
+// value as soon as it changes
+function featureControl(t, f) {
+  const id = `feature-${t.name}-${f.name}`.replace(/[^a-z0-9]/gi, "-");
+  const save = async (value, control, show) => {
+    control.disabled = true;
+    try {
+      await api.setTemplateFeature(t.name, f.name, value);
+      await changed();
+    } catch (err) {
+      toast(err.message, "err", 6000);
+      await loadLibrary();
+    } finally {
+      control.disabled = false;
+      show?.();
+    }
+  };
+  let control;
+  let readout = null;
+  if (f.type === "bool") {
+    control = h("input", { id, type: "checkbox", checked: f.value === true });
+    control.addEventListener("change", () => save(control.checked, control));
+    return h("div", { class: "setting tp-feature" }, h("label", { for: id }, f.label), h("span", { class: "inline" }, control));
+  }
+  if (f.type === "choice") {
+    control = h("select", { id }, ...(f.values || []).map((v) => new Option(v, v)));
+    control.value = f.value;
+    control.addEventListener("change", () => save(control.value, control));
+    return h("div", { class: "setting tp-feature" }, h("label", { for: id }, f.label), control);
+  }
+  control = h("input", { id, type: "range", min: f.min, max: f.max, step: f.step, value: f.value });
+  readout = h("span", { class: "tp-readout" }, String(f.value));
+  control.addEventListener("input", () => (readout.textContent = control.value));
+  control.addEventListener("change", () => save(Number(control.value), control));
+  return h("div", { class: "setting tp-feature" }, h("label", { for: id }, f.label), h("span", { class: "inline" }, control, readout));
+}
+
 async function loadLibrary() {
   const list = $("tm-library-list");
   let rows;
@@ -63,7 +116,7 @@ async function loadLibrary() {
     return;
   }
   if (!rows || rows.length === 0) {
-    list.replaceChildren(h("p", { class: "dim tm-empty" }, "No catalog available. Connect to the internet to fetch templates."));
+    list.replaceChildren(h("p", { class: "dim tm-empty" }, "No templates are installed, and the catalog lists none this version of the app can use yet. If you are offline, connect to the internet and open this page again."));
     return;
   }
   list.replaceChildren(
@@ -76,9 +129,12 @@ async function loadLibrary() {
           { class: "tp-head" },
           h("div", { class: "tp-name" }, t.name),
           t.description ? h("div", { class: "tp-desc" }, t.description) : null,
-          t.reason ? h("div", { class: "tp-desc" }, t.reason) : null,
+          ...(t.details ? aboutTemplate(t.details) : []),
         ),
         h("div", { class: "tp-versions" }, ...(t.versions || []).map((v) => versionRow(t, v))),
+        t.details && t.details.features && t.details.features.length
+          ? h("div", { class: "tp-features" }, ...t.details.features.map((f) => featureControl(t, f)))
+          : null,
       ),
     ),
   );

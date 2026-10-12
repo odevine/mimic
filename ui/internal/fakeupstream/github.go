@@ -1,23 +1,17 @@
 package fakeupstream
 
 import (
-	"archive/zip"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/odevine/mimic/engine/render"
+	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/template"
-	_ "github.com/odevine/mimic/engine/template/all" // registers every template
+	"github.com/odevine/mimic/ui/internal/templatetest"
 )
 
 // Release is a ui release the fake offers
@@ -110,12 +104,12 @@ func (s *Server) githubFiles(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-// bundle is a template bundle the fake offers: the engine's placeholder assets
-// with a header, so the app installs it and renders with it
+// bundle is a template bundle the fake offers: flat colors where a frame's art
+// goes, built by the engine's packer so the app installs it and renders with it
 type bundle struct {
-	name, version string
-	data          []byte
-	sha           string
+	name, version, description string
+	data                       []byte
+	sha                        string
 }
 
 func (b bundle) file() string { return b.name + "-" + b.version + ".mimic" }
@@ -124,82 +118,28 @@ func (b bundle) url() string {
 	return "https://github.com/odevine/mimic-templates/releases/download/" + b.name + "-v" + b.version + "/" + b.file()
 }
 
-// placeholders holds each template's generated assets, as path and bytes, since
-// generating them is the slow part of building a bundle
-var placeholders = struct {
-	sync.Mutex
-	byName map[string][]placeholder
-}{byName: map[string][]placeholder{}}
-
-type placeholder struct {
-	path string
-	data []byte
+// shapesFor is what a template of the id renders: the faces of a transform card
+// for one named transform, and a standard single card otherwise
+func shapesFor(id string) []frame.Shape {
+	if strings.HasSuffix(id, ".transform") {
+		return templatetest.Transform
+	}
+	return []frame.Shape{templatetest.Single}
 }
 
-func placeholderFiles(name string) ([]placeholder, error) {
-	placeholders.Lock()
-	defer placeholders.Unlock()
-	if files, ok := placeholders.byName[name]; ok {
-		return files, nil
-	}
-	if _, err := template.Get(name); err != nil {
-		return nil, fmt.Errorf("fakeupstream: no template named %q: %w", name, err)
-	}
-	dir, err := os.MkdirTemp("", "fakeupstream-bundle-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	if err := render.WritePlaceholderAssets(dir, name); err != nil {
-		return nil, err
-	}
-	var files []placeholder
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, path)
-		raw, err := os.ReadFile(path)
-		files = append(files, placeholder{filepath.ToSlash(rel), raw})
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	placeholders.byName[name] = files
-	return files, nil
-}
-
-func newBundle(name, version string) (bundle, error) {
+func newBundle(name, version string, features bool) (bundle, error) {
 	if name == "" || version == "" {
 		return bundle{}, fmt.Errorf("fakeupstream: a template needs a name and a version")
 	}
-	files, err := placeholderFiles(name)
+	spec := templatetest.Spec{ID: name, Version: version, Shapes: shapesFor(name)}
+	if features {
+		spec.Features = templatetest.Features
+	}
+	data, sha, err := spec.Zip()
 	if err != nil {
 		return bundle{}, err
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	header, _ := json.Marshal(map[string]any{"format": 1, "template": name, "version": version, "minEngine": "0.3.0"})
-	w, err := zw.Create("bundle.json")
-	if err != nil {
-		return bundle{}, err
-	}
-	w.Write(header)
-	for _, f := range files {
-		fw, err := zw.Create(f.path)
-		if err != nil {
-			return bundle{}, err
-		}
-		if _, err := fw.Write(f.data); err != nil {
-			return bundle{}, err
-		}
-	}
-	if err := zw.Close(); err != nil {
-		return bundle{}, err
-	}
-	sum := sha256.Sum256(buf.Bytes())
-	return bundle{name: name, version: version, data: buf.Bytes(), sha: hex.EncodeToString(sum[:])}, nil
+	return bundle{name: name, version: version, description: "Flat colors where a frame's art goes", data: data, sha: sha}, nil
 }
 
 func (s *Server) githubRaw(w http.ResponseWriter, r *http.Request) {
@@ -212,27 +152,30 @@ func (s *Server) githubRaw(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	type version struct {
 		Version   string `json:"version"`
+		Format    int    `json:"format"`
 		MinEngine string `json:"minEngine"`
 		URL       string `json:"url"`
 		Size      int    `json:"size"`
 		SHA256    string `json:"sha256"`
 	}
 	type entry struct {
-		Name     string    `json:"name"`
-		Latest   string    `json:"latest"`
-		Versions []version `json:"versions"`
+		Name        string        `json:"name"`
+		Description string        `json:"description"`
+		Shapes      []frame.Shape `json:"shapes"`
+		Latest      string        `json:"latest"`
+		Versions    []version     `json:"versions"`
 	}
 	byName := map[string]*entry{}
 	var order []string
 	for _, b := range catalog {
 		e := byName[b.name]
 		if e == nil {
-			e = &entry{Name: b.name}
+			e = &entry{Name: b.name, Description: b.description, Shapes: shapesFor(b.name)}
 			byName[b.name] = e
 			order = append(order, b.name)
 		}
 		// Newest first, so Versions[0] is Latest
-		e.Versions = append([]version{{Version: b.version, MinEngine: "0.3.0", URL: b.url(), Size: len(b.data), SHA256: b.sha}}, e.Versions...)
+		e.Versions = append([]version{{Version: b.version, Format: template.BundleFormat, MinEngine: "0.3.0", URL: b.url(), Size: len(b.data), SHA256: b.sha}}, e.Versions...)
 		e.Latest = e.Versions[0].Version
 	}
 	templates := make([]*entry, 0, len(order))

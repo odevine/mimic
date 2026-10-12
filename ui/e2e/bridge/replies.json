@@ -217,20 +217,18 @@
     ]
   },
   "Templates.Active": {
-    "name": "normal",
+    "name": "mimic.placeholder",
     "version": "",
-    "label": "normal (placeholder)",
+    "label": "mimic.placeholder (placeholder)",
     "source": "placeholder",
-    "supports": {
-      "roles": [
-        "single"
-      ],
-      "kinds": [
-        "standard"
-      ]
-    },
+    "shapes": [
+      {
+        "role": "single",
+        "kind": "standard"
+      }
+    ],
     "faces": {
-      "single/standard": "normal"
+      "single/standard": "mimic.placeholder"
     }
   },
   "Templates.List": [],
@@ -241,9 +239,9 @@
       "kind": "standard",
       "options": null,
       "chosen": {
-        "name": "normal"
+        "name": "mimic.placeholder"
       },
-      "using": "normal (placeholder)",
+      "using": "mimic.placeholder (placeholder)",
       "primary": true
     }
   ],

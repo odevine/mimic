@@ -117,6 +117,22 @@
   font-size: 12px;
 }
 
+.template-library .tp-features {
+  padding: 4px 12px 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.template-library .tp-readout {
+  min-width: 3ch;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+}
+
+.template-library .tp-features .setting {
+  margin-top: 6px;
+}
+
 .tp-foot {
   display: flex;
   flex-direction: column;

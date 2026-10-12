@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
-	_ "github.com/odevine/mimic/engine/template/all" // registers every template
 	"github.com/odevine/mimic/engine/version"
 	"github.com/odevine/mimic/ui/internal/catalog"
 )
@@ -69,12 +73,6 @@ func (t *Template) dropLayers() {
 	}
 }
 
-// LooseDirBases are the roots under which a template's loose developer assets
-// live as assets/<name>, relative to both a repo-root run and a ui-subdir run.
-// Loose assets are developer-local, so a checkout without them falls back to a
-// cached bundle or generated placeholders
-var LooseDirBases = []string{"assets", filepath.Join("..", "assets")}
-
 // LocalVersion is the synthetic version label for a template rendered from its
 // loose developer directory rather than a downloaded bundle
 const LocalVersion = "local"
@@ -93,31 +91,27 @@ const (
 	SourceExplicit
 )
 
-// Resolve builds the startup template from a network-free fallback
-// chain: a loose developer directory, then the newest cached bundle, then
-// generated placeholders. It never blocks on the network, so a fresh offline
-// Install still renders. The returned source lets the caller decide whether to
-// look for an update
-func Resolve(name string) (*Template, Source, error) {
-	tmpl, err := template.Get(name)
-	if err != nil {
-		return nil, SourcePlaceholder, err
+// Resolve builds the startup template from a network-free fallback chain: the
+// loose developer folder of the template with the id, then its newest cached
+// bundle, then the placeholder template. It never blocks on the network, so a
+// fresh offline install still renders. The returned source lets the caller decide
+// whether to look for an update. The placeholder has an id of its own
+func Resolve(id string) (*Template, Source, error) {
+	if dir := LooseDir(id); dir != "" {
+		at, err := openLoose(id, dir)
+		if err != nil {
+			return nil, SourceLoose, err
+		}
+		return at, SourceLoose, nil
 	}
-	if dir := LooseDir(name); dir != "" {
-		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
-		return &Template{
-			Name: name, Version: LocalVersion, template: tmpl,
-			provider: p, cleanup: cleanup,
-		}, SourceLoose, nil
-	}
-	if ver, ok := catalog.NewestCachedVersion(name); ok {
-		if at, err := activeFromCachedBundle(name, ver, tmpl); err == nil {
+	if ver, ok := catalog.NewestCachedVersion(id); ok {
+		if at, err := activeFromCachedBundle(id, ver); err == nil {
 			return at, SourceBundle, nil
 		} else {
-			log.Printf("mimic-ui: skipping cached bundle %s %s: %v", name, ver, err)
+			log.Printf("mimic-ui: skipping cached bundle %s %s: %v", id, ver, err)
 		}
 	}
-	at, err := placeholderActive(name, tmpl)
+	at, err := placeholderActive()
 	if err != nil {
 		return nil, SourcePlaceholder, err
 	}
@@ -128,50 +122,42 @@ func Resolve(name string) (*Template, Source, error) {
 // local version uses the loose directory; any other version is ensured in the
 // cache (downloaded and verified when missing) and opened as a bundle. progress
 // may be nil
-func FromVersion(ctx context.Context, name, version string, progress func(done, total int64)) (*Template, error) {
-	tmpl, err := template.Get(name)
-	if err != nil {
-		return nil, err
-	}
+func FromVersion(ctx context.Context, id, version string, progress func(done, total int64)) (*Template, error) {
 	if version == LocalVersion {
-		dir := LooseDir(name)
+		dir := LooseDir(id)
 		if dir == "" {
-			return nil, fmt.Errorf("no local assets for %q", name)
+			return nil, fmt.Errorf("no local assets for %q", id)
 		}
-		p, cleanup := cached(template.NewFSAssetProvider(dir), nil)
-		return &Template{
-			Name: name, Version: LocalVersion, template: tmpl,
-			provider: p, cleanup: cleanup,
-		}, nil
+		return openLoose(id, dir)
 	}
-	if _, err := catalog.EnsureVersion(ctx, name, version, progress); err != nil {
+	if _, err := catalog.EnsureVersion(ctx, id, version, progress); err != nil {
 		return nil, err
 	}
-	return activeFromCachedBundle(name, version, tmpl)
+	return activeFromCachedBundle(id, version)
 }
 
 // Latest builds the template for the newest catalog version the engine
 // can render, downloading it when needed. It is the background-update path, so a
 // missing catalog or no compatible version is a returned error the caller logs
-func Latest(ctx context.Context, name string) (*Template, error) {
+func Latest(ctx context.Context, id string) (*Template, error) {
 	idx, err := catalog.FetchIndex(ctx)
 	if err != nil {
 		return nil, err
 	}
-	t, ok := idx.Find(name)
+	t, ok := idx.Find(id)
 	if !ok {
-		return nil, fmt.Errorf("template %q not in catalog", name)
+		return nil, fmt.Errorf("template %q not in catalog", id)
 	}
 	v, ok := catalog.PickCompatible(t)
 	if !ok {
-		return nil, fmt.Errorf("no version of %q is compatible with engine %s", name, version.Version)
+		return nil, fmt.Errorf("no version of %q is compatible with engine %s", id, version.Version)
 	}
-	return FromVersion(ctx, name, v.Version, nil)
+	return FromVersion(ctx, id, v.Version, nil)
 }
 
-// activeFromCachedBundle opens a cached bundle and pairs it with a template
-func activeFromCachedBundle(name, version string, tmpl template.Template) (*Template, error) {
-	path, err := catalog.BundlePath(name, version)
+// activeFromCachedBundle opens a cached bundle
+func activeFromCachedBundle(id, version string) (*Template, error) {
+	path, err := catalog.BundlePath(id, version)
 	if err != nil {
 		return nil, err
 	}
@@ -179,45 +165,122 @@ func activeFromCachedBundle(name, version string, tmpl template.Template) (*Temp
 	if err != nil {
 		return nil, err
 	}
-	p, cleanup := cached(zp, nil)
-	return &Template{
-		Name: name, Version: version, template: tmpl,
-		provider: p, cleanup: cleanup,
-	}, nil
+	at, err := open(id, version, zp, nil)
+	if err != nil {
+		zp.Close()
+		return nil, err
+	}
+	return at, nil
 }
 
-// WritePlaceholders writes a template's stand-in assets into a directory. Tests
-// swap in a copy of assets generated once, since encoding them is slow
-var WritePlaceholders = render.WritePlaceholderAssets
-
-// placeholderActive generates stand-in assets for a template that has no loose
-// directory and no cached bundle
-func placeholderActive(name string, tmpl template.Template) (*Template, error) {
-	tmp, err := os.MkdirTemp("", "mimic-placeholder-")
+// openLoose loads the template in a loose developer folder, and notes what its
+// files look like so a later change is noticed
+func openLoose(id, dir string) (*Template, error) {
+	stamp := looseStamp(dir)
+	at, err := open(id, LocalVersion, template.NewFSAssetProvider(dir), nil)
 	if err != nil {
 		return nil, err
 	}
-	if err := WritePlaceholders(tmp, name); err != nil {
-		os.RemoveAll(tmp)
-		return nil, err
-	}
-	p, cleanup := cached(template.NewFSAssetProvider(tmp), func() { os.RemoveAll(tmp) })
-	return &Template{
-		Name: name, Version: "", template: tmpl,
-		provider: p, cleanup: cleanup,
-	}, nil
+	at.dir, at.stamp = dir, stamp
+	return at, nil
 }
 
-// LooseDir returns the loose developer asset directory for a template, or "" if
-// none exists
-func LooseDir(name string) string {
-	for _, base := range LooseDirBases {
-		cand := filepath.Join(base, name)
-		if info, err := os.Stat(cand); err == nil && info.IsDir() {
-			return cand
+// looseStamp is the names, sizes, and modification times of a loose folder's
+// manifest and of every image the manifest names, which changes when an author
+// edits any of them. A folder that cannot be read has an empty stamp
+func looseStamp(dir string) string {
+	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	if err != nil {
+		return ""
+	}
+	m, _ := manifest.Decode(raw)
+	var b strings.Builder
+	add := func(rel string) {
+		if st, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel))); err == nil {
+			fmt.Fprintf(&b, "%s|%d|%d;", rel, st.Size(), st.ModTime().UnixNano())
 		}
 	}
-	return ""
+	add("manifest.json")
+	if m != nil {
+		for _, name := range slices.Sorted(maps.Keys(m.Parts)) {
+			for _, key := range slices.Sorted(maps.Keys(m.Parts[name].Variants)) {
+				add(m.Parts[name].Variants[key].Path)
+			}
+		}
+	}
+	return b.String()
+}
+
+// reloadChanged loads again any loose folder template that is in use and whose
+// files have changed since it was loaded, so an author sees an edit in the next
+// render. It looks at most once a second. A template that no longer loads is kept
+// as it was, and the error is logged
+func (p *Pipeline) reloadChanged() {
+	p.mu.Lock()
+	if time.Since(p.checked) < time.Second {
+		p.mu.Unlock()
+		return
+	}
+	p.checked = time.Now()
+	active := p.active.Load()
+	loaded := maps.Clone(p.loaded)
+	p.mu.Unlock()
+
+	stale := func(at *Template) bool { return at != nil && at.dir != "" && looseStamp(at.dir) != at.stamp }
+	if stale(active) {
+		if fresh, err := openLoose(active.Name, active.dir); err == nil {
+			p.Install(fresh)
+		} else {
+			log.Printf("mimic-ui: reloading %s: %v", active.Name, err)
+		}
+	}
+	for id, at := range loaded {
+		if !stale(at) {
+			continue
+		}
+		fresh, err := openLoose(id, at.dir)
+		if err != nil {
+			log.Printf("mimic-ui: reloading %s: %v", id, err)
+			continue
+		}
+		p.mu.Lock()
+		if p.loaded[id] == at {
+			p.loaded[id] = fresh
+			p.cleanups = append(p.cleanups, fresh.cleanup)
+			at.dropLayers()
+		} else {
+			fresh.Close()
+		}
+		p.mu.Unlock()
+	}
+}
+
+// placeholderActive is the template for an app with nothing installed. Its
+// version is empty
+func placeholderActive() (*Template, error) {
+	return open(render.PlaceholderID, "", render.PlaceholderAssets(), nil)
+}
+
+// open loads a template from a provider behind a layer cache, and checks that it
+// is the template that was asked for. Releasing the template releases the cache
+// and the provider with it
+func open(id, version string, p template.AssetProvider, after func()) (*Template, error) {
+	cp, cleanup := cached(p, after)
+	tmpl, ds, err := template.Load(cp)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("loading %s: %w", id, err)
+	}
+	if tmpl.ID() != id {
+		cleanup()
+		return nil, fmt.Errorf("expected template %s, and it is %s", id, tmpl.ID())
+	}
+	for _, d := range ds {
+		if d.Severity == manifest.Warning {
+			log.Printf("mimic-ui: template %s: %v", id, d)
+		}
+	}
+	return &Template{Name: id, Version: version, tmpl: tmpl, provider: cp, cleanup: cleanup}, nil
 }
 
 // Display names a template and version for the indicator. An empty version is

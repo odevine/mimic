@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/odevine/mimic/engine/template"
 )
 
 // IndexURL is the catalog the app fetches to discover templates and versions.
@@ -35,19 +37,28 @@ type Index struct {
 	Templates []Template `json:"templates"`
 }
 
-// Template groups every published version of one template. Versions are
-// sorted newest first, so Versions[0] is Latest
+// Template groups every published version of one template. Name is the
+// template's id, such as "mimic.m15". Versions are sorted newest first, so
+// Versions[0] is Latest
 type Template struct {
-	Name     string    `json:"name"`
-	Latest   string    `json:"latest"`
-	Versions []Version `json:"versions"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Shapes are the faces the template renders, when the catalog says, so the
+	// manager can tell a template for standard cards from one for other faces
+	// before it is installed. An absent list says nothing
+	Shapes   []template.Shape `json:"shapes,omitempty"`
+	Latest   string           `json:"latest"`
+	Versions []Version        `json:"versions"`
 }
 
 // Version is one downloadable bundle. SHA256 gates the download's
-// integrity; MinEngine lets the app filter incompatible versions before
-// fetching anything
+// integrity. Format is the bundle container format, and a version in a format
+// this engine does not read is never offered, so an entry without one, which is
+// a format 1 bundle, is left out. MinEngine lets the app filter incompatible
+// versions before fetching anything
 type Version struct {
 	Version   string `json:"version"`
+	Format    int    `json:"format,omitempty"`
 	MinEngine string `json:"minEngine"`
 	URL       string `json:"url"`
 	Size      int64  `json:"size"`
@@ -123,7 +134,10 @@ func getBytes(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// Find returns the named template from the catalog
+// Readable reports whether the engine reads the version's bundle format
+func (v Version) Readable() bool { return v.Format == template.BundleFormat }
+
+// Find returns the template with the id from the catalog
 func (idx *Index) Find(name string) (Template, bool) {
 	for _, t := range idx.Templates {
 		if t.Name == name {

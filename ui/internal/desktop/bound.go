@@ -76,6 +76,7 @@ type templatesAPI interface {
 	Select(req templates.SelectRequest) (string, error)
 	Faces() []pipeline.FaceRow
 	SetFace(c templates.FaceChoice) ([]pipeline.FaceRow, error)
+	SetFeature(c templates.FeatureChoice) (*templates.DetailsView, error)
 }
 
 // Templates is the bound template service

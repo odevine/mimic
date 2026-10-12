@@ -29,6 +29,10 @@ type data struct {
 	// a standard single card, which TemplateName holds, keyed like
 	// "transform_front/standard"
 	FaceTemplates map[string]TemplateChoice `json:"faceTemplates,omitempty"`
+	// TemplateFeatures is the value chosen for each feature of a template, by the
+	// template's id and then the feature's name. A feature with no value takes the
+	// default the template declares
+	TemplateFeatures map[string]map[string]any `json:"templateFeatures,omitempty"`
 	// CardbackName names the uploaded MPC Autofill cardback, which is kept
 	// beside this file
 	CardbackName string `json:"cardbackName,omitempty"`
@@ -158,8 +162,48 @@ func Load(path string) *Store {
 	}
 	if raw, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(raw, &s.data)
+		if migrateTemplates(&s.data) {
+			s.save()
+		}
 	}
 	return s
+}
+
+// DefaultTemplate is the template the three that came before it, normal, split,
+// and transform, became the layouts of
+const DefaultTemplate = "mimic.m15"
+
+// legacyTemplates are the names of the templates that were separate before they
+// became layouts of one
+var legacyTemplates = map[string]bool{"normal": true, "split": true, "transform": true}
+
+// localVersion is the version of a loose developer folder, which means the same
+// thing for any template
+const localVersion = "local"
+
+// migrateTemplates rewrites a choice of one of the earlier templates as a choice
+// of the template that replaced them, and reports whether it changed anything. A
+// downloaded version of an earlier template names nothing now, so it becomes the
+// newest installed, and a local folder stays a local folder
+func migrateTemplates(d *data) bool {
+	changed := false
+	move := func(c TemplateChoice) TemplateChoice {
+		if !legacyTemplates[c.Name] {
+			return c
+		}
+		changed = true
+		c.Name = DefaultTemplate
+		if c.Version != localVersion {
+			c.Version = ""
+		}
+		return c
+	}
+	moved := move(TemplateChoice{Name: d.TemplateName, Version: d.TemplateVersion})
+	d.TemplateName, d.TemplateVersion = moved.Name, moved.Version
+	for key, c := range d.FaceTemplates {
+		d.FaceTemplates[key] = move(c)
+	}
+	return changed
 }
 
 // save writes the current state, best-effort. The caller holds the mutex
@@ -370,5 +414,38 @@ func (s *Store) SetCardbackName(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data.CardbackName = name
+	s.save()
+}
+
+// Features returns a copy of the values chosen for a template's features
+func (s *Store) Features(templateID string) map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]any, len(s.data.TemplateFeatures[templateID]))
+	for k, v := range s.data.TemplateFeatures[templateID] {
+		out[k] = v
+	}
+	return out
+}
+
+// SetFeature stores the value chosen for one feature of a template and persists
+// it. A nil value forgets the choice, so the feature takes its default again
+func (s *Store) SetFeature(templateID, name string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if value == nil {
+		delete(s.data.TemplateFeatures[templateID], name)
+		if len(s.data.TemplateFeatures[templateID]) == 0 {
+			delete(s.data.TemplateFeatures, templateID)
+		}
+	} else {
+		if s.data.TemplateFeatures == nil {
+			s.data.TemplateFeatures = map[string]map[string]any{}
+		}
+		if s.data.TemplateFeatures[templateID] == nil {
+			s.data.TemplateFeatures[templateID] = map[string]any{}
+		}
+		s.data.TemplateFeatures[templateID][name] = value
+	}
 	s.save()
 }

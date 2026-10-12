@@ -5,7 +5,6 @@ package settings
 
 import (
 	"github.com/odevine/mimic/engine/template"
-	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
@@ -79,10 +78,7 @@ type Resolutions struct {
 // upscaling, so switching templates never leaves a preference that renders
 // something the assets cannot support
 func (s *Service) Resolution() (Resolutions, error) {
-	m, err := s.ws.Pipe.Manifest()
-	if err != nil {
-		return Resolutions{}, apierr.Wrap(apierr.Internal, "reading template manifest", err)
-	}
+	m := s.ws.Pipe.Layout()
 	preview, output := s.ws.Prefs.Resolution()
 	return Resolutions{
 		Preview: m.Resolution(workspace.PreviewOrDefault(preview)),
@@ -104,10 +100,7 @@ type ResolutionRequest struct {
 // Resolution does, so the client renders back what was actually kept rather than
 // what it asked for
 func (s *Service) SetResolution(req ResolutionRequest) (Resolutions, error) {
-	m, err := s.ws.Pipe.Manifest()
-	if err != nil {
-		return Resolutions{}, apierr.Wrap(apierr.Internal, "reading template manifest", err)
-	}
+	m := s.ws.Pipe.Layout()
 	// Clamping before the store keeps a dpi the active template cannot reach
 	// from sitting in prefs and surprising a later, larger template
 	s.ws.Prefs.SetResolution(m.ClampDPI(workspace.PreviewOrDefault(req.PreviewDPI)), workspace.ClampOutputDPI(m, req.OutputDPI))

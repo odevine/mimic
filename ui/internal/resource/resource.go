@@ -16,7 +16,7 @@ const (
 	MaxWorkers = 16
 
 	// renderFixed and bytesPerPixel model what one render adds to the process.
-	// They were fitted to measured peaks of the normal template at 300 dpi, 600
+	// They were fitted to measured peaks of the M15 template at 300 dpi, 600
 	// dpi and its authored 3264 by 4440, where one more worker added about 270
 	// MiB, 380 MiB and 1.1 GiB. The pixel term is four 16 byte buffers' worth
 	renderFixed   = 200 << 20

@@ -238,10 +238,10 @@ func TestControlCallsAreNotRecordedAsTheAppsRequests(t *testing.T) {
 func TestTheCatalogListsTheBundlesItIsToldOf(t *testing.T) {
 	s := newServer(t)
 	rec := get(s, GitHubRaw, "/odevine/mimic-templates/main/index.json")
-	if strings.Contains(rec.Body.String(), `"normal"`) {
+	if strings.Contains(rec.Body.String(), `"test.normal"`) {
 		t.Error("the catalog starts with a template")
 	}
-	if rec := control(s, "PUT", "/__fake/catalog", `{"templates":[{"name":"normal","version":"1.0.0"},{"name":"normal","version":"1.1.0"}]}`); rec.Code != 204 {
+	if rec := control(s, "PUT", "/__fake/catalog", `{"templates":[{"name":"test.normal","version":"1.0.0"},{"name":"test.normal","version":"1.1.0"}]}`); rec.Code != 204 {
 		t.Fatalf("PUT catalog = %d %s", rec.Code, rec.Body)
 	}
 	var idx struct {

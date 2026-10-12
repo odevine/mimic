@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 
 	"github.com/odevine/mimic/engine/card"
@@ -31,45 +32,27 @@ func (e *noTemplateError) Error() string {
 	return fmt.Sprintf("no installed template renders %s faces", e.Shape)
 }
 
-// installed reports whether a template can render without a download: it has
-// a loose developer folder or a cached bundle. Placeholders do not count, since
-// they would render a face as flat boxes
-func installed(name string) bool {
-	if LooseDir(name) != "" {
-		return true
-	}
-	_, ok := catalog.NewestCachedVersion(name)
-	return ok
-}
-
-// installedTemplates lists the registered templates that are installed, sorted
-// by name
-func installedTemplates() []template.Registration {
-	var out []template.Registration
-	for _, r := range template.List() {
-		if installed(r.Name) {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
 // Choose decides which template renders a face of shape sh, without loading
 // it: the face's own preference when that template is installed and supports
 // it, then the active template when it supports it, then the first installed
 // template that does. It reports false when none does
 func (p *Pipeline) Choose(sh template.Shape) (prefs.TemplateChoice, bool) {
+	installed := InstalledTemplates()
+	serves := func(id string) bool {
+		i := slices.IndexFunc(installed, func(in Installed) bool { return in.ID == id })
+		return i >= 0 && slices.Contains(installed[i].Shapes, sh)
+	}
 	if sh != PrimaryShape && p.preferences != nil {
-		if c, ok := p.preferences()[ShapeKey(sh)]; ok && SupportsOf(c.Name).Allows(sh) && installed(c.Name) {
+		if c, ok := p.preferences()[ShapeKey(sh)]; ok && serves(c.Name) {
 			return c, true
 		}
 	}
-	if at := p.active.Load(); SupportsOf(at.Name).Allows(sh) {
+	if at := p.active.Load(); at.Serves(sh) {
 		return prefs.TemplateChoice{Name: at.Name, Version: at.Version}, true
 	}
-	for _, r := range installedTemplates() {
-		if r.Supports.Allows(sh) {
-			return prefs.TemplateChoice{Name: r.Name}, true
+	for _, in := range installed {
+		if serves(in.ID) {
+			return prefs.TemplateChoice{Name: in.ID}, true
 		}
 	}
 	return prefs.TemplateChoice{}, false
@@ -107,6 +90,10 @@ func (p *Pipeline) load(c prefs.TemplateChoice) (*Template, error) {
 		at, err = FromVersion(context.Background(), c.Name, c.Version, nil)
 	} else {
 		at, _, err = Resolve(c.Name)
+		if err == nil && at.Name != c.Name {
+			at.Close()
+			err = fmt.Errorf("%s is not installed", c.Name)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("loading template %s: %w", c.Name, err)
@@ -151,12 +138,8 @@ func IsUnsupported(err error) bool {
 // the name of the template that renders it, keyed by ShapeKey. The page checks
 // a card's shapes against it
 func (p *Pipeline) FaceTemplates() map[string]string {
-	regs := installedTemplates()
-	if at := p.active.Load(); !installed(at.Name) {
-		regs = append(regs, template.Registration{Name: at.Name, Supports: SupportsOf(at.Name)})
-	}
 	out := map[string]string{}
-	for _, sh := range shapesOf(regs) {
+	for _, sh := range p.shapes() {
 		if c, ok := p.Choose(sh); ok {
 			out[ShapeKey(sh)] = c.Name
 		}
@@ -164,18 +147,18 @@ func (p *Pipeline) FaceTemplates() map[string]string {
 	return out
 }
 
-// shapesOf lists every shape the registrations support, deduplicated and
-// sorted by key
-func shapesOf(regs []template.Registration) []template.Shape {
+// shapes lists every shape some installed or active template renders, sorted by key
+func (p *Pipeline) shapes() []template.Shape {
 	seen := map[string]template.Shape{}
-	for _, r := range regs {
-		for _, role := range r.Supports.Roles {
-			for _, kind := range r.Supports.Kinds {
-				sh := template.Shape{Role: role, Kind: kind}
-				seen[ShapeKey(sh)] = sh
-			}
+	add := func(shapes []template.Shape) {
+		for _, sh := range shapes {
+			seen[ShapeKey(sh)] = sh
 		}
 	}
+	for _, in := range InstalledTemplates() {
+		add(in.Shapes)
+	}
+	add(p.active.Load().Shapes())
 	keys := make([]string, 0, len(seen))
 	for k := range seen {
 		keys = append(keys, k)
@@ -218,7 +201,7 @@ type FaceRow struct {
 // template, then each other face shape some installed template renders, so
 // the settings list stays as short as what is installed
 func (p *Pipeline) FaceRows() []FaceRow {
-	regs := installedTemplates()
+	installed := InstalledTemplates()
 	var saved map[string]prefs.TemplateChoice
 	if p.preferences != nil {
 		saved = p.preferences()
@@ -226,16 +209,20 @@ func (p *Pipeline) FaceRows() []FaceRow {
 	active := p.active.Load()
 	primary := FaceRow{
 		Key: ShapeKey(PrimaryShape), Role: PrimaryShape.Role, Kind: PrimaryShape.Kind, Primary: true,
-		Options: faceOptions(regs, PrimaryShape),
+		Options: faceOptions(installed, PrimaryShape),
 		Chosen:  &prefs.TemplateChoice{Name: active.Name, Version: active.Version},
 		Using:   Display(active.Name, active.Version),
 	}
 	rows := []FaceRow{primary}
-	for _, sh := range shapesOf(regs) {
+	for _, sh := range p.shapes() {
 		if sh == PrimaryShape {
 			continue
 		}
-		row := FaceRow{Key: ShapeKey(sh), Role: sh.Role, Kind: sh.Kind, Options: faceOptions(regs, sh)}
+		options := faceOptions(installed, sh)
+		if len(options) == 0 {
+			continue
+		}
+		row := FaceRow{Key: ShapeKey(sh), Role: sh.Role, Kind: sh.Kind, Options: options}
 		if c, ok := saved[row.Key]; ok {
 			row.Chosen = &c
 		}
@@ -252,25 +239,13 @@ func (p *Pipeline) FaceRows() []FaceRow {
 	return rows
 }
 
-// InstalledVersions lists the versions of a template that render without a
-// download: the local developer version first, then cached bundles, newest
-// first
-func InstalledVersions(name string) []string {
-	var out []string
-	if LooseDir(name) != "" {
-		out = append(out, LocalVersion)
-	}
-	cached, _ := catalog.CachedVersions(name)
-	return append(out, cached...)
-}
-
 // faceOptions lists the installed templates that render sh, with their
 // installed versions
-func faceOptions(regs []template.Registration, sh template.Shape) []FaceOption {
+func faceOptions(installed []Installed, sh template.Shape) []FaceOption {
 	var out []FaceOption
-	for _, r := range regs {
-		if r.Supports.Allows(sh) {
-			out = append(out, FaceOption{Name: r.Name, Versions: InstalledVersions(r.Name)})
+	for _, in := range installed {
+		if slices.Contains(in.Shapes, sh) {
+			out = append(out, FaceOption{Name: in.ID, Versions: InstalledVersions(in.ID)})
 		}
 	}
 	return out

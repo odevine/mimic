@@ -2,7 +2,7 @@ import { test, expect } from "../../bridge-fixtures.mjs";
 
 test("the page boots from the replies of the real app", async ({ bridge, page }) => {
   await bridge.boot();
-  await expect(page.locator("#template-label")).toHaveText("normal (placeholder)");
+  await expect(page.locator("#template-label")).toHaveText("mimic.placeholder (placeholder)");
   await expect(page.locator("#search-input")).toBeFocused();
   await expect(page.locator("#single-empty")).toBeVisible();
   await expect(page.locator("#boot-error")).toBeHidden();

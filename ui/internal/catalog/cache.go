@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +21,29 @@ import (
 // bundleDownloadTimeout bounds a bundle download. Bundles are large (the live
 // normal is about 199 MB), so this is generous
 const bundleDownloadTimeout = 15 * time.Minute
+
+// legacyTemplates are the folders of the cache that hold bundles of the templates
+// that came before the ones named by an id. Their format is not one the engine
+// reads, so nothing can use them
+var legacyTemplates = []string{"normal", "split", "transform"}
+
+// RemoveLegacy deletes the cached bundles of the templates that came before ids,
+// which are in a format the engine no longer reads. It is best effort, and a
+// folder that cannot be removed is left
+func RemoveLegacy() {
+	dir, err := Dir()
+	if err != nil {
+		return
+	}
+	for _, name := range legacyTemplates {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err == nil {
+			if err := os.RemoveAll(path); err != nil {
+				log.Printf("mimic-ui: removing the old %s bundles: %v", name, err)
+			}
+		}
+	}
+}
 
 // BundlePath is where a template version's bundle is cached. Versions sit side
 // by side, so an update never overwrites a working bundle and a downgrade stays
@@ -76,7 +100,7 @@ func newestCachedBundle(name string) (string, bool) {
 // render. Versions are newest first, so the first compatible one wins
 func PickCompatible(t Template) (Version, bool) {
 	for _, v := range t.Versions {
-		if version.Satisfies(v.MinEngine) {
+		if v.Readable() && version.Satisfies(v.MinEngine) {
 			return v, true
 		}
 	}
@@ -136,7 +160,7 @@ func EnsureVersion(ctx context.Context, name, version string, progress func(done
 // findVersion returns the catalog entry for one exact version of a template
 func findVersion(t Template, version string) (Version, bool) {
 	for _, v := range t.Versions {
-		if v.Version == version {
+		if v.Version == version && v.Readable() {
 			return v, true
 		}
 	}

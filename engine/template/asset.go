@@ -94,6 +94,9 @@ type TextBoxSpec struct {
 	// delivered canvas's own coordinates, such as a legal line that reads upright
 	// on a card turned from its authored side. Empty is the authored canvas
 	Space string `json:"space,omitempty"`
+	// Rotate turns the box's text clockwise, a multiple of 90. The rect is where the
+	// box ends up, so the text is laid out in it turned a quarter for 90 or 270
+	Rotate int `json:"rotate,omitempty"`
 }
 
 // ArtSlot is where the card's art goes and which layer it sits directly above
@@ -103,6 +106,8 @@ type ArtSlot struct {
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
 	After  string `json:"after"` // insert art directly above the LayerSpec with this Name
+	// Rotate turns the art clockwise within the window, a multiple of 90
+	Rotate int `json:"rotate,omitempty"`
 }
 
 // SpaceOutput is the TextBoxSpec.Space of a box laid out after the rotation

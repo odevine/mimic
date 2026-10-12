@@ -383,7 +383,7 @@ func (l *Layout) buildGeometry(s Scale) *Geometry {
 		g.Boxes[b.Key] = sb
 	}
 	for _, a := range l.Art {
-		g.Art = append(g.Art, ArtSlot{X: s.Px(a.X), Y: s.Px(a.Y), Width: s.Px(a.Width), Height: s.Px(a.Height), After: a.After})
+		g.Art = append(g.Art, ArtSlot{X: s.Px(a.X), Y: s.Px(a.Y), Width: s.Px(a.Width), Height: s.Px(a.Height), After: a.After, Rotate: a.Rotate})
 	}
 	for name, sym := range l.Symbols {
 		g.Symbols[name] = scaleSymbol(SymbolOf(sym.Spec), s)
@@ -401,7 +401,7 @@ func SpecOf(draws string, b manifest.TextBox) TextBoxSpec {
 		PaddingX: &px, PaddingY: &py,
 		Tracking: b.Text.Tracking, Font: b.Text.Font,
 		ClearOf: b.Flow.ClearOf, ClearGap: b.Flow.ClearGap, AvoidLayer: b.Flow.AvoidLayer,
-		Space: b.Space,
+		Space: b.Space, Rotate: b.Rotate,
 	}
 	if d := b.Flow.Duck; d != nil {
 		spec.DuckLayer, spec.DuckRow = d.Layer, d.Row

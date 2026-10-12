@@ -35,6 +35,10 @@ func findVer(rows []versionRow, version string) (versionRow, bool) {
 	return versionRow{}, false
 }
 
+func installedInfo(id, desc string, shapes ...template.Shape) pipeline.Installed {
+	return pipeline.Installed{ID: id, Info: template.Info{ID: id, Description: desc, Shapes: shapes}}
+}
+
 func TestBuildTemplateRows(t *testing.T) {
 	// Engine says 0.3.0 satisfies >=0.3.0 but not >=0.4.0
 	old := templateVersionSatisfied
@@ -42,69 +46,74 @@ func TestBuildTemplateRows(t *testing.T) {
 	defer func() { templateVersionSatisfied = old }()
 
 	idx := &catalog.Index{Schema: 1, Templates: []catalog.Template{
-		{Name: "normal", Latest: "0.2.0", Versions: []catalog.Version{
-			{Version: "0.2.0", MinEngine: "0.4.0"}, // incompatible
-			{Version: "0.1.0", MinEngine: "0.3.0"}, // compatible
+		{Name: "mimic.m15", Description: "from the catalog", Latest: "0.2.0", Versions: []catalog.Version{
+			{Version: "0.2.0", Format: 2, MinEngine: "0.4.0"}, // incompatible
+			{Version: "0.1.0", Format: 2, MinEngine: "0.3.0"}, // compatible
 		}},
-		{Name: "future", Latest: "1.0.0", Versions: []catalog.Version{
-			{Version: "1.0.0", MinEngine: "0.3.0"}, // compatible engine but unregistered
+		{Name: "mimic.old", Latest: "1.0.0", Versions: []catalog.Version{
+			{Version: "1.0.0", Format: 1, MinEngine: "0.3.0"}, // a format this engine does not read
+		}},
+		{Name: "mimic.walkers", Shapes: []template.Shape{{Role: "single", Kind: "planeswalker"}}, Latest: "1.0.0", Versions: []catalog.Version{
+			{Version: "1.0.0", Format: 2, MinEngine: "0.3.0"},
 		}},
 	}}
-	registered := []template.Registration{{Name: "normal", Description: "a test template"}}
+	installed := []pipeline.Installed{installedInfo("mimic.m15", "from the installed copy", pipeline.PrimaryShape)}
 	hasLocal := func(n string) bool { return false }
-	isCached := func(n, v string) bool { return n == "normal" && v == "0.1.0" }
+	isCached := func(n, v string) bool { return n == "mimic.m15" && v == "0.1.0" }
 
-	rows := buildTemplateRows(idx, registered, hasLocal, isCached)
+	rows := buildTemplateRows(idx, installed, hasLocal, isCached)
 
-	normalRow, ok := findRow(rows, "normal")
-	if !ok || !normalRow.renderable {
-		t.Fatalf("normal row missing or not renderable: %+v", normalRow)
+	row, ok := findRow(rows, "mimic.m15")
+	if !ok {
+		t.Fatalf("mimic.m15 row missing: %+v", rows)
 	}
-	if normalRow.description != "a test template" {
-		t.Errorf("description = %q, want the registered description", normalRow.description)
+	if row.description != "from the installed copy" || !row.standard {
+		t.Errorf("row = %+v, want the installed copy's description and standard", row)
 	}
-	if v, _ := findVer(normalRow.versions, "0.1.0"); !v.selectable || !v.cached {
-		t.Errorf("normal 0.1.0 = %+v, want selectable and cached", v)
+	if v, _ := findVer(row.versions, "0.1.0"); !v.selectable || !v.cached {
+		t.Errorf("0.1.0 = %+v, want selectable and cached", v)
 	}
-	if v, _ := findVer(normalRow.versions, "0.2.0"); v.selectable || v.reason == "" {
-		t.Errorf("normal 0.2.0 = %+v, want not selectable with a reason", v)
+	if v, _ := findVer(row.versions, "0.2.0"); v.selectable || v.reason == "" {
+		t.Errorf("0.2.0 = %+v, want not selectable with a reason", v)
 	}
-
-	futureRow, ok := findRow(rows, "future")
-	if !ok || futureRow.renderable || futureRow.reason != unsupportedReason {
-		t.Fatalf("future row = %+v, want unsupported", futureRow)
+	if _, ok := findRow(rows, "mimic.old"); ok {
+		t.Error("a template with only format 1 bundles has a row")
 	}
-	if v, _ := findVer(futureRow.versions, "1.0.0"); v.selectable {
-		t.Errorf("future 1.0.0 selectable, want disabled (unsupported build)")
+	walkers, ok := findRow(rows, "mimic.walkers")
+	if !ok || walkers.standard {
+		t.Errorf("walkers = %+v, want a row that does not render standard cards", walkers)
+	}
+	if v, _ := findVer(walkers.versions, "1.0.0"); !v.selectable || v.cached {
+		t.Errorf("walkers 1.0.0 = %+v, want selectable and not cached", v)
 	}
 }
 
 func TestBuildTemplateRowsAddsLocalRow(t *testing.T) {
-	idx := oneTemplate("normal", catalog.Version{Version: "0.1.0", MinEngine: "0.3.0"})
-	rows := buildTemplateRows(idx, []template.Registration{{Name: "normal", Description: "a test template"}},
-		func(n string) bool { return n == "normal" },
+	idx := oneTemplate("mimic.m15", catalog.Version{Version: "0.1.0", Format: 2, MinEngine: "0.3.0"})
+	rows := buildTemplateRows(idx, []pipeline.Installed{installedInfo("mimic.m15", "", pipeline.PrimaryShape)},
+		func(n string) bool { return n == "mimic.m15" },
 		func(n, v string) bool { return false })
 
-	row, ok := findRow(rows, "normal")
+	row, ok := findRow(rows, "mimic.m15")
 	if !ok {
-		t.Fatal("normal row missing")
+		t.Fatal("mimic.m15 row missing")
 	}
 	if len(row.versions) == 0 || row.versions[0].version != pipeline.LocalVersion {
 		t.Fatalf("first version = %+v, want the synthetic local row", row.versions)
 	}
 	if !row.versions[0].selectable {
-		t.Error("local row should be selectable for a renderable template")
+		t.Error("local row should be selectable")
 	}
 }
 
-// A registered template with local assets but no catalog entry still appears
+// An installed template with local assets but no catalog entry still appears
 func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
-	rows := buildTemplateRows(nil, []template.Registration{{Name: "normal", Description: "a test template"}},
-		func(n string) bool { return n == "normal" },
+	rows := buildTemplateRows(nil, []pipeline.Installed{installedInfo("mimic.m15", "mine", pipeline.PrimaryShape)},
+		func(n string) bool { return n == "mimic.m15" },
 		func(n, v string) bool { return false })
 
-	row, ok := findRow(rows, "normal")
-	if !ok || len(row.versions) != 1 || row.versions[0].version != pipeline.LocalVersion {
+	row, ok := findRow(rows, "mimic.m15")
+	if !ok || len(row.versions) != 1 || row.versions[0].version != pipeline.LocalVersion || row.description != "mine" {
 		t.Fatalf("local-only row = %+v, want a single local version", row)
 	}
 }

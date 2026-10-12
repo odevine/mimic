@@ -8,6 +8,7 @@ import (
 
 	"github.com/odevine/mimic/ui/internal/jobs"
 	"github.com/odevine/mimic/ui/internal/pipeline"
+	"github.com/odevine/mimic/ui/internal/templatetest"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -25,13 +26,13 @@ func WithEmptyAssetChain(t *testing.T) string {
 	return tmp
 }
 
-// New builds a workspace over the placeholder normal template. It is enough for
+// New builds a workspace over the placeholder template. It is enough for
 // everything the resolution and settings services touch
 func New(t *testing.T) *workspace.Workspace {
 	t.Helper()
 	WithEmptyAssetChain(t)
 
-	at, _, err := pipeline.Resolve("normal")
+	at, _, err := pipeline.Resolve(pipeline.DefaultTemplate)
 	if err != nil {
 		t.Fatalf("pipeline.Resolve: %v", err)
 	}
@@ -39,6 +40,7 @@ func New(t *testing.T) *workspace.Workspace {
 
 	p := workspace.LoadPrefs()
 	pipe := pipeline.New(nil, p.FaceTemplates)
+	pipe.SetFeatures(p.Features)
 	pipe.Install(at)
 	return &workspace.Workspace{Pipe: pipe, Prefs: p, Jobs: jobs.NewRegistry()}
 }
@@ -52,15 +54,16 @@ func NewSmall(t *testing.T) *workspace.Workspace {
 	return ws
 }
 
-// NewWithTransform is NewSmall with transform installed as a loose developer
-// folder of placeholder assets beside the active normal template
+// TransformTemplate renders the two faces of a transform card
+var TransformTemplate = templatetest.Spec{ID: "test.transform", Shapes: templatetest.Transform}
+
+// NewWithTransform is NewSmall with a transform template installed as a loose
+// developer folder beside the active template
 func NewWithTransform(t *testing.T) *workspace.Workspace {
 	t.Helper()
 	ws := NewSmall(t)
 	assets := filepath.Join(t.TempDir(), "assets")
-	if err := pipeline.WritePlaceholders(filepath.Join(assets, "transform"), "transform"); err != nil {
-		t.Fatal(err)
-	}
+	TransformTemplate.WriteLoose(t, filepath.Join(assets, "transform"))
 	pipeline.LooseDirBases = []string{assets}
 	t.Cleanup(ws.Pipe.Close)
 	return ws
@@ -69,9 +72,5 @@ func NewWithTransform(t *testing.T) *workspace.Workspace {
 // NativeDPI is what the active template reports as its authored resolution
 func NativeDPI(t *testing.T, ws *workspace.Workspace) int {
 	t.Helper()
-	m, err := ws.Pipe.Manifest()
-	if err != nil {
-		t.Fatalf("manifest: %v", err)
-	}
-	return m.NativeDPI()
+	return ws.Pipe.Layout().NativeDPI()
 }

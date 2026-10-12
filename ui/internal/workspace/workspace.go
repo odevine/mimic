@@ -105,7 +105,9 @@ type Workspace struct {
 	recents   *prefs.Recents
 }
 
-// StartupTemplate names the template a workspace began with and its origin
+// StartupTemplate names the template a workspace began with and its origin. Name
+// is the template the workspace wants, which is the default one when it began
+// with the placeholder in its place
 type StartupTemplate struct {
 	Name   string
 	Source pipeline.Source
@@ -120,9 +122,15 @@ func New(o Options) *Workspace {
 	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
 	fd := fontdir.Resolve(o.FontDir, ManagedFontsDir())
 	pipe.SetFontDir(fd.Path)
+	pipe.SetFeatures(p.Features)
+	catalog.RemoveLegacy()
 
 	at, source := startupTemplate(p)
 	pipe.Install(at)
+	want := at.Name
+	if source == pipeline.SourcePlaceholder {
+		want = pipeline.DefaultTemplate
+	}
 
 	return &Workspace{
 		Pipe:          pipe,
@@ -131,7 +139,7 @@ func New(o Options) *Workspace {
 		Cards:         carddata.New(CardDir()),
 		HTTP:          httpc,
 		Fonts:         fd,
-		Startup:       StartupTemplate{Name: at.Name, Source: source},
+		Startup:       StartupTemplate{Name: want, Source: source},
 		artCache:      make(map[string]image.Image),
 		activeName:    at.Name,
 		activeVersion: at.Version,
@@ -187,7 +195,7 @@ func CardbackPath() (string, error) {
 // startupTemplate builds the template to render at launch. It restores the
 // persisted selection only when it needs no download (a loose dir or an
 // already-cached bundle), so launch is never blocked, and otherwise falls back
-// to the default network-free chain for normal
+// to the default network-free chain for the default template
 func startupTemplate(p *prefs.Store) (*pipeline.Template, pipeline.Source) {
 	name, ver := p.Template()
 	restorable := name != "" && ((ver == pipeline.LocalVersion && pipeline.LooseDir(name) != "") || catalog.IsCached(name, ver))
@@ -198,7 +206,7 @@ func startupTemplate(p *prefs.Store) (*pipeline.Template, pipeline.Source) {
 			log.Printf("mimic: restoring template %s %s failed: %v", name, ver, err)
 		}
 	}
-	at, source, err := pipeline.Resolve("normal")
+	at, source, err := pipeline.Resolve(pipeline.DefaultTemplate)
 	if err != nil {
 		log.Fatalf("mimic: resolving template: %v", err)
 	}

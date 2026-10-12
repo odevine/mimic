@@ -335,25 +335,25 @@ func TestAFakeBundleInstallsThroughTheCatalogAndOpens(t *testing.T) {
 	catalog.Dir = func() (string, error) { return cache, nil }
 	t.Cleanup(func() { catalog.Dir = oldDir })
 	url := fakeUpstream(t)
-	putJSON(t, url+"/__fake/catalog", `{"templates":[{"name":"normal","version":"1.0.0"}]}`)
+	putJSON(t, url+"/__fake/catalog", `{"templates":[{"name":"test.normal","version":"1.0.0"}]}`)
 
 	idx, err := catalog.FetchIndex(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl, ok := idx.Find("normal")
+	tmpl, ok := idx.Find("test.normal")
 	if !ok {
-		t.Fatalf("the catalog lacks normal: %+v", idx)
+		t.Fatalf("the catalog lacks test.normal: %+v", idx)
 	}
 	if v, ok := catalog.PickCompatible(tmpl); !ok || v.Version != "1.0.0" {
 		t.Fatalf("PickCompatible = %+v, %v", v, ok)
 	}
-	at, err := pipeline.FromVersion(context.Background(), "normal", "1.0.0", nil)
+	at, err := pipeline.FromVersion(context.Background(), "test.normal", "1.0.0", nil)
 	if err != nil {
 		t.Fatalf("installing the fake bundle: %v", err)
 	}
 	defer at.Close()
-	if at.Name != "normal" || at.Version != "1.0.0" {
+	if at.Name != "test.normal" || at.Version != "1.0.0" {
 		t.Errorf("template = %s %s", at.Name, at.Version)
 	}
 }

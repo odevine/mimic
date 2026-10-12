@@ -26,7 +26,7 @@ func serveCatalog(t *testing.T) *catalogtest.Server {
 func TestEnsureTemplateDownloadsVerifiesAndCaches(t *testing.T) {
 	srv := serveCatalog(t)
 
-	path, err := ensureTemplate(context.Background(), "normal")
+	path, err := ensureTemplate(context.Background(), catalogtest.ID)
 	if err != nil {
 		t.Fatalf("ensureTemplate: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestEnsureTemplateDownloadsVerifiesAndCaches(t *testing.T) {
 	}
 
 	// A second call is served from the cache without re-downloading
-	if _, err := ensureTemplate(context.Background(), "normal"); err != nil {
+	if _, err := ensureTemplate(context.Background(), catalogtest.ID); err != nil {
 		t.Fatalf("second ensureTemplate: %v", err)
 	}
 	if srv.Downloads() != 1 {
@@ -49,7 +49,7 @@ func TestEnsureTemplateDownloadsVerifiesAndCaches(t *testing.T) {
 	}
 
 	// The cached file opens as a valid bundle through the real provider
-	cached, ok := newestCachedBundle("normal")
+	cached, ok := newestCachedBundle(catalogtest.ID)
 	if !ok {
 		t.Fatal("newestCachedBundle found nothing after a download")
 	}
@@ -64,11 +64,11 @@ func TestDownloadRejectsChecksumMismatch(t *testing.T) {
 	srv := serveCatalog(t)
 
 	bad := Version{Version: "0.1.0", MinEngine: "0.3.0", URL: srv.BundleURL, SHA256: "deadbeef"}
-	if _, err := download(context.Background(), "normal", bad, nil); err == nil {
+	if _, err := download(context.Background(), catalogtest.ID, bad, nil); err == nil {
 		t.Fatal("expected a checksum mismatch error, got nil")
 	}
 	// A rejected download leaves nothing in the cache
-	if versions, _ := CachedVersions("normal"); len(versions) != 0 {
+	if versions, _ := CachedVersions(catalogtest.ID); len(versions) != 0 {
 		t.Errorf("cache holds %v after a mismatch, want empty", versions)
 	}
 }
@@ -85,7 +85,25 @@ func TestFetchIndexFallsBackToCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchIndex offline: %v", err)
 	}
-	if tmpl, ok := idx.Find("normal"); !ok || len(tmpl.Versions) == 0 || tmpl.Versions[0].URL != srv.BundleURL {
+	if tmpl, ok := idx.Find(catalogtest.ID); !ok || len(tmpl.Versions) == 0 || tmpl.Versions[0].URL != srv.BundleURL {
 		t.Errorf("cached index = %+v, want normal served from %s", idx, srv.BundleURL)
+	}
+}
+
+func TestPickCompatibleSkipsBundlesInAFormatTheEngineDoesNotRead(t *testing.T) {
+	tmpl := Template{Name: "mimic.m15", Versions: []Version{
+		{Version: "0.3.0", Format: 1, MinEngine: "0.3.0"},
+		{Version: "0.2.0", Format: 2, MinEngine: "0.3.0"},
+		{Version: "0.1.0"},
+	}}
+	v, ok := PickCompatible(tmpl)
+	if !ok || v.Version != "0.2.0" {
+		t.Errorf("picked %+v, %v, want 0.2.0 in format 2", v, ok)
+	}
+	if _, ok := findVersion(tmpl, "0.3.0"); ok {
+		t.Error("found a format 1 version")
+	}
+	if _, ok := PickCompatible(Template{Versions: []Version{{Version: "1.0.0", Format: 1}}}); ok {
+		t.Error("picked a template that has only format 1 bundles")
 	}
 }

@@ -1,9 +1,9 @@
 package templates
 
 import (
+	"slices"
 	"sort"
 
-	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/version"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/pipeline"
@@ -21,60 +21,69 @@ type versionRow struct {
 	reason     string
 }
 
-// templateRow is one template in the manager: its versions and whether this
-// build can render it at all. A template the engine has no code for is listed
-// but not renderable, so the catalog stays honest about what exists.
-// description is the registered template's own blurb, empty for one this
-// build has no code for
+// templateRow is one template in the manager: its versions, and whether it
+// renders standard cards. description is the template's own, from the catalog or
+// else from the installed copy
 type templateRow struct {
 	name        string
 	description string
-	renderable  bool
-	reason      string
+	standard    bool
 	versions    []versionRow
 }
 
-// unsupportedReason is shown when the running build has no code for a template
-const unsupportedReason = "not supported by this build"
-
 // buildTemplateRows assembles the manager's model from the catalog, the
-// engine's registered templates, and the cache. It is pure so it can be
-// tested without any UI. A template is renderable when it is registered; a
-// version is selectable when its template is renderable and the engine
-// satisfies its minEngine. A loose developer directory contributes a
-// synthetic local version, and a registered template with local assets but
-// no catalog entry still appears, so an offline developer sees it
-func buildTemplateRows(idx *catalog.Index, registered []template.Registration, hasLocal func(name string) bool, isCached func(name, ver string) bool) []templateRow {
-	descriptions := make(map[string]string, len(registered))
-	for _, r := range registered {
-		descriptions[r.Name] = r.Description
+// installed templates, and the cache. It is pure so it can be tested without any
+// UI. A version is selectable when the engine satisfies its minEngine, and a
+// version in a bundle format the engine does not read is not listed. A loose
+// developer directory contributes a synthetic local version, and an installed
+// template with no catalog entry still appears, so an offline developer sees it
+func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLocal func(id string) bool, isCached func(id, ver string) bool) []templateRow {
+	byID := make(map[string]pipeline.Installed, len(installed))
+	for _, in := range installed {
+		byID[in.ID] = in
 	}
 
 	var rows []templateRow
 	seen := map[string]bool{}
 	if idx != nil {
 		for _, t := range idx.Templates {
-			desc, renderable := descriptions[t.Name]
-			row := templateRow{name: t.Name, description: desc, renderable: renderable}
-			if !row.renderable {
-				row.reason = unsupportedReason
+			row := templateRow{name: t.Name, description: t.Description, standard: true}
+			if len(t.Shapes) > 0 {
+				row.standard = slices.Contains(t.Shapes, pipeline.PrimaryShape)
+			}
+			if in, ok := byID[t.Name]; ok {
+				row.description, row.standard = in.Description, slices.Contains(in.Shapes, pipeline.PrimaryShape)
 			}
 			if hasLocal(t.Name) {
-				row.versions = append(row.versions, localRow(row.renderable))
+				row.versions = append(row.versions, localRow())
 			}
 			for _, v := range t.Versions {
-				row.versions = append(row.versions, catalogRow(v, row.renderable, isCached(t.Name, v.Version)))
+				if v.Readable() {
+					row.versions = append(row.versions, catalogRow(v, isCached(t.Name, v.Version)))
+				}
+			}
+			// A template with nothing this engine reads is not worth a row
+			if len(row.versions) == 0 {
+				continue
 			}
 			rows = append(rows, row)
 			seen[t.Name] = true
 		}
 	}
-	// Registered templates with local assets but no catalog entry
-	for _, r := range registered {
-		if seen[r.Name] || !hasLocal(r.Name) {
+	// Installed templates with no catalog entry
+	for _, in := range installed {
+		if seen[in.ID] {
 			continue
 		}
-		rows = append(rows, templateRow{name: r.Name, description: r.Description, renderable: true, versions: []versionRow{localRow(true)}})
+		row := templateRow{name: in.ID, description: in.Description, standard: slices.Contains(in.Shapes, pipeline.PrimaryShape)}
+		if hasLocal(in.ID) {
+			row.versions = append(row.versions, localRow())
+		}
+		cached, _ := catalog.CachedVersions(in.ID)
+		for _, v := range cached {
+			row.versions = append(row.versions, versionRow{version: v, cached: true, selectable: true})
+		}
+		rows = append(rows, row)
 	}
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
@@ -82,20 +91,14 @@ func buildTemplateRows(idx *catalog.Index, registered []template.Registration, h
 }
 
 // localRow is the synthetic loose-directory version
-func localRow(renderable bool) versionRow {
-	r := versionRow{version: pipeline.LocalVersion, cached: true, selectable: renderable}
-	if !renderable {
-		r.reason = unsupportedReason
-	}
-	return r
+func localRow() versionRow {
+	return versionRow{version: pipeline.LocalVersion, cached: true, selectable: true}
 }
 
 // catalogRow turns a catalog version into a model row, deciding selectability
-func catalogRow(v catalog.Version, renderable, cached bool) versionRow {
+func catalogRow(v catalog.Version, cached bool) versionRow {
 	r := versionRow{version: v.Version, cached: cached}
 	switch {
-	case !renderable:
-		r.reason = unsupportedReason
 	case !templateVersionSatisfied(v.MinEngine):
 		r.reason = "needs engine " + v.MinEngine
 	default:

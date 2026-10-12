@@ -194,6 +194,10 @@ export const api = {
   activeTemplate: () => rpc("Templates", "Active"),
   selectTemplate: async (name, version, install = false) => ({ jobId: await rpc("Templates", "Select", { name, version, install }) }),
   selectEvents: (jobId, onStep) => watchJob(jobId, onStep),
+  // setTemplateFeature keeps the value chosen for one feature of an installed
+  // template, and resolves to the template's details with it in force. A null
+  // value takes the choice back
+  setTemplateFeature: (template, name, value) => rpc("Templates", "SetFeature", { template, name, value }),
   faceTemplates: () => rpc("Templates", "Faces"),
   setFaceTemplate: (key, name, version) => rpc("Templates", "SetFace", { key, name, version }),
 

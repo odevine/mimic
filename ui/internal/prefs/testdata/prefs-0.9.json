@@ -1,0 +1,14 @@
+{
+  "recentSearches": ["lightning bolt", "fire // ice"],
+  "templateName": "normal",
+  "templateVersion": "local",
+  "previewDpi": 300,
+  "faceTemplates": {
+    "split/standard": { "name": "split", "version": "0.1.0" },
+    "transform_back/standard": { "name": "transform", "version": "0.1.0" },
+    "transform_front/standard": { "name": "transform", "version": "local" }
+  },
+  "window": { "x": 100, "y": 100, "width": 1600, "height": 1100, "maximised": true },
+  "theme": "dark",
+  "layerCache": "large"
+}

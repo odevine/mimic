@@ -1,6 +1,6 @@
 // Command mimic is the desktop app for the mimic card renderer. It opens a
 // window where you search Scryfall with full query syntax, edit a match's
-// fields, preview it through the normal template, render whole lists, and save
+// fields, preview it through the active template, render whole lists, and save
 // the results. The window shows the embedded frontend through the system
 // webview, and nothing listens on the network
 package main

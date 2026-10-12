@@ -9,25 +9,39 @@ import (
 	"image"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/odevine/impasto/raster"
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/prefs"
 )
 
-// Template is a template the app renders with and the assets it draws from.
-// The two are a pair: the template's Go code expects its own layer set, so
-// swapping one without the other would render a template against the wrong
-// assets. Version is "" for placeholders, LocalVersion for a loose directory,
-// and the bundle version otherwise
+// Template is a loaded template the app renders with, and the layer cache over
+// its assets. Name is the template's id, such as "mimic.m15". Version is "" for
+// the placeholder, LocalVersion for a loose directory, and the bundle version
+// otherwise
 type Template struct {
 	Name     string
 	Version  string
-	template template.Template
+	tmpl     *template.Template
 	provider template.AssetProvider
 	cleanup  func()
+	// dir and stamp are set for a loose developer folder: where it is, and what its
+	// files looked like when it was loaded, so a change to them is noticed
+	dir, stamp string
 }
+
+// Info describes the template to a person, without drawing with it
+func (t *Template) Info() template.Info { return t.tmpl.Info() }
+
+// Serves reports whether the template renders a shape
+func (t *Template) Serves(sh template.Shape) bool { return t.tmpl.Serves(sh) }
+
+// Shapes lists the shapes the template renders, sorted
+func (t *Template) Shapes() []template.Shape { return t.tmpl.Shapes() }
 
 // Pipeline holds the pieces reused across every render: the client that
 // fetches art, the active template the top-bar picker chose, and any other
@@ -50,6 +64,11 @@ type Pipeline struct {
 	// preferences returns the preferred template for each face shape, keyed by
 	// ShapeKey. Nil means no preferences
 	preferences func() map[string]prefs.TemplateChoice
+	// features returns the values chosen for a template's features. Nil means
+	// none are chosen
+	features func(id string) map[string]any
+	// checked is when the loose folders were last compared with what was loaded
+	checked time.Time
 	// fontDir is the font override directory every render uses, "" for the
 	// engine's embedded defaults. It is caller configuration rather than part of
 	// any template, so it is shared by all of them
@@ -60,6 +79,24 @@ type Pipeline struct {
 // the preferred template for each face shape, and may be nil
 func New(client *card.Client, preferences func() map[string]prefs.TemplateChoice) *Pipeline {
 	return &Pipeline{client: client, preferences: preferences}
+}
+
+// SetFeatures sets where the values chosen for a template's features come from.
+// A render reads them when it starts, so a change applies to the next render
+func (p *Pipeline) SetFeatures(f func(id string) map[string]any) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.features = f
+}
+
+func (p *Pipeline) chosenFeatures(id string) frame.Features {
+	p.mu.Lock()
+	f := p.features
+	p.mu.Unlock()
+	if f == nil {
+		return nil
+	}
+	return frame.Features(f(id))
 }
 
 // SetFontDir sets the font override directory for later renders. The engine
@@ -118,11 +155,10 @@ func (p *Pipeline) Close() {
 	p.cleanups = nil
 }
 
-// Manifest reads the active template's manifest, which is what turns a dpi into
-// the pixel size a render produces. It re-reads and re-parses on every call, so
-// it belongs on a settings request rather than in a hot loop
-func (p *Pipeline) Manifest() (*template.Manifest, error) {
-	return p.active.Load().provider.Manifest()
+// Layout is the active template's layout for a standard single card, or the first
+// it has, which is what turns a dpi into the pixel size a render produces
+func (p *Pipeline) Layout() *template.Layout {
+	return p.active.Load().tmpl.Primary()
 }
 
 // FetchArt downloads the card's art crop. A card with no artwork URL is not an
@@ -170,6 +206,7 @@ func (p *Pipeline) RenderYCbCr(ctx context.Context, d *card.Data, face int, art 
 
 // render composites the card and reports the encoding step
 func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (*raster.Buffer, error) {
+	p.reloadChanged()
 	shapes := template.Classify(d)
 	if face < 0 || face >= len(shapes) {
 		return nil, fmt.Errorf("face %d out of range, %q renders %d", face, d.Name, len(shapes))
@@ -179,19 +216,19 @@ func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image
 		return nil, err
 	}
 	req := template.RenderRequest{
-		Card:    d,
-		Face:    face,
-		Art:     art,
-		Assets:  at.provider,
-		FontDir: p.FontDir(),
-		DPI:     dpi,
+		Card:     d,
+		Face:     face,
+		Art:      art,
+		Features: p.chosenFeatures(at.Name),
+		FontDir:  p.FontDir(),
+		DPI:      dpi,
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to
 		// 0.9 and the encoding below fills the rest
 		req.Progress = func(step string, frac float64) { progress(step, frac*0.9) }
 	}
-	buf, err := at.template.Render(ctx, req)
+	buf, err := render.Render(ctx, at.tmpl, req)
 	if err != nil {
 		return nil, fmt.Errorf("rendering %q: %w", FaceName(d, face), err)
 	}

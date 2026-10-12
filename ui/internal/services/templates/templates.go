@@ -6,8 +6,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"slices"
+	"strings"
 
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/catalog"
@@ -60,18 +64,61 @@ type VersionView struct {
 	Action     string `json:"action"`
 }
 
-// TemplateView is one template block: its name, its description, whether this
-// build can render it, an optional reason, and its versions
+// TemplateView is one template block: its id, its description, and its versions
 type TemplateView struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Renderable  bool   `json:"renderable"`
 	// Standard reports whether the template renders standard single cards,
 	// which is what selecting it as the active template is for. A template
 	// that does not, such as transform, is only installed
 	Standard bool          `json:"standard"`
-	Reason   string        `json:"reason,omitempty"`
 	Versions []VersionView `json:"versions"`
+	// Details is who made the template and what a person can change in it, and is
+	// absent until the template is installed, since the catalog does not say
+	Details *DetailsView `json:"details,omitempty"`
+}
+
+// FeatureView is one choice a template offers, with the value in force. A bool is
+// on or off, a choice is one of Values, and a range is a number from Min to Max in
+// steps of Step
+type FeatureView struct {
+	Name   string   `json:"name"`
+	Label  string   `json:"label"`
+	Type   string   `json:"type"`
+	Values []string `json:"values,omitempty"`
+	Min    float64  `json:"min,omitempty"`
+	Max    float64  `json:"max,omitempty"`
+	Step   float64  `json:"step,omitempty"`
+	Value  any      `json:"value"`
+}
+
+// DetailsView is what the template manager shows about an installed template
+// beside its versions: who made it, the licence it is under, whose art it is cut
+// from, and its features
+type DetailsView struct {
+	Title    string            `json:"title"`
+	Author   manifest.Author   `json:"author"`
+	License  string            `json:"license,omitempty"`
+	Credits  []manifest.Credit `json:"credits,omitempty"`
+	Features []FeatureView     `json:"features,omitempty"`
+}
+
+// details describes an installed template, with each feature at the value this
+// person chose or else the template's default
+func (s *Service) details(in pipeline.Installed) *DetailsView {
+	resolved := in.Template.ResolveFeatures(frame.Features(s.ws.Prefs.Features(in.ID)))
+	v := &DetailsView{Title: in.Name, Author: in.Author, License: in.License, Credits: in.Credits}
+	for _, f := range in.Features {
+		label := f.Label
+		if label == "" {
+			label = f.Name
+		}
+		v.Features = append(v.Features, FeatureView{
+			Name: f.Name, Label: label, Type: f.Type, Values: f.Values,
+			Min: f.Min, Max: f.Max, Step: f.Step, Value: resolved[f.Name],
+		})
+	}
+	return v
 }
 
 // List fetches the catalog (falling back to the cached copy offline) and returns
@@ -84,11 +131,18 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 		idx = nil
 	}
 	activeName, activeVersion := s.ws.Active()
-	rows := buildTemplateRows(idx, template.List(), func(n string) bool { return pipeline.LooseDir(n) != "" }, catalog.IsCached)
+	installed := map[string]pipeline.Installed{}
+	for _, in := range pipeline.InstalledTemplates() {
+		installed[in.ID] = in
+	}
+	rows := buildTemplateRows(idx, slices.Collect(maps.Values(installed)), func(id string) bool { return pipeline.LooseDir(id) != "" }, catalog.IsCached)
 
 	views := make([]TemplateView, 0, len(rows))
 	for _, row := range rows {
-		tv := TemplateView{Name: row.name, Description: row.description, Renderable: row.renderable, Reason: row.reason, Standard: pipeline.SupportsOf(row.name).Allows(pipeline.PrimaryShape)}
+		tv := TemplateView{Name: row.name, Description: row.description, Standard: row.standard}
+		if in, ok := installed[row.name]; ok {
+			tv.Details = s.details(in)
+		}
 		for _, v := range row.versions {
 			vv := VersionView{
 				Version:    v.version,
@@ -113,30 +167,30 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 	return views
 }
 
-// ActiveView is the active template: its name, version, the display label for
+// ActiveView is the active template: its id, version, the display label for
 // the top-bar indicator, where its assets come from for the status bar, and the
-// faces it supports. Faces maps every face shape some installed template renders
+// faces it renders. Faces maps every face shape some installed template renders
 // to the template chosen for it, which the list review and the editor check
 // cards against
 type ActiveView struct {
-	Name     string            `json:"name"`
-	Version  string            `json:"version"`
-	Label    string            `json:"label"`
-	Source   string            `json:"source"`
-	Supports template.Supports `json:"supports"`
-	Faces    map[string]string `json:"faces"`
+	Name    string            `json:"name"`
+	Version string            `json:"version"`
+	Label   string            `json:"label"`
+	Source  string            `json:"source"`
+	Shapes  []template.Shape  `json:"shapes"`
+	Faces   map[string]string `json:"faces"`
 }
 
 // Active returns the active template
 func (s *Service) Active() ActiveView {
 	name, version := s.ws.Active()
 	return ActiveView{
-		Name:     name,
-		Version:  version,
-		Label:    pipeline.Display(name, version),
-		Source:   templateSource(name, version),
-		Supports: s.ws.Pipe.Supports(),
-		Faces:    s.ws.Pipe.FaceTemplates(),
+		Name:    name,
+		Version: version,
+		Label:   pipeline.Display(name, version),
+		Source:  templateSource(name, version),
+		Shapes:  s.ws.Pipe.Active().Shapes(),
+		Faces:   s.ws.Pipe.FaceTemplates(),
 	}
 }
 
@@ -275,4 +329,62 @@ func (s *Service) switchActive(name, version string) error {
 	}
 	s.ws.SetActiveTemplate(at)
 	return nil
+}
+
+// FeatureChoice is the value to keep for one feature of a template. A nil Value
+// forgets the choice, so the feature takes the template's default again
+type FeatureChoice struct {
+	Template string `json:"template"`
+	Name     string `json:"name"`
+	Value    any    `json:"value"`
+}
+
+// SetFeature keeps the value chosen for a feature of an installed template, held
+// to what the feature allows, and returns the template's details with it in force.
+// It waits for a run to finish, so every card of a run renders with the same choices
+func (s *Service) SetFeature(c FeatureChoice) (*DetailsView, error) {
+	if s.ws.Run.Active() {
+		return nil, apierr.New(apierr.Conflict, "a template's features cannot change while a run is in progress")
+	}
+	in, ok := pipeline.InstalledInfo(c.Template)
+	if !ok {
+		return nil, apierr.Newf(apierr.BadRequest, "%s is not an installed template", c.Template)
+	}
+	i := slices.IndexFunc(in.Features, func(f template.Feature) bool { return f.Name == c.Name })
+	if i < 0 {
+		return nil, apierr.Newf(apierr.BadRequest, "%s has no feature named %s", c.Template, c.Name)
+	}
+	value, err := featureValue(in, in.Features[i], c.Value)
+	if err != nil {
+		return nil, apierr.Wrap(apierr.BadRequest, "", err)
+	}
+	s.ws.Prefs.SetFeature(c.Template, c.Name, value)
+	return s.details(in), nil
+}
+
+// featureValue checks that a value is one the feature can hold and returns it as
+// the feature keeps it, a number snapped to the feature's steps. Nil is kept as nil
+func featureValue(in pipeline.Installed, f template.Feature, v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	switch f.Type {
+	case "bool":
+		if _, ok := v.(bool); !ok {
+			return nil, fmt.Errorf("%s is on or off", f.Name)
+		}
+	case "choice":
+		if s, ok := v.(string); !ok || !slices.Contains(f.Values, s) {
+			return nil, fmt.Errorf("%v is not one of %s", v, strings.Join(f.Values, ", "))
+		}
+	case "range":
+		n, ok := v.(float64)
+		if !ok || n != n {
+			return nil, fmt.Errorf("%s is a number from %g to %g", f.Name, f.Min, f.Max)
+		}
+		if n < f.Min || n > f.Max {
+			return nil, fmt.Errorf("%g is not from %g to %g", n, f.Min, f.Max)
+		}
+	}
+	return in.Template.ResolveFeatures(frame.Features{f.Name: v})[f.Name], nil
 }

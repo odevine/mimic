@@ -115,12 +115,29 @@ export const scenes = {
     run: async ({ bridge, page }) => {
       const version = (v, extra) => ({ version: v, label: v, cached: true, selectable: true, active: false, action: "select", ...extra });
       bridge.reply("Templates.List", [
-        { name: "normal", description: "The standard, modern Magic card frame", renderable: true, standard: true, versions: [version("1.1.0", { cached: false, action: "download" }), version("1.0.0", { active: true, action: "" })] },
-        { name: "transform", description: "The modern frame for both faces of transform cards", renderable: true, standard: false, versions: [version("1.0.0", { cached: false, action: "download" })] },
+        {
+          name: "mimic.m15",
+          description: "The modern card frame",
+          standard: true,
+          details: {
+            title: "Modern frame (M15)",
+            author: { name: "mimic" },
+            license: "CC BY 4.0",
+            credits: [{ name: "Proxyshop", url: "https://github.com/Investigamer/Proxyshop" }],
+            features: [
+              { name: "ptStyle", label: "Power and toughness box", type: "choice", values: ["light", "dark"], value: "light" },
+              { name: "glow", label: "Glow", type: "bool", value: false },
+              { name: "strength", label: "Strength", type: "range", min: 0, max: 1, step: 0.25, value: 0.5 },
+            ],
+          },
+          versions: [version("1.1.0", { cached: false, action: "download" }), version("1.0.0", { active: true, action: "" })],
+        },
+        { name: "mimic.walkers", description: "Frames for planeswalkers", standard: false, versions: [version("1.0.0", { cached: false, action: "download" })] },
       ]);
       await bridge.boot();
       await page.locator("#template-trigger").click();
       await expect(page.locator("#tm-library .tp-template")).toHaveCount(2);
+      await expect(page.locator("#tm-library .tp-feature")).toHaveCount(3);
     },
   },
   "overrides": {

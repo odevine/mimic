@@ -221,9 +221,8 @@ func (s *Service) ApplyPreset(name string) (Applied, error) {
 	settings.MPCStock, settings.MPCFoil = p.Render.MPCStock, p.Render.MPCFoil
 	s.ws.Prefs.SetSettings(settings)
 	preview, output := workspace.PreviewOrDefault(p.Render.PreviewDPI), p.Render.OutputDPI
-	if m, err := s.ws.Pipe.Manifest(); err == nil {
-		preview, output = m.ClampDPI(preview), workspace.ClampOutputDPI(m, output)
-	}
+	m := s.ws.Pipe.Layout()
+	preview, output = m.ClampDPI(preview), workspace.ClampOutputDPI(m, output)
 	s.ws.Prefs.SetResolution(preview, output)
 	return Applied{Rules: s.Rules(), Settings: s.ws.Prefs.Settings()}, nil
 }

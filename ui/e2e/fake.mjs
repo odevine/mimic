@@ -16,7 +16,9 @@ export class Fake {
     return this.#send("PUT", "/release", { version, notes });
   }
 
-  // catalog lists template bundles, as [{ name, version }]. Without it the
+  // catalog lists template bundles, as [{ name, version, features }], where a name
+  // is a template id such as test.frame, one ending in .transform renders the
+  // faces of transform cards, and features gives the template a choice of each type. Without it the
   // catalog is empty
   catalog(templates) {
     return this.#send("PUT", "/catalog", { templates });

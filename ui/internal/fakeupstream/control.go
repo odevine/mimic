@@ -45,7 +45,11 @@ func (s *Server) control(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	case name == "catalog" && r.Method == http.MethodPut:
 		var in struct {
-			Templates []struct{ Name, Version string } `json:"templates"`
+			Templates []struct {
+				Name, Version string
+				// Features gives the template a choice of each type
+				Features bool
+			} `json:"templates"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -53,7 +57,7 @@ func (s *Server) control(w http.ResponseWriter, r *http.Request) {
 		}
 		var out []bundle
 		for _, t := range in.Templates {
-			b, err := newBundle(t.Name, t.Version)
+			b, err := newBundle(t.Name, t.Version, t.Features)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return

@@ -49,10 +49,7 @@ func (w *Workspace) RenderDPI(target string) int {
 // setting changes while the render is in flight
 func (w *Workspace) ClampedDPI(target string) int {
 	dpi := w.RenderDPI(target)
-	if m, err := w.Pipe.Manifest(); err == nil {
-		dpi = m.ClampDPI(dpi)
-	}
-	return dpi
+	return w.Pipe.Layout().ClampDPI(dpi)
 }
 
 // PreviewOrDefault fills in the preview resolution nobody has chosen yet. Zero
@@ -68,12 +65,8 @@ func PreviewOrDefault(dpi int) int {
 // RenderBytes estimates the memory one render adds at the output resolution, the
 // size a run renders at
 func (w *Workspace) RenderBytes() uint64 {
-	m, err := w.Pipe.Manifest()
-	if err != nil {
-		return resource.RenderBytes(fallbackWidth, fallbackHeight)
-	}
-	scaled := m.Scaled(m.ScaleForDPI(m.ClampDPI(w.RenderDPI(TargetOutput))))
-	return resource.RenderBytes(scaled.Width, scaled.Height)
+	r := w.Pipe.Layout().Resolution(w.RenderDPI(TargetOutput))
+	return resource.RenderBytes(r.Width, r.Height)
 }
 
 // LayerCacheName is the layer cache size the settings choose, with the default
@@ -94,7 +87,7 @@ func (w *Workspace) AutoConcurrency() int {
 // ClampOutputDPI keeps a stored output resolution inside what the template can
 // render, preserving zero as "the template's own" so the preference tracks a
 // later template rather than pinning this one's number
-func ClampOutputDPI(m *template.Manifest, dpi int) int {
+func ClampOutputDPI(m *template.Layout, dpi int) int {
 	if dpi <= 0 || dpi >= m.NativeDPI() {
 		return 0
 	}

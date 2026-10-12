@@ -212,7 +212,7 @@ func TestSetSymbolSpecFollowsAFeature(t *testing.T) {
 // type line that gives way to it
 func symbolTemplate(t *testing.T) *template.Template {
 	t.Helper()
-	base := template.NewFSAssetProvider(placeholderDir)
+	base := PlaceholderAssets()
 	m := readManifest(t, base)
 	l := m.Layouts["normal"]
 	l.Symbols = map[string]manifest.Symbol{

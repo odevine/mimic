@@ -140,8 +140,7 @@ func loadTemplate(p template.AssetProvider) (*template.Template, error) {
 
 // resolveAssets returns the asset provider to render from. A bundle path takes
 // precedence and renders through a ZipAssetProvider; else a loose directory
-// renders through an FSAssetProvider; else a placeholder template is generated
-// into a temporary directory the caller cleans up
+// renders through an FSAssetProvider; else the built-in placeholder template
 func resolveAssets(dir, bundle string) (template.AssetProvider, func(), error) {
 	if bundle != "" {
 		p, err := template.NewZipAssetProvider(bundle)
@@ -153,15 +152,7 @@ func resolveAssets(dir, bundle string) (template.AssetProvider, func(), error) {
 	if dir != "" {
 		return template.NewFSAssetProvider(dir), func() {}, nil
 	}
-	tmp, err := os.MkdirTemp("", "mimic-placeholder-")
-	if err != nil {
-		return nil, func() {}, err
-	}
-	if err := render.WritePlaceholderAssets(tmp, "mimic.placeholder"); err != nil {
-		os.RemoveAll(tmp)
-		return nil, func() {}, err
-	}
-	return template.NewFSAssetProvider(tmp), func() { os.RemoveAll(tmp) }, nil
+	return render.PlaceholderAssets(), func() {}, nil
 }
 
 func writePNG(path string, img image.Image) error {

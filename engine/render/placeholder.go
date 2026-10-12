@@ -1,16 +1,20 @@
 package render
 
 import (
+	"bytes"
 	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
-	"os"
-	"path/filepath"
+	"sync"
 
 	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/manifest"
+	"github.com/odevine/mimic/engine/template"
 )
+
+// PlaceholderID is the id of the built-in placeholder template
+const PlaceholderID = "mimic.placeholder"
 
 // Placeholder canvas size. It is a stand-in at a demo resolution, not a real
 // frame's geometry, which is measured and calibrated once real assets are
@@ -34,37 +38,43 @@ var placeholderColors = map[string]color.NRGBA{
 	"land":      {0xC3, 0xA8, 0x7F, 0xFF},
 }
 
-// WritePlaceholderAssets writes a manifest and flat-colored layer PNGs into
-// dir under name, giving the pipeline a full asset set to render against
-// before a template's real frame art exists. The layers are a coarse WUBRG
-// frame at demo resolution: a color-keyed background, a text panel, and a
-// legendary crown
-func WritePlaceholderAssets(dir, id string) error {
-	layersDir := filepath.Join(dir, "layers")
-	if err := os.MkdirAll(layersDir, 0o755); err != nil {
-		return err
-	}
+// PlaceholderAssets is the assets of the built-in placeholder template, held in
+// memory. It is a coarse frame at demo resolution that serves an ordinary card: a
+// color keyed background, a text panel, and a legendary crown. It gives a program a
+// template to render with before a real one is installed, and is built the first
+// time it is asked for
+func PlaceholderAssets() *template.MemoryAssets {
+	p := placeholder()
+	return template.NewMemoryAssets(p.manifest, p.files)
+}
 
+// Placeholder loads the built-in placeholder template
+func Placeholder() (*template.Template, error) {
+	t, _, err := template.Load(PlaceholderAssets())
+	return t, err
+}
+
+type placeholderAssets struct {
+	manifest []byte
+	files    map[string][]byte
+}
+
+var placeholder = sync.OnceValue(buildPlaceholder)
+
+func buildPlaceholder() placeholderAssets {
+	files := map[string][]byte{}
 	bg := make(map[string]manifest.Variant, len(placeholderColors))
 	for key, col := range placeholderColors {
-		path := filepath.Join("layers", "bg_"+key+".png")
-		if err := writeFlat(filepath.Join(dir, path), fullRect(), col); err != nil {
-			return err
-		}
-		bg[key] = manifest.Variant{Path: filepath.ToSlash(path)}
+		path := "layers/bg_" + key + ".png"
+		files[path] = flat(fullRect(), col)
+		bg[key] = manifest.Variant{Path: path}
 	}
 
-	// A translucent panel behind the rules text, and a crown strip at the top.
-	if err := writeFlat(filepath.Join(layersDir, "textbox.png"),
-		image.Rect(48, 612, 696, 984), color.NRGBA{0xF4, 0xF1, 0xE6, 0xDC}); err != nil {
-		return err
-	}
+	// A translucent panel behind the rules text, and a crown strip at the top
+	files["layers/textbox.png"] = flat(image.Rect(48, 612, 696, 984), color.NRGBA{0xF4, 0xF1, 0xE6, 0xDC})
 	// A darker gold than any background so the crown stays visible on the gold
-	// color key as well as the lighter ones.
-	if err := writeFlat(filepath.Join(layersDir, "crown.png"),
-		image.Rect(36, 30, 708, 120), color.NRGBA{0xA0, 0x7E, 0x2A, 0xFF}); err != nil {
-		return err
-	}
+	// color key as well as the lighter ones
+	files["layers/crown.png"] = flat(image.Rect(36, 30, 708, 120), color.NRGBA{0xA0, 0x7E, 0x2A, 0xFF})
 
 	text := func(x, y, w, h int, size float64, font, align string) manifest.TextBox {
 		return manifest.TextBox{
@@ -78,7 +88,7 @@ func WritePlaceholderAssets(dir, id string) error {
 	mana.Text.MinFontSize = 28
 	m := manifest.Manifest{
 		Contract:    manifest.Contract,
-		ID:          id,
+		ID:          PlaceholderID,
 		Name:        "Placeholder",
 		Description: "Flat colors where a frame's art goes",
 		Parts: map[string]manifest.Part{
@@ -106,28 +116,27 @@ func WritePlaceholderAssets(dir, id string) error {
 			},
 		},
 	}
-
 	raw, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		return err
+		panic(err)
 	}
-	return os.WriteFile(filepath.Join(dir, "manifest.json"), raw, 0o644)
+	return placeholderAssets{manifest: raw, files: files}
 }
 
 func fullRect() image.Rectangle { return image.Rect(0, 0, placeholderWidth, placeholderHeight) }
 
-// writeFlat writes a document-sized transparent PNG with fill painted into rect
-func writeFlat(path string, rect image.Rectangle, fill color.NRGBA) error {
+// flat is a document-sized transparent PNG with fill painted into rect
+func flat(rect image.Rectangle, fill color.NRGBA) []byte {
 	img := image.NewNRGBA(fullRect())
 	for y := rect.Min.Y; y < rect.Max.Y; y++ {
 		for x := rect.Min.X; x < rect.Max.X; x++ {
 			img.SetNRGBA(x, y, fill)
 		}
 	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
+	var buf bytes.Buffer
+	enc := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := enc.Encode(&buf, img); err != nil {
+		panic(err)
 	}
-	defer f.Close()
-	return png.Encode(f, img)
+	return buf.Bytes()
 }

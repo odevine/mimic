@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
 	"io"
 	"os"
 	"path/filepath"
@@ -84,7 +86,7 @@ func mustLoad(t *testing.T, p template.AssetProvider) *template.Template {
 // placeholderTemplate is the generated placeholder frame every test reads
 func placeholderTemplate(t *testing.T) *template.Template {
 	t.Helper()
-	return mustLoad(t, template.NewFSAssetProvider(placeholderDir))
+	return mustLoad(t, PlaceholderAssets())
 }
 
 // testManifest wraps a layout and its parts into a template that serves the
@@ -131,4 +133,9 @@ func box(x, y, w, h int, size float64) manifest.TextBox {
 // when builds a text box override from the JSON of the parts it changes
 func when(cond, patch string) manifest.Override {
 	return manifest.Override{Condition: cond, Patch: json.RawMessage(patch)}
+}
+
+// writeFlat writes a document-sized PNG with fill painted into rect
+func writeFlat(path string, rect image.Rectangle, fill color.NRGBA) error {
+	return os.WriteFile(path, flat(rect, fill), 0o644)
 }

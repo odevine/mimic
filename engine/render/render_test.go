@@ -10,7 +10,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,25 +19,6 @@ import (
 	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 )
-
-// placeholderDir holds one set of placeholder assets that every test reads,
-// since encoding their full-size PNGs is slow under the race detector
-var placeholderDir string
-
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "render-test-")
-	if err == nil {
-		err = WritePlaceholderAssets(dir, "mimic.test")
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "writing placeholder assets:", err)
-		os.Exit(1)
-	}
-	placeholderDir = dir
-	code := m.Run()
-	os.RemoveAll(dir)
-	os.Exit(code)
-}
 
 // renderBolt is a request for a synthetic Lightning Bolt, with no network involved
 func renderBolt(t *testing.T, art image.Image) *template.RenderRequest {
@@ -83,7 +63,7 @@ func TestRenderRefusesWhatItCannotDraw(t *testing.T) {
 	_, err := Render(ctx, tmpl, template.RenderRequest{Card: &card.Data{TypeLine: "Legendary Planeswalker — Jace"}})
 	var unsupported *template.UnsupportedError
 	want := frame.Shape{Role: frame.RoleSingle, Kind: frame.KindPlaneswalker}
-	if !errors.As(err, &unsupported) || unsupported.Shape != want || unsupported.Template != "mimic.test" {
+	if !errors.As(err, &unsupported) || unsupported.Shape != want || unsupported.Template != PlaceholderID {
 		t.Errorf("a planeswalker should be refused with an UnsupportedError for the template, got %v", err)
 	}
 
@@ -246,7 +226,7 @@ func TestRenderClampsDPIToNative(t *testing.T) {
 // A frame layer decodes when the compositor reaches it, so a missing PNG fails
 // the render rather than the node list, and the error still names the path
 func TestRenderReportsAMissingFrameLayer(t *testing.T) {
-	base := template.NewFSAssetProvider(placeholderDir)
+	base := PlaceholderAssets()
 	m := readManifest(t, base)
 	m.Parts["background"] = manifest.Part{Slot: "background", Variants: anyImage("nope/missing.png")}
 	tmpl := mustLoad(t, withManifest(t, base, m, nil))
@@ -285,7 +265,7 @@ func TestRenderStopsWhenCancelledDuringFrameLoad(t *testing.T) {
 // The nyx frame stands in for the background, and loads where its own part says,
 // not where the background's does
 func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
-	base := template.NewFSAssetProvider(placeholderDir)
+	base := PlaceholderAssets()
 	m := readManifest(t, base)
 	l := m.Layouts["normal"]
 	l.Stack[0].Condition = "nonnyx"
@@ -334,7 +314,7 @@ func TestRenderPlacesNyxAtItsOwnPosition(t *testing.T) {
 // range feature and a crown entry that a bool feature switches on
 func featureTemplate(t *testing.T) *template.Template {
 	t.Helper()
-	base := template.NewFSAssetProvider(placeholderDir)
+	base := PlaceholderAssets()
 	m := readManifest(t, base)
 	m.Features = map[string]manifest.Feature{
 		"strength": {Type: "range", Min: 0, Max: 1, Step: 0.05, Default: json.RawMessage(`1`)},
@@ -348,7 +328,7 @@ func featureTemplate(t *testing.T) *template.Template {
 }
 
 func TestRenderAppliesAnEntrysOpacity(t *testing.T) {
-	base := template.NewFSAssetProvider(placeholderDir)
+	base := PlaceholderAssets()
 	m := readManifest(t, base)
 	half := 0.5
 	l := m.Layouts["normal"]
@@ -437,7 +417,7 @@ func TestRenderThroughACacheMatchesAPlainProvider(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cached := template.NewCachedAssets(template.NewFSAssetProvider(placeholderDir), 1<<30)
+		cached := template.NewCachedAssets(PlaceholderAssets(), 1<<30)
 		defer cached.Close()
 		tmpl := mustLoad(t, cached)
 		for pass := 1; pass <= 2; pass++ {
@@ -468,7 +448,7 @@ func TestRendersKeepTheTemplateTheyStartedWith(t *testing.T) {
 	errs := make(chan error, 12)
 	for i := 0; i < 6; i++ {
 		go func() {
-			tmpl, ok := lib.Get("mimic.test")
+			tmpl, ok := lib.Get(PlaceholderID)
 			if !ok {
 				errs <- errors.New("template missing from the library")
 				return

@@ -283,15 +283,18 @@ func open(id, version string, p template.AssetProvider, after func()) (*Template
 	return &Template{Name: id, Version: version, tmpl: tmpl, provider: cp, cleanup: cleanup}, nil
 }
 
-// Display names a template and version for the indicator. An empty version is
-// the placeholder fallback
-func Display(name, version string) string {
+// Display names a template and version for the indicator, by the template's title.
+// An empty version is the placeholder fallback, which is no template at all
+func Display(title, version string) string {
 	switch version {
 	case "":
-		return name + " (placeholder)"
+		return NoTemplateLabel
 	case LocalVersion:
-		return name + " · local"
+		return title + " · local"
 	default:
-		return name + " · " + version
+		return title + " · " + version
 	}
 }
+
+// NoTemplateLabel is what the indicator says when no template is installed
+const NoTemplateLabel = "No template installed"

@@ -7,6 +7,7 @@ import { ListPage } from "../pages/ListPage.mjs";
 import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
+import { noTemplate } from "../bridge-fixtures.mjs";
 import { card, done, result } from "./cards.mjs";
 
 const ELF = {
@@ -76,6 +77,14 @@ const runView = {
 // lists what a screenshot leaves out: the card image, which is a stand-in, and
 // anything that shows a time
 export const scenes = {
+  "no-template": {
+    run: async ({ bridge, page }) => {
+      noTemplate(bridge);
+      await bridge.boot();
+      await expect(page.locator("#no-template-strip")).toBeVisible();
+      await expect(page.locator("#activity-title")).toHaveText("No template is installed");
+    },
+  },
   "single-empty": {
     run: async ({ bridge }) => bridge.boot(),
   },
@@ -117,6 +126,7 @@ export const scenes = {
       bridge.reply("Templates.List", [
         {
           name: "mimic.m15",
+          title: "Modern frame (M15)",
           description: "The modern card frame",
           standard: true,
           shapes: [
@@ -140,6 +150,7 @@ export const scenes = {
         },
         {
           name: "mimic.walkers",
+          title: "Walker frames",
           description: "Frames for planeswalkers",
           standard: false,
           shapes: [{ role: "single", kind: "planeswalker" }],
@@ -158,6 +169,7 @@ export const scenes = {
       await bridge.boot();
       await page.locator("#template-trigger").click();
       await expect(page.locator("#tm-library .tp-template")).toHaveCount(2);
+      await expect(page.locator("#tm-library .tp-name")).toHaveText(["Modern frame (M15)", "Walker frames"]);
       await expect(page.locator("#tm-library .tp-chip.on")).toHaveText(["Standard", "Split"]);
       await expect(page.locator("#tm-library .tp-feature")).toHaveCount(3);
       await expect(page.locator("#tm-library .tp-chip")).toHaveText(["Standard", "Split", "Transform", "Planeswalker"]);
@@ -194,3 +206,4 @@ export const scenes = {
     },
   },
 };
+

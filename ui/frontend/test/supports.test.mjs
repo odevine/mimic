@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 register("./loader.mjs", import.meta.url);
 const { app } = await import("../js/state.js");
-const { describeShape, layoutChips, faceSupport, unsupportedBy, partlyUnsupportedBy, faceUnsupportedBy } = await import("../js/supports.js");
+const { noTemplateInstalled, describeShape, layoutChips, faceSupport, unsupportedBy, partlyUnsupportedBy, faceUnsupportedBy } = await import("../js/supports.js");
 
 const single = { role: "single", kind: "standard" };
 const walker = { role: "single", kind: "planeswalker" };
@@ -88,4 +88,15 @@ test("shapes group into the layouts a person thinks of", () => {
   const transform = layoutChips([front, back])[0];
   assert.equal(transform.shapes.length, 2);
   assert.equal(transform.title, "Renders transform front faces and transform back faces");
+});
+
+test("with no template installed every face says so, not that some shape is missing", () => {
+  app.template.value = { name: "mimic.placeholder", source: "placeholder", faces: {} };
+  assert.equal(noTemplateInstalled(), true);
+  assert.equal(faceUnsupportedBy({ shapes: [single] }, 0), "No template is installed");
+  assert.equal(unsupportedBy({ shapes: [single] }), "No template is installed");
+  // Once a template is installed the message names the shape again
+  app.template.value = { name: "mimic.m15", source: "cached", faces: { "single/standard": "mimic.m15" } };
+  assert.equal(noTemplateInstalled(), false);
+  assert.equal(faceUnsupportedBy({ shapes: [front] }, 0), "No installed template renders transform front faces");
 });

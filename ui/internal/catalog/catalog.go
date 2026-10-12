@@ -41,7 +41,9 @@ type Index struct {
 // template's id, such as "mimic.m15". Versions are sorted newest first, so
 // Versions[0] is Latest
 type Template struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Title is what a person calls the template, as its manifest names it
+	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 	// Shapes are the faces the template renders, when the catalog says, so the
 	// manager can tell a template for standard cards from one for other faces

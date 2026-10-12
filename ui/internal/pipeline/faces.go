@@ -33,7 +33,7 @@ func (e *noTemplateError) Error() string {
 }
 
 // Choose decides which template renders a face of shape sh, without loading
-// it: the face's own preference when that template is installed and supports
+// it. The placeholder the app runs on when nothing is installed renders no face: the face's own preference when that template is installed and supports
 // it, then the active template when it supports it, then the first installed
 // template that does. It reports false when none does
 func (p *Pipeline) Choose(sh template.Shape) (prefs.TemplateChoice, bool) {
@@ -47,7 +47,7 @@ func (p *Pipeline) Choose(sh template.Shape) (prefs.TemplateChoice, bool) {
 			return c, true
 		}
 	}
-	if at := p.active.Load(); at.Serves(sh) {
+	if at := p.active.Load(); !at.IsPlaceholder() && at.Serves(sh) {
 		return prefs.TemplateChoice{Name: at.Name, Version: at.Version}, true
 	}
 	for _, in := range installed {
@@ -180,6 +180,7 @@ func FaceName(d *card.Data, face int) string {
 // the versions of it that need no download
 type FaceOption struct {
 	Name     string   `json:"name"`
+	Title    string   `json:"title"`
 	Versions []string `json:"versions"`
 }
 
@@ -211,7 +212,7 @@ func (p *Pipeline) FaceRows() []FaceRow {
 		Key: ShapeKey(PrimaryShape), Role: PrimaryShape.Role, Kind: PrimaryShape.Kind, Primary: true,
 		Options: faceOptions(installed, PrimaryShape),
 		Chosen:  &prefs.TemplateChoice{Name: active.Name, Version: active.Version},
-		Using:   Display(active.Name, active.Version),
+		Using:   Display(active.Info().Name, active.Version),
 	}
 	rows := []FaceRow{primary}
 	for _, sh := range p.shapes() {
@@ -232,7 +233,7 @@ func (p *Pipeline) FaceRows() []FaceRow {
 			if v := InstalledVersions(c.Name); c.Version == "" && len(v) > 0 {
 				c.Version = v[0]
 			}
-			row.Using = Display(c.Name, c.Version)
+			row.Using = Display(p.titleOf(c.Name), c.Version)
 		}
 		rows = append(rows, row)
 	}
@@ -245,8 +246,23 @@ func faceOptions(installed []Installed, sh template.Shape) []FaceOption {
 	var out []FaceOption
 	for _, in := range installed {
 		if slices.Contains(in.Shapes, sh) {
-			out = append(out, FaceOption{Name: in.ID, Versions: InstalledVersions(in.ID)})
+			out = append(out, FaceOption{Name: in.ID, Title: in.Name, Versions: InstalledVersions(in.ID)})
 		}
 	}
 	return out
 }
+
+// titleOf is the name a person gives a template, from the active template or an
+// installed one, and the id when neither is known
+func (p *Pipeline) titleOf(id string) string {
+	if at := p.active.Load(); at.Name == id && at.Info().Name != "" {
+		return at.Info().Name
+	}
+	if in, ok := InstalledInfo(id); ok && in.Name != "" {
+		return in.Name
+	}
+	return id
+}
+
+// Title is the name a person gives the template with the id
+func (p *Pipeline) Title(id string) string { return p.titleOf(id) }

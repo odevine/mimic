@@ -34,6 +34,10 @@ type Template struct {
 	dir, stamp string
 }
 
+// IsPlaceholder reports whether this is the built-in stand-in the app runs on when
+// nothing is installed, which renders no card
+func (t *Template) IsPlaceholder() bool { return t.Name == render.PlaceholderID }
+
 // Info describes the template to a person, without drawing with it
 func (t *Template) Info() template.Info { return t.tmpl.Info() }
 

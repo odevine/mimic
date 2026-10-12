@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/odevine/mimic/ui/internal/buildinfo"
@@ -17,6 +18,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/scryfall"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/templatetest"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -34,6 +36,10 @@ const (
 	EnvVersion = "MIMIC_E2E_VERSION"
 	// EnvCapabilities lists feature keys, separated by commas, to report live
 	EnvCapabilities = "MIMIC_E2E_CAPABILITIES"
+	// EnvTemplate, when it is set to anything, starts the app with a template
+	// installed as a loose folder in the scratch folder, where an app with nothing
+	// installed has none to render with
+	EnvTemplate = "MIMIC_E2E_TEMPLATE"
 )
 
 // refused is an address nothing listens on, so a test build with no upstream
@@ -61,6 +67,13 @@ func Apply(env func(string) string) error {
 	// A checkout with loose template assets would render from them, and a test
 	// should see the same template on every machine
 	pipeline.LooseDirBases = nil
+	if env(EnvTemplate) != "" {
+		assets := filepath.Join(home, "assets")
+		if err := (templatetest.Spec{ID: pipeline.DefaultTemplate}).Write(filepath.Join(assets, "frame")); err != nil {
+			return err
+		}
+		pipeline.LooseDirBases = []string{assets}
+	}
 	// The same goes for a checkout's local fonts, which are a developer's own and
 	// read-only, so the fonts come from the scratch folder and the engine
 	fontdir.CheckoutCandidates = nil

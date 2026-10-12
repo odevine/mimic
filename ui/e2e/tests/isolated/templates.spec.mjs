@@ -6,7 +6,7 @@ import { test, expect } from "../../fixtures.mjs";
 test("a catalog with no templates lists none", async ({ templates, fake }) => {
   await templates.show();
   await expect(templates.libraryList.locator(".tp-template")).toHaveCount(0);
-  await expect(templates.label).toHaveText("mimic.placeholder (placeholder)");
+  await expect(templates.label).toHaveText("No template installed");
 });
 
 test("downloading a template installs it, makes it active and renders with it", async ({ templates, single, fake, page }) => {
@@ -21,7 +21,7 @@ test("downloading a template installs it, makes it active and renders with it", 
   await expect(normal.getByRole("button", { name: /^Download · \d+ KB$/ })).toBeVisible();
 
   await normal.getByRole("button", { name: "Download" }).click();
-  await expect(templates.label).toHaveText("test.normal · 1.0.0");
+  await expect(templates.label).toHaveText("Test frame · 1.0.0");
   await expect(normal).toContainText("active");
   await expect(normal.locator(".tp-chip.on")).toHaveText(["Standard"]);
 

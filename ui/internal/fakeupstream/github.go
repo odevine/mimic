@@ -107,9 +107,9 @@ func (s *Server) githubFiles(w http.ResponseWriter, r *http.Request) {
 // bundle is a template bundle the fake offers: flat colors where a frame's art
 // goes, built by the engine's packer so the app installs it and renders with it
 type bundle struct {
-	name, version, description string
-	data                       []byte
-	sha                        string
+	name, version, title, description string
+	data                              []byte
+	sha                               string
 }
 
 func (b bundle) file() string { return b.name + "-" + b.version + ".mimic" }
@@ -139,7 +139,7 @@ func newBundle(name, version string, features bool) (bundle, error) {
 	if err != nil {
 		return bundle{}, err
 	}
-	return bundle{name: name, version: version, description: "Flat colors where a frame's art goes", data: data, sha: sha}, nil
+	return bundle{name: name, version: version, title: "Test frame", description: "Flat colors where a frame's art goes", data: data, sha: sha}, nil
 }
 
 func (s *Server) githubRaw(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +160,7 @@ func (s *Server) githubRaw(w http.ResponseWriter, r *http.Request) {
 	}
 	type entry struct {
 		Name        string        `json:"name"`
+		Title       string        `json:"title"`
 		Description string        `json:"description"`
 		Shapes      []frame.Shape `json:"shapes"`
 		Latest      string        `json:"latest"`
@@ -170,7 +171,7 @@ func (s *Server) githubRaw(w http.ResponseWriter, r *http.Request) {
 	for _, b := range catalog {
 		e := byName[b.name]
 		if e == nil {
-			e = &entry{Name: b.name, Description: b.description, Shapes: shapesFor(b.name)}
+			e = &entry{Name: b.name, Title: b.title, Description: b.description, Shapes: shapesFor(b.name)}
 			byName[b.name] = e
 			order = append(order, b.name)
 		}

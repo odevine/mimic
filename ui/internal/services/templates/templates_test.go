@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/catalog"
+	"github.com/odevine/mimic/ui/internal/catalog/catalogtest"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/templatetest"
+	"github.com/odevine/mimic/ui/internal/workspace"
 	"github.com/odevine/mimic/ui/internal/workspace/workspacetest"
 )
 
@@ -25,7 +26,7 @@ const (
 )
 
 func TestTemplateSource(t *testing.T) {
-	if got := templateSource(render.PlaceholderID, ""); got != "placeholder" {
+	if got := templateSource(workspacetest.ActiveID, ""); got != "placeholder" {
 		t.Errorf("empty version: %q, want placeholder", got)
 	}
 	if got := templateSource("test.frame", pipeline.LocalVersion); got != "local" {
@@ -44,7 +45,7 @@ func TestActiveReportsTheShapesItRenders(t *testing.T) {
 func TestChooseTemplatePerFace(t *testing.T) {
 	ws := workspacetest.NewWithTransform(t)
 	front := template.Shape{Role: template.RoleTransformFront, Kind: template.KindStandard}
-	if c, ok := ws.Pipe.Choose(pipeline.PrimaryShape); !ok || c.Name != render.PlaceholderID {
+	if c, ok := ws.Pipe.Choose(pipeline.PrimaryShape); !ok || c.Name != workspacetest.ActiveID {
 		t.Errorf("single standard chose %+v, %v, want the active template", c, ok)
 	}
 	if c, ok := ws.Pipe.Choose(front); !ok || c.Name != transformID {
@@ -55,13 +56,13 @@ func TestChooseTemplatePerFace(t *testing.T) {
 		t.Error("a planeswalker back has no template, but one was chosen")
 	}
 	// A preference for a template that does not render the shape is ignored
-	ws.Prefs.SetFaceTemplate(pipeline.ShapeKey(front), prefs.TemplateChoice{Name: render.PlaceholderID})
+	ws.Prefs.SetFaceTemplate(pipeline.ShapeKey(front), prefs.TemplateChoice{Name: workspacetest.ActiveID})
 	if c, _ := ws.Pipe.Choose(front); c.Name != transformID {
 		t.Errorf("an unusable preference chose %+v", c)
 	}
 
 	faces := ws.Pipe.FaceTemplates()
-	if faces["transform_back/standard"] != transformID || faces["single/standard"] != render.PlaceholderID {
+	if faces["transform_back/standard"] != transformID || faces["single/standard"] != workspacetest.ActiveID {
 		t.Errorf("faceTemplates = %v", faces)
 	}
 }
@@ -71,7 +72,7 @@ func TestSetFace(t *testing.T) {
 	svc := New(ws)
 
 	rows := svc.Faces()
-	if len(rows) != 3 || !rows[0].Primary || rows[0].Key != "single/standard" || rows[1].Key != "transform_back/standard" || rows[1].Using != transformID+" · local" {
+	if len(rows) != 3 || !rows[0].Primary || rows[0].Key != "single/standard" || rows[1].Key != "transform_back/standard" || rows[1].Using != "Test frame · local" {
 		t.Errorf("face rows = %+v", rows)
 	}
 
@@ -135,7 +136,7 @@ func TestInstallOnlyLeavesTheActiveTemplate(t *testing.T) {
 	}
 
 	selectAndWait(SelectRequest{Name: transformID, Version: pipeline.LocalVersion, Install: true})
-	if name := ws.Pipe.Active().Name; name != render.PlaceholderID {
+	if name := ws.Pipe.Active().Name; name != workspacetest.ActiveID {
 		t.Errorf("installing transform made %s active", name)
 	}
 	selectAndWait(SelectRequest{Name: transformID, Version: pipeline.LocalVersion})
@@ -179,6 +180,9 @@ func featuredView(t *testing.T, svc *Service) *DetailsView {
 			if tv.Details == nil {
 				t.Fatal("the installed template has no details")
 			}
+			if tv.Title != "Featured" {
+				t.Errorf("template title = %q, want the manifest's", tv.Title)
+			}
 			return tv.Details
 		}
 	}
@@ -191,6 +195,7 @@ func TestListShowsAnInstalledTemplatesDetailsAndFeatures(t *testing.T) {
 	if d.Title != "Featured" {
 		t.Errorf("title = %q", d.Title)
 	}
+
 	got := map[string]FeatureView{}
 	for _, f := range d.Features {
 		got[f.Name] = f
@@ -261,5 +266,24 @@ func TestSetFeatureKeepsAValueHeldToWhatTheFeatureAllows(t *testing.T) {
 	svc.ws.Run.Set(batch.New(nil, batch.Options{ID: "run-1"}), nil)
 	if _, err := set("banner", false); apierr.KindOf(err) != apierr.Conflict {
 		t.Errorf("a change mid-run: %v, want a conflict", err)
+	}
+}
+
+// With nothing installed the app waits to be given a template, and downloads none
+func TestStartupInstallsNothingByItself(t *testing.T) {
+	ws := workspacetest.NewSmall(t)
+	srv := catalogtest.Serve(t)
+	oldURL := catalog.IndexURL
+	catalog.IndexURL = srv.IndexURL
+	t.Cleanup(func() { catalog.IndexURL = oldURL })
+
+	ws.Startup = workspace.StartupTemplate{Name: pipeline.DefaultTemplate, Source: pipeline.SourcePlaceholder}
+	New(ws).Startup()
+	time.Sleep(300 * time.Millisecond)
+	if n := srv.Downloads(); n != 0 {
+		t.Errorf("the app downloaded %d bundles on its own", n)
+	}
+	if catalog.IsCached(catalogtest.ID, "0.1.0") {
+		t.Error("a template was installed that nobody asked for")
 	}
 }

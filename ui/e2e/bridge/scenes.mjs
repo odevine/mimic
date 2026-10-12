@@ -119,25 +119,49 @@ export const scenes = {
           name: "mimic.m15",
           description: "The modern card frame",
           standard: true,
+          shapes: [
+            { role: "single", kind: "standard" },
+            { role: "split", kind: "standard" },
+            { role: "transform_front", kind: "standard" },
+            { role: "transform_back", kind: "standard" },
+          ],
           details: {
             title: "Modern frame (M15)",
             author: { name: "mimic" },
             license: "CC BY 4.0",
             credits: [{ name: "Proxyshop", url: "https://github.com/Investigamer/Proxyshop" }],
             features: [
-              { name: "ptStyle", label: "Power and toughness box", type: "choice", values: ["light", "dark"], value: "light" },
+              { name: "tone", label: "Tone", type: "choice", values: ["light", "dark"], value: "light" },
               { name: "glow", label: "Glow", type: "bool", value: false },
               { name: "strength", label: "Strength", type: "range", min: 0, max: 1, step: 0.25, value: 0.5 },
             ],
           },
-          versions: [version("1.1.0", { cached: false, action: "download" }), version("1.0.0", { active: true, action: "" })],
+          versions: [version("1.1.0", { cached: false, action: "download", size: 235_000_000 }), version("1.0.0", { active: true, action: "" })],
         },
-        { name: "mimic.walkers", description: "Frames for planeswalkers", standard: false, versions: [version("1.0.0", { cached: false, action: "download" })] },
+        {
+          name: "mimic.walkers",
+          description: "Frames for planeswalkers",
+          standard: false,
+          shapes: [{ role: "single", kind: "planeswalker" }],
+          versions: [version("1.0.0", { cached: false, action: "download", size: 41_300_000 })],
+        },
       ]);
+      // The standard and split layouts render with mimic.m15 now, and transform with another
+      bridge.reply("Templates.Active", {
+        name: "mimic.m15",
+        version: "1.0.0",
+        label: "mimic.m15 · 1.0.0",
+        source: "cached",
+        shapes: [{ role: "single", kind: "standard" }],
+        faces: { "single/standard": "mimic.m15", "split/standard": "mimic.m15", "transform_front/standard": "other.frame" },
+      });
       await bridge.boot();
       await page.locator("#template-trigger").click();
       await expect(page.locator("#tm-library .tp-template")).toHaveCount(2);
+      await expect(page.locator("#tm-library .tp-chip.on")).toHaveText(["Standard", "Split"]);
       await expect(page.locator("#tm-library .tp-feature")).toHaveCount(3);
+      await expect(page.locator("#tm-library .tp-chip")).toHaveText(["Standard", "Split", "Transform", "Planeswalker"]);
+      await expect(page.locator("#tm-library .tp-versions button", { hasText: "235 MB" })).toBeVisible();
     },
   },
   "overrides": {

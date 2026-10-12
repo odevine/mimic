@@ -15,10 +15,15 @@ test("downloading a template installs it, makes it active and renders with it", 
   await expect(templates.libraryList.locator(".tp-template")).toHaveCount(2);
   const normal = templates.entry("test.normal");
   await expect(normal).toContainText("Flat colors where a frame's art goes");
+  // The catalog says which layouts each one renders, before either is installed
+  await expect(normal.locator(".tp-chip")).toHaveText(["Standard"]);
+  await expect(templates.entry("test.transform").locator(".tp-chip")).toHaveText(["Transform"]);
+  await expect(normal.getByRole("button", { name: /^Download · \d+ KB$/ })).toBeVisible();
 
   await normal.getByRole("button", { name: "Download" }).click();
   await expect(templates.label).toHaveText("test.normal · 1.0.0");
   await expect(normal).toContainText("active");
+  await expect(normal.locator(".tp-chip.on")).toHaveText(["Standard"]);
 
   // The bundle is a real template, so a card renders with it
   await single.show();

@@ -60,8 +60,11 @@ type VersionView struct {
 	Cached     bool   `json:"cached"`
 	Selectable bool   `json:"selectable"`
 	Active     bool   `json:"active"`
-	Reason     string `json:"reason,omitempty"`
-	Action     string `json:"action"`
+	// Size is the bundle's size in bytes when it is not installed and the catalog
+	// says
+	Size   int64  `json:"size,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	Action string `json:"action"`
 }
 
 // TemplateView is one template block: its id, its description, and its versions
@@ -71,8 +74,10 @@ type TemplateView struct {
 	// Standard reports whether the template renders standard single cards,
 	// which is what selecting it as the active template is for. A template
 	// that does not, such as transform, is only installed
-	Standard bool          `json:"standard"`
-	Versions []VersionView `json:"versions"`
+	Standard bool `json:"standard"`
+	// Shapes are the faces the template renders, as far as is known
+	Shapes   []template.Shape `json:"shapes,omitempty"`
+	Versions []VersionView    `json:"versions"`
 	// Details is who made the template and what a person can change in it, and is
 	// absent until the template is installed, since the catalog does not say
 	Details *DetailsView `json:"details,omitempty"`
@@ -139,7 +144,7 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 
 	views := make([]TemplateView, 0, len(rows))
 	for _, row := range rows {
-		tv := TemplateView{Name: row.name, Description: row.description, Standard: row.standard}
+		tv := TemplateView{Name: row.name, Description: row.description, Standard: row.standard, Shapes: row.shapes}
 		if in, ok := installed[row.name]; ok {
 			tv.Details = s.details(in)
 		}
@@ -149,6 +154,7 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 				Label:      versionLabel(v.version),
 				Cached:     v.cached,
 				Selectable: v.selectable,
+				Size:       v.size,
 				Active:     row.name == activeName && v.version == activeVersion,
 				Reason:     v.reason,
 			}

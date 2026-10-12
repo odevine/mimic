@@ -51,6 +51,7 @@ Templates.Faces() -> []pipeline.FaceRow
 Templates.List() -> []templates.TemplateView
 Templates.Select(templates.SelectRequest) -> string !
 Templates.SetFace(templates.FaceChoice) -> []pipeline.FaceRow !
+Templates.SetFeature(templates.FeatureChoice) -> templates.DetailsView !
 Updates.Check() -> desktop.UpdateStatus !
 Updates.Install() !
 Updates.Restart() !
@@ -235,7 +236,7 @@ cardlist.ShapedCard struct {
 	ColorIndicator []card.Color
 	Faces []card.Face
 	FaceIndex int
-	shapes []template.Shape
+	shapes []frame.Shape
 }
 
 cards.SearchResult struct {
@@ -316,6 +317,15 @@ desktop.VersionInfo struct {
 
 float64 = float64
 
+frame.Kind = string
+
+frame.Role = string
+
+frame.Shape struct {
+	role frame.Role
+	kind frame.Kind
+}
+
 int = int
 
 int64 = int64
@@ -350,6 +360,17 @@ list.Started struct {
 	rows []cardlist.Row
 }
 
+manifest.Author struct {
+	name string (omitempty)
+	url string (omitempty)
+}
+
+manifest.Credit struct {
+	name string
+	url string (omitempty)
+	note string (omitempty)
+}
+
 overrides.Applied struct {
 	rules []rules.Rule
 	settings prefs.Settings
@@ -369,13 +390,14 @@ overrides.RowRef struct {
 
 pipeline.FaceOption struct {
 	name string
+	title string
 	versions []string
 }
 
 pipeline.FaceRow struct {
 	key string
-	role template.Role
-	kind template.Kind
+	role frame.Role
+	kind frame.Kind
 	options []pipeline.FaceOption
 	chosen prefs.TemplateChoice (omitempty)
 	using string
@@ -510,8 +532,6 @@ settings.ResourcesView struct {
 
 string = string
 
-template.Kind = string
-
 template.Resolution struct {
 	dpi int
 	width int
@@ -519,31 +539,44 @@ template.Resolution struct {
 	native bool (omitempty)
 }
 
-template.Role = string
-
-template.Shape struct {
-	role template.Role
-	kind template.Kind
-}
-
-template.Supports struct {
-	roles []template.Role
-	kinds []template.Kind
-}
-
 templates.ActiveView struct {
 	name string
 	version string
 	label string
 	source string
-	supports template.Supports
+	shapes []frame.Shape
 	faces map[string]string
+}
+
+templates.DetailsView struct {
+	title string
+	author manifest.Author
+	license string (omitempty)
+	credits []manifest.Credit (omitempty)
+	features []templates.FeatureView (omitempty)
 }
 
 templates.FaceChoice struct {
 	key string
 	name string
 	version string
+}
+
+templates.FeatureChoice struct {
+	template string
+	name string
+	value any
+}
+
+templates.FeatureView struct {
+	name string
+	label string
+	type string
+	values []string (omitempty)
+	min float64 (omitempty)
+	max float64 (omitempty)
+	step float64 (omitempty)
+	value any
 }
 
 templates.SelectRequest struct {
@@ -554,11 +587,12 @@ templates.SelectRequest struct {
 
 templates.TemplateView struct {
 	name string
+	title string (omitempty)
 	description string (omitempty)
-	renderable bool
 	standard bool
-	reason string (omitempty)
+	shapes []frame.Shape (omitempty)
 	versions []templates.VersionView
+	details templates.DetailsView (omitempty)
 }
 
 templates.VersionView struct {
@@ -567,6 +601,7 @@ templates.VersionView struct {
 	cached bool
 	selectable bool
 	active bool
+	size int64 (omitempty)
 	reason string (omitempty)
 	action string
 }

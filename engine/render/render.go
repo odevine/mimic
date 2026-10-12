@@ -73,6 +73,9 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	if req.Card == nil {
 		return nil, fmt.Errorf("render: request has no card")
 	}
+	// Conditions and opacities read feature values the template offers, held to
+	// their ranges, so a caller's stale or out of range choice cannot reach them
+	req.Features = t.ResolveFeatures(req.Features)
 	shapes := template.Classify(req.Card)
 	if req.Face < 0 || req.Face >= len(shapes) {
 		return nil, fmt.Errorf("render: face %d out of range, %q renders %d", req.Face, req.Card.Name, len(shapes))
@@ -424,10 +427,7 @@ func layerNode(ctx context.Context, loads *frameLoads, t *template.Template, req
 	}
 	opacity := e.Opacity
 	if e.OpacityFeature != "" {
-		opacity = 1
-		if v, ok := req.Features[e.OpacityFeature].(float64); ok {
-			opacity = max(0, min(1, v))
-		}
+		opacity, _ = req.Features[e.OpacityFeature].(float64)
 	}
 	// The compositor reads an opacity of zero as opaque, so an entry that is fully
 	// transparent is left out

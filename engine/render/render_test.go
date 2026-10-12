@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -336,7 +337,7 @@ func featureTemplate(t *testing.T) *template.Template {
 	base := template.NewFSAssetProvider(placeholderDir)
 	m := readManifest(t, base)
 	m.Features = map[string]manifest.Feature{
-		"strength": {Type: "range", Min: 0, Max: 1, Step: 0.05},
+		"strength": {Type: "range", Min: 0, Max: 1, Step: 0.05, Default: json.RawMessage(`1`)},
 		"banner":   {Type: "bool"},
 	}
 	l := m.Layouts["normal"]
@@ -384,7 +385,10 @@ func TestRenderTakesAnEntrysOpacityFromAFeature(t *testing.T) {
 		t.Errorf("a feature of 0.25 gives alpha %d, want about 64", a)
 	}
 	if a := alphaAt(nil); a != 255 {
-		t.Errorf("a feature with no value gives alpha %d, want opaque", a)
+		t.Errorf("a feature with no value gives alpha %d, want its default of opaque", a)
+	}
+	if a := alphaAt(frame.Features{"strength": 0.26}); a < 61 || a > 67 {
+		t.Errorf("a feature of 0.26 gives alpha %d, want it snapped to 0.25 and about 64", a)
 	}
 	if a := alphaAt(frame.Features{"strength": 7.0}); a != 255 {
 		t.Errorf("a feature past its range gives alpha %d, want it held at opaque", a)

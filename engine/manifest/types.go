@@ -93,7 +93,8 @@ type Blend struct {
 // Seam is one transition between two neighbouring colors
 type Seam struct {
 	// Center is where the transition is centered, in pixels from the middle of the
-	// canvas
+	// canvas, for the part drawn at its own origin. An entry placed elsewhere with
+	// at carries its seams along by the same distance
 	Center float64 `json:"center"`
 	// Width is how wide the transition is, in pixels
 	Width float64 `json:"width"`

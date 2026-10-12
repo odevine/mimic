@@ -57,6 +57,22 @@ func NewBlender(n int, b *manifest.Blend, docW int) (Blender, bool) {
 	return bl, true
 }
 
+// Shifted moves every seam dx pixels to the right in an authored document docW
+// wide, for an entry placed away from its part's origin, which carries its blend
+// with it
+func (bl Blender) Shifted(dx, docW int) Blender {
+	if dx == 0 || docW <= 0 {
+		return bl
+	}
+	d := float64(dx) / float64(docW)
+	out := bl
+	out.seams = make([]seamSpan, len(bl.seams))
+	for i, s := range bl.seams {
+		out.seams[i] = seamSpan{from: s.from + d, to: s.to + d}
+	}
+	return out
+}
+
 // Weights is how much of each color shows at a fraction f of the document's width,
 // written into w, which holds one weight per color and sums to 1. The far right
 // shows End of the last color, and the rest goes to the one before it

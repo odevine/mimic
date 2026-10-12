@@ -1,7 +1,10 @@
 package template
 
 import (
+	"bytes"
 	"image"
+	"image/color"
+	"image/png"
 	"testing"
 )
 
@@ -26,5 +29,27 @@ func TestTurnRect(t *testing.T) {
 	// Off center, a quarter turn carries the corner around the point
 	if got := TurnRect(image.Rect(10, 0, 20, 5), 0, 0, 90); got != image.Rect(-5, 10, 0, 20) {
 		t.Errorf("TurnRect about the origin = %v", got)
+	}
+}
+
+func TestDividerKeepsItsPlaceWhenItsPartIsCut(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 40, 10))
+	for y := 4; y < 6; y++ {
+		for x := 10; x < 30; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	p := NewMemoryAssets(nil, map[string][]byte{"d.png": buf.Bytes()})
+	// The image is the part cut at x 100, so its strip starts 10 in from there
+	layer, err := Divider(p, "d.png", image.Pt(100, 0), 50, 1)
+	if err != nil || layer == nil {
+		t.Fatal(layer, err)
+	}
+	if layer.Origin.X != 110 {
+		t.Errorf("divider starts at x %d, want 110", layer.Origin.X)
 	}
 }

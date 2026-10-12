@@ -10,14 +10,15 @@ import (
 	"github.com/odevine/mimic/engine/version"
 )
 
-// bundleFormat is the .mimic container schema this reader understands.
+// BundleFormat is the .mimic container schema this reader understands and the
+// packer writes.
 // bundle.json carries the format a bundle was written with, and any other one
 // means the structure differs and this engine cannot read it
-const bundleFormat = 2
+const BundleFormat = 2
 
-// bundleHeader is bundle.json, read first so an incompatible container is
+// BundleHeader is bundle.json, read first so an incompatible container is
 // rejected before the larger manifest or any layer is touched
-type bundleHeader struct {
+type BundleHeader struct {
 	Format    int    `json:"format"`
 	ID        string `json:"id"`
 	Version   string `json:"version"`
@@ -34,7 +35,7 @@ type ZipAssetProvider struct {
 	f      *os.File
 	zr     *zip.Reader
 	byName map[string]*zip.File
-	header bundleHeader
+	header BundleHeader
 }
 
 // NewZipAssetProvider opens a .mimic at path and gates it once: it reads
@@ -80,9 +81,9 @@ func (p *ZipAssetProvider) readHeader() error {
 	if err := json.Unmarshal(raw, &p.header); err != nil {
 		return fmt.Errorf("template: decoding bundle header: %w", err)
 	}
-	if p.header.Format != bundleFormat {
+	if p.header.Format != BundleFormat {
 		return fmt.Errorf("template: bundle format %d is not one this engine reads, which reads format %d",
-			p.header.Format, bundleFormat)
+			p.header.Format, BundleFormat)
 	}
 	if !version.Satisfies(p.header.MinEngine) {
 		return fmt.Errorf("template: bundle needs engine %s or newer, running %s; update the engine",

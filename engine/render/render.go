@@ -414,7 +414,7 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 		if !ok {
 			return nil, fmt.Errorf("render: text box %q names a divider part %q the layout does not have", job.key, job.divider)
 		}
-		div, err := template.Divider(t.Assets(), part.Variants["any"], res.DividerY, scale)
+		div, err := template.Divider(t.Assets(), part.Variants["any"], part.Origin, res.DividerY, scale)
 		if err != nil {
 			return nil, err
 		}

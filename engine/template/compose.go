@@ -96,9 +96,10 @@ func Mirror(buf *raster.Buffer, region image.Rectangle) {
 // creature's rules and flavor text. The divider asset bakes a thin graphic into
 // an otherwise transparent full-document image, so this crops that strip to its
 // opaque bounds and places its center at centerY, the document Y a text layout
-// reported for the divider. It returns nil when path is empty, so a template
+// reported for the divider. The asset sits at origin in the authored document, so a
+// cut part keeps its place. It returns nil when path is empty, so a template
 // without a divider still renders
-func Divider(p AssetProvider, path string, centerY int, s Scale) (*canvas.Layer, error) {
+func Divider(p AssetProvider, path string, origin image.Point, centerY int, s Scale) (*canvas.Layer, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -123,7 +124,7 @@ func Divider(p AssetProvider, path string, centerY int, s Scale) (*canvas.Layer,
 	if err != nil {
 		return nil, fmt.Errorf("template: wrapping divider: %w", err)
 	}
-	return &canvas.Layer{Content: buf, Origin: image.Pt(strip.Min.X, centerY-strip.Dy()/2), Mode: blend.Normal}, nil
+	return &canvas.Layer{Content: buf, Origin: image.Pt(strip.Min.X+s.Px(origin.X), centerY-strip.Dy()/2), Mode: blend.Normal}, nil
 }
 
 // OpaqueBounds is the smallest rectangle covering every pixel of img with any

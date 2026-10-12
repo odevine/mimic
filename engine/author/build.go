@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/odevine/mimic/engine/manifest"
@@ -39,6 +40,20 @@ var semverRe = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0
 // Build reads the source form in fsys and resolves it. Every problem found is in
 // the diagnostics, and the result is nil when there is an error
 func Build(fsys fs.FS, opt Options) (*Built, manifest.Diagnostics) {
+	return buildFrom(fsys, opt, true)
+}
+
+// Validate checks a template's source folder the way Build does, without cutting or
+// storing an image, and is strict where the engine's loader is lenient: a field the
+// contract does not have is an error. It reports every problem in one pass
+func Validate(fsys fs.FS, opt Options) manifest.Diagnostics {
+	_, ds := buildFrom(fsys, opt, false)
+	return ds
+}
+
+// buildFrom is Build, and with write unset it reads each image to check it and leaves
+// the result without assets
+func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostics) {
 	src, ds := readSource(fsys)
 	if src == nil {
 		return nil, ds
@@ -61,10 +76,12 @@ func Build(fsys fs.FS, opt Options) (*Built, manifest.Diagnostics) {
 	// author every problem
 	sources := map[string]map[string]string{}
 	parts := map[string]manifest.Part{}
+	unread := map[string]bool{}
 	for _, name := range sortedKeys(src.Parts) {
 		p := src.Parts[name]
 		vs, pds := expandPart(fsys, name, p)
 		ds = append(ds, pds...)
+		unread[name] = pds.HasErrors()
 		sources[name] = vs
 		mp := manifest.Part{Slot: p.Slot, Origin: p.Origin, Blend: p.Blend, Variants: map[string]manifest.Variant{}}
 		for key, path := range vs {
@@ -72,7 +89,7 @@ func Build(fsys fs.FS, opt Options) (*Built, manifest.Diagnostics) {
 		}
 		parts[name] = mp
 	}
-	if ds.HasErrors() {
+	if layouts == nil {
 		sortDiagnostics(ds)
 		return nil, ds
 	}
@@ -88,16 +105,22 @@ func Build(fsys fs.FS, opt Options) (*Built, manifest.Diagnostics) {
 	if err != nil {
 		return nil, append(ds, manifest.Diagnostic{Severity: manifest.Error, Message: err.Error()})
 	}
-	m, mds := manifest.Decode(raw)
-	ds = append(ds, mds...)
-	if m == nil || mds.HasErrors() {
+	m, mds := manifest.DecodeStrict(raw)
+	for _, d := range mds {
+		// A part whose folder could not be read has been reported once already
+		if name, ok := strings.CutPrefix(d.Path, "parts."); ok && unread[strings.Split(name, ".")[0]] && strings.HasSuffix(d.Path, ".variants") {
+			continue
+		}
+		ds = append(ds, d)
+	}
+	if m == nil || ds.HasErrors() {
 		sortDiagnostics(ds)
 		return nil, ds
 	}
 
-	store := &assetStore{}
+	store := &assetStore{check: !write}
 	cuts := packParts(fsys, sources, m, store, &ds)
-	if ds.HasErrors() {
+	if ds.HasErrors() || !write {
 		sortDiagnostics(ds)
 		return nil, ds
 	}
@@ -120,7 +143,7 @@ func Build(fsys fs.FS, opt Options) (*Built, manifest.Diagnostics) {
 		return nil, ds
 	}
 	// The manifest as bundled must pass the same rules the engine applies on load
-	if _, fds := manifest.Decode(out); fds.HasErrors() {
+	if _, fds := manifest.DecodeStrict(out); fds.HasErrors() {
 		sortDiagnostics(fds)
 		return nil, append(ds, fds...)
 	}

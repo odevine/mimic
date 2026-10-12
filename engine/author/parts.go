@@ -58,6 +58,8 @@ func expandPart(fsys fs.FS, name string, p Part) (map[string]string, manifest.Di
 type assetStore struct {
 	mu    sync.Mutex
 	files map[string][]byte
+	// check is set for a build that only validates, which stores nothing
+	check bool
 }
 
 // put keeps an image and returns the path it is named by
@@ -110,7 +112,7 @@ func packPart(fsys fs.FS, name string, sources map[string]string, p manifest.Par
 	if union.Empty() {
 		return fail("none of the images has a visible pixel")
 	}
-	cut := union != image.Rect(0, 0, size.X, size.Y)
+	cut := union != image.Rect(0, 0, size.X, size.Y) && !store.check
 	out := p
 	out.Variants = make(map[string]manifest.Variant, len(keys))
 	for _, key := range keys {
@@ -124,6 +126,9 @@ func packPart(fsys fs.FS, name string, sources map[string]string, p manifest.Par
 			if err != nil {
 				return fail("the image for %q cannot be cut: %v", key, err)
 			}
+		}
+		if store.check {
+			continue
 		}
 		out.Variants[key] = manifest.Variant{Path: store.put(data)}
 	}

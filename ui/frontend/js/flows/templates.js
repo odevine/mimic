@@ -3,7 +3,7 @@ import { $, h, icon } from "../dom.js";
 import { app, effect } from "../state.js";
 import { toast } from "../components/toast.js";
 import { loadActiveTemplate } from "../components/templatePicker.js";
-import { describeShape } from "../supports.js";
+import { describeShape, layoutChips } from "../supports.js";
 
 // The Templates mode keeps everything about templates in one place. Library
 // lists the catalog and installs or activates a version, Defaults picks which
@@ -23,6 +23,12 @@ async function changed() {
 
 // --- library ---
 
+// sizeLabel says how big a download is, in the units a person reads
+function sizeLabel(bytes) {
+  if (!bytes) return "";
+  return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+}
+
 // versionRow draws one version with what can be done with it. A template that
 // renders only other faces, such as transform, is never the active template,
 // so its versions are downloaded or shown as installed rather than selected
@@ -33,7 +39,8 @@ function versionRow(t, v) {
   } else if (!t.standard && v.selectable && v.cached) {
     row.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "installed"));
   } else if (v.action === "select" || v.action === "download") {
-    const label = v.action === "download" ? "Download" : "Select";
+    const size = v.action === "download" ? sizeLabel(v.size) : "";
+    const label = v.action === "download" ? `Download${size ? ` · ${size}` : ""}` : "Select";
     row.append(
       h(
         "button",
@@ -53,19 +60,31 @@ function versionRow(t, v) {
   return row;
 }
 
-// aboutTemplate says who made an installed template, under what licence, and
-// whose art it is cut from. Links open in the browser through the page's one handler
+// aboutTemplate says who made an installed template and whose art it is cut from. Links open in the browser through the page's one handler
 function aboutTemplate(d) {
   const by = [];
-  if (d.title) by.push(d.title);
   if (d.author && d.author.name) by.push(d.author.url ? h("span", {}, "by ", h("a", { href: d.author.url }, d.author.name)) : `by ${d.author.name}`);
-  if (d.license) by.push(`${d.license} licence`);
   const lines = [h("div", { class: "tp-desc" }, ...by.flatMap((part, i) => (i ? [" · ", part] : [part])))];
   if (d.credits && d.credits.length) {
     const credits = d.credits.map((c) => (c.url ? h("a", { href: c.url, title: c.note || "" }, c.name) : h("span", { title: c.note || "" }, c.name)));
     lines.push(h("div", { class: "tp-desc" }, "Art from ", ...credits.flatMap((el, i) => (i ? [", ", el] : [el]))));
   }
   return lines;
+}
+
+// layoutsOf lists the card layouts a template renders, each marked when this
+// template is the one rendering it now. The page knows which template renders
+// each shape from the active template's report
+function layoutsOf(t) {
+  const chips = layoutChips(t.shapes);
+  if (!chips.length) return null;
+  const faces = app.template.peek()?.faces || {};
+  const using = (c) => c.shapes.some((sh) => faces[`${sh.role}/${sh.kind}`] === t.name);
+  return h(
+    "ul",
+    { class: "tp-layouts", "aria-label": "Card layouts" },
+    ...chips.map((c) => h("li", { class: `tp-chip${using(c) ? " on" : ""}`, title: using(c) ? `${c.title}, in use now` : c.title }, c.label)),
+  );
 }
 
 // featureControl draws the control for one choice a template offers: a switch for
@@ -127,9 +146,10 @@ async function loadLibrary() {
         h(
           "div",
           { class: "tp-head" },
-          h("div", { class: "tp-name" }, t.name),
+          h("div", { class: "tp-title" }, h("span", { class: "tp-name" }, (t.details && t.details.title) || t.name), t.details && t.details.title && t.details.title !== t.name ? h("span", { class: "tp-id" }, t.name) : null),
           t.description ? h("div", { class: "tp-desc" }, t.description) : null,
           ...(t.details ? aboutTemplate(t.details) : []),
+          layoutsOf(t),
         ),
         h("div", { class: "tp-versions" }, ...(t.versions || []).map((v) => versionRow(t, v))),
         t.details && t.details.features && t.details.features.length

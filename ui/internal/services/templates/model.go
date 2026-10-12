@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/engine/version"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/pipeline"
@@ -16,6 +17,7 @@ func defaultVersionSatisfied(minEngine string) bool { return version.Satisfies(m
 // is false when the engine cannot render it, and reason then says why
 type versionRow struct {
 	version    string
+	size       int64
 	cached     bool
 	selectable bool
 	reason     string
@@ -28,7 +30,11 @@ type templateRow struct {
 	name        string
 	description string
 	standard    bool
-	versions    []versionRow
+	// shapes are the faces the template renders, when they are known: from its
+	// manifest once it is installed, and from the catalog before that when the
+	// catalog says
+	shapes   []template.Shape
+	versions []versionRow
 }
 
 // buildTemplateRows assembles the manager's model from the catalog, the
@@ -47,12 +53,12 @@ func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLo
 	seen := map[string]bool{}
 	if idx != nil {
 		for _, t := range idx.Templates {
-			row := templateRow{name: t.Name, description: t.Description, standard: true}
+			row := templateRow{name: t.Name, description: t.Description, standard: true, shapes: t.Shapes}
 			if len(t.Shapes) > 0 {
 				row.standard = slices.Contains(t.Shapes, pipeline.PrimaryShape)
 			}
 			if in, ok := byID[t.Name]; ok {
-				row.description, row.standard = in.Description, slices.Contains(in.Shapes, pipeline.PrimaryShape)
+				row.description, row.standard, row.shapes = in.Description, slices.Contains(in.Shapes, pipeline.PrimaryShape), in.Shapes
 			}
 			if hasLocal(t.Name) {
 				row.versions = append(row.versions, localRow())
@@ -75,7 +81,7 @@ func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLo
 		if seen[in.ID] {
 			continue
 		}
-		row := templateRow{name: in.ID, description: in.Description, standard: slices.Contains(in.Shapes, pipeline.PrimaryShape)}
+		row := templateRow{name: in.ID, description: in.Description, standard: slices.Contains(in.Shapes, pipeline.PrimaryShape), shapes: in.Shapes}
 		if hasLocal(in.ID) {
 			row.versions = append(row.versions, localRow())
 		}
@@ -97,7 +103,7 @@ func localRow() versionRow {
 
 // catalogRow turns a catalog version into a model row, deciding selectability
 func catalogRow(v catalog.Version, cached bool) versionRow {
-	r := versionRow{version: v.Version, cached: cached}
+	r := versionRow{version: v.Version, size: v.Size, cached: cached}
 	switch {
 	case !templateVersionSatisfied(v.MinEngine):
 		r.reason = "needs engine " + v.MinEngine

@@ -54,7 +54,7 @@ func TestBuildTemplateRows(t *testing.T) {
 			{Version: "1.0.0", Format: 1, MinEngine: "0.3.0"}, // a format this engine does not read
 		}},
 		{Name: "mimic.walkers", Shapes: []template.Shape{{Role: "single", Kind: "planeswalker"}}, Latest: "1.0.0", Versions: []catalog.Version{
-			{Version: "1.0.0", Format: 2, MinEngine: "0.3.0"},
+			{Version: "1.0.0", Format: 2, MinEngine: "0.3.0", Size: 41_300_000},
 		}},
 	}}
 	installed := []pipeline.Installed{installedInfo("mimic.m15", "from the installed copy", pipeline.PrimaryShape)}
@@ -66,6 +66,9 @@ func TestBuildTemplateRows(t *testing.T) {
 	row, ok := findRow(rows, "mimic.m15")
 	if !ok {
 		t.Fatalf("mimic.m15 row missing: %+v", rows)
+	}
+	if len(row.shapes) != 1 || row.shapes[0] != pipeline.PrimaryShape {
+		t.Errorf("shapes = %v, want those of the installed copy", row.shapes)
 	}
 	if row.description != "from the installed copy" || !row.standard {
 		t.Errorf("row = %+v, want the installed copy's description and standard", row)
@@ -83,7 +86,10 @@ func TestBuildTemplateRows(t *testing.T) {
 	if !ok || walkers.standard {
 		t.Errorf("walkers = %+v, want a row that does not render standard cards", walkers)
 	}
-	if v, _ := findVer(walkers.versions, "1.0.0"); !v.selectable || v.cached {
+	if len(walkers.shapes) != 1 || walkers.shapes[0].Kind != "planeswalker" {
+		t.Errorf("walkers shapes = %v, want the catalog's", walkers.shapes)
+	}
+	if v, _ := findVer(walkers.versions, "1.0.0"); !v.selectable || v.cached || v.size != 41_300_000 {
 		t.Errorf("walkers 1.0.0 = %+v, want selectable and not cached", v)
 	}
 }

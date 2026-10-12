@@ -54,3 +54,39 @@ export function faceUnsupportedBy(card, face) {
   if (!sh || !faces || faces[shapeKey(sh)]) return "";
   return `No installed template renders ${describeShape(sh)}`;
 }
+
+// The card layouts a template can render, grouped the way a person thinks of
+// them: the two faces of a transform card are one layout, and a shape of a kind
+// other than standard is named by its kind
+const FAMILIES = { single: "Standard", split: "Split", adventure: "Adventure", aftermath: "Aftermath", transform: "Transform", mdfc: "MDFC" };
+const FAMILY_ORDER = Object.keys(FAMILIES);
+const SIDED = new Set(["transform", "mdfc"]);
+
+const titleCase = (s) => s.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+// layoutChips groups a template's shapes into layouts, each { label, shapes,
+// title }, standard cards first. A layout with faces on two sides that a template
+// renders only one of says which, as in "Transform (front only)"
+export function layoutChips(shapes) {
+  const groups = new Map();
+  for (const sh of shapes || []) {
+    const [family, side] = sh.role.split("_");
+    const key = `${sh.kind}|${family}`;
+    if (!groups.has(key)) groups.set(key, { kind: sh.kind, family, sides: new Set(), shapes: [] });
+    const g = groups.get(key);
+    g.shapes.push(sh);
+    if (side) g.sides.add(side);
+  }
+  const rank = (g) => (g.kind === "standard" ? 0 : 1) * 100 + (FAMILY_ORDER.includes(g.family) ? FAMILY_ORDER.indexOf(g.family) : FAMILY_ORDER.length);
+  return [...groups.values()]
+    .sort((a, b) => rank(a) - rank(b) || a.kind.localeCompare(b.kind))
+    .map((g) => {
+      const family = FAMILIES[g.family] || titleCase(g.family);
+      const standard = g.kind === "standard";
+      const qualifiers = [];
+      if (!standard && g.family !== "single") qualifiers.push(family.toLowerCase());
+      if (SIDED.has(g.family) && g.sides.size === 1) qualifiers.push(`${[...g.sides][0]} only`);
+      const label = (standard ? family : titleCase(g.kind)) + (qualifiers.length ? ` (${qualifiers.join(", ")})` : "");
+      return { label, shapes: g.shapes, title: `Renders ${g.shapes.map(describeShape).join(" and ")}` };
+    });
+}

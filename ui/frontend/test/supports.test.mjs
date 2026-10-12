@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 register("./loader.mjs", import.meta.url);
 const { app } = await import("../js/state.js");
-const { describeShape, faceSupport, unsupportedBy, partlyUnsupportedBy, faceUnsupportedBy } = await import("../js/supports.js");
+const { describeShape, layoutChips, faceSupport, unsupportedBy, partlyUnsupportedBy, faceUnsupportedBy } = await import("../js/supports.js");
 
 const single = { role: "single", kind: "standard" };
 const walker = { role: "single", kind: "planeswalker" };
@@ -69,4 +69,23 @@ test("one face reports its own reason", () => {
   assert.equal(faceUnsupportedBy(card, 2), "", "a face with no shape is left to the engine");
   app.template.value = null;
   assert.equal(faceUnsupportedBy(card, 1), "");
+});
+
+test("shapes group into the layouts a person thinks of", () => {
+  const labels = (shapes) => layoutChips(shapes).map((c) => c.label);
+  assert.deepEqual(labels([single]), ["Standard"]);
+  // Both faces of a transform card are one layout, and standard comes first
+  assert.deepEqual(labels([back, front, { role: "split", kind: "standard" }, single]), ["Standard", "Split", "Transform"]);
+  assert.deepEqual(labels([front]), ["Transform (front only)"]);
+  assert.deepEqual(labels([{ role: "mdfc_back", kind: "standard" }]), ["MDFC (back only)"]);
+  // A kind other than standard names the layout, and keeps the card's layout when it is not a single card
+  assert.deepEqual(labels([walker, { role: "single", kind: "saga" }]), ["Planeswalker", "Saga"]);
+  assert.deepEqual(labels([{ role: "transform_front", kind: "planeswalker" }, { role: "transform_back", kind: "planeswalker" }]), ["Planeswalker (transform)"]);
+  assert.deepEqual(labels([{ role: "transform_front", kind: "planeswalker" }]), ["Planeswalker (transform, front only)"]);
+  assert.deepEqual(labels([{ role: "single", kind: "basic_land" }]), ["Basic land"]);
+  assert.deepEqual(labels([]), []);
+  assert.deepEqual(labels(undefined), []);
+  const transform = layoutChips([front, back])[0];
+  assert.equal(transform.shapes.length, 2);
+  assert.equal(transform.title, "Renders transform front faces and transform back faces");
 });

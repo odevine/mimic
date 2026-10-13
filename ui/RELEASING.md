@@ -27,7 +27,12 @@ All systems:
   it off, then save a preset, change a setting and apply the preset back. Render a
   card and confirm the rule's field is set and the report records it.
 - MPC Autofill output and the cardback upload.
-- Templates: download a bundle, select it, and set a face default.
+- A fresh config folder: the top bar says "No template installed", the strip
+  under it leads to the Templates tab, and Single and List say no template is
+  installed in place of rendering.
+- Templates: download `mimic.m15` (about 234 MB), then confirm its layouts are
+  listed, its title shows in the top bar, and a card renders. On the Defaults
+  tab, set a face default for split and transform cards and render one of each.
 - Settings: download the local card data, add and remove a font, and confirm the
   theme follows the system.
 - The window opens where it was left, including after unplugging a display.
@@ -39,8 +44,11 @@ All systems:
   reference says, including a tooltip that must not appear for a control the
   pointer left before the delay.
 - Uninstalling removes the app and leaves the config folder alone.
-- A config folder from 0.9.2, with its prefs, templates and card data, is picked
-  up unchanged.
+- A config folder from 0.9.2 keeps its prefs and card data, and starts with no
+  template. Copy a real 0.9.2 config folder into place, then start the build.
+  A saved choice of `normal`, `split` or `transform` is rewritten to
+  `mimic.m15`, the cached bundles of those three are deleted, and the app shows
+  "No template installed" until `mimic.m15` is downloaded.
 
 On Windows the installer must run without administrator rights and add the WebView2
 runtime on a machine that lacks it. On Linux, check the AppImage, the `.deb` and
@@ -50,13 +58,16 @@ update instead of replacing itself.
 ## Throughput
 
 The run loop is compared against the previous release on one machine with the
-same 100 cards. Both builds pin the same engine, so the difference is the shell
-around it.
+same 100 cards. A comparison is like for like only when both builds pin the same
+engine, so say which engine each build used when quoting a result.
 
 `cmd/throughput` renders a JSON file of run rows through the run service and
-prints cards per second for each pass. Take the rows from the local card data, one
-hundred distinct English cards with art, and run it three times. The first pass
-fetches art and the later ones measure rendering.
+prints cards per second for each pass. It renders with an installed template, so
+install `mimic.m15` first, either from the Templates tab or as a loose folder
+with its `manifest.json` under `assets/` or `../assets/` of the directory it runs
+from. Take the rows from the local card data, one hundred distinct English cards
+with art, and run it three times. The first pass fetches art and the later ones
+measure rendering.
 
 ```
 go build -o /tmp/throughput ./cmd/throughput
@@ -69,7 +80,10 @@ with `GOWORK=off go build`, start it with `-no-open`, post the same rows to
 memory while it runs.
 
 The 1.0 comparison, on an Apple M3 Max with 16 workers, JPEG output and 1200 dpi
-cards, was:
+cards, was measured when both builds pinned the same engine. The current build
+pins engine v0.18.0, which blends pairs from single color art and caches the
+result, so these numbers come from the earlier engine and a new run against them
+is not like for like:
 
 | Build      | Cards per second                   | Peak memory      |
 | ---------- | ---------------------------------- | ---------------- |
@@ -92,6 +106,11 @@ for, since a breaking change from 0.9.2 would otherwise produce 0.10.0. Merging
 the release pull request tags `ui/v1.0.0`, and the release workflow calls the
 packaging workflow to build and attach the installers, `SHA256SUMS` and the
 signatures when the signing key is set.
+
+The release pull request body is generated from the commits, so it cannot
+describe behavior a user needs to know before upgrading. When a release changes
+what an existing config folder does, open the GitHub release with one sentence
+on it.
 
 Afterward, install the published release on one system, check that the updater
 sees it as current, and that an older build offers it.

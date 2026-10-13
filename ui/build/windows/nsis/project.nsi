@@ -21,7 +21,7 @@ Unicode true
 ####
 ## !define INFO_PROJECTNAME    "my-project" # Default "mimic"
 ## !define INFO_COMPANYNAME    "My Company" # Default "Owen Devine"
-## !define INFO_PRODUCTNAME    "My Product Name" # Default "Mimic"
+## !define INFO_PRODUCTNAME    "My Product Name" # Default "mimic"
 ## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.0.0"
 ## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "Copyright Owen Devine"
 ###

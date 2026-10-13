@@ -132,8 +132,8 @@ func Launch(o Options) error {
 	}
 
 	opts := application.Options{
-		Name:        "Mimic",
-		Description: "Mimic renders Magic: The Gathering cards.",
+		Name:        "mimic",
+		Description: "mimic renders Magic: The Gathering cards.",
 		Services:    bound,
 		Assets: application.AssetOptions{
 			Handler:        assetHandler(img, o.Frontend, o.Smoke || buildinfo.TestBuild),

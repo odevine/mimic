@@ -343,7 +343,7 @@ func (u *updatesService) Restart() error {
 	}
 	if u.sh.svc.Workspace.Run.Active() {
 		if !u.sh.sys.Confirm(ConfirmRequest{
-			Title:   "Restart Mimic",
+			Title:   "Restart mimic",
 			Message: "A run is still going. Restarting stops it, and the cards not yet rendered are skipped.",
 			Accept:  "Stop and Restart",
 		}) {

@@ -99,7 +99,7 @@ test("checked rows can be removed from the list", async ({ list }) => {
   await list.bulk("Remove 2 checked rows");
   await expect(list.rows).toHaveCount(1);
   await expect(list.row("Llanowar Elves")).toBeVisible();
-  await expect(list.summary).toHaveText(/^1 rows? · 1 matched$/);
+  await expect(list.summary).toHaveText("1 row · 1 matched");
 });
 
 test("rows can be ticked and unticked by what they are", async ({ list }) => {

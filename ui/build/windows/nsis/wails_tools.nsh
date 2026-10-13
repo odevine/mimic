@@ -11,7 +11,7 @@
     !define INFO_COMPANYNAME "Owen Devine"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "Mimic"
+    !define INFO_PRODUCTNAME "mimic"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.0.0"

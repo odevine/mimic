@@ -6,6 +6,7 @@ import { syncChips } from "../components/chips.js";
 import { openFolderMenu } from "../components/folderMenu.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { toast } from "../components/toast.js";
+import { plural } from "../plural.js";
 import { unsupportedBy, partlyUnsupportedBy, faceSupport } from "../supports.js";
 import { initInspector, openInspector, closeInspector, checkInspected, inspectedRow } from "./listInspector.js";
 import { initBulk } from "./listBulk.js";
@@ -332,7 +333,7 @@ function buildRow(row) {
         ),
       );
     }
-    if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note }, icon("warn")));
+    if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note, role: "img" }, icon("warn")));
     buildDetail(row, s, detail);
   });
   const disposeSel = effect(() => {
@@ -782,7 +783,7 @@ function initReview() {
     $("list-review-body").hidden = empty;
     if (empty) return;
 
-    const parts = [`${c.total} rows`];
+    const parts = [plural(c.total, "row")];
     if (c.matched) parts.push(`${c.matched} matched`);
     if (c.ambiguous) parts.push(`${c.ambiguous} ambiguous`);
     if (c.notFound) parts.push(`${c.notFound} not found`);

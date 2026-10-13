@@ -75,10 +75,10 @@ func (s *shell) menu() *application.Menu {
 	}
 
 	help := menu.AddSubmenu("Help")
-	help.Add("Mimic on GitHub").OnClick(func(*application.Context) { s.sys.OpenURL(readmeURL) })
+	help.Add("mimic on GitHub").OnClick(func(*application.Context) { s.sys.OpenURL(readmeURL) })
 	help.Add("Report an Issue").OnClick(func(*application.Context) { s.sys.OpenURL(issuesURL) })
 	help.AddSeparator()
-	help.Add("About Mimic").OnClick(func(*application.Context) { s.about() })
+	help.Add("About mimic").OnClick(func(*application.Context) { s.about() })
 	return menu
 }
 
@@ -97,6 +97,6 @@ func (s *shell) about() {
 			template += " " + version
 		}
 	}
-	s.app.Dialog.Info().AttachToWindow(s.win).SetTitle("About Mimic").SetMessage(fmt.Sprintf(
-		"Mimic %s\nEngine %s\nTemplate %s", buildinfo.Version, buildinfo.Engine(), template)).Show()
+	s.app.Dialog.Info().AttachToWindow(s.win).SetTitle("About mimic").SetMessage(fmt.Sprintf(
+		"mimic %s\nEngine %s\nTemplate %s", buildinfo.Version, buildinfo.Engine(), template)).Show()
 }

@@ -74,7 +74,7 @@ func linuxNames(dir, out, version, arch string) error {
 		return fmt.Errorf("no rpm architecture for %q", arch)
 	}
 	for _, f := range []struct{ ext, name string }{
-		{".AppImage", fmt.Sprintf("Mimic-%s-linux-%s.AppImage", version, arch)},
+		{".AppImage", fmt.Sprintf("mimic-%s-linux-%s.AppImage", version, arch)},
 		{".deb", fmt.Sprintf("mimic_%s_%s.deb", version, arch)},
 		{".rpm", fmt.Sprintf("mimic-%s.%s.rpm", version, ra)},
 	} {

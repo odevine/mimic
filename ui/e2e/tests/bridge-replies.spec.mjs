@@ -1,6 +1,7 @@
 import { test, expect } from "../fixtures.mjs";
 import { CALLS } from "../bridge/calls.mjs";
 import { loadReplies } from "../bridge.mjs";
+import { installedFonts } from "../bridge/cards.mjs";
 
 // The page tests start from replies captured from the real app. This test asks
 // the real app the same questions and checks every field a captured reply holds
@@ -36,4 +37,16 @@ test("the replies the page tests start from still match what the app sends", asy
     found.push(...problems(captured[name], real, name));
   }
   expect(found, "the captured replies are stale: run test:e2e:capture").toEqual([]);
+});
+
+// The Fonts reply of an app with a template installed is written by hand, since
+// the replies are captured from a fresh one. The main server has a template, so
+// it is the one to check that story against
+test("the fonts a page test shows for an installed template still match what the app sends", async ({ app }) => {
+  const real = await app.evaluate(async () => {
+    const { Call } = await import("/wails/runtime.js");
+    return Call.ByName("github.com/odevine/mimic/ui/internal/desktop.Data.Fonts");
+  });
+  expect(problems(installedFonts, real, "Data.Fonts")).toEqual([]);
+  expect(real.roles.map((r) => r.role)).toEqual(installedFonts.roles.map((r) => r.role));
 });

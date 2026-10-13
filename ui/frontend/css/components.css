@@ -971,7 +971,7 @@ input.gated {
 
 .fonts-roles {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) auto auto;
+  grid-template-columns: 150px minmax(220px, 1.3fr) minmax(0, 1fr);
   gap: 4px 12px;
   align-items: center;
   margin: 0;
@@ -987,21 +987,52 @@ input.gated {
   color: var(--text);
 }
 
-.fonts-role-font {
+.fonts-role-pick {
+  min-width: 0;
+}
+
+.fonts-role-state {
+  color: var(--text-dim);
+}
+
+.fonts-role-state.ok {
+  color: var(--ok);
+}
+
+.fonts-role-state.warn {
+  color: var(--warn);
+}
+
+.fonts-subhead {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+
+.fonts-pool {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fonts-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.fonts-file-name {
+  color: var(--text);
+}
+
+.fonts-file-path {
   overflow: hidden;
   color: var(--text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.fonts-role-source.user {
-  color: var(--ok);
-}
-
-.fonts-role-actions {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
 }
 
 .fonts-note {

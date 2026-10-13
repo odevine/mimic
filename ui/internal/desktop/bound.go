@@ -116,8 +116,8 @@ type dataAPI interface {
 	DownloadCardData() (string, error)
 	RemoveCardData() (carddata.Status, error)
 	Fonts() data.FontsStatus
-	AddFont(folder, path string) (data.FontsStatus, error)
-	RemoveFont(folder string) (data.FontsStatus, error)
+	AddFont(path string) (data.FontsStatus, error)
+	RemoveFont(name string) (data.FontsStatus, error)
 	OpenFonts() error
 }
 

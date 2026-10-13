@@ -194,6 +194,31 @@ export const scenes = {
       await expect(page.locator("#fonts-roles > li").first()).toBeVisible();
     },
   },
+  "settings-fonts": {
+    run: async ({ bridge, page }) => {
+      const gotham = { name: "Gotham Medium", family: "Gotham", style: "Medium", file: "Gotham-Medium.otf", removable: true };
+      const row = (role, label, own, extra) => ({ role, label, own, source: "template", family: own.split(" ")[0], ...extra });
+      bridge.reply("Data.Fonts", {
+        kind: "managed",
+        path: "/fonts",
+        writable: true,
+        roles: [
+          row("title", "Card name, type line and power/toughness", "Beleren Proxy Bold", { source: "override", override: "Gotham Medium", file: "Gotham-Medium.otf" }),
+          row("body", "Rules text", "Plantin MT Pro Regular", { source: "template-missing-override", override: "Lost Font Regular" }),
+          row("mana", "Mana and other card symbols", "Mana Regular"),
+          row("saga-chapter", "Chapter text", "Plantin MT Pro Italic", { bundled: true }),
+        ],
+        pool: [gotham],
+        rejected: [{ file: "Broken.ttf", error: "not a font file" }],
+        duplicates: ["Gotham-Copy.otf"],
+      });
+      await bridge.boot();
+      await new SettingsDialog(page).show();
+      await expect(page.locator("#fonts-pool > li").first()).toBeVisible();
+      // The row sits below the first screen of the dialog, so it is scrolled to
+      await page.locator("#fonts").scrollIntoViewIfNeeded();
+    },
+  },
   "update-offer": {
     run: async ({ bridge }) => {
       bridge.reply("Updates.Status", {

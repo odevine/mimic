@@ -100,29 +100,29 @@ published there as versioned `.mimic` bundles. The app reads that catalog to
 list what is available and downloads a bundle when you select it.
 
 The engine embeds a reproduction of each font printed on real cards, so it
-renders with nothing extra installed. To draw a role with another font, add one
-in the app under Settings, Fonts. Each font goes to one role, and a font added
-to the wrong role draws in the wrong place, so match the file to the role in
-this table.
+renders with nothing extra installed. Under Settings, Fonts, each text role has a
+picker offering the template's own font and every font in the app's fonts folder,
+so any font can be assigned to any role. Add font copies a file into the folder,
+and Open folder shows it, where `.ttf` and `.otf` files can also be dropped in by
+hand. A font is named by its family and style, such as `Gotham Medium`.
 
-| Role           | Folder         | Draws                         | Built-in font           |
-| -------------- | -------------- | ----------------------------- | ----------------------- |
-| Title          | `title/`       | card name, type line, P/T     | Beleren Proxy Bold      |
-| Rules          | `body/`        | rules text, copyright line    | Plantin MT Pro          |
-| Flavor         | `body-italic/` | flavor text                   | Plantin MT Pro Italic   |
-| Mana           | `mana/`        | mana and other card symbols   | Mana                    |
-| Artist         | `type/`        | artist credit, in small caps  | Beleren Small Caps Bold |
-| Collector info | `info/`        | collector number and set code | Gotham Medium           |
+The standard roles, and the built-in font each draws with, are in this table. A
+template can define roles of its own, which appear in the same list.
+
+| Role           | Draws                         | Built-in font           |
+| -------------- | ----------------------------- | ----------------------- |
+| Title          | card name, type line, P/T     | Beleren Proxy Bold      |
+| Rules          | rules text, copyright line    | Plantin MT Pro          |
+| Flavor         | flavor text                   | Plantin MT Pro Italic   |
+| Mana           | mana and other card symbols   | Mana                    |
+| Artist         | artist credit, in small caps  | Beleren Small Caps Bold |
+| Collector info | collector number and set code | Gotham Medium           |
 
 The app keeps added fonts in a `fonts` folder under the per-OS user config
-directory, one subfolder per role as named above, and Open folder in the same
-setting shows it. Copying files into those subfolders by hand works too. Only
-`.ttf` and `.otf` files are read, and only the first one in a folder is used.
-
-Two other sources take priority over that folder. The `-fonts <dir>` flag points
-the app at any folder laid out the same way, and a run from a checkout uses
-`local-fonts/` as its [README](local-fonts/README.md) describes. Either one is
-read-only from the app.
+directory. Two other sources take priority over that folder. The `-fonts <dir>`
+flag points the app at any folder of fonts, and a run from a checkout uses
+`local-fonts/` as its [README](local-fonts/README.md) describes. Fonts in either
+one can be assigned to roles, and are changed there rather than in the app.
 
 Layer compositing is handled by [impasto](https://github.com/odevine/impasto), a
 pure-Go library for Photoshop-style layered images.

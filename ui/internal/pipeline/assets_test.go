@@ -1,7 +1,10 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/draw"
 	"maps"
 	"os"
 	"path/filepath"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/catalog"
@@ -324,6 +328,55 @@ func TestAChangedLooseFolderIsLoadedAgain(t *testing.T) {
 	}
 	if p.Active().Name != catalogtest.ID || p.Active().Version != LocalVersion {
 		t.Errorf("reloaded as %s %s", p.Active().Name, p.Active().Version)
+	}
+}
+
+func TestARenderReadsTheFontsChosenWhenItStarts(t *testing.T) {
+	tmp := withEmptyAssetChain(t)
+	LooseDirBases = []string{filepath.Join(tmp, "assets")}
+	templatetest.Spec{ID: catalogtest.ID}.WriteLoose(t, filepath.Join(tmp, "assets", "frame"))
+	at, _, err := Resolve(catalogtest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(nil, nil)
+	defer p.Close()
+	p.Install(at)
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "engine", "fonts", "embedded", "m15", "Gotham-Medium.otf"))
+	if err != nil {
+		t.Skipf("engine fonts not in this checkout: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "g.otf"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pool := fonts.NewPool(dir)
+	overrides := map[string]string{}
+	p.SetFonts(func() (*fonts.Pool, map[string]string) { return pool, overrides })
+
+	d := &card.Data{Name: "Plain", TypeLine: "Instant", Layout: "normal"}
+	drawn := func() []byte {
+		img, err := p.Render(context.Background(), d, 0, nil, 72, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := image.NewRGBA(img.Bounds())
+		draw.Draw(out, out.Bounds(), img, img.Bounds().Min, draw.Src)
+		return out.Pix
+	}
+	plain := drawn()
+	overrides = map[string]string{"title": "Gotham Medium", "body": "Gotham Medium"}
+	if bytes.Equal(plain, drawn()) {
+		t.Error("assigning a font to the title role changed nothing, so the render ignored the assignment")
+	}
+	overrides = map[string]string{"title": "No Such Font Regular"}
+	if !bytes.Equal(plain, drawn()) {
+		t.Error("a font that is not in the pool changed the render")
+	}
+	p.SetFonts(nil)
+	if !bytes.Equal(plain, drawn()) {
+		t.Error("a pipeline with no fonts set drew differently")
 	}
 }
 

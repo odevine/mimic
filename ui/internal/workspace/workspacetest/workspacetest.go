@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	enginefonts "github.com/odevine/mimic/engine/fonts"
+	"github.com/odevine/mimic/ui/internal/fontdir"
 	"github.com/odevine/mimic/ui/internal/jobs"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/templatetest"
@@ -47,8 +49,11 @@ func New(t *testing.T) *workspace.Workspace {
 	p := workspace.LoadPrefs()
 	pipe := pipeline.New(nil, p.FaceTemplates)
 	pipe.SetFeatures(p.Features)
+	fd := fontdir.Dir{Path: filepath.Join(tmp, "config", "fonts"), Kind: fontdir.KindManaged}
+	pool := fontdir.NewPool(fd)
+	pipe.SetFonts(func() (*enginefonts.Pool, map[string]string) { return pool.Get(), p.Settings().FontOverrides })
 	pipe.Install(at)
-	return &workspace.Workspace{Pipe: pipe, Prefs: p, Jobs: jobs.NewRegistry()}
+	return &workspace.Workspace{Pipe: pipe, Prefs: p, Jobs: jobs.NewRegistry(), Fonts: fd, FontPool: pool}
 }
 
 // NewSmall is New with the output resolution set low, so a batch test finishes

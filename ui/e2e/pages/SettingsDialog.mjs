@@ -12,6 +12,8 @@ export class SettingsDialog {
     this.outputDir = page.locator("#output-dir-input");
     this.fontsSource = page.locator("#fonts-source");
     this.fontRoles = page.locator("#fonts-roles > li");
+    this.addFont = page.locator("#fonts-add");
+    this.fontsPool = page.locator("#fonts-pool > li.fonts-file");
     this.resetFonts = page.locator("#fonts-reset");
     this.updateVersion = page.locator("#update-version");
     this.updateSummary = page.locator("#update-summary");
@@ -40,8 +42,19 @@ export class SettingsDialog {
     await expect(this.dialog).toBeHidden();
   }
 
-  // fontRole is the row of one role, such as Title
+  // fontRole is the row of one role, by the label the template gives it, such as
+  // "Rules text"
   fontRole(label) {
     return this.fontRoles.filter({ has: this.page.locator(".fonts-role-name", { hasText: new RegExp(`^${label}$`) }) });
+  }
+
+  // fontPick is the picker of one role's font
+  fontPick(label) {
+    return this.fontRole(label).getByRole("combobox");
+  }
+
+  // fontFile is the row of a font in the folder, by its name
+  fontFile(name) {
+    return this.fontsPool.filter({ has: this.page.locator(".fonts-file-name", { hasText: new RegExp(`^${name}$`) }) });
   }
 }

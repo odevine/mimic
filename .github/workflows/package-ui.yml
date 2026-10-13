@@ -2,7 +2,7 @@ name: Package ui
 
 # Builds the app natively on each operating system and packages what a release
 # ships: a dmg and zip on macOS, an installer and zip on Windows for both
-# architectures, and an AppImage, deb and rpm on Linux for both. The release
+# architectures, and a Flatpak bundle, deb and rpm on Linux for both. The release
 # workflow calls it with publish on, which attaches the files to the release. A
 # manual run, the weekly run and a pull request that touches the packaging call
 # it with publish off, which leaves the files as workflow artifacts, so the
@@ -102,7 +102,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Install the Windows installer builder
         if: runner.os == 'Windows'
@@ -126,14 +127,15 @@ jobs:
 
       # The updater verifies the digest it computes while downloading against
       # the signature, with the public key stamped into the app. Only the files
-      # it swaps in are signed, and only when the signing key is configured
+      # it swaps in are signed, and only when the signing key is configured. The
+      # Linux files are installed by Flatpak or a package manager, so none is
       - name: Sign the update files
         if: env.SIGNING == 'true'
         env:
           MIMIC_UPDATE_PRIVATE_KEY: ${{ secrets.MIMIC_UPDATE_PRIVATE_KEY }}
         run: |
           shopt -s nullglob
-          go run ./cmd/pkgtool sign bin/Mimic-*.zip bin/Mimic-*.AppImage
+          go run ./cmd/pkgtool sign bin/Mimic-*.zip
 
       - name: List what was built
         run: ls -la bin
@@ -185,10 +187,10 @@ jobs:
             Mimic-${v}-windows-amd64.zip
             Mimic-${v}-windows-arm64-installer.exe
             Mimic-${v}-windows-arm64.zip
-            Mimic-${v}-linux-amd64.AppImage
+            Mimic-${v}-linux-amd64.flatpak
             mimic_${v}_amd64.deb
             mimic-${v}.x86_64.rpm
-            Mimic-${v}-linux-arm64.AppImage
+            Mimic-${v}-linux-arm64.flatpak
             mimic_${v}_arm64.deb
             mimic-${v}.aarch64.rpm"
           missing=0

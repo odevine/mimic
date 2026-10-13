@@ -13,7 +13,7 @@ version: '3'
 
 vars:
   APP_NAME: mimic
-  PRODUCT: Mimic
+  PRODUCT: mimic
   BIN_DIR: bin
   # The version a release carries, without the ui/v prefix. A plain build is dev
   VERSION: '{{.VERSION | default "dev"}}'
@@ -60,7 +60,9 @@ tasks:
   run:
     summary: Runs the app from source
     cmds:
-      - go run {{if eq .GOOS "linux"}}-tags gtk3{{end}} .
+      # go run names its binary after the directory, and macOS shows that name in the menu bar and Dock
+      - go build {{if eq .GOOS "linux"}}-tags gtk3{{end}} -o "{{.BIN_DIR}}/dev/{{.PRODUCT}}{{exeExt}}" .
+      - ./{{.BIN_DIR}}/dev/{{.PRODUCT}}{{exeExt}}
 
   dev:server:
     desc: Runs the app as a headless test server with a fake Scryfall and prints its address

@@ -173,6 +173,7 @@ export function createCardEditor(ctx) {
     const multi = spec.kind === "area" || spec.kind === "rules";
     const input = h(multi ? "textarea" : "input", {
       id,
+      "aria-label": spec.label ? null : spec.key,
       rows: spec.rows,
       placeholder: spec.placeholder || "",
       spellcheck: multi ? "true" : "false",

@@ -2,6 +2,7 @@ import { $, h } from "../dom.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { FIELD_LABELS } from "../components/fieldLabels.js";
 import { toast } from "../components/toast.js";
+import { plural } from "../plural.js";
 
 // Bulk actions on the checked rows of a list: set a field, set a quantity,
 // remove rows, and tick or untick by what is shown, by section and by whether a
@@ -11,8 +12,6 @@ import { toast } from "../components/toast.js";
 // changing, so the rows keep a single owner
 
 let host = null;
-
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function menuItem(label, onClick, { disabled = false, tip = "" } = {}) {
   const b = h("button", { class: "menu-item", type: "button", disabled, onClick }, h("span", { class: "truncate" }, label));

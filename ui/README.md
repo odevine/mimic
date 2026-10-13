@@ -240,7 +240,7 @@ The window opens where it was left. Its position and size are saved to
 `prefs.json` under `window`, and a saved place that is off every connected
 display, such as after unplugging a monitor, is dropped and the window opens
 centered at the default size. Closing the window quits the app, and with a run
-going a dialog asks first and stops the run if you agree. Starting Mimic a
+going a dialog asks first and stops the run if you agree. Starting mimic a
 second time brings the first window forward instead of opening another.
 
 The menu bar follows each platform. File holds Save Card, Open List and Choose

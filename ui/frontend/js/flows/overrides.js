@@ -2,6 +2,7 @@ import { api } from "../api.js";
 import { $, h, icon } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "../components/toast.js";
+import { plural } from "../plural.js";
 import { openPopover, closePopover } from "../components/popover.js";
 import { loadResolution } from "../components/settings.js";
 import { showOverrides } from "./templates.js";
@@ -233,7 +234,7 @@ function updatePills() {
     const text = `matches ${n} of ${rowTotal}`;
     pill.className = `pill rule-pill ${rule.disabled ? "idle" : n > 0 ? "ok" : "idle"}`;
     pill.textContent = rule.disabled ? "off" : text;
-    pill.dataset.tip = rule.disabled ? `Would ${text} rows of the list` : `Holds for ${n} of the ${rowTotal} rows in From a List`;
+    pill.dataset.tip = rule.disabled ? `Would ${text} rows of the list` : `Holds for ${n} of the ${plural(rowTotal, "row")} in From a List`;
   });
 }
 

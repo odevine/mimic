@@ -15,7 +15,7 @@ func CanSwap(goos, exe string, getenv func(string) string) bool {
 	case "linux":
 		return false
 	case "darwin":
-		// The bundle is Mimic.app/Contents/MacOS/mimic, and it is the bundle
+		// The bundle is mimic.app/Contents/MacOS/mimic, and it is the bundle
 		// that gets replaced, inside whatever folder holds it
 		if i := strings.Index(exe, ".app/Contents/MacOS/"); i >= 0 {
 			return writable(filepath.Dir(exe[:i+len(".app")]))

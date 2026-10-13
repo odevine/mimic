@@ -36,7 +36,7 @@ var (
 func (s *shell) windowOptions(url string) application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "Mimic",
+		Title:            "mimic",
 		Width:            defaultWidth,
 		Height:           defaultHeight,
 		MinWidth:         minWidth,
@@ -171,7 +171,7 @@ func (s *shell) mayClose() bool {
 	}
 	go func() {
 		if !s.sys.Confirm(ConfirmRequest{
-			Title:   "Quit Mimic",
+			Title:   "Quit mimic",
 			Message: "A run is still going. Quitting stops it, and the cards not yet rendered are skipped.",
 			Accept:  "Stop and Quit",
 		}) {

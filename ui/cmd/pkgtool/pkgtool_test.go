@@ -23,19 +23,19 @@ func write(t *testing.T, path, content string) {
 
 func TestStampWritesTheVersionEverywhereItLives(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "darwin/Info.plist"), "<key>CFBundleVersion</key>\n  <string>0.0.0</string>\n<key>CFBundleShortVersionString</key>\n  <string>0.0.0</string>\n<key>CFBundleName</key>\n  <string>Mimic</string>")
-	write(t, filepath.Join(dir, "windows/info.json"), `{"fixed": {"file_version": "0.0.0"}, "info": {"0000": {"ProductVersion": "0.0.0", "ProductName": "Mimic"}}}`)
+	write(t, filepath.Join(dir, "darwin/Info.plist"), "<key>CFBundleVersion</key>\n  <string>0.0.0</string>\n<key>CFBundleShortVersionString</key>\n  <string>0.0.0</string>\n<key>CFBundleName</key>\n  <string>mimic</string>")
+	write(t, filepath.Join(dir, "windows/info.json"), `{"fixed": {"file_version": "0.0.0"}, "info": {"0000": {"ProductVersion": "0.0.0", "ProductName": "mimic"}}}`)
 	write(t, filepath.Join(dir, "linux/flatpak/io.github.odevine.mimic.metainfo.xml"), `<releases><release version="0.0.0" date="2026-01-01"/></releases>`)
-	write(t, filepath.Join(dir, "config.yml"), "info:\n  productName: \"Mimic\"\n  version: \"0.0.0\"\n")
+	write(t, filepath.Join(dir, "config.yml"), "info:\n  productName: \"mimic\"\n  version: \"0.0.0\"\n")
 
 	if err := stamp(dir, "v1.2.3-rc.1"); err != nil {
 		t.Fatal(err)
 	}
 	for file, want := range map[string][]string{
-		"darwin/Info.plist": {"<string>1.2.3</string>\n<key>CFBundleShortVersionString</key>\n  <string>1.2.3</string>", "<string>Mimic</string>"},
-		"windows/info.json": {`"file_version": "1.2.3"`, `"ProductVersion": "1.2.3"`, `"ProductName": "Mimic"`},
+		"darwin/Info.plist": {"<string>1.2.3</string>\n<key>CFBundleShortVersionString</key>\n  <string>1.2.3</string>", "<string>mimic</string>"},
+		"windows/info.json": {`"file_version": "1.2.3"`, `"ProductVersion": "1.2.3"`, `"ProductName": "mimic"`},
 		"linux/flatpak/io.github.odevine.mimic.metainfo.xml": {`<release version="1.2.3" date="2026-01-01"/>`},
-		"config.yml": {`version: "1.2.3"`, `productName: "Mimic"`},
+		"config.yml": {`version: "1.2.3"`, `productName: "mimic"`},
 	} {
 		raw, _ := os.ReadFile(filepath.Join(dir, file))
 		for _, w := range want {
@@ -54,10 +54,10 @@ func TestStampWritesTheVersionEverywhereItLives(t *testing.T) {
 
 func TestZipHasOneTopLevelEntryAndKeepsPermissions(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "bin/Mimic.app/Contents/MacOS/mimic"), "binary")
-	write(t, filepath.Join(dir, "bin/Mimic.app/Contents/Info.plist"), "plist")
-	out := filepath.Join(dir, "Mimic.zip")
-	if err := zipOne(out, filepath.Join(dir, "bin/Mimic.app")); err != nil {
+	write(t, filepath.Join(dir, "bin/mimic.app/Contents/MacOS/mimic"), "binary")
+	write(t, filepath.Join(dir, "bin/mimic.app/Contents/Info.plist"), "plist")
+	out := filepath.Join(dir, "mimic.zip")
+	if err := zipOne(out, filepath.Join(dir, "bin/mimic.app")); err != nil {
 		t.Fatal(err)
 	}
 	zr, err := zip.OpenReader(out)
@@ -68,22 +68,22 @@ func TestZipHasOneTopLevelEntryAndKeepsPermissions(t *testing.T) {
 	tops := map[string]bool{}
 	for _, f := range zr.File {
 		tops[strings.SplitN(f.Name, "/", 2)[0]] = true
-		if f.Name == "Mimic.app/Contents/MacOS/mimic" && f.Mode()&0o100 == 0 {
+		if f.Name == "mimic.app/Contents/MacOS/mimic" && f.Mode()&0o100 == 0 {
 			t.Errorf("the binary lost its executable bit: %v", f.Mode())
 		}
 	}
-	if len(tops) != 1 || !tops["Mimic.app"] {
-		t.Errorf("top level entries = %v, want only Mimic.app", tops)
+	if len(tops) != 1 || !tops["mimic.app"] {
+		t.Errorf("top level entries = %v, want only mimic.app", tops)
 	}
 
 	// A single file, as the Windows executable is
-	write(t, filepath.Join(dir, "bin/Mimic.exe"), "exe")
-	if err := zipOne(filepath.Join(dir, "exe.zip"), filepath.Join(dir, "bin/Mimic.exe")); err != nil {
+	write(t, filepath.Join(dir, "bin/mimic.exe"), "exe")
+	if err := zipOne(filepath.Join(dir, "exe.zip"), filepath.Join(dir, "bin/mimic.exe")); err != nil {
 		t.Fatal(err)
 	}
 	zr2, _ := zip.OpenReader(filepath.Join(dir, "exe.zip"))
 	defer zr2.Close()
-	if len(zr2.File) != 1 || zr2.File[0].Name != "Mimic.exe" {
+	if len(zr2.File) != 1 || zr2.File[0].Name != "mimic.exe" {
 		t.Errorf("exe zip = %v", zr2.File)
 	}
 }
@@ -109,7 +109,7 @@ func TestSumsAreSortedAndNamedByFile(t *testing.T) {
 func TestSignatureVerifiesAgainstTheDigest(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "Mimic.zip")
+	path := filepath.Join(dir, "mimic.zip")
 	write(t, path, "release bytes")
 	t.Setenv(keyEnv, base64.StdEncoding.EncodeToString(priv))
 	if err := signCmd([]string{path}); err != nil {
@@ -133,7 +133,7 @@ func TestSignatureVerifiesAgainstTheDigest(t *testing.T) {
 func TestRenameMovesAndCopies(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.exe"), "exe")
-	if err := renameCmd([]string{"--copy", filepath.Join(dir, "a.exe"), filepath.Join(dir, "stage/Mimic.exe")}); err != nil {
+	if err := renameCmd([]string{"--copy", filepath.Join(dir, "a.exe"), filepath.Join(dir, "stage/mimic.exe")}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "a.exe")); err != nil {
@@ -159,7 +159,7 @@ func TestLinuxNamesGivesTheReleaseNames(t *testing.T) {
 	if err := linuxNames(stage, dir, "1.0.0", "amd64"); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Mimic-1.0.0-linux-amd64.flatpak", "mimic_1.0.0_amd64.deb", "mimic-1.0.0.x86_64.rpm"} {
+	for _, want := range []string{"mimic-1.0.0-linux-amd64.flatpak", "mimic_1.0.0_amd64.deb", "mimic-1.0.0.x86_64.rpm"} {
 		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
 			t.Errorf("missing %s", want)
 		}

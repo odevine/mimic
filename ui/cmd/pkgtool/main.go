@@ -4,7 +4,7 @@
 // only the standard library, so it runs the same on every runner
 //
 //	pkgtool stamp -version 1.0.0 [-dir build]
-//	pkgtool zip -out Mimic-1.0.0-macos-universal.zip bin/Mimic.app
+//	pkgtool zip -out mimic-1.0.0-macos-universal.zip bin/mimic.app
 //	pkgtool sums -out SHA256SUMS file...
 //	pkgtool rename [--copy] from to
 //	pkgtool linux-names -dir d -out o -version v -arch a

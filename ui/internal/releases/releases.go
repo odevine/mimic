@@ -141,10 +141,11 @@ func Newer(a, b string) bool {
 // artifacts are the files an update swaps in, one pattern per platform. The
 // installers carry an -installer suffix or another extension, so these never
 // match them
+// The product name matches in either case
 var artifacts = map[string]*regexp.Regexp{
-	"darwin":  regexp.MustCompile(`^Mimic-.+-macos-universal\.zip$`),
-	"windows": regexp.MustCompile(`^Mimic-.+-windows-%s\.zip$`),
-	"linux":   regexp.MustCompile(`^Mimic-.+-linux-%s\.flatpak$`),
+	"darwin":  regexp.MustCompile(`^[Mm]imic-.+-macos-universal\.zip$`),
+	"windows": regexp.MustCompile(`^[Mm]imic-.+-windows-%s\.zip$`),
+	"linux":   regexp.MustCompile(`^[Mm]imic-.+-linux-%s\.flatpak$`),
 }
 
 // Pick returns the asset that updates an app running on goos and goarch, or nil

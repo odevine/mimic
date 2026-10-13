@@ -27,13 +27,13 @@ function summary(s) {
     case "checking":
       return "Checking for updates…";
     case "up-to-date":
-      return "Mimic is up to date.";
+      return "mimic is up to date.";
     case "available":
-      return `Mimic ${v} is available${s.release.size ? ` (${mb(s.release.size)})` : ""}.`;
+      return `mimic ${v} is available${s.release.size ? ` (${mb(s.release.size)})` : ""}.`;
     case "downloading":
-      return s.total ? `Downloading Mimic ${v}, ${Math.round((s.written / s.total) * 100)}%` : `Downloading Mimic ${v}…`;
+      return s.total ? `Downloading mimic ${v}, ${Math.round((s.written / s.total) * 100)}%` : `Downloading mimic ${v}…`;
     case "ready":
-      return `Mimic ${v} is ready. Restart to use it.`;
+      return `mimic ${v} is ready. Restart to use it.`;
     case "error":
       return `The update failed: ${s.error}`;
     default:
@@ -60,14 +60,14 @@ function render() {
   const showStrip = !!a && !dismissed() && s.state !== "downloading";
   strip.hidden = !showStrip && s.state !== "downloading";
   if (!strip.hidden) {
-    $("update-strip-text").textContent = s.state === "downloading" ? summary(s) : s.state === "ready" ? `Mimic ${s.release.version} is ready` : `Mimic ${s.release.version} is available`;
+    $("update-strip-text").textContent = s.state === "downloading" ? summary(s) : s.state === "ready" ? `mimic ${s.release.version} is ready` : `mimic ${s.release.version} is available`;
     $("update-strip-action").hidden = !a;
     if (a) $("update-strip-action").textContent = a.label;
     $("update-strip-dismiss").hidden = s.state === "downloading" || s.state === "ready";
   }
 
   // The Settings row
-  $("update-version").textContent = `Mimic ${s.current}`;
+  $("update-version").textContent = `mimic ${s.current}`;
   $("update-summary").textContent = summary(s);
   $("update-summary").classList.toggle("err", s.state === "error");
   const busy = s.state === "checking" || s.state === "downloading";

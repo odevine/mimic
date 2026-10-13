@@ -94,12 +94,19 @@ func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostic
 		return nil, ds
 	}
 
+	fontFiles, fontData, fds := packFonts(fsys, src.Fonts)
+	ds = append(ds, fds...)
+	if (len(src.Fonts) > 0 || len(src.Roles) > 0) && src.MinEngine == "" {
+		ds = append(ds, manifest.Diagnostic{Severity: manifest.Warning, Path: sourceFile + ": minEngine", Message: "the template defines fonts or roles, so name the first engine release that reads them, because an older engine would draw it with other fonts"})
+	}
+
 	// Decoding the manifest as written, before any image is cut, checks it against
 	// the engine's own rules with the source paths in it
 	full := rawManifest{
 		Contract: src.Contract, ID: src.ID, Name: src.Name, Description: src.Description,
 		Author: src.Author, License: src.License, Credits: src.Credits,
 		Features: src.Features, Parts: parts, Layouts: layouts,
+		Fonts: fontFiles, Roles: src.Roles,
 	}
 	raw, err := json.Marshal(full)
 	if err != nil {
@@ -123,6 +130,9 @@ func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostic
 	if ds.HasErrors() || !write {
 		sortDiagnostics(ds)
 		return nil, ds
+	}
+	for path, data := range fontData {
+		store.putAt(path, data)
 	}
 	for lname, l := range m.Layouts {
 		for i, e := range l.Stack {
@@ -158,16 +168,18 @@ func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostic
 
 // rawManifest is the manifest with its layouts as they were resolved
 type rawManifest struct {
-	Contract    string                      `json:"contract"`
-	ID          string                      `json:"id"`
-	Name        string                      `json:"name"`
-	Description string                      `json:"description,omitempty"`
-	Author      manifest.Author             `json:"author,omitempty"`
-	License     string                      `json:"license,omitempty"`
-	Credits     []manifest.Credit           `json:"credits,omitempty"`
-	Parts       map[string]manifest.Part    `json:"parts"`
-	Layouts     map[string]rawLayout        `json:"layouts"`
-	Features    map[string]manifest.Feature `json:"features,omitempty"`
+	Contract    string                       `json:"contract"`
+	ID          string                       `json:"id"`
+	Name        string                       `json:"name"`
+	Description string                       `json:"description,omitempty"`
+	Author      manifest.Author              `json:"author,omitempty"`
+	License     string                       `json:"license,omitempty"`
+	Credits     []manifest.Credit            `json:"credits,omitempty"`
+	Parts       map[string]manifest.Part     `json:"parts"`
+	Layouts     map[string]rawLayout         `json:"layouts"`
+	Features    map[string]manifest.Feature  `json:"features,omitempty"`
+	Fonts       map[string]manifest.FontFile `json:"fonts,omitempty"`
+	Roles       map[string]manifest.FontRole `json:"roles,omitempty"`
 }
 
 // packParts cuts and stores the images of every part in the manifest, a few at a

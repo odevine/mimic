@@ -1,19 +1,18 @@
-// Package fonts owns font sourcing for the engine. It resolves a role (title,
-// body, mana) to a font.Face through a chain: a font the end user dropped into
-// that role's subfolder of an override directory, then the role's built-in
-// font compiled into the binary, then basicfont.Face7x13 as a last resort.
+// Package fonts owns font sourcing for the engine. A role (title, body, mana,
+// or one a template defines) resolves to a font.Face through a chain: a font
+// the user picked by name from a pool of font files, then the role's own font,
+// which is a built-in one compiled into the binary or one the template bundles,
+// then basicfont.Face7x13 as a last resort.
 //
 // The built-in fonts are reproductions of the fonts printed on Magic cards, so
 // a render looks like a real card with nothing extra installed. A user who
-// prefers another face supplies it through the override directory.
+// prefers another face adds its file to the pool and assigns it to a role.
 package fonts
 
 import (
 	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"golang.org/x/image/font"
@@ -102,18 +101,6 @@ var builtinFile = func() map[string]string {
 	return m
 }()
 
-// roleDir maps a role to its subfolder under the user font directory. A user
-// drops a font into the folder for its role, so no file needs a matching name.
-// A role without an entry has no override folder and always uses its default
-var roleDir = map[Role]string{
-	Title:      "title",
-	Body:       "body",
-	BodyItalic: "body-italic",
-	Mana:       "mana",
-	SmallCaps:  "type",
-	Info:       "info",
-}
-
 var (
 	cacheMu   sync.Mutex
 	fontCache = map[string]*opentype.Font{}
@@ -130,46 +117,10 @@ type Sizer struct {
 	fallback bool
 }
 
-// ResolveFont picks the font for role the way Resolve does, the role's subfolder
-// of userDir first, then its built-in font, then the basicfont fallback, but
-// leaves sizing to Face. An empty userDir
-// skips the override step. It never fails: an unresolvable role yields a Sizer
-// whose Face returns the fallback
-func ResolveFont(role Role, userDir string) *Sizer {
-	f, _ := resolve(role, userDir)
-	if f == nil {
-		return &Sizer{fallback: true}
-	}
-	return &Sizer{font: f}
-}
-
-// resolve walks the resolution chain for role and returns the parsed font, nil
-// for the basicfont fallback, beside a Resolution describing where it came from
-func resolve(role Role, userDir string) (*opentype.Font, Resolution) {
-	res := Resolution{Role: role, Source: SourceFallback}
-	if userDir != "" {
-		files := userFonts(role, userDir)
-		if len(files) > 0 {
-			res.Ignored = files[1:]
-			f, err := fontFromFile(files[0])
-			if err == nil {
-				res.Source, res.Path = SourceUser, files[0]
-				res.Family, res.Style = names(f)
-				return f, res
-			}
-			res.Rejected, res.Err = files[0], err
-		}
-	}
-	if def, ok := standardRoles[role]; ok {
-		path := builtinFile[def.builtin]
-		if f, err := fontFromEmbedded(path); err == nil {
-			res.Source, res.Path = SourceDefault, path
-			res.Family, res.Style = names(f)
-			return f, res
-		}
-	}
-	return nil, res
-}
+// Default returns the built-in font of a standard role with no template or
+// override in play, or a Sizer on the basicfont fallback for a role the engine
+// does not know
+func Default(role Role) *Sizer { return NewResolver(nil, nil, nil).Font(role) }
 
 // Fallback reports whether Face returns basicfont.Face7x13, so a caller can
 // decide whether to normalize text for that limited face
@@ -182,17 +133,6 @@ func (s *Sizer) Face(size float64) (font.Face, error) {
 		return basicfont.Face7x13, nil
 	}
 	return newFace(s.font, size)
-}
-
-// Resolve returns a face for role at the given point size. It tries the role's
-// subfolder of userDir first, then its built-in font, then basicfont.Face7x13.
-// The bool is true only when the basicfont fallback was used, so a caller can
-// decide whether to normalize text for that limited face. An empty userDir
-// skips the override step
-func Resolve(role Role, userDir string, size float64) (font.Face, bool, error) {
-	s := ResolveFont(role, userDir)
-	face, err := s.Face(size)
-	return face, s.fallback, err
 }
 
 // fontFromFile parses a user font, caching it under its path, size, and
@@ -270,38 +210,4 @@ func newFace(f *opentype.Font, size float64) (font.Face, error) {
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
-}
-
-// findUserFont returns the first .ttf or .otf in role's subfolder of dir, or ""
-// when the folder is absent or holds no font. One folder per role means the
-// dropped file keeps its own name
-func findUserFont(role Role, dir string) string {
-	if files := userFonts(role, dir); len(files) > 0 {
-		return files[0]
-	}
-	return ""
-}
-
-// userFonts lists every .ttf or .otf in role's subfolder of dir in directory
-// order. The first is the one used, and the rest are reported as ignored
-func userFonts(role Role, dir string) []string {
-	sub, ok := roleDir[role]
-	if !ok {
-		return nil
-	}
-	folder := filepath.Join(dir, sub)
-	entries, err := os.ReadDir(folder)
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".ttf" || ext == ".otf" {
-			out = append(out, filepath.Join(folder, e.Name()))
-		}
-	}
-	return out
 }

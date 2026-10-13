@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"math"
 	"testing"
+
+	"github.com/odevine/mimic/engine/fonts"
 )
 
 func TestLookupPipCoversScryfallCodes(t *testing.T) {
@@ -87,7 +89,7 @@ func TestLookupPipRejectsUnknownCodes(t *testing.T) {
 }
 
 func TestSymbolMetricsScaleWithSize(t *testing.T) {
-	s := NewSymbols("")
+	s := NewSymbols(fonts.Default(fonts.Mana))
 	if s == nil {
 		t.Fatal("no mana font resolved")
 	}
@@ -117,7 +119,7 @@ func TestSymbolMetricsScaleWithSize(t *testing.T) {
 }
 
 func TestDrawSymbolPaintsTheDisc(t *testing.T) {
-	s := NewSymbols("")
+	s := NewSymbols(fonts.Default(fonts.Mana))
 	if s == nil {
 		t.Fatal("no mana font resolved")
 	}
@@ -162,7 +164,7 @@ func abs(v int) int {
 }
 
 func TestArtistNibMetrics(t *testing.T) {
-	ms := NewSymbols("")
+	ms := NewSymbols(fonts.Default(fonts.Mana))
 	if ms == nil {
 		t.Fatal("no mana font resolved")
 	}
@@ -194,7 +196,7 @@ func TestArtistNibMetrics(t *testing.T) {
 }
 
 func TestArtistNibDrawsFlatInk(t *testing.T) {
-	ms := NewSymbols("")
+	ms := NewSymbols(fonts.Default(fonts.Mana))
 	if ms == nil {
 		t.Fatal("no mana font resolved")
 	}

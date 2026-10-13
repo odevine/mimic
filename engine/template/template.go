@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/manifest"
 )
@@ -37,12 +38,15 @@ type RenderRequest struct {
 	// Progress, when set, receives step updates during the render. Nil disables
 	// reporting, which is the common case for a batch or a headless render
 	Progress ProgressFunc
-	// FontDir is an optional directory of user-supplied font overrides, one
-	// file per role subfolder (title, body, body-italic, mana, type, info). An
-	// empty FontDir uses the engine's embedded defaults. It is caller
-	// configuration rather than the card's own data, so it travels on the
-	// request instead of in a template
-	FontDir string
+	// FontPool is the set of font files the user has made available. Nil
+	// offers none, so every role draws with its own font. Like FontOverrides it
+	// is caller configuration rather than the card's own data, so it travels on
+	// the request instead of in a template
+	FontPool *fonts.Pool
+	// FontOverrides assigns a font from FontPool to a role, by the role's name
+	// and the font's "Family Style" name. A role with no entry, or whose font is
+	// not in the pool, draws with its own font
+	FontOverrides map[string]string
 	// Copyright is the boilerplate line a card's bottom carries. An empty
 	// Copyright builds the printed one from the card's own year
 	Copyright string
@@ -68,6 +72,7 @@ func (r RenderRequest) Report(step string, frac float64) {
 type Template struct {
 	m       *manifest.Manifest
 	assets  AssetProvider
+	fonts   *fonts.Catalog
 	layouts map[string]*Layout
 	byShape map[frame.Shape]*Layout
 	shapes  []frame.Shape
@@ -88,7 +93,11 @@ func Load(p AssetProvider) (*Template, manifest.Diagnostics, error) {
 	if err := ds.Err(); err != nil {
 		return nil, ds, err
 	}
-	t := &Template{m: m, assets: p, layouts: map[string]*Layout{}, byShape: map[frame.Shape]*Layout{}}
+	cat, err := newCatalog(m, p)
+	if err != nil {
+		return nil, ds, fmt.Errorf("template: %w", err)
+	}
+	t := &Template{m: m, assets: p, fonts: cat, layouts: map[string]*Layout{}, byShape: map[frame.Shape]*Layout{}}
 	parts := make(map[string]*Part, len(m.Parts))
 	for name, mp := range m.Parts {
 		slot, err := frame.ParseSlot(mp.Slot)
@@ -123,6 +132,20 @@ func Load(p AssetProvider) (*Template, manifest.Diagnostics, error) {
 	return t, ds, nil
 }
 
+// newCatalog reads and checks the fonts a manifest bundles through its provider
+// and binds its roles to them
+func newCatalog(m *manifest.Manifest, p AssetProvider) (*fonts.Catalog, error) {
+	defs := make(map[string]fonts.FontDef, len(m.Fonts))
+	for id, f := range m.Fonts {
+		defs[id] = fonts.FontDef{File: f.File, Family: f.Family, Style: f.Style, SHA256: f.SHA256}
+	}
+	roles := make(map[string]fonts.RoleDef, len(m.Roles))
+	for name, r := range m.Roles {
+		roles[name] = fonts.RoleDef{Label: r.Label, Font: r.Font, Builtin: r.Builtin}
+	}
+	return fonts.NewCatalog(defs, roles, p.Open)
+}
+
 // unsupported reports what a manifest can say and this engine cannot yet draw, so
 // an author is told and a template does not render wrongly without a word
 func unsupported(m *manifest.Manifest) manifest.Diagnostics {
@@ -146,6 +169,10 @@ func (t *Template) ID() string { return t.m.ID }
 
 // Manifest is the template's checked manifest, which must not be changed
 func (t *Template) Manifest() *manifest.Manifest { return t.m }
+
+// Fonts is what the template says about its text roles and the fonts it bundles,
+// which is the standard roles alone for a template that says nothing
+func (t *Template) Fonts() *fonts.Catalog { return t.fonts }
 
 // Assets is where the template's images are read from
 func (t *Template) Assets() AssetProvider { return t.assets }

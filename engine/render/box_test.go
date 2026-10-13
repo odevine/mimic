@@ -14,12 +14,12 @@ func TestMinFontSizeStopsManaCostFromShrinking(t *testing.T) {
 	// A manifest's mana box sets MinFontSize equal to its own FontSize, since a
 	// symbol is a fixed size on a printed card: a cost wider than its box keeps
 	// its size and grows leftward out of it rather than shrinking into it.
-	sym := mana.NewSymbols("")
+	sym := mana.NewSymbols(fonts.Default(fonts.Mana))
 	if sym == nil {
 		t.Fatal("no mana font resolved")
 	}
 	box := template.TextBoxSpec{X: 2047, Y: 506, Width: 866, Height: 200, FontSize: 179, MinFontSize: 179, Align: "right", VAlign: "baseline"}
-	cost := template.TextPart{Text: "{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}", Src: fonts.ResolveFont(fonts.Body, ""), Sym: sym}
+	cost := template.TextPart{Text: "{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}", Src: fonts.Default(fonts.Body), Sym: sym}
 
 	ten, err := template.MeasureTextSpan(box, cost)
 	if err != nil {

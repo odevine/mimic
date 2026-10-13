@@ -6,14 +6,17 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"image"
 	"image/png"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 )
@@ -25,7 +28,9 @@ func main() {
 	bundle := flag.String("bundle", "", "path to a .mimic bundle holding the template; takes precedence over -assets")
 	noArt := flag.Bool("no-art", false, "skip fetching and placing card art")
 	noSymbol := flag.Bool("no-symbol", false, "skip fetching and drawing the set symbol")
-	fontDir := flag.String("fonts", "", "directory of font overrides, one font per role subfolder (title, body, body-italic, mana, type, info); empty auto-uses ./local-fonts if present, else the embedded defaults")
+	fontDir := flag.String("fonts", "", "directory of font files to choose overrides from, subfolders included; empty auto-uses ./local-fonts if present")
+	var overrides fontFlags
+	flag.Var(&overrides, "font", "draw a role with a font from the -fonts directory, as role=\"Family Style\" such as title=\"Gotham Medium\"; repeat for more roles")
 	face := flag.Int("face", 0, "which face to render, 0 for the front and 1 for a double-faced card's back")
 	dpi := flag.Int("dpi", 0, "resolution to render at, clamped to the template's own; 0 renders at the template's authored resolution")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout for network work")
@@ -34,12 +39,12 @@ func main() {
 	if *name == "" {
 		log.Fatal("rendercard: -name is required")
 	}
-	if err := run(*name, *out, *assetsDir, *bundle, *fontDir, *noArt, *noSymbol, *face, *dpi, *timeout); err != nil {
+	if err := run(*name, *out, *assetsDir, *bundle, *fontDir, overrides, *noArt, *noSymbol, *face, *dpi, *timeout); err != nil {
 		log.Fatalf("rendercard: %v", err)
 	}
 }
 
-func run(name, out, assetsDir, bundle, fontDir string, noArt, noSymbol bool, face, dpi int, timeout time.Duration) error {
+func run(name, out, assetsDir, bundle, fontDir string, overrides fontFlags, noArt, noSymbol bool, face, dpi int, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -78,17 +83,17 @@ func run(name, out, assetsDir, bundle, fontDir string, noArt, noSymbol bool, fac
 		}
 	}
 
-	if fontDir = resolveFontDir(fontDir); fontDir != "" {
-		log.Printf("font overrides: %s", fontDir)
-	}
+	pool := loadFontPool(resolveFontDir(fontDir), overrides, tmpl.Fonts())
 
 	buf, err := render.Render(ctx, tmpl, template.RenderRequest{
 		Card:      data,
 		Face:      face,
 		Art:       art,
 		SetSymbol: symbol,
-		FontDir:   fontDir,
 		DPI:       dpi,
+
+		FontPool:      pool,
+		FontOverrides: overrides,
 	})
 	if err != nil {
 		return err
@@ -106,13 +111,63 @@ func symbolCacheDir() string {
 	return filepath.Join(base, "mimic", "symbols")
 }
 
+// fontFlags collects the repeated -font flag as a role to font name map
+type fontFlags map[string]string
+
+func (f *fontFlags) String() string {
+	var parts []string
+	for role, name := range *f {
+		parts = append(parts, role+"="+name)
+	}
+	return strings.Join(parts, ",")
+}
+
+// Set reads one role=name pair, splitting at the first equals sign, since a font
+// name has none
+func (f *fontFlags) Set(v string) error {
+	role, name, ok := strings.Cut(v, "=")
+	role, name = strings.TrimSpace(role), strings.TrimSpace(name)
+	if !ok || role == "" || name == "" {
+		return fmt.Errorf("%q is not role=\"Family Style\"", v)
+	}
+	if *f == nil {
+		*f = fontFlags{}
+	}
+	(*f)[role] = name
+	return nil
+}
+
+// loadFontPool indexes the font directory and says what it found, and warns about
+// each override that names a role the template lacks or a font the pool lacks
+func loadFontPool(dir string, overrides fontFlags, cat *fonts.Catalog) *fonts.Pool {
+	pool := fonts.NewPool(dir)
+	if dir != "" {
+		log.Printf("font pool: %s (%d fonts)", dir, len(pool.Fonts()))
+	}
+	for _, r := range pool.Rejected() {
+		log.Printf("font pool: skipping %s: %v", r.Path, r.Err)
+	}
+	for _, p := range pool.Duplicates() {
+		log.Printf("font pool: skipping %s, another file has the same name", p)
+	}
+	for role, name := range overrides {
+		switch _, found := pool.Lookup(name); {
+		case !cat.Knows(fonts.Role(role)):
+			log.Printf("font override: the template has no role %q", role)
+		case !found:
+			log.Printf("font override: %q is not in the pool, so %s keeps its own font", name, role)
+		}
+	}
+	return pool
+}
+
 // defaultFontDirs lists where rendercard looks for font overrides when -fonts
 // is not given. local-fonts sits at the repo root, so both a repo-root run and
 // an engine-subdir run find it
 var defaultFontDirs = []string{"local-fonts", filepath.Join("..", "local-fonts")}
 
 // resolveFontDir returns dir when set, else the first default font directory
-// that exists, else "" for the embedded defaults
+// that exists, else "" for no pool
 func resolveFontDir(dir string) string {
 	if dir != "" {
 		return dir

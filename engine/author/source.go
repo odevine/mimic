@@ -34,6 +34,12 @@ type Source struct {
 
 	Features map[string]manifest.Feature `json:"features,omitempty"`
 	Parts    map[string]Part             `json:"parts"`
+	// Fonts are the font files the template ships, each at the path its file names
+	// in the template's folder, directly inside "font/". The build fills in the
+	// hash and any family or style left out
+	Fonts map[string]manifest.FontFile `json:"fonts,omitempty"`
+	// Roles are the text roles the template defines
+	Roles map[string]manifest.FontRole `json:"roles,omitempty"`
 }
 
 // Part is an art set in the source form

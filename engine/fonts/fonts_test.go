@@ -1,8 +1,6 @@
 package fonts
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"golang.org/x/image/font/basicfont"
@@ -12,12 +10,13 @@ func TestResolveEmbeddedRoles(t *testing.T) {
 	// Every standard role resolves to its built-in font without hitting the
 	// fallback.
 	for _, info := range Roles() {
-		face, fallback, err := Resolve(info.Role, "", 24)
+		sizer := Default(info.Role)
+		face, err := sizer.Face(24)
 		if err != nil {
-			t.Errorf("Resolve(%s): %v", info.Role, err)
+			t.Errorf("Default(%s): %v", info.Role, err)
 			continue
 		}
-		if fallback {
+		if sizer.Fallback() {
 			t.Errorf("role %s used the basicfont fallback, want its built-in font", info.Role)
 		}
 		if face == nil {
@@ -79,11 +78,12 @@ func TestBuiltinsAreComplete(t *testing.T) {
 
 func TestResolveUnknownRoleFallsBack(t *testing.T) {
 	// A role the engine does not know falls back to basicfont.
-	face, fallback, err := Resolve(Role("no-such-role"), "", 24)
+	s := Default(Role("no-such-role"))
+	face, err := s.Face(24)
 	if err != nil {
-		t.Fatalf("Resolve(unknown role): %v", err)
+		t.Fatalf("Face: %v", err)
 	}
-	if !fallback {
+	if !s.Fallback() {
 		t.Error("an unmapped role should report the basicfont fallback")
 	}
 	if face != basicfont.Face7x13 {
@@ -91,60 +91,10 @@ func TestResolveUnknownRoleFallsBack(t *testing.T) {
 	}
 }
 
-func TestResolvePrefersUserOverride(t *testing.T) {
-	// A font dropped into the Title role folder is used ahead of the built-in
-	// font, whatever its filename. Any real font file stands in for Beleren.
-	dir := t.TempDir()
-	src, err := embedded.ReadFile("embedded/m15/plantin-body.ttf")
-	if err != nil {
-		t.Fatalf("reading embedded font: %v", err)
-	}
-	titleDir := filepath.Join(dir, roleDir[Title])
-	if err := os.MkdirAll(titleDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(titleDir, "AnyName.ttf"), src, 0o644); err != nil {
-		t.Fatalf("writing override: %v", err)
-	}
-	face, fallback, err := Resolve(Title, dir, 24)
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if fallback || face == nil {
-		t.Errorf("expected the override face, got fallback=%v face=%v", fallback, face)
-	}
-}
-
-func TestFindUserFontUsesRoleFolder(t *testing.T) {
-	dir := t.TempDir()
-	bodyDir := filepath.Join(dir, roleDir[Body])
-	if err := os.MkdirAll(bodyDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bodyDir, "whatever.otf"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// A font in the body folder fills the Body role by folder, not by name.
-	if got := filepath.Base(findUserFont(Body, dir)); got != "whatever.otf" {
-		t.Errorf("Body matched %q, want whatever.otf", got)
-	}
-	// An empty role folder yields no override, so the caller uses the default.
-	if got := findUserFont(BodyItalic, dir); got != "" {
-		t.Errorf("BodyItalic matched %q, want no override", got)
-	}
-	// A file at the override root, in no role folder, is ignored.
-	if err := os.WriteFile(filepath.Join(dir, "loose.ttf"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := findUserFont(Title, dir); got != "" {
-		t.Errorf("Title matched %q from the root, want no override", got)
-	}
-}
-
 func TestSizerBuildsFacesPerSize(t *testing.T) {
 	// One resolved font produces distinct faces at different sizes, and a
 	// bigger size has a taller line height.
-	s := ResolveFont(Body, "")
+	s := Default(Body)
 	if s.Fallback() {
 		t.Fatal("Body resolved to the basicfont fallback, want the built-in font")
 	}
@@ -162,29 +112,16 @@ func TestSizerBuildsFacesPerSize(t *testing.T) {
 	}
 }
 
-func TestSizerFallbackFace(t *testing.T) {
-	s := ResolveFont(Role("no-such-role"), "")
-	if !s.Fallback() {
-		t.Error("an unmapped role should report the basicfont fallback")
-	}
-	face, err := s.Face(24)
-	if err != nil {
-		t.Fatalf("Face: %v", err)
-	}
-	if face != basicfont.Face7x13 {
-		t.Error("fallback Face should be basicfont.Face7x13")
-	}
-}
-
 func TestManaFaceHasPrivateUseGlyphs(t *testing.T) {
 	// The Mana font carries its symbols in the private use area, not at ASCII
 	// letters, so a face that resolves is not by itself proof it is usable.
 	// The codepoints below are the ones the Mana cheatsheet documents
-	face, fallback, err := Resolve(Mana, "", 32)
+	sizer := Default(Mana)
+	face, err := sizer.Face(32)
 	if err != nil {
-		t.Fatalf("Resolve(Mana): %v", err)
+		t.Fatalf("Face: %v", err)
 	}
-	if fallback {
+	if sizer.Fallback() {
 		t.Fatal("Mana resolved to the basicfont fallback, want the built-in font")
 	}
 	for _, tc := range []struct {

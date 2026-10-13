@@ -149,8 +149,9 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	// One renderer serves every box, so its faces and rasterized pips are built
 	// once for the card rather than once per box. The artist credit draws from
 	// that same font but in its own box color, so it takes a renderer beside it
+	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
 	var syms symbols
-	if ms := mana.NewSymbols(req.FontDir); ms != nil {
+	if ms := mana.NewSymbols(fr.Font(fonts.Mana)); ms != nil {
 		syms.mana = ms
 		if box, ok := boxes.byDraws("artist"); ok {
 			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.spec.Color)}
@@ -177,7 +178,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		if job.space == template.SpaceOutput {
 			docW, docH = geo.DeliveredWidth, geo.DeliveredHeight
 		}
-		got, err := drawBox(req, t, layout, authored, job, boxes, fc, syms, scale, docW, docH)
+		got, err := drawBox(req, t, layout, authored, job, boxes, fc, syms, fr, scale, docW, docH)
 		if err != nil {
 			return nil, err
 		}
@@ -342,10 +343,10 @@ func resolveBoxes(layout *template.Layout, geo *template.Geometry, fc *faces, fe
 // drawBox lays one text box out and returns the nodes it draws, the text and a
 // flavor divider when the box carries one. docW and docH are the canvas the box
 // is laid out in, which is the delivered one for a box in the output space
-func drawBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
+func drawBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, fr *fonts.Resolver, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
 	box := job.spec
 	d, _ := fc.get(job.face)
-	parts := textParts(job.draws, box, d, syms, req.FontDir, req.Copyright)
+	parts := textParts(job.draws, box, d, syms, fr, req.Copyright)
 	if len(parts) == 0 {
 		return nil, nil
 	}
@@ -369,7 +370,7 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 	if box.ClearOf != "" {
 		if other, ok := boxes.byKey[box.ClearOf]; ok {
 			od, _ := fc.get(other.face)
-			if otherParts := textParts(other.draws, other.spec, od, syms, req.FontDir, req.Copyright); len(otherParts) > 0 {
+			if otherParts := textParts(other.draws, other.spec, od, syms, fr, req.Copyright); len(otherParts) > 0 {
 				span, err := template.MeasureTextSpan(other.spec, otherParts...)
 				if err != nil {
 					return nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
@@ -528,9 +529,9 @@ func mirrored(buf *raster.Buffer, origin image.Point, err error, mirror bool, e 
 }
 
 // roleFor returns the font role a box's manifest Font names, defaulting to the
-// body role for a box that names none or an unrecognized one
-func roleFor(font string) fonts.Role {
-	if role, ok := fonts.ParseRole(font); ok {
+// body role for a box that names none or one the template does not define
+func roleFor(font string, fr *fonts.Resolver) fonts.Role {
+	if role, ok := fr.Role(font); ok {
 		return role
 	}
 	return fonts.Body
@@ -561,18 +562,18 @@ type symbols struct {
 // a divider. The mana cost and the rules text are where a card's own symbols
 // appear, and the artist credit opens with the nib the engine prepends, so
 // those are the parts that carry a renderer
-func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols, fontDir, copyrightOverride string) []template.TextPart {
+func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols, fr *fonts.Resolver, copyrightOverride string) []template.TextPart {
 	if name == "oracle" {
 		var parts []template.TextPart
-		if p, ok := part(d.OracleText, fonts.Body, fontDir); ok {
+		if p, ok := part(d.OracleText, fonts.Body, fr); ok {
 			// Parenthesized reminder text and leading ability or flavor words
 			// italicize, while keyword abilities stay roman
-			p.Emph = fonts.ResolveFont(fonts.BodyItalic, fontDir)
+			p.Emph = fr.Font(fonts.BodyItalic)
 			p.EmphLead = card.EmphasisWords
 			p.Sym = syms.mana
 			parts = append(parts, p)
 		}
-		if p, ok := part(d.FlavorText, fonts.BodyItalic, fontDir); ok {
+		if p, ok := part(d.FlavorText, fonts.BodyItalic, fr); ok {
 			parts = append(parts, p)
 		}
 		return parts
@@ -586,7 +587,7 @@ func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols
 		// the symbol's own advance opens the gap
 		text = "{" + mana.NibCode + "}" + text
 	}
-	p, ok := part(text, roleFor(box.Font), fontDir)
+	p, ok := part(text, roleFor(box.Font, fr), fr)
 	if !ok {
 		return nil
 	}
@@ -601,11 +602,11 @@ func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols
 
 // part resolves a font for role and pairs it with text, normalizing the text
 // when the font falls back to the basic face. It reports false for empty text
-func part(text string, role fonts.Role, fontDir string) (template.TextPart, bool) {
+func part(text string, role fonts.Role, fr *fonts.Resolver) (template.TextPart, bool) {
 	if strings.TrimSpace(text) == "" {
 		return template.TextPart{}, false
 	}
-	sizer := fonts.ResolveFont(role, fontDir)
+	sizer := fr.Font(role)
 	if sizer.Fallback() {
 		text = normalizeForBasicFont(text)
 	}

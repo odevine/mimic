@@ -321,3 +321,48 @@ func TestSetBudgetDuringLoads(t *testing.T) {
 		t.Errorf("bytes = %d, over the final budget of %d", s.Bytes, 2*layerBytes)
 	}
 }
+
+func TestCachedAssetsForgetDecodesAgainOnlyThatImage(t *testing.T) {
+	m := newMem(t, "a.png", "b.png")
+	c := NewCachedAssets(m, 10*layerBytes)
+	mustLoad(t, c, "a.png")
+	mustLoad(t, c, "b.png")
+	if got := m.opens.Load(); got != 2 {
+		t.Fatalf("opened %d times, want 2", got)
+	}
+	c.Forget("a.png")
+	mustLoad(t, c, "a.png")
+	mustLoad(t, c, "b.png")
+	if got := m.opens.Load(); got != 3 {
+		t.Fatalf("opened %d times after Forget, want 3, so only a.png decodes again", got)
+	}
+	if got := c.Stats().Bytes; got != 2*layerBytes {
+		t.Fatalf("holds %d bytes, want %d", got, 2*layerBytes)
+	}
+}
+
+func TestCachedAssetsForgetDropsBlendsBuiltFromTheImage(t *testing.T) {
+	m := newMem(t, "a.png", "b.png")
+	c := NewCachedAssets(m, 10*layerBytes)
+	builds := 0
+	build := func() (image.Image, image.Point, error) {
+		builds++
+		return image.NewNRGBA(image.Rect(0, 0, 10, 10)), image.Point{}, nil
+	}
+	key := blendKey([]string{"a.png", "b.png"}, Blender{}, 1, 0, 0, 10, 10)
+	for range 2 {
+		if _, _, err := c.LoadBlended(key, false, build); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if builds != 1 {
+		t.Fatalf("built %d times, want 1", builds)
+	}
+	c.Forget("b.png")
+	if _, _, err := c.LoadBlended(key, false, build); err != nil {
+		t.Fatal(err)
+	}
+	if builds != 2 {
+		t.Fatalf("built %d times after Forget, want 2", builds)
+	}
+}

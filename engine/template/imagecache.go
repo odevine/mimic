@@ -5,6 +5,8 @@ import (
 	"image"
 	"io"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/odevine/impasto/blend"
@@ -260,6 +262,21 @@ func (c *CachedAssets) SetBudget(budget int64) {
 		delete(c.resident, k)
 		if c.used <= max(budget, 0) {
 			break
+		}
+	}
+}
+
+// Forget drops the cached layer for the image at relPath and every blended layer
+// built from it, so a file that has changed on disk decodes again on its next
+// load. Images already returned to callers stay valid
+func (c *CachedAssets) Forget(relPath string) {
+	quoted := strconv.Quote(relPath)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, e := range c.resident {
+		if k == relPath || strings.HasPrefix(k, "blend:") && strings.Contains(k, quoted) {
+			c.used -= e.bytes
+			delete(c.resident, k)
 		}
 	}
 }

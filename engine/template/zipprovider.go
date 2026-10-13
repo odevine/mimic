@@ -120,6 +120,10 @@ func (p *ZipAssetProvider) Open(relPath string) (io.ReadCloser, error) {
 	return entry.Open()
 }
 
+// Header is the bundle's own bundle.json, which names its version and the engine
+// it needs
+func (p *ZipAssetProvider) Header() BundleHeader { return p.header }
+
 // Close releases the underlying bundle file. After Close the provider must not
 // be used
 func (p *ZipAssetProvider) Close() error {

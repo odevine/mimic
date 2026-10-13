@@ -51,9 +51,21 @@ func Validate(fsys fs.FS, opt Options) manifest.Diagnostics {
 	return ds
 }
 
-// buildFrom is Build, and with write unset it reads each image to check it and leaves
-// the result without assets
-func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostics) {
+// resolved is a source folder read and checked, with the manifest it describes
+// written against the source paths of its images
+type resolved struct {
+	src *Source
+	m   *manifest.Manifest
+	// sources is the source path of each part's images, by material
+	sources map[string]map[string]string
+	// fontData is each font file's bytes by its path
+	fontData map[string][]byte
+}
+
+// resolveSource reads template.json and the layouts, resolves inheritance, and
+// decodes the manifest the way the engine will, before any image is cut. It
+// returns nil when there is an error, with every problem found in the diagnostics
+func resolveSource(fsys fs.FS, opt Options) (*resolved, manifest.Diagnostics) {
 	src, ds := readSource(fsys)
 	if src == nil {
 		return nil, ds
@@ -124,6 +136,17 @@ func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostic
 		sortDiagnostics(ds)
 		return nil, ds
 	}
+	return &resolved{src: src, m: m, sources: sources, fontData: fontData}, ds
+}
+
+// buildFrom is Build, and with write unset it reads each image to check it and leaves
+// the result without assets
+func buildFrom(fsys fs.FS, opt Options, write bool) (*Built, manifest.Diagnostics) {
+	r, ds := resolveSource(fsys, opt)
+	if r == nil {
+		return nil, ds
+	}
+	src, m, sources, fontData := r.src, r.m, r.sources, r.fontData
 
 	store := &assetStore{check: !write}
 	cuts := packParts(fsys, sources, m, store, &ds)

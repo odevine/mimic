@@ -4,6 +4,7 @@ import { app, signal, effect, batch } from "../state.js";
 import { keyedRows } from "../components/keyed.js";
 import { syncChips } from "../components/chips.js";
 import { toast } from "../components/toast.js";
+import { plural } from "../plural.js";
 
 // The Run Console: watches a batch while it renders and stays readable after.
 // It only reports, and the actions it offers start new work from what it found.
@@ -396,7 +397,7 @@ function initView() {
     // The rail and status bar carry a running batch into every other mode
     $("rail-run-dot").hidden = !live;
     if (live) {
-      app.status.value = `Rendering ${c.settled} of ${c.total} cards`;
+      app.status.value = `Rendering ${c.settled} of ${plural(c.total, "card")}`;
       app.progress.value = c.settled / Math.max(c.total, 1);
     }
   });

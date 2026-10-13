@@ -31,6 +31,8 @@ for (const theme of ["dark", "light"]) {
       bridge.reply("Settings.Get", { theme });
       await scene.run({ bridge, page });
       await page.evaluate(() => document.fonts.ready);
+      // A control still fading in is measured against a half-mixed color
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
       const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
 
       const found = [];

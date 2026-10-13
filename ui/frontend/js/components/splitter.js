@@ -22,7 +22,7 @@ function regionMin(region) {
 // the row leaves it: the other fixed regions, the splitters, and the grow
 // region's own minimum, read from its --grow-min. So a drag never pushes the
 // row past the window, and the regions never scroll sideways as one strip
-function clampWidth(regions, region, w) {
+function widthRange(regions, region) {
   let others = 0;
   let growMin = MIN;
   for (const el of regions.children) {
@@ -35,7 +35,11 @@ function clampWidth(regions, region, w) {
   }
   const min = regionMin(region);
   const room = regions.clientWidth - others - growMin;
-  const max = Math.max(min, Math.min(regions.clientWidth * 0.55, room));
+  return { min, max: Math.max(min, Math.min(regions.clientWidth * 0.55, room)) };
+}
+
+function clampWidth(regions, region, w) {
+  const { min, max } = widthRange(regions, region);
   return Math.round(Math.min(Math.max(w, min), max));
 }
 
@@ -53,18 +57,34 @@ export function initSplitters(regions, widths, onChange) {
     fixed.forEach((r, i) => (r.style.width = `${Math.max(preferred[i], regionMin(r))}px`));
     fixed.forEach((r) => (r.style.width = `${clampWidth(regions, r, r.getBoundingClientRect().width)}px`));
   };
-  fit();
+  // report keeps each splitter's separator values at its region's width and range
+  const splitters = [...regions.querySelectorAll(":scope > .splitter")];
+  const report = () => {
+    for (const s of splitters) {
+      const { region } = fixedNeighbor(s);
+      const { min, max } = widthRange(regions, region);
+      s.setAttribute("aria-valuemin", Math.round(min));
+      s.setAttribute("aria-valuemax", Math.round(max));
+      s.setAttribute("aria-valuenow", Math.round(region.getBoundingClientRect().width));
+    }
+  };
+  const refit = () => {
+    fit();
+    report();
+  };
+  refit();
   // Watching the row rather than the window fits after layout has settled,
   // including a switch between the stacked and side by side layouts
-  new ResizeObserver(fit).observe(regions);
+  new ResizeObserver(refit).observe(regions);
 
   // settle records a region's new width as its preference and persists them all
   const settle = (region) => {
     preferred[fixed.indexOf(region)] = region.getBoundingClientRect().width;
     onChange(preferred.map(Math.round));
+    report();
   };
 
-  for (const s of regions.querySelectorAll(":scope > .splitter")) {
+  for (const s of splitters) {
     const { region, sign } = fixedNeighbor(s);
     s.tabIndex = 0;
 
@@ -78,6 +98,7 @@ export function initSplitters(regions, widths, onChange) {
 
       const move = (ev) => {
         region.style.width = `${clampWidth(regions, region, startW + sign * (ev.clientX - startX))}px`;
+        report();
       };
       const up = () => {
         s.removeEventListener("pointermove", move);

@@ -1101,7 +1101,7 @@ input.gated {
 
 .rule-card.off .rule-block,
 .rule-card.off .rule-name {
-  opacity: 0.55;
+  opacity: 0.85;
 }
 
 .rule-head {

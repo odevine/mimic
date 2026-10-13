@@ -333,7 +333,7 @@ function buildRow(row) {
         ),
       );
     }
-    if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note }, icon("warn")));
+    if (s.note && !row.fromQuery) status.append(h("span", { class: "note-dot", "data-tip": s.note, "aria-label": s.note, role: "img" }, icon("warn")));
     buildDetail(row, s, detail);
   });
   const disposeSel = effect(() => {

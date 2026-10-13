@@ -4,8 +4,9 @@ version: '3'
 # builds on the oldest supported Ubuntu, which keeps the binary's glibc
 # requirement low enough to run on newer distributions. Wails v3 builds against
 # GTK 4 unless told otherwise, and the gtk3 tag selects the stack Ubuntu 22.04
-# ships. The AppImage is the install that needs no package manager and the file
-# the updater swaps in. The deb and rpm belong to the system's package manager
+# ships. The Flatpak bundle installs the binary this build makes, against the GNOME
+# runtime's copies of those libraries. The bundle, deb and rpm belong to Flatpak
+# and the system's package manager, so the updater only points at the release page
 
 tasks:
   build:
@@ -19,7 +20,7 @@ tasks:
       - CGO_ENABLED=1 go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}}" -o "{{.BIN_DIR}}/{{.APP_NAME}}" .
 
   package:
-    summary: Makes the AppImage, deb and rpm
+    summary: Makes the Flatpak bundle, deb and rpm
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
     deps: [build]
@@ -28,7 +29,8 @@ tasks:
       MIMIC_VERSION: '{{.VERSION}}'
     cmds:
       - mkdir -p "{{.BIN_DIR}}/stage"
-      - go tool wails3 generate appimage -binary "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}" -icon "{{.ROOT_DIR}}/build/linux/mimic.png" -desktopfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -outputdir "{{.ROOT_DIR}}/{{.BIN_DIR}}/stage" -builddir "{{.ROOT_DIR}}/{{.BIN_DIR}}/appimage-build"
+      - flatpak-builder --force-clean --user --disable-rofiles-fuse --install-deps-from=flathub --default-branch=stable --repo="{{.BIN_DIR}}/flatpak-repo" --state-dir="{{.BIN_DIR}}/flatpak-state" "{{.BIN_DIR}}/flatpak-build" build/linux/flatpak/io.github.odevine.mimic.yml
+      - flatpak build-bundle "{{.BIN_DIR}}/flatpak-repo" "{{.BIN_DIR}}/stage/mimic.flatpak" io.github.odevine.mimic stable --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
       - go tool wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
       - go tool wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm.yaml -out "{{.BIN_DIR}}/stage"
       - go run ./cmd/pkgtool linux-names -dir "{{.BIN_DIR}}/stage" -out "{{.BIN_DIR}}" -version "{{.VERSION}}" -arch "{{.ARCH}}"

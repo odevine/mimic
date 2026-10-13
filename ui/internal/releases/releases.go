@@ -144,7 +144,7 @@ func Newer(a, b string) bool {
 var artifacts = map[string]*regexp.Regexp{
 	"darwin":  regexp.MustCompile(`^Mimic-.+-macos-universal\.zip$`),
 	"windows": regexp.MustCompile(`^Mimic-.+-windows-%s\.zip$`),
-	"linux":   regexp.MustCompile(`^Mimic-.+-linux-%s\.AppImage$`),
+	"linux":   regexp.MustCompile(`^Mimic-.+-linux-%s\.flatpak$`),
 }
 
 // Pick returns the asset that updates an app running on goos and goarch, or nil

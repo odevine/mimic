@@ -66,7 +66,7 @@ func move(from, to string, copyIt bool) error {
 // rpmArch is the architecture name an rpm file carries
 var rpmArch = map[string]string{"amd64": "x86_64", "arm64": "aarch64"}
 
-// linuxNames moves the AppImage, deb and rpm the Linux packaging wrote into dir
+// linuxNames moves the Flatpak bundle, deb and rpm the Linux packaging wrote into dir
 // to out under their release names
 func linuxNames(dir, out, version, arch string) error {
 	ra, ok := rpmArch[arch]
@@ -74,7 +74,7 @@ func linuxNames(dir, out, version, arch string) error {
 		return fmt.Errorf("no rpm architecture for %q", arch)
 	}
 	for _, f := range []struct{ ext, name string }{
-		{".AppImage", fmt.Sprintf("Mimic-%s-linux-%s.AppImage", version, arch)},
+		{".flatpak", fmt.Sprintf("Mimic-%s-linux-%s.flatpak", version, arch)},
 		{".deb", fmt.Sprintf("mimic_%s_%s.deb", version, arch)},
 		{".rpm", fmt.Sprintf("mimic-%s.%s.rpm", version, ra)},
 	} {

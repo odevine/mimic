@@ -31,7 +31,8 @@ func stampCmd(args []string) error {
 }
 
 // stamp writes version into the build assets that carry one: the macOS
-// Info.plist, the Windows version resource and the identity file. The installer
+// Info.plist, the Windows version resource, the Flatpak metainfo and the identity
+// file. The installer
 // and the packages read the version from those or from the environment, so this
 // is the one place a release's version lands in them. The files are edited in
 // the build checkout and never committed
@@ -49,6 +50,7 @@ func stamp(dir, version string) error {
 		{"darwin/Info.plist", regexp.MustCompile(`(<key>CFBundleShortVersionString</key>\s*<string>)[^<]*`), "${1}" + n},
 		{"windows/info.json", regexp.MustCompile(`("file_version":\s*")[^"]*`), "${1}" + n},
 		{"windows/info.json", regexp.MustCompile(`("ProductVersion":\s*")[^"]*`), "${1}" + n},
+		{"linux/flatpak/io.github.odevine.mimic.metainfo.xml", regexp.MustCompile(`(<release version=")[^"]*`), "${1}" + n},
 		{"config.yml", regexp.MustCompile(`(?m)^(  version: ")[^"]*`), "${1}" + n},
 	}
 	for _, e := range edits {

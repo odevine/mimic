@@ -8,13 +8,11 @@ import (
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
-func TestCanSwapOnLinuxNeedsAnAppImage(t *testing.T) {
-	dir := t.TempDir()
-	if CanSwap("linux", "/usr/bin/mimic", env(nil)) {
-		t.Error("a package install was offered a swap")
-	}
-	if !CanSwap("linux", "/tmp/.mount_x/usr/bin/mimic", env(map[string]string{"APPIMAGE": filepath.Join(dir, "Mimic.AppImage")})) {
-		t.Error("an AppImage in a folder the user owns was refused")
+func TestCanSwapOnLinuxIsNever(t *testing.T) {
+	for _, exe := range []string{"/usr/bin/mimic", "/app/bin/mimic", filepath.Join(t.TempDir(), "mimic")} {
+		if CanSwap("linux", exe, env(nil)) {
+			t.Errorf("%s was offered a swap", exe)
+		}
 	}
 }
 

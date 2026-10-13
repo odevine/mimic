@@ -217,8 +217,9 @@ only itself, because the webview needs the system's own toolchain. macOS makes a
 universal `.dmg` and `.zip`. Windows needs
 [NSIS](https://nsis.sourceforge.io) for `makensis`, takes `ARCH=amd64` or
 `ARCH=arm64`, and makes a per-user installer and a portable `.zip`. Linux makes
-an AppImage, a `.deb` and an `.rpm` for its own architecture. The AppImage step
-downloads linuxdeploy when it runs.
+a Flatpak bundle, a `.deb` and an `.rpm` for its own architecture. The Flatpak
+step needs `flatpak` and `flatpak-builder`, and installs the GNOME runtime and
+SDK from Flathub when it runs.
 
 `.github/workflows/package-ui.yml` runs all five on native runners. A release
 calls it to publish, and a manual run, the weekly run and any pull request that

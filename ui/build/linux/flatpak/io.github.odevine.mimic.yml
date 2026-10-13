@@ -1,0 +1,34 @@
+# The Flatpak bundle. It installs the binary the build task already made, so the
+# bundle runs the same GTK 3 and WebKitGTK 4.1 build the deb and rpm do, against
+# the GNOME runtime's copies of those libraries. Paths are relative to this file
+app-id: io.github.odevine.mimic
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: mimic
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Scryfall, the template catalog and the update check
+  - --share=network
+
+modules:
+  - name: mimic
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 mimic /app/bin/mimic
+      - install -Dm644 io.github.odevine.mimic.desktop /app/share/applications/io.github.odevine.mimic.desktop
+      - install -Dm644 io.github.odevine.mimic.metainfo.xml /app/share/metainfo/io.github.odevine.mimic.metainfo.xml
+      - install -Dm644 mimic.png /app/share/icons/hicolor/256x256/apps/io.github.odevine.mimic.png
+    sources:
+      - type: file
+        path: ../../../bin/mimic
+      - type: file
+        path: io.github.odevine.mimic.desktop
+      - type: file
+        path: io.github.odevine.mimic.metainfo.xml
+      - type: file
+        path: ../mimic.png

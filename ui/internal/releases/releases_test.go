@@ -27,7 +27,7 @@ func serve(t *testing.T, releases ...map[string]any) *Client {
 			raw, _ := json.Marshal(releases)
 			w.Write([]byte(strings.ReplaceAll(string(raw), "ASSET/", srv.URL+"/asset/")))
 		case r.URL.Path == "/asset/SHA256SUMS":
-			w.Write([]byte("aa" + strings.Repeat("00", 31) + "  Mimic-1.0.0-macos-universal.zip\n" + strings.Repeat("ab", 32) + " *Mimic-1.0.0-linux-amd64.AppImage\n"))
+			w.Write([]byte("aa" + strings.Repeat("00", 31) + "  Mimic-1.0.0-macos-universal.zip\n" + strings.Repeat("ab", 32) + " *Mimic-1.0.0-linux-amd64.flatpak\n"))
 		case strings.HasSuffix(r.URL.Path, ".sig"):
 			w.Write([]byte(base64.StdEncoding.EncodeToString(make([]byte, 64))))
 		case strings.HasPrefix(r.URL.Path, "/asset/"):
@@ -99,8 +99,8 @@ func TestPickChoosesTheUpdaterArtifactNotTheInstaller(t *testing.T) {
 		{Name: "Mimic-1.0.0-windows-amd64.zip"},
 		{Name: "Mimic-1.0.0-windows-arm64.zip"},
 		{Name: "mimic_1.0.0_amd64.deb"},
-		{Name: "Mimic-1.0.0-linux-amd64.AppImage"},
-		{Name: "Mimic-1.0.0-linux-arm64.AppImage"},
+		{Name: "Mimic-1.0.0-linux-amd64.flatpak"},
+		{Name: "Mimic-1.0.0-linux-arm64.flatpak"},
 		{Name: "SHA256SUMS"},
 	}
 	for _, c := range []struct{ goos, goarch, want string }{
@@ -108,8 +108,8 @@ func TestPickChoosesTheUpdaterArtifactNotTheInstaller(t *testing.T) {
 		{"darwin", "amd64", "Mimic-1.0.0-macos-universal.zip"},
 		{"windows", "amd64", "Mimic-1.0.0-windows-amd64.zip"},
 		{"windows", "arm64", "Mimic-1.0.0-windows-arm64.zip"},
-		{"linux", "amd64", "Mimic-1.0.0-linux-amd64.AppImage"},
-		{"linux", "arm64", "Mimic-1.0.0-linux-arm64.AppImage"},
+		{"linux", "amd64", "Mimic-1.0.0-linux-amd64.flatpak"},
+		{"linux", "arm64", "Mimic-1.0.0-linux-arm64.flatpak"},
 		{"linux", "riscv64", ""},
 		{"freebsd", "amd64", ""},
 	} {
@@ -127,7 +127,7 @@ func TestPickChoosesTheUpdaterArtifactNotTheInstaller(t *testing.T) {
 }
 
 func TestDigestAndSignature(t *testing.T) {
-	c := serve(t, rel("ui/v1.0.0", "Mimic-1.0.0-macos-universal.zip", "Mimic-1.0.0-macos-universal.zip.sig", "Mimic-1.0.0-linux-amd64.AppImage", "SHA256SUMS"))
+	c := serve(t, rel("ui/v1.0.0", "Mimic-1.0.0-macos-universal.zip", "Mimic-1.0.0-macos-universal.zip.sig", "Mimic-1.0.0-linux-amd64.flatpak", "SHA256SUMS"))
 	r, err := c.Latest(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestDigestAndSignature(t *testing.T) {
 	if d, err := c.Digest(context.Background(), r, "Mimic-1.0.0-macos-universal.zip"); err != nil || len(d) != 32 || d[0] != 0xaa {
 		t.Errorf("digest = %x, %v", d, err)
 	}
-	if d, err := c.Digest(context.Background(), r, "Mimic-1.0.0-linux-amd64.AppImage"); err != nil || len(d) != 32 {
+	if d, err := c.Digest(context.Background(), r, "Mimic-1.0.0-linux-amd64.flatpak"); err != nil || len(d) != 32 {
 		t.Errorf("a starred name: %x, %v", d, err)
 	}
 	if d, err := c.Digest(context.Background(), r, "Mimic-1.0.0-windows-amd64.zip"); err != nil || d != nil {
@@ -144,7 +144,7 @@ func TestDigestAndSignature(t *testing.T) {
 	if s, err := c.Signature(context.Background(), r, "Mimic-1.0.0-macos-universal.zip"); err != nil || len(s) != 64 {
 		t.Errorf("signature = %d bytes, %v", len(s), err)
 	}
-	if s, err := c.Signature(context.Background(), r, "Mimic-1.0.0-linux-amd64.AppImage"); err != nil || s != nil {
+	if s, err := c.Signature(context.Background(), r, "Mimic-1.0.0-linux-amd64.flatpak"); err != nil || s != nil {
 		t.Errorf("an unsigned file: %v, %v, want nothing", s, err)
 	}
 }

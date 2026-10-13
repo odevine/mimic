@@ -43,8 +43,8 @@ All systems:
   up unchanged.
 
 On Windows the installer must run without administrator rights and add the WebView2
-runtime on a machine that lacks it. On Linux, check the AppImage, the `.deb` and
-the `.rpm`, and that a package-managed install offers the release page for an
+runtime on a machine that lacks it. On Linux, check the Flatpak bundle (it installs, launches and renders a card, and its
+file dialogs open), the `.deb` and the `.rpm`, and that a package-managed install offers the release page for an
 update instead of replacing itself.
 
 ## Throughput

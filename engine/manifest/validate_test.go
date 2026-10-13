@@ -11,6 +11,16 @@ type change struct {
 	value any
 }
 
+// fontsOK is the changes that give the small manifest one bundled font and a role
+// that uses it, which the font cases build on
+func fontsOK() []change {
+	return []change{
+		{"contract", "1.1"},
+		{"fonts.f", map[string]any{"file": "font/F.ttf"}},
+		{"roles.r", map[string]any{"font": "f"}},
+	}
+}
+
 func TestEachMistakeIsReportedAtItsPath(t *testing.T) {
 	const (
 		normal = "layouts.normal."
@@ -30,6 +40,21 @@ func TestEachMistakeIsReportedAtItsPath(t *testing.T) {
 		{"no description", []change{{"description", gone}}, "description", Warning, "no description"},
 		{"a credit with no name", []change{{"credits[0].name", ""}}, "credits[0].name", Error, "no name"},
 		{"no layouts", []change{{"layouts", map[string]any{}}}, "layouts", Error, "no layouts"},
+
+		// fonts and roles
+		{"fonts on contract 1.0", []change{{"fonts.f", map[string]any{"file": "font/F.ttf"}}, {"roles.r", map[string]any{"font": "f"}}}, "contract", Error, "need contract 1.1"},
+		{"a role name with capitals", append(fontsOK(), change{"roles.Big", map[string]any{"builtin": "mimic-m15-body"}}), "roles.Big", Error, "is not a role name"},
+		{"a role with no font", append(fontsOK(), change{"roles.bare", map[string]any{}}), "roles.bare", Error, "names no font"},
+		{"a role with two fonts", append(fontsOK(), change{"roles.two", map[string]any{"font": "f", "builtin": "mimic-m15-body"}}), "roles.two", Error, "names both"},
+		{"a role with an unbundled font", append(fontsOK(), change{"roles.lost", map[string]any{"font": "zz"}}), "roles.lost.font", Error, "bundles no font"},
+		{"a role with an unknown built-in", append(fontsOK(), change{"roles.lost", map[string]any{"builtin": "beleren"}}), "roles.lost.builtin", Error, "not a built-in font"},
+		{"a font outside font/", append(fontsOK(), change{"fonts.f.file", "assets/F.ttf"}), "fonts.f.file", Error, "directly in font/"},
+		{"a font in a subfolder", append(fontsOK(), change{"fonts.f.file", "font/sub/F.ttf"}), "fonts.f.file", Error, "directly in font/"},
+		{"a font that is not a font file", append(fontsOK(), change{"fonts.f.file", "font/F.woff"}), "fonts.f.file", Error, ".ttf or .otf"},
+		{"a font id with capitals", append(fontsOK(), change{"fonts.Big", map[string]any{"file": "font/B.ttf"}}), "fonts.Big", Error, "is not a font id"},
+		{"a bad hash", append(fontsOK(), change{"fonts.f.sha256", "ABC"}), "fonts.f.sha256", Error, "64 lowercase hex"},
+		{"a font no role uses", append(fontsOK(), change{"fonts.idle", map[string]any{"file": "font/I.ttf"}}), "fonts.idle", Warning, "no role uses"},
+		{"a box in an undefined role", append(fontsOK(), change{title + ".text.font", "saga"}), title + ".text.font", Error, "is not a font role"},
 
 		// parts
 		{"an unknown slot", []change{{"parts.background.slot", "border"}}, "parts.background.slot", Error, "unknown color slot"},
@@ -328,5 +353,48 @@ func TestOverrideKeepsItsConditionAndPatchThroughJSON(t *testing.T) {
 	out, err := o.MarshalJSON()
 	if err != nil || string(out) != `{"condition":"land","rect":{"x":5}}` {
 		t.Errorf("encoded = %s, %v", out, err)
+	}
+}
+
+func TestFontsAndRolesDecode(t *testing.T) {
+	m, ds := Decode(edit(t, func(r map[string]any) {
+		set(t, r, "contract", "1.1")
+		set(t, r, "fonts.script", map[string]any{"file": "font/Script.TTF", "family": "Script", "style": "Regular", "sha256": strings.Repeat("a", 64)})
+		set(t, r, "roles.saga-chapter", map[string]any{"label": "Chapter", "font": "script"})
+		set(t, r, "roles.saga-name", map[string]any{"builtin": "mimic-m15-title"})
+		set(t, r, "roles.title", map[string]any{"builtin": "mimic-m15-info"})
+		set(t, r, "layouts.normal.textBoxes.title.text.font", "saga-chapter")
+	}))
+	if m == nil || ds.HasErrors() {
+		t.Fatalf("manifest %v, diagnostics %v", m != nil, ds)
+	}
+	if len(ds) != 0 {
+		t.Errorf("diagnostics = %v, want none", ds)
+	}
+	if f := m.Fonts["script"]; f.File != "font/Script.TTF" || f.Family != "Script" {
+		t.Errorf("fonts.script = %+v", f)
+	}
+	if r := m.Roles["saga-name"]; r.Builtin != "mimic-m15-title" || r.Font != "" {
+		t.Errorf("roles.saga-name = %+v", r)
+	}
+}
+
+func TestFontsAndRolesStayWithinTheirCaps(t *testing.T) {
+	_, ds := Decode(edit(t, func(r map[string]any) {
+		set(t, r, "contract", "1.1")
+		fonts, roles := map[string]any{}, map[string]any{}
+		for i := range MaxFonts + 1 {
+			fonts[fmt.Sprintf("f%d", i)] = map[string]any{"file": fmt.Sprintf("font/F%d.ttf", i)}
+		}
+		for i := range MaxRoles + 1 {
+			roles[fmt.Sprintf("r%s", strings.Repeat("a", i%30))+fmt.Sprint(i)] = map[string]any{"builtin": "mimic-m15-body"}
+		}
+		set(t, r, "fonts", fonts)
+		set(t, r, "roles", roles)
+	}))
+	for _, path := range []string{"fonts", "roles"} {
+		if d, ok := find(ds, path); !ok || d.Severity != Error || !strings.Contains(d.Message, "over the limit") {
+			t.Errorf("no cap error at %s in %v", path, ds)
+		}
 	}
 }

@@ -99,20 +99,20 @@ Frame templates are built in the
 published there as versioned `.mimic` bundles. The app reads that catalog to
 list what is available and downloads a bundle when you select it.
 
-The engine embeds open-license fonts, so it renders without anything extra. The
-fonts printed on real cards are copyrighted and not redistributed here. If you
-have them, add them in the app under Settings, Fonts. Each font goes to one
-role, and a font added to the wrong role draws in the wrong place, so match the
-file to the role in this table.
+The engine embeds a reproduction of each font printed on real cards, so it
+renders with nothing extra installed. To draw a role with another font, add one
+in the app under Settings, Fonts. Each font goes to one role, and a font added
+to the wrong role draws in the wrong place, so match the file to the role in
+this table.
 
-| Role           | Folder         | Draws                         | Real cards use          | Default when empty   |
-| -------------- | -------------- | ----------------------------- | ----------------------- | -------------------- |
-| Title          | `title/`       | card name, type line, P/T     | Beleren Bold            | Big Shoulders Bold   |
-| Rules          | `body/`        | rules text, copyright line    | MPlantin                | Merriweather Regular |
-| Flavor         | `body-italic/` | flavor text                   | MPlantin Italic         | Merriweather Italic  |
-| Mana           | `mana/`        | mana and other card symbols   | Mana, already included  | Mana                 |
-| Artist         | `type/`        | artist credit, in small caps  | Beleren Small Caps Bold | the Title default    |
-| Collector info | `info/`        | collector number and set code | Gotham Medium           | the Rules default    |
+| Role           | Folder         | Draws                         | Built-in font           |
+| -------------- | -------------- | ----------------------------- | ----------------------- |
+| Title          | `title/`       | card name, type line, P/T     | Beleren Proxy Bold      |
+| Rules          | `body/`        | rules text, copyright line    | Plantin MT Pro          |
+| Flavor         | `body-italic/` | flavor text                   | Plantin MT Pro Italic   |
+| Mana           | `mana/`        | mana and other card symbols   | Mana                    |
+| Artist         | `type/`        | artist credit, in small caps  | Beleren Small Caps Bold |
+| Collector info | `info/`        | collector number and set code | Gotham Medium           |
 
 The app keeps added fonts in a `fonts` folder under the per-OS user config
 directory, one subfolder per role as named above, and Open folder in the same

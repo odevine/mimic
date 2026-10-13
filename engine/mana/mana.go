@@ -217,13 +217,11 @@ type pipKey struct {
 	box  int
 }
 
-// NewSymbols builds the renderer from the mana font in fontDir, or the
-// embedded one. It returns nil when no mana font resolves, which leaves braced
-// codes as their literal characters rather than drawing them in a face that has
-// no icons
-func NewSymbols(fontDir string) *Symbols {
-	sizer := fonts.ResolveFont(fonts.Mana, fontDir)
-	if sizer.Fallback() {
+// NewSymbols builds the renderer from the font of the mana role. It returns nil
+// when no mana font resolves, which leaves braced codes as their literal
+// characters rather than drawing them in a face that has no icons
+func NewSymbols(sizer *fonts.Sizer) *Symbols {
+	if sizer == nil || sizer.Fallback() {
 		return nil
 	}
 	return &Symbols{

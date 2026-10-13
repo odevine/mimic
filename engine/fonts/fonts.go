@@ -1,21 +1,18 @@
-// Package fonts owns font sourcing for the engine. It resolves a role (title,
-// body, mana) to a font.Face through a chain: a font the end user dropped into
-// that role's subfolder of an override directory, then a default compiled into
-// the binary, then a fallback role's default for a role that bundles none, then
-// basicfont.Face7x13 as a last resort.
+// Package fonts owns font sourcing for the engine. A role (title, body, mana,
+// or one a template defines) resolves to a font.Face through a chain: a font
+// the user picked by name from a pool of font files, then the role's own font,
+// which is a built-in one compiled into the binary or one the template bundles,
+// then basicfont.Face7x13 as a last resort.
 //
-// The engine bundles no facsimile of the real Magic fonts. Titles fall back to
-// Big Shoulders and body text to Merriweather, both under the SIL Open Font
-// License, and a user who has obtained Beleren or Plantin supplies them through
-// the override directory.
+// The built-in fonts are reproductions of the fonts printed on Magic cards, so
+// a render looks like a real card with nothing extra installed. A user who
+// prefers another face adds its file to the pool and assigns it to a role.
 package fonts
 
 import (
 	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"golang.org/x/image/font"
@@ -23,90 +20,86 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
-// Role is the part a font plays on a card. A template maps each text box to one
-type Role int
+// Role is the part a font plays on a card. A text box names its role in the
+// manifest, and the role is a plain string so a role is the same thing in a
+// manifest, a settings file, and the code
+type Role string
 
 const (
-	// Title is the card name, type line, and power/toughness, the Beleren role
-	Title Role = iota
-	// Body is rules text, the Plantin role
-	Body
-	// BodyItalic is flavor text, the Plantin italic role
-	BodyItalic
+	// Title is the card name, type line, and power/toughness
+	Title Role = "title"
+	// Body is rules text
+	Body Role = "body"
+	// BodyItalic is flavor text
+	BodyItalic Role = "body-italic"
 	// Mana is every card symbol: mana costs, tap and untap, loyalty, card
 	// types, and watermarks. The Mana font covers all of them in one face
-	Mana
-	// SmallCaps is the artist credit's small-caps face. It bundles no default
-	// and borrows the Title default when the user supplies no font
-	SmallCaps
-	// Info is the sans face for the collector, set, and copyright lines. It
-	// bundles no default and borrows the Body default
-	Info
+	Mana Role = "mana"
+	// SmallCaps is the artist credit's small-caps face
+	SmallCaps Role = "small-caps"
+	// Info is the sans face for the collector, set, and copyright lines
+	Info Role = "info"
 )
 
-// roleNames maps a manifest's Font string to the Role it names, so a text box
-// declares its font role as data rather than a template mapping box names to
-// roles in Go
-var roleNames = map[string]Role{
-	"title":       Title,
-	"body":        Body,
-	"body-italic": BodyItalic,
-	"mana":        Mana,
-	"small-caps":  SmallCaps,
-	"info":        Info,
+// standardRole is what the engine knows about one of the standard roles
+type standardRole struct {
+	// label is how a settings panel names the role
+	label string
+	// builtin is the id of the built-in font the role draws with by default
+	builtin string
 }
 
-// ParseRole resolves a manifest's Font string to the Role it names, reporting
-// false for an empty or unrecognized one, which a caller treats as the body
-// role
+// standardRoles lists the roles every template has, each with a label and the
+// built-in font it defaults to
+var standardRoles = map[Role]standardRole{
+	Title:      {label: "Card name, type line and power/toughness", builtin: "mimic-m15-title"},
+	Body:       {label: "Rules text", builtin: "mimic-m15-body"},
+	BodyItalic: {label: "Flavor text", builtin: "mimic-m15-body-italic"},
+	Mana:       {label: "Mana and other card symbols", builtin: "mimic-m15-mana"},
+	SmallCaps:  {label: "Artist credit", builtin: "mimic-m15-small-caps"},
+	Info:       {label: "Collector number and set code", builtin: "mimic-m15-info"},
+}
+
+// ParseRole resolves a manifest's Font string to the standard role it names,
+// reporting false for an empty or unrecognized one, which a caller treats as
+// the body role
 func ParseRole(name string) (Role, bool) {
-	role, ok := roleNames[name]
+	role := Role(name)
+	_, ok := standardRoles[role]
 	return role, ok
 }
 
 //go:embed embedded
 var embedded embed.FS
 
-// embeddedPath maps a role to its compiled-in default. A role without an entry
-// resolves to the basicfont fallback. The mana face is Mana 1.18.0, whose
-// glyphs live in the private use area rather than at ASCII letters
-var embeddedPath = map[Role]string{
-	Title:      "embedded/title/BigShoulders-Bold.ttf",
-	Body:       "embedded/body/Merriweather-Regular.ttf",
-	BodyItalic: "embedded/body/Merriweather-Italic.ttf",
-	Mana:       "embedded/mana/mana.ttf",
+// Builtin describes one font compiled into the engine. The id is what a role
+// names and is keyed by the role the font fills, not by its file or family, so
+// the font behind an id can change without a template that names it breaking.
+// An id is never renamed or reassigned to another role
+type Builtin struct {
+	ID string
+	// File is the font's path inside the embedded tree
+	File string
 }
 
-// embeddedNames is the family and style each embedded default presents as. The
-// files are static instances cut from variable fonts, and their name tables
-// still carry the source instance's names, such as Big Shoulders Thin for the
-// bold cut
-var embeddedNames = map[string][2]string{
-	"embedded/title/BigShoulders-Bold.ttf":   {"Big Shoulders", "Bold"},
-	"embedded/body/Merriweather-Regular.ttf": {"Merriweather", "Regular"},
-	"embedded/body/Merriweather-Italic.ttf":  {"Merriweather", "Italic"},
-	"embedded/mana/mana.ttf":                 {"Mana", "Regular"},
+// builtins lists every built-in font in presentation order
+var builtins = []Builtin{
+	{ID: "mimic-m15-title", File: "embedded/m15/BelerenProxy-Bold.ttf"},
+	{ID: "mimic-m15-body", File: "embedded/m15/plantin-body.ttf"},
+	{ID: "mimic-m15-body-italic", File: "embedded/m15/plantin-italic.ttf"},
+	{ID: "mimic-m15-small-caps", File: "embedded/m15/Beleren Small Caps.ttf"},
+	{ID: "mimic-m15-info", File: "embedded/m15/Gotham-Medium.otf"},
+	{ID: "mimic-m15-mana", File: "embedded/mana/mana.ttf"},
 }
 
-// roleDir maps a role to its subfolder under the user font directory. A user
-// drops a font into the folder for its role, so no file needs a matching name.
-// A role without an entry has no override folder and always uses its default
-var roleDir = map[Role]string{
-	Title:      "title",
-	Body:       "body",
-	BodyItalic: "body-italic",
-	Mana:       "mana",
-	SmallCaps:  "type",
-	Info:       "info",
-}
-
-// fallbackRole borrows another role's default for a role that bundles no font
-// of its own, so a user who drops in no override still gets a fitting face
-// rather than the bitmap fallback
-var fallbackRole = map[Role]Role{
-	SmallCaps: Title,
-	Info:      Body,
-}
+// builtinFile maps a built-in id to its embedded path
+var builtinFile = func() map[string]string {
+	m := make(map[string]string, len(builtins))
+	for _, b := range builtins {
+		m[b.ID] = b.File
+	}
+	return m
+}()
 
 var (
 	cacheMu   sync.Mutex
@@ -124,55 +117,10 @@ type Sizer struct {
 	fallback bool
 }
 
-// ResolveFont picks the font for role the way Resolve does, the role's subfolder
-// of userDir first, then its embedded default, then the default of a fallback
-// role, then the basicfont fallback, but leaves sizing to Face. An empty userDir
-// skips the override step. It never fails: an unresolvable role yields a Sizer
-// whose Face returns the fallback
-func ResolveFont(role Role, userDir string) *Sizer {
-	f, _ := resolve(role, userDir)
-	if f == nil {
-		return &Sizer{fallback: true}
-	}
-	return &Sizer{font: f}
-}
-
-// resolve walks the resolution chain for role and returns the parsed font, nil
-// for the basicfont fallback, beside a Resolution describing where it came from
-func resolve(role Role, userDir string) (*opentype.Font, Resolution) {
-	res := Resolution{Role: role, Source: SourceFallback}
-	if userDir != "" {
-		files := userFonts(role, userDir)
-		if len(files) > 0 {
-			res.Ignored = files[1:]
-			f, err := fontFromFile(files[0])
-			if err == nil {
-				res.Source, res.Path = SourceUser, files[0]
-				res.Family, res.Style = names(f)
-				return f, res
-			}
-			res.Rejected, res.Err = files[0], err
-		}
-	}
-	for r := role; ; {
-		if path, ok := embeddedPath[r]; ok {
-			if f, err := fontFromEmbedded(path); err == nil {
-				res.Source, res.Path = SourceDefault, path
-				if r != role {
-					res.Source = SourceBorrowed
-				}
-				res.Family, res.Style = embeddedNames[path][0], embeddedNames[path][1]
-				return f, res
-			}
-		}
-		next, ok := fallbackRole[r]
-		if !ok {
-			break
-		}
-		r = next
-	}
-	return nil, res
-}
+// Default returns the built-in font of a standard role with no template or
+// override in play, or a Sizer on the basicfont fallback for a role the engine
+// does not know
+func Default(role Role) *Sizer { return NewResolver(nil, nil, nil).Font(role) }
 
 // Fallback reports whether Face returns basicfont.Face7x13, so a caller can
 // decide whether to normalize text for that limited face
@@ -185,17 +133,6 @@ func (s *Sizer) Face(size float64) (font.Face, error) {
 		return basicfont.Face7x13, nil
 	}
 	return newFace(s.font, size)
-}
-
-// Resolve returns a face for role at the given point size. It tries the role's
-// subfolder of userDir first, then the embedded default, then basicfont.Face7x13.
-// The bool is true only when the basicfont fallback was used, so a caller can
-// decide whether to normalize text for that limited face. An empty userDir
-// skips the override step
-func Resolve(role Role, userDir string, size float64) (font.Face, bool, error) {
-	s := ResolveFont(role, userDir)
-	face, err := s.Face(size)
-	return face, s.fallback, err
 }
 
 // fontFromFile parses a user font, caching it under its path, size, and
@@ -273,38 +210,4 @@ func newFace(f *opentype.Font, size float64) (font.Face, error) {
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
-}
-
-// findUserFont returns the first .ttf or .otf in role's subfolder of dir, or ""
-// when the folder is absent or holds no font. One folder per role means the
-// dropped file keeps its own name
-func findUserFont(role Role, dir string) string {
-	if files := userFonts(role, dir); len(files) > 0 {
-		return files[0]
-	}
-	return ""
-}
-
-// userFonts lists every .ttf or .otf in role's subfolder of dir in directory
-// order. The first is the one used, and the rest are reported as ignored
-func userFonts(role Role, dir string) []string {
-	sub, ok := roleDir[role]
-	if !ok {
-		return nil
-	}
-	folder := filepath.Join(dir, sub)
-	entries, err := os.ReadDir(folder)
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".ttf" || ext == ".otf" {
-			out = append(out, filepath.Join(folder, e.Name()))
-		}
-	}
-	return out
 }

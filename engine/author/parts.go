@@ -77,6 +77,16 @@ func (s *assetStore) put(data []byte) string {
 	return name
 }
 
+// putAt keeps a file that is named by its own path, such as a font
+func (s *assetStore) putAt(name string, data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.files == nil {
+		s.files = map[string][]byte{}
+	}
+	s.files[name] = data
+}
+
 // packPart cuts a part's images to the rectangle that holds the visible pixels of
 // all of them and stores them. It returns the part with the new paths and origin,
 // and the offset of the cut, which an entry that places the part itself needs. The

@@ -22,6 +22,10 @@ var (
 	valueRe    = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 	keyRe      = regexp.MustCompile(`^[a-z0-9_]+$`)
 	colorRe    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+	roleRe     = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
+	fontIDRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+	fontFileRe = regexp.MustCompile(`^font/[A-Za-z0-9][A-Za-z0-9 ._-]*\.(?i:ttf|otf)$`)
+	sha256Re   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 // colorKeys are the material keys a part that reads a frame color can hold
@@ -80,6 +84,7 @@ func (v *validator) manifest() {
 	for _, name := range sortedKeys(m.Parts) {
 		v.part("parts."+name, name, m.Parts[name])
 	}
+	v.fonts()
 	if len(m.Layouts) == 0 {
 		v.c.errorf("layouts", "the template has no layouts")
 	}
@@ -97,6 +102,75 @@ func (v *validator) manifest() {
 	}
 }
 
+// fonts checks the fonts a template bundles and the roles it defines
+func (v *validator) fonts() {
+	m := v.m
+	if (len(m.Fonts) > 0 || len(m.Roles) > 0) && !contractAtLeast(m.Contract, 1) {
+		v.c.errorf("contract", "fonts and roles need contract 1.1 or newer, and this is %s", m.Contract)
+	}
+	used := map[string]bool{}
+	for _, name := range sortedKeys(m.Roles) {
+		r := m.Roles[name]
+		path := "roles." + name
+		if !roleRe.MatchString(name) {
+			v.c.errorf(path, "%q is not a role name, which is lowercase letters, digits, and hyphens starting with a letter", name)
+		}
+		if len(r.Label) > 80 {
+			v.c.errorf(path+".label", "is over 80 characters")
+		}
+		switch {
+		case r.Font != "" && r.Builtin != "":
+			v.c.errorf(path, "names both a font and a built-in font, and has to name one")
+		case r.Font != "":
+			used[r.Font] = true
+			if _, ok := m.Fonts[r.Font]; !ok {
+				v.c.errorf(path+".font", "the template bundles no font %q", r.Font)
+			}
+		case r.Builtin != "":
+			if !fonts.IsBuiltin(r.Builtin) {
+				v.c.errorf(path+".builtin", "%q is not a built-in font", r.Builtin)
+			}
+		default:
+			v.c.errorf(path, "names no font, so give it a font or a built-in font")
+		}
+	}
+	files := map[string]string{}
+	for _, id := range sortedKeys(m.Fonts) {
+		f := m.Fonts[id]
+		path := "fonts." + id
+		if !fontIDRe.MatchString(id) {
+			v.c.errorf(path, "%q is not a font id, which is lowercase letters, digits, hyphens, and underscores", id)
+		}
+		switch {
+		case len(f.File) > MaxPathBytes:
+			v.c.errorf(path+".file", "is over %d bytes", MaxPathBytes)
+		case !fontFileRe.MatchString(f.File):
+			v.c.errorf(path+".file", "%q is not a .ttf or .otf file directly in font/", f.File)
+		}
+		if other, dup := files[f.File]; dup && f.File != "" {
+			v.c.warnf(path+".file", "is also the file of %s", other)
+		}
+		files[f.File] = id
+		if f.SHA256 != "" && !sha256Re.MatchString(f.SHA256) {
+			v.c.errorf(path+".sha256", "is not 64 lowercase hex digits")
+		}
+		if !used[id] {
+			v.c.warnf(path, "no role uses the font")
+		}
+	}
+}
+
+// contractAtLeast reports whether a contract version has at least the given minor
+// of the current major
+func contractAtLeast(contract string, minor int) bool {
+	match := contractRe.FindStringSubmatch(contract)
+	if match == nil {
+		return false
+	}
+	got, _ := strconv.Atoi(match[2])
+	return got >= minor
+}
+
 func (v *validator) caps() {
 	m := v.m
 	check := func(path string, n, limit int) {
@@ -107,6 +181,8 @@ func (v *validator) caps() {
 	check("parts", len(m.Parts), MaxParts)
 	check("layouts", len(m.Layouts), MaxLayouts)
 	check("features", len(m.Features), MaxFeatures)
+	check("fonts", len(m.Fonts), MaxFonts)
+	check("roles", len(m.Roles), MaxRoles)
 }
 
 func (v *validator) feature(path, name string, f Feature) {
@@ -542,8 +618,9 @@ func (v *validator) boxFields(path string, b *TextBox) {
 		v.c.errorf(tp+".minFontSize", "%g is not from 0 to the font size %g", t.MinFontSize, t.FontSize)
 	}
 	if t.Font != "" {
-		if _, ok := fonts.ParseRole(t.Font); !ok {
-			v.c.errorf(tp+".font", "%q is not a font role", t.Font)
+		_, standard := fonts.ParseRole(t.Font)
+		if _, defined := v.m.Roles[t.Font]; !standard && !defined {
+			v.c.errorf(tp+".font", "%q is not a font role, which is a standard one or one the template defines in roles", t.Font)
 		}
 	}
 	if t.Color != "" && !colorRe.MatchString(t.Color) {

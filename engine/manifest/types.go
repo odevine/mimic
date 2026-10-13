@@ -15,8 +15,9 @@ import (
 
 // Contract is the version of the resolved form this package reads, as MAJOR.MINOR.
 // A manifest with a different major is refused, and one with a newer minor loads
-// with a warning because a minor release only adds optional fields
-const Contract = "1.0"
+// with a warning because a minor release only adds optional fields. Minor 1 added
+// the fonts and roles tables
+const Contract = "1.1"
 
 // Manifest is a template as the engine reads it
 type Manifest struct {
@@ -32,6 +33,40 @@ type Manifest struct {
 	Parts    map[string]Part    `json:"parts"`
 	Layouts  map[string]Layout  `json:"layouts"`
 	Features map[string]Feature `json:"features,omitempty"`
+	// Fonts is the font files the template bundles, by an id local to the
+	// template. A template that uses only the engine's built-in fonts has none
+	Fonts map[string]FontFile `json:"fonts,omitempty"`
+	// Roles is the text roles the template defines, by the name a text box uses.
+	// The standard roles exist without an entry here, and an entry redefines one
+	Roles map[string]FontRole `json:"roles,omitempty"`
+}
+
+// FontFile is a font a template bundles
+type FontFile struct {
+	// File is the font's path in the bundle, a .ttf or .otf directly in "font/"
+	File string `json:"file"`
+	// Family and Style are what the font is called, shown in a settings panel.
+	// Empty reads them from the font's own name table
+	Family string `json:"family,omitempty"`
+	Style  string `json:"style,omitempty"`
+	// SHA256 is the lowercase hex hash of the file. A file that does not match it
+	// is refused
+	SHA256 string `json:"sha256,omitempty"`
+	// Source and License say where the font comes from and under what terms
+	Source  string `json:"source,omitempty"`
+	License string `json:"license,omitempty"`
+}
+
+// FontRole is a text role and the font it draws with. Exactly one of Font and
+// Builtin is set
+type FontRole struct {
+	// Label is how a settings panel names the role. Empty is the role's name
+	Label string `json:"label,omitempty"`
+	// Font is a key of the template's Fonts
+	Font string `json:"font,omitempty"`
+	// Builtin is the id of a font that ships with the engine, such as
+	// "mimic-m15-title"
+	Builtin string `json:"builtin,omitempty"`
 }
 
 // Author is who made the template
@@ -240,8 +275,9 @@ type Rect struct {
 // TextStyle is how a box's text looks
 type TextStyle struct {
 	FontSize float64 `json:"fontSize"`
-	// Font is the font role: "title", "body", "body-italic", "mana", "small-caps",
-	// or "info". Empty is body
+	// Font is the font role: one of the standard ones, "title", "body",
+	// "body-italic", "mana", "small-caps", or "info", or one the template defines
+	// in Roles. Empty is body
 	Font  string `json:"font,omitempty"`
 	Color string `json:"color,omitempty"`
 	// Align is "left", "center", or "right". Empty is left

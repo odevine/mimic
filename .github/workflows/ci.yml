@@ -9,6 +9,26 @@ permissions:
   contents: read
 
 jobs:
+  # The ui jobs build against the engine release pinned in ui/go.mod, so a pull
+  # request that touches nothing but engine/ cannot change their result. A job
+  # skipped by its condition counts as passing for a required check
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.ui == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            ui:
+              - 'ui/**'
+              - 'assets/**'
+              - '.github/workflows/ci.yml'
+
   test:
     runs-on: ubuntu-latest
     defaults:
@@ -47,6 +67,8 @@ jobs:
   # and their tests. It builds and tests without cgo, so it runs on one Linux
   # runner and cross-compiles to every target
   ui-core:
+    if: needs.changes.outputs.ui == 'true'
+    needs: changes
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -120,6 +142,8 @@ jobs:
   # runner (see update-visual-baselines.yml). A failure leaves the report and the
   # traces behind, with the images that differed
   ui-e2e:
+    if: needs.changes.outputs.ui == 'true'
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -182,6 +206,8 @@ jobs:
   # --smoke to prove the window, the bridge, the image routes and a few scripted
   # flows work in the platform's own webview
   ui-desktop:
+    if: needs.changes.outputs.ui == 'true'
+    needs: changes
     name: ui-desktop (${{ matrix.os }})
     strategy:
       fail-fast: false

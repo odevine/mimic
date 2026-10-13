@@ -23,6 +23,8 @@ const (
 	MaxStack     = 128
 	MaxTextBoxes = 64
 	MaxFeatures  = 32
+	MaxFonts     = 32
+	MaxRoles     = 64
 	MaxPathBytes = 255
 )
 

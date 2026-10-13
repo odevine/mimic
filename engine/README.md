@@ -44,8 +44,9 @@ go run ./cmd/rendercard -name "Lightning Bolt" -o bolt.png
 
 With no `-assets` directory it generates placeholder frame layers, so the command
 runs without a local asset set. Point `-assets` at a real template directory for
-finished frames, and `-fonts` at a directory of font overrides. `-face 1` renders
-a double-faced card's back face with its own art.
+finished frames. `-fonts` names a directory of font files and `-font` draws a role
+with one of them, as in `-font title="Gotham Medium"`. `-face 1` renders a
+double-faced card's back face with its own art.
 
 Engine releases are Go module tags and carry no prebuilt binaries. To install
 the command outside a checkout, use `go install` instead:

@@ -38,14 +38,14 @@ func TestRolesCoverEveryFolder(t *testing.T) {
 			t.Errorf("Roles() name %q does not parse back to its role", info.Name)
 		}
 	}
-	if roles[4].Name != "small-caps" || roles[4].Borrows != "title" {
-		t.Errorf("small-caps entry = %+v, want it to borrow title", roles[4])
+	if roles[4].Name != "small-caps" || roles[4].Builtin != "mimic-m15-small-caps" || roles[4].Label == "" {
+		t.Errorf("small-caps entry = %+v, want its own built-in font and a label", roles[4])
 	}
 }
 
 func TestInspectSources(t *testing.T) {
 	dir := t.TempDir()
-	path := writeRoleFont(t, dir, Title, "Mine.ttf", "embedded/body/Merriweather-Regular.ttf")
+	path := writeRoleFont(t, dir, Title, "Mine.ttf", "embedded/m15/plantin-body.ttf")
 
 	user := Inspect(Title, dir)
 	if user.Source != SourceUser || user.Path != path {
@@ -54,13 +54,13 @@ func TestInspectSources(t *testing.T) {
 	if user.Family == "" || user.Style != "Regular" {
 		t.Errorf("Title names = %q %q, want a family and Regular from the name table", user.Family, user.Style)
 	}
-	if def := Inspect(Body, dir); def.Source != SourceDefault || def.Family != "Merriweather" {
-		t.Errorf("Body = %s %q, want the Merriweather default", def.Source, def.Family)
+	if def := Inspect(Body, dir); def.Source != SourceDefault || def.Family == "" {
+		t.Errorf("Body = %s %q, want the built-in default", def.Source, def.Family)
 	}
-	if b := Inspect(Info, dir); b.Source != SourceBorrowed || b.Family != "Merriweather" {
-		t.Errorf("Info = %s %q, want the borrowed Merriweather default", b.Source, b.Family)
+	if def := Inspect(Info, dir); def.Source != SourceDefault || def.Path != "embedded/m15/Gotham-Medium.otf" {
+		t.Errorf("Info = %s %q, want its own built-in font", def.Source, def.Path)
 	}
-	if f := Inspect(Role(-1), dir); f.Source != SourceFallback {
+	if f := Inspect(Role("no-such-role"), dir); f.Source != SourceFallback {
 		t.Errorf("unknown role source = %s, want fallback", f.Source)
 	}
 }
@@ -75,7 +75,7 @@ func TestInspectReportsRejectedAndIgnored(t *testing.T) {
 	if err := os.WriteFile(bad, []byte("not a font"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	extra := writeRoleFont(t, dir, Body, "b-extra.ttf", "embedded/body/Merriweather-Regular.ttf")
+	extra := writeRoleFont(t, dir, Body, "b-extra.ttf", "embedded/m15/plantin-body.ttf")
 
 	res := Inspect(Body, dir)
 	if res.Source != SourceDefault {
@@ -91,11 +91,11 @@ func TestInspectReportsRejectedAndIgnored(t *testing.T) {
 
 func TestReplacedFileIsReparsed(t *testing.T) {
 	dir := t.TempDir()
-	path := writeRoleFont(t, dir, Title, "Font.ttf", "embedded/body/Merriweather-Regular.ttf")
+	path := writeRoleFont(t, dir, Title, "Font.ttf", "embedded/m15/plantin-body.ttf")
 	if got := Inspect(Title, dir).Style; got != "Regular" {
 		t.Fatalf("style = %q, want Regular", got)
 	}
-	writeRoleFont(t, dir, Title, "Font.ttf", "embedded/body/Merriweather-Italic.ttf")
+	writeRoleFont(t, dir, Title, "Font.ttf", "embedded/m15/plantin-italic.ttf")
 	// Some filesystems keep coarse modification times, so force a distinct one
 	later := time.Now().Add(time.Minute)
 	if err := os.Chtimes(path, later, later); err != nil {
@@ -103,13 +103,5 @@ func TestReplacedFileIsReparsed(t *testing.T) {
 	}
 	if got := Inspect(Title, dir).Style; got != "Italic" {
 		t.Errorf("style after replacing = %q, want Italic", got)
-	}
-}
-
-func TestEmbeddedNamesCoverEveryDefault(t *testing.T) {
-	for role, path := range embeddedPath {
-		if n, ok := embeddedNames[path]; !ok || n[0] == "" || n[1] == "" {
-			t.Errorf("role %s default %s has no display name", role, path)
-		}
 	}
 }

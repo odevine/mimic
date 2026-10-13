@@ -11,38 +11,32 @@ type RoleInfo struct {
 	Role Role
 	// Name is the manifest name a text box uses for the role, as ParseRole reads it
 	Name string
+	// Label is how a settings panel names the role
+	Label string
 	// Folder is the role's subfolder under a font override directory
 	Folder string
-	// Borrows is the manifest name of the role whose default this one uses
-	// when it bundles none, or "" when it has a default of its own
-	Borrows string
+	// Builtin is the id of the built-in font the role draws with by default
+	Builtin string
 }
 
 // roleOrder lists every role in the order a caller should present them
 var roleOrder = []Role{Title, Body, BodyItalic, Mana, SmallCaps, Info}
 
-// Roles returns every role with an override folder, in presentation order
+// Roles returns every standard role, in presentation order
 func Roles() []RoleInfo {
 	out := make([]RoleInfo, 0, len(roleOrder))
 	for _, r := range roleOrder {
-		info := RoleInfo{Role: r, Name: r.String(), Folder: roleDir[r]}
-		if fb, ok := fallbackRole[r]; ok {
-			info.Borrows = fb.String()
-		}
-		out = append(out, info)
+		def := standardRoles[r]
+		out = append(out, RoleInfo{Role: r, Name: r.String(), Label: def.label, Folder: roleDir[r], Builtin: def.builtin})
 	}
 	return out
 }
 
-// String returns the role's manifest name, or "" for a role with none
-func (r Role) String() string {
-	for name, role := range roleNames {
-		if role == r {
-			return name
-		}
-	}
-	return ""
-}
+// String returns the role's manifest name
+func (r Role) String() string { return string(r) }
+
+// Builtins returns every built-in font in presentation order
+func Builtins() []Builtin { return append([]Builtin(nil), builtins...) }
 
 // Source is where a role's resolved font came from
 type Source string
@@ -50,11 +44,8 @@ type Source string
 const (
 	// SourceUser is a font from the role's subfolder of the override directory
 	SourceUser Source = "user"
-	// SourceDefault is the role's own embedded default
+	// SourceDefault is the role's built-in font
 	SourceDefault Source = "default"
-	// SourceBorrowed is the embedded default of a fallback role, used by a role
-	// that bundles none of its own
-	SourceBorrowed Source = "borrowed"
 	// SourceFallback is basicfont.Face7x13, used when nothing else resolved
 	SourceFallback Source = "fallback"
 )

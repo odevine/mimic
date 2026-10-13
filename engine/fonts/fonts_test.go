@@ -9,43 +9,77 @@ import (
 )
 
 func TestResolveEmbeddedRoles(t *testing.T) {
-	// Roles with an embedded default resolve without hitting the fallback.
-	for _, role := range []Role{Title, Body, BodyItalic, Mana} {
-		face, fallback, err := Resolve(role, "", 24)
+	// Every standard role resolves to its built-in font without hitting the
+	// fallback.
+	for _, info := range Roles() {
+		face, fallback, err := Resolve(info.Role, "", 24)
 		if err != nil {
-			t.Errorf("Resolve(role %d): %v", role, err)
+			t.Errorf("Resolve(%s): %v", info.Role, err)
 			continue
 		}
 		if fallback {
-			t.Errorf("role %d used the basicfont fallback, want embedded default", role)
+			t.Errorf("role %s used the basicfont fallback, want its built-in font", info.Role)
 		}
 		if face == nil {
-			t.Errorf("role %d returned a nil face", role)
+			t.Errorf("role %s returned a nil face", info.Role)
 		}
 	}
 }
 
-func TestResolveBorrowsFallbackRole(t *testing.T) {
-	// SmallCaps and Info bundle no default of their own, so with no override
-	// they borrow a fallback role's default rather than the bitmap face.
-	for _, role := range []Role{SmallCaps, Info} {
-		if _, ok := embeddedPath[role]; ok {
-			t.Errorf("role %d unexpectedly has its own embedded default", role)
-		}
-		_, fallback, err := Resolve(role, "", 24)
+func TestBuiltinNamesAreStable(t *testing.T) {
+	// A template names a built-in by id, so each id must keep drawing the same
+	// font. The family and style come from the font's own name table.
+	want := map[string][2]string{
+		"mimic-m15-title":       {"Beleren Proxy", "Bold"},
+		"mimic-m15-body":        {"Plantin MT Pro", "Regular"},
+		"mimic-m15-body-italic": {"Plantin MT Pro", "Italic"},
+		"mimic-m15-small-caps":  {"Beleren Small Caps", "Bold"},
+		"mimic-m15-info":        {"Gotham", "Medium"},
+		"mimic-m15-mana":        {"Mana", "Regular"},
+	}
+	if len(Builtins()) != len(want) {
+		t.Errorf("%d built-ins, want %d", len(Builtins()), len(want))
+	}
+	for _, b := range Builtins() {
+		f, err := fontFromEmbedded(b.File)
 		if err != nil {
-			t.Errorf("Resolve(role %d): %v", role, err)
+			t.Errorf("%s: %v", b.ID, err)
 			continue
 		}
-		if fallback {
-			t.Errorf("role %d used the basicfont fallback, want a borrowed default", role)
+		if family, style := names(f); [2]string{family, style} != want[b.ID] {
+			t.Errorf("%s = %q %q, want %q", b.ID, family, style, want[b.ID])
+		}
+	}
+}
+
+func TestBuiltinsAreComplete(t *testing.T) {
+	// Each built-in id is unique, its file is embedded and parses, and every
+	// standard role names a built-in that exists.
+	seen := map[string]bool{}
+	for _, b := range Builtins() {
+		if seen[b.ID] {
+			t.Errorf("built-in id %q is listed twice", b.ID)
+		}
+		seen[b.ID] = true
+		f, err := fontFromEmbedded(b.File)
+		if err != nil {
+			t.Errorf("built-in %q (%s): %v", b.ID, b.File, err)
+			continue
+		}
+		if family, style := names(f); family == "" || style == "" {
+			t.Errorf("built-in %q has no family or style in its name table", b.ID)
+		}
+	}
+	for _, info := range Roles() {
+		if !seen[info.Builtin] {
+			t.Errorf("role %s names built-in %q, which does not exist", info.Role, info.Builtin)
 		}
 	}
 }
 
 func TestResolveUnknownRoleFallsBack(t *testing.T) {
-	// A role with no embedded default falls back to basicfont.
-	face, fallback, err := Resolve(Role(-1), "", 24)
+	// A role the engine does not know falls back to basicfont.
+	face, fallback, err := Resolve(Role("no-such-role"), "", 24)
 	if err != nil {
 		t.Fatalf("Resolve(unknown role): %v", err)
 	}
@@ -58,10 +92,10 @@ func TestResolveUnknownRoleFallsBack(t *testing.T) {
 }
 
 func TestResolvePrefersUserOverride(t *testing.T) {
-	// A font dropped into the Title role folder is used ahead of the embedded
-	// default, whatever its filename. Any real font file stands in for Beleren.
+	// A font dropped into the Title role folder is used ahead of the built-in
+	// font, whatever its filename. Any real font file stands in for Beleren.
 	dir := t.TempDir()
-	src, err := embedded.ReadFile("embedded/body/Merriweather-Regular.ttf")
+	src, err := embedded.ReadFile("embedded/m15/plantin-body.ttf")
 	if err != nil {
 		t.Fatalf("reading embedded font: %v", err)
 	}
@@ -112,7 +146,7 @@ func TestSizerBuildsFacesPerSize(t *testing.T) {
 	// bigger size has a taller line height.
 	s := ResolveFont(Body, "")
 	if s.Fallback() {
-		t.Fatal("Body resolved to the basicfont fallback, want the embedded font")
+		t.Fatal("Body resolved to the basicfont fallback, want the built-in font")
 	}
 	small, err := s.Face(12)
 	if err != nil {
@@ -129,7 +163,7 @@ func TestSizerBuildsFacesPerSize(t *testing.T) {
 }
 
 func TestSizerFallbackFace(t *testing.T) {
-	s := ResolveFont(Role(-1), "")
+	s := ResolveFont(Role("no-such-role"), "")
 	if !s.Fallback() {
 		t.Error("an unmapped role should report the basicfont fallback")
 	}
@@ -151,7 +185,7 @@ func TestManaFaceHasPrivateUseGlyphs(t *testing.T) {
 		t.Fatalf("Resolve(Mana): %v", err)
 	}
 	if fallback {
-		t.Fatal("Mana resolved to the basicfont fallback, want the embedded font")
+		t.Fatal("Mana resolved to the basicfont fallback, want the built-in font")
 	}
 	for _, tc := range []struct {
 		r    rune

@@ -216,12 +216,13 @@ engine version it stamps is the release the module pins. Each system packages
 only itself, because the webview needs the system's own toolchain. macOS makes a
 universal `.dmg` and `.zip`. Windows needs
 [NSIS](https://nsis.sourceforge.io) for `makensis`, takes `ARCH=amd64` or
-`ARCH=arm64`, and makes a per-user installer and a portable `.zip`. Linux makes
-a Flatpak bundle, a `.deb` and an `.rpm` for its own architecture. The Flatpak
+`ARCH=arm64` (releases ship amd64 only, which a Windows Arm PC runs under
+emulation), and makes a per-user installer and a portable `.zip`. Linux makes
+a Flatpak bundle and a `.deb`. The Flatpak
 step needs `flatpak` and `flatpak-builder`, and installs the GNOME runtime and
 SDK from Flathub when it runs.
 
-`.github/workflows/package-ui.yml` runs all five on native runners. A release
+`.github/workflows/package-ui.yml` runs all three on native runners. A release
 calls it to publish, and a manual run, the weekly run and any pull request that
 touches `ui/build` call it without publishing, which leaves the files as
 workflow artifacts.

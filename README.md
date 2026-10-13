@@ -22,8 +22,8 @@ release, written here with `<version>` standing in for it.
 | System  | Download                                                                                          |
 | ------- | ------------------------------------------------------------------------------------------------- |
 | macOS   | `mimic-<version>-macos-universal.dmg`, for Apple silicon and Intel                                |
-| Windows | `mimic-<version>-windows-amd64-installer.exe`, or `windows-arm64` on an Arm PC                    |
-| Linux   | `mimic-<version>-linux-amd64.flatpak` or `linux-arm64`, or the `.deb` or `.rpm` for your package manager |
+| Windows | `mimic-<version>-windows-amd64-installer.exe`, which also runs on an Arm PC                       |
+| Linux   | `mimic-<version>-linux-amd64.flatpak`, or the `.deb` for your package manager                     |
 
 The releases are not code signed yet, so each system warns before it opens one.
 On macOS, drag mimic to Applications, then open it with a right click and
@@ -34,15 +34,15 @@ More info, then Run anyway. The installer puts mimic in your own folder, so it
 asks for no administrator rights, and it installs the WebView2 runtime if
 Windows lacks it. On Linux, install the Flatpak bundle with
 `flatpak install --user mimic-<version>-linux-amd64.flatpak`, which pulls the GNOME
-runtime from Flathub if it is missing. The `.deb` and `.rpm` need GTK 3 and
-WebKitGTK 4.1, which they ask your package manager for.
+runtime from Flathub if it is missing. The `.deb` needs GTK 3 and
+WebKitGTK 4.1, which it asks your package manager for.
 
 Every release lists the SHA-256 of each file in `SHA256SUMS`, so you can check a
 download with `sha256sum -c SHA256SUMS --ignore-missing`.
 
 mimic looks for a newer release when it starts, at most once a day, and offers it
 in the top bar. Nothing downloads until you choose to install it. A Windows
-portable `.zip` updates in place. A Flatpak, `.deb` or `.rpm` install shows the
+portable `.zip` updates in place. A Flatpak or `.deb` install shows the
 release page instead, since Flatpak or your package manager owns those files, and
 a Flatpak updates by installing the newer bundle over it. The check can be turned off in Settings.
 

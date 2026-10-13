@@ -1,8 +1,9 @@
 name: Package ui
 
 # Builds the app natively on each operating system and packages what a release
-# ships: a dmg and zip on macOS, an installer and zip on Windows for both
-# architectures, and a Flatpak bundle, deb and rpm on Linux for both. The release
+# ships: a dmg and zip on macOS, an installer and zip on Windows, and a Flatpak
+# bundle and deb on Linux. Windows and Linux are amd64 only, and a Windows Arm PC
+# runs the amd64 build under emulation. The release
 # workflow calls it with publish on, which attaches the files to the release. A
 # manual run, the weekly run and a pull request that touches the packaging call
 # it with publish off, which leaves the files as workflow artifacts, so the
@@ -65,15 +66,10 @@ jobs:
           - leg: windows-amd64
             runner: windows-latest
             arch: amd64
-          - leg: windows-arm64
-            runner: windows-latest
-            arch: arm64
           # Linux builds on the oldest supported Ubuntu, so the binary links
           # against an older glibc and runs on newer distributions
           - leg: linux-amd64
             runner: ubuntu-22.04
-          - leg: linux-arm64
-            runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     defaults:
@@ -147,7 +143,6 @@ jobs:
           path: |
             ui/bin/mimic-*
             ui/bin/mimic_*.deb
-            ui/bin/mimic-*.rpm
 
   # Every expected file is there, and SHA256SUMS covers all of them. The updater
   # checks a download against that list, so a release without it offers no update
@@ -185,14 +180,8 @@ jobs:
             mimic-${v}-macos-universal.zip
             mimic-${v}-windows-amd64-installer.exe
             mimic-${v}-windows-amd64.zip
-            mimic-${v}-windows-arm64-installer.exe
-            mimic-${v}-windows-arm64.zip
             mimic-${v}-linux-amd64.flatpak
-            mimic_${v}_amd64.deb
-            mimic-${v}.x86_64.rpm
-            mimic-${v}-linux-arm64.flatpak
-            mimic_${v}_arm64.deb
-            mimic-${v}.aarch64.rpm"
+            mimic_${v}_amd64.deb"
           missing=0
           for f in $expected; do
             if [ ! -f "dist/$f" ]; then

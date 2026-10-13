@@ -121,6 +121,13 @@ func TestPickChoosesTheUpdaterArtifactNotTheInstaller(t *testing.T) {
 			t.Errorf("%s/%s picked %v, want %s", c.goos, c.goarch, got, c.want)
 		}
 	}
+	amd64Only := []Asset{{Name: "mimic-1.0.0-windows-amd64.zip"}, {Name: "mimic-1.0.0-linux-amd64.flatpak"}}
+	if got := Pick(amd64Only, "windows", "arm64"); got == nil || got.Name != "mimic-1.0.0-windows-amd64.zip" {
+		t.Errorf("a Windows Arm PC picked %v, want the amd64 zip", got)
+	}
+	if got := Pick(amd64Only, "linux", "arm64"); got != nil {
+		t.Errorf("a Linux arm64 machine picked %s, want nothing", got.Name)
+	}
 	if Pick(nil, "darwin", "arm64") != nil {
 		t.Error("a release with no files offered an update")
 	}

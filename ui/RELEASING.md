@@ -8,7 +8,7 @@ installers that a packaging run builds.
 ## Before a release
 
 Run the packaging workflow on the release commit (Actions, package-ui, Run
-workflow, publish left off). It builds all five installers and uploads them as
+workflow, publish left off). It builds all three installers and uploads them as
 workflow artifacts. Install from those files on each system, not from a local
 build, and work through the list below.
 
@@ -52,7 +52,7 @@ All systems:
 
 On Windows the installer must run without administrator rights and add the WebView2
 runtime on a machine that lacks it. On Linux, check the Flatpak bundle (it installs, launches and renders a card, and its
-file dialogs open), the `.deb` and the `.rpm`, and that a package-managed install offers the release page for an
+file dialogs open), and the `.deb`, and that a package-managed install offers the release page for an
 update instead of replacing itself.
 
 ## Throughput

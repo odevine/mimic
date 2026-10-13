@@ -153,13 +153,13 @@ func TestRenameMovesAndCopies(t *testing.T) {
 func TestLinuxNamesGivesTheReleaseNames(t *testing.T) {
 	dir := t.TempDir()
 	stage := filepath.Join(dir, "stage")
-	for _, f := range []string{"mimic-x86_64.flatpak", "mimic_1.0.0_amd64.deb", "mimic-1.0.0-1.x86_64.rpm"} {
+	for _, f := range []string{"mimic-x86_64.flatpak", "mimic_1.0.0_amd64.deb"} {
 		write(t, filepath.Join(stage, f), f)
 	}
 	if err := linuxNames(stage, dir, "1.0.0", "amd64"); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"mimic-1.0.0-linux-amd64.flatpak", "mimic_1.0.0_amd64.deb", "mimic-1.0.0.x86_64.rpm"} {
+	for _, want := range []string{"mimic-1.0.0-linux-amd64.flatpak", "mimic_1.0.0_amd64.deb"} {
 		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
 			t.Errorf("missing %s", want)
 		}

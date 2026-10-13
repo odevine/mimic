@@ -1,5 +1,5 @@
 # The Flatpak bundle. It installs the binary the build task already made, so the
-# bundle runs the same GTK 3 and WebKitGTK 4.1 build the deb and rpm do, against
+# bundle runs the same GTK 3 and WebKitGTK 4.1 build the deb does, against
 # the GNOME runtime's copies of those libraries. Paths are relative to this file
 app-id: io.github.odevine.mimic
 runtime: org.gnome.Platform

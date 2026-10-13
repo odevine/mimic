@@ -4,7 +4,7 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>Mimic</string>
+            <string>mimic</string>
         <key>CFBundleExecutable</key>
             <string>mimic</string>
         <key>CFBundleIdentifier</key>

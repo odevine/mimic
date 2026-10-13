@@ -6,7 +6,7 @@ import { test, expect } from "../../fixtures.mjs";
 
 test("with no newer release the app says it is up to date", async ({ settings }) => {
   await settings.show();
-  await expect(settings.updateVersion).toHaveText("Mimic 1.0.0");
+  await expect(settings.updateVersion).toHaveText("mimic 1.0.0");
   await settings.updateCheck.click();
   await expect(settings.updateSummary).toContainText(/up to date/i);
   await expect(settings.updateAction).toBeHidden();
@@ -22,7 +22,7 @@ test("a newer release is offered with its notes and opens its page", async ({ se
   await expect(settings.updateNotes).toBeVisible();
   await expect(settings.updateNotes).toContainText("Fixes the other thing");
   await expect(settings.strip).toBeVisible();
-  await expect(settings.stripText).toHaveText("Mimic 1.1.0 is available");
+  await expect(settings.stripText).toHaveText("mimic 1.1.0 is available");
 
   await settings.updateAction.click();
   await expect.poll(async () => (await scratch.events()).filter(([kind]) => kind === "url").map(([, link]) => link)).toContain(

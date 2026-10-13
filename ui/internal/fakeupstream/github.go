@@ -25,11 +25,11 @@ type Release struct {
 func installer(version string) string {
 	switch runtime.GOOS {
 	case "darwin":
-		return "Mimic-" + version + "-macos-universal.zip"
+		return "mimic-" + version + "-macos-universal.zip"
 	case "windows":
-		return "Mimic-" + version + "-windows-" + runtime.GOARCH + ".zip"
+		return "mimic-" + version + "-windows-" + runtime.GOARCH + ".zip"
 	default:
-		return "Mimic-" + version + "-linux-" + runtime.GOARCH + ".AppImage"
+		return "mimic-" + version + "-linux-" + runtime.GOARCH + ".AppImage"
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *Server) githubAPI(w http.ResponseWriter, r *http.Request) {
 	sums := hex.EncodeToString(sum[:]) + "  " + name + "\n"
 	writeJSON(w, http.StatusOK, []any{map[string]any{
 		"tag_name":     "ui/v" + rel.Version,
-		"name":         "Mimic " + rel.Version,
+		"name":         "mimic " + rel.Version,
 		"body":         rel.Notes,
 		"html_url":     releasePage(rel.Version),
 		"draft":        false,

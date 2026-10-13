@@ -6,7 +6,7 @@ version: '3'
 
 info:
   companyName: "Owen Devine"
-  productName: "Mimic"
+  productName: "mimic"
   productIdentifier: "io.github.odevine.mimic"
   description: "Renders Magic: The Gathering cards"
   copyright: "Copyright Owen Devine"

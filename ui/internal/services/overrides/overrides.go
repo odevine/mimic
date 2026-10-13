@@ -210,7 +210,7 @@ func (s *Service) ApplyPreset(name string) (Applied, error) {
 		return Applied{}, apierr.New(apierr.NotFound, "no such preset")
 	}
 	if p.Version > prefs.PresetVersion {
-		return Applied{}, apierr.New(apierr.BadRequest, "this preset was saved by a newer version of Mimic")
+		return Applied{}, apierr.New(apierr.BadRequest, "this preset was saved by a newer version of mimic")
 	}
 	if err := rules.Validate(p.Rules); err != nil {
 		return Applied{}, apierr.Wrap(apierr.BadRequest, "this preset's rules do not check", err)

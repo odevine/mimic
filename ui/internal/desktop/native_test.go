@@ -78,7 +78,7 @@ func releaseServer(t *testing.T, list ...map[string]any) *provider {
 		}
 		switch {
 		case strings.HasSuffix(r.URL.Path, "SHA256SUMS"):
-			w.Write([]byte(strings.Repeat("ab", 32) + "  Mimic-1.0.0-macos-universal.zip\n"))
+			w.Write([]byte(strings.Repeat("ab", 32) + "  mimic-1.0.0-macos-universal.zip\n"))
 		default:
 			w.Write([]byte("bytes"))
 		}
@@ -98,13 +98,13 @@ func uiRelease(tag string, assets ...string) map[string]any {
 func TestProviderOffersTheNewerUIReleaseWithItsDigest(t *testing.T) {
 	p := releaseServer(t,
 		uiRelease("engine/v9.9.9"),
-		uiRelease("ui/v1.0.0", "Mimic-1.0.0-macos-universal.dmg", "Mimic-1.0.0-macos-universal.zip", "SHA256SUMS"),
+		uiRelease("ui/v1.0.0", "mimic-1.0.0-macos-universal.dmg", "mimic-1.0.0-macos-universal.zip", "SHA256SUMS"),
 	)
 	rel, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "0.9.2", Platform: "darwin", Arch: "arm64"})
 	if err != nil || rel == nil {
 		t.Fatalf("check = %+v, %v", rel, err)
 	}
-	if rel.Version != "1.0.0" || rel.Artifact.Filename != "Mimic-1.0.0-macos-universal.zip" || rel.Artifact.Filetype != "zip" || rel.Notes != "notes" {
+	if rel.Version != "1.0.0" || rel.Artifact.Filename != "mimic-1.0.0-macos-universal.zip" || rel.Artifact.Filetype != "zip" || rel.Notes != "notes" {
 		t.Errorf("release = %+v", rel)
 	}
 	if rel.Verification == nil || rel.Verification.DigestAlgo != "sha256" || len(rel.Verification.Digest) != 32 || rel.Verification.Signature != nil {
@@ -130,7 +130,7 @@ func TestProviderSaysNothingWhenThereIsNothingToInstall(t *testing.T) {
 		}
 		return rel
 	}
-	p := releaseServer(t, uiRelease("ui/v1.0.0", "Mimic-1.0.0-macos-universal.zip"))
+	p := releaseServer(t, uiRelease("ui/v1.0.0", "mimic-1.0.0-macos-universal.zip"))
 	if check(p, "1.0.0", "darwin", "arm64") != nil {
 		t.Error("the same version was offered")
 	}
@@ -142,7 +142,7 @@ func TestProviderSaysNothingWhenThereIsNothingToInstall(t *testing.T) {
 		t.Error("a release with no files was offered")
 	}
 	// The file is up but the checksums are not, so there is nothing to check it by
-	if check(releaseServer(t, uiRelease("ui/v1.0.0", "Mimic-1.0.0-macos-universal.zip")), "0.9.2", "darwin", "arm64") != nil {
+	if check(releaseServer(t, uiRelease("ui/v1.0.0", "mimic-1.0.0-macos-universal.zip")), "0.9.2", "darwin", "arm64") != nil {
 		t.Error("a file with no checksum was offered")
 	}
 	if check(releaseServer(t, uiRelease("engine/v1.0.0")), "0.9.2", "darwin", "arm64") != nil {

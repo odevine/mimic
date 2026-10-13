@@ -13,14 +13,14 @@ func TestCanSwapOnLinuxNeedsAnAppImage(t *testing.T) {
 	if CanSwap("linux", "/usr/bin/mimic", env(nil)) {
 		t.Error("a package install was offered a swap")
 	}
-	if !CanSwap("linux", "/tmp/.mount_x/usr/bin/mimic", env(map[string]string{"APPIMAGE": filepath.Join(dir, "Mimic.AppImage")})) {
+	if !CanSwap("linux", "/tmp/.mount_x/usr/bin/mimic", env(map[string]string{"APPIMAGE": filepath.Join(dir, "mimic.AppImage")})) {
 		t.Error("an AppImage in a folder the user owns was refused")
 	}
 }
 
 func TestCanSwapOnMacNeedsAWritableBundleFolder(t *testing.T) {
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "Mimic.app", "Contents", "MacOS", "mimic")
+	exe := filepath.Join(dir, "mimic.app", "Contents", "MacOS", "mimic")
 	if !CanSwap("darwin", exe, env(nil)) {
 		t.Error("a bundle in a writable folder was refused")
 	}
@@ -39,10 +39,10 @@ func TestCanSwapOnMacNeedsAWritableBundleFolder(t *testing.T) {
 }
 
 func TestCanSwapOnWindowsNeedsAWritableFolder(t *testing.T) {
-	if !CanSwap("windows", filepath.Join(t.TempDir(), "Mimic.exe"), env(nil)) {
+	if !CanSwap("windows", filepath.Join(t.TempDir(), "mimic.exe"), env(nil)) {
 		t.Error("a per-user install was refused")
 	}
-	if CanSwap("windows", filepath.Join(t.TempDir(), "missing", "Mimic.exe"), env(nil)) {
+	if CanSwap("windows", filepath.Join(t.TempDir(), "missing", "mimic.exe"), env(nil)) {
 		t.Error("a folder that is not there was offered a swap")
 	}
 }

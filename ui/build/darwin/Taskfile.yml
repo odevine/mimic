@@ -31,7 +31,7 @@ tasks:
       - rm "{{.BIN_DIR}}/{{.APP_NAME}}-amd64" "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
 
   bundle:
-    summary: Wraps the binary in Mimic.app and signs it ad hoc
+    summary: Wraps the binary in mimic.app and signs it ad hoc
     cmds:
       - rm -rf "{{.BIN_DIR}}/{{.PRODUCT}}.app"
       - mkdir -p "{{.BIN_DIR}}/{{.PRODUCT}}.app/Contents/MacOS" "{{.BIN_DIR}}/{{.PRODUCT}}.app/Contents/Resources"

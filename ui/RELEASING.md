@@ -31,7 +31,7 @@ All systems:
 - Settings: download the local card data, add and remove a font, and confirm the
   theme follows the system.
 - The window opens where it was left, including after unplugging a display.
-- Starting Mimic a second time brings the first window forward.
+- Starting mimic a second time brings the first window forward.
 - Closing during a run asks before quitting, and agreeing stops the run.
 - The update strip appears against an older version, and Install replaces the app
   and restarts into the new version.

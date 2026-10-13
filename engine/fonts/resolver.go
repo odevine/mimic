@@ -54,6 +54,7 @@ type Resolver struct {
 
 type resolved struct {
 	font *opentype.Font // nil means the basicfont fallback
+	more []*opentype.Font
 	res  Resolution
 }
 
@@ -75,38 +76,57 @@ func (r *Resolver) Role(name string) (Role, bool) {
 	return role, r.cat.Knows(role)
 }
 
-// Font returns the sized-on-demand font for role. It never fails: a role
-// nothing defines yields a Sizer on the basicfont fallback
+// Font returns the sized-on-demand font for role. A rune its font lacks is
+// drawn from the next of the role's own font and the built-in body font. It
+// never fails: a role nothing defines yields a Sizer on the basicfont fallback
 func (r *Resolver) Font(role Role) *Sizer {
-	f, _ := r.get(role)
-	if f == nil {
+	v := r.get(role)
+	if v.font == nil {
 		return &Sizer{fallback: true}
 	}
-	return &Sizer{font: f}
+	return &Sizer{font: v.font, more: v.more}
 }
 
 // Inspect reports how role resolved
-func (r *Resolver) Inspect(role Role) Resolution {
-	_, res := r.get(role)
-	return res
-}
+func (r *Resolver) Inspect(role Role) Resolution { return r.get(role).res }
 
-func (r *Resolver) get(role Role) (*opentype.Font, Resolution) {
+func (r *Resolver) get(role Role) resolved {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if v, ok := r.done[role]; ok {
-		return v.font, v.res
+		return v
 	}
-	f, res := r.resolve(role)
-	r.done[role] = resolved{font: f, res: res}
-	return f, res
+	v := r.resolve(role)
+	r.done[role] = v
+	return v
 }
 
-func (r *Resolver) resolve(role Role) (*opentype.Font, Resolution) {
+// fallbacks lists the fonts a rune is drawn from when the first has no glyph for
+// it: the role's own font, when the first is one the user assigned, and the
+// built-in body font, which covers the Latin letters the card fonts leave out.
+// A font already in the chain is not listed again
+func fallbacks(first, own *opentype.Font) []*opentype.Font {
+	chain := []*opentype.Font{first}
+	add := func(f *opentype.Font) {
+		for _, have := range chain {
+			if have == f {
+				return
+			}
+		}
+		chain = append(chain, f)
+	}
+	add(own)
+	if body, err := fontFromEmbedded(builtinFile[standardRoles[Body].builtin]); err == nil {
+		add(body)
+	}
+	return chain[1:]
+}
+
+func (r *Resolver) resolve(role Role) resolved {
 	res := Resolution{Role: role, Source: SourceFallback}
 	own, ok := r.cat.own(role)
 	if !ok {
-		return nil, res
+		return resolved{res: res}
 	}
 	if name := r.overrides[string(role)]; name != "" {
 		res.Override = name
@@ -116,7 +136,7 @@ func (r *Resolver) resolve(role Role) (*opentype.Font, Resolution) {
 			if err == nil {
 				res.Source, res.Path = SourceOverride, pf.Path
 				res.Family, res.Style = pf.Family, pf.Style
-				return f, res
+				return resolved{font: f, more: fallbacks(f, own.font), res: res}
 			}
 			res.Err = err
 		}
@@ -127,5 +147,5 @@ func (r *Resolver) resolve(role Role) (*opentype.Font, Resolution) {
 	if own.builtin != "" {
 		res.Path = builtinFile[own.builtin]
 	}
-	return own.font, res
+	return resolved{font: own.font, more: fallbacks(own.font, own.font), res: res}
 }

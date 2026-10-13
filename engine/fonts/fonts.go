@@ -7,6 +7,11 @@
 // The built-in fonts are reproductions of the fonts printed on Magic cards, so
 // a render looks like a real card with nothing extra installed. A user who
 // prefers another face adds its file to the pool and assigns it to a role.
+//
+// No font has every letter. A rune the font a role draws with lacks is drawn
+// from the next font in a chain: the role's own font when the user assigned
+// another, then the built-in body font, which covers the Latin letters the card
+// fonts leave out.
 package fonts
 
 import (
@@ -115,6 +120,9 @@ var (
 type Sizer struct {
 	font     *opentype.Font // nil means the basicfont fallback
 	fallback bool
+	// more are the fonts a rune is drawn from, in order, when font has no glyph
+	// for it
+	more []*opentype.Font
 }
 
 // Default returns the built-in font of a standard role with no template or
@@ -127,10 +135,15 @@ func Default(role Role) *Sizer { return NewResolver(nil, nil, nil).Font(role) }
 func (s *Sizer) Fallback() bool { return s.fallback }
 
 // Face returns a face for the resolved font at size, or basicfont.Face7x13
-// when no font resolved. The fallback is a fixed size and ignores size
+// when no font resolved. A rune the font lacks is drawn from the fonts after it,
+// at the same size, on the same baseline, and the line is as tall as the first
+// font makes it. The fallback face is a fixed size and ignores size
 func (s *Sizer) Face(size float64) (font.Face, error) {
 	if s.font == nil {
 		return basicfont.Face7x13, nil
+	}
+	if len(s.more) > 0 {
+		return newChainFace(append([]*opentype.Font{s.font}, s.more...), size)
 	}
 	return newFace(s.font, size)
 }

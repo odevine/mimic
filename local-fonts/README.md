@@ -27,6 +27,10 @@ A role is a standard one, `title`, `body`, `body-italic`, `mana`, `small-caps` o
 role. The [top-level README](../README.md#templates-and-fonts) lists the standard
 roles and the built-in font each one draws with.
 
+No font has every letter. A letter the font assigned to a role lacks is drawn from
+the role's own font, and then from the built-in body font, at the same size on the
+same baseline. A line is as tall as the assigned font makes it.
+
 `rendercard` prints what it found in the pool and warns about a name it cannot
 find. A file that is not a valid font, or that has the same family and style as an
 earlier one, is skipped with a note, so a role that looks unchanged after an

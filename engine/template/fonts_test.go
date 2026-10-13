@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/engine/manifest"
 )
 
@@ -120,5 +121,56 @@ func TestLoadRefusesATextBoxInAnUndefinedRole(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "is not a font role") {
 		t.Errorf("err = %v, want the undefined role refused", err)
+	}
+}
+
+func TestALetterTheRolesFontLacksIsMeasuredAndDrawnFromTheNextFont(t *testing.T) {
+	// The title font has no glyph for Ć, which it once drew as an empty space of
+	// its own choosing. The body font has it, so the line takes that letter's room
+	// and shows it
+	src := fonts.Default(fonts.Title)
+	box := TextBoxSpec{X: 10, Y: 110, Width: 600, Height: 120, FontSize: 60, VAlign: "baseline", Align: "left"}
+
+	body, err := fonts.Default(fonts.Body).Face(box.FontSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adv, _ := body.GlyphAdvance('Ć')
+	span, err := MeasureTextSpan(box, TextPart{Text: "Ć", Src: src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := span.Right-span.Left, adv.Round(); got < want-1 || got > want+1 {
+		t.Errorf("Ć measures %d wide, want about the body font's %d", got, want)
+	}
+
+	inkRows := func(text string) int {
+		res, err := RenderTextBox(box, 640, 240, TextPart{Text: text, Src: src})
+		if err != nil {
+			t.Fatal(err)
+		}
+		top, bottom := -1, -1
+		if res.Image == nil {
+			return 0
+		}
+		b := res.Image.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				if res.Image.RGBAAt(x, y).A != 0 {
+					if top < 0 {
+						top = y
+					}
+					bottom = y
+					break
+				}
+			}
+		}
+		if top < 0 {
+			return 0
+		}
+		return bottom - top + 1
+	}
+	if plain, accented := inkRows("C"), inkRows("Ć"); accented <= plain {
+		t.Errorf("Ć has %d rows of ink and C has %d, so the accent was not drawn", accented, plain)
 	}
 }

@@ -6,6 +6,9 @@ runtime: org.gnome.Platform
 runtime-version: '49'
 sdk: org.gnome.Sdk
 command: mimic
+# The SDK ships no appstream-compose, which only builds the store catalog and is
+# not needed for a bundle installed from a file
+appstream-compose: false
 
 finish-args:
   - --socket=wayland

@@ -971,7 +971,7 @@ input.gated {
 
 .fonts-roles {
   display: grid;
-  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 150px minmax(220px, 1.3fr) minmax(0, 1fr);
   gap: 4px 12px;
   align-items: center;
   margin: 0;

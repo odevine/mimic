@@ -198,7 +198,6 @@ export const scenes = {
     run: async ({ bridge, page }) => {
       const gotham = { name: "Gotham Medium", family: "Gotham", style: "Medium", file: "Gotham-Medium.otf", removable: true };
       const row = (role, label, own, extra) => ({ role, label, own, source: "template", family: own.split(" ")[0], ...extra });
-      bridge.reply("Settings.Get", { fontOverrides: { title: "Gotham Medium", body: "Lost Font Regular" } });
       bridge.reply("Data.Fonts", {
         kind: "managed",
         path: "/fonts",
@@ -216,6 +215,8 @@ export const scenes = {
       await bridge.boot();
       await new SettingsDialog(page).show();
       await expect(page.locator("#fonts-pool > li").first()).toBeVisible();
+      // The row sits below the first screen of the dialog, so it is scrolled to
+      await page.locator("#fonts").scrollIntoViewIfNeeded();
     },
   },
   "update-offer": {

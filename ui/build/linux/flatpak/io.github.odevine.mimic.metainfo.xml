@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.odevine.mimic</id>
+  <name>mimic</name>
+  <summary>Renders Magic: The Gathering cards</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer_name>Owen Devine</developer_name>
+  <url type="homepage">https://github.com/odevine/mimic</url>
+  <launchable type="desktop-id">io.github.odevine.mimic.desktop</launchable>
+  <description>
+    <p>mimic renders Magic: The Gathering cards from Scryfall data and frame templates.</p>
+  </description>
+  <releases>
+    <release version="0.0.0" date="2026-01-01"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

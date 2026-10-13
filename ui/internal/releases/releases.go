@@ -145,17 +145,29 @@ func Newer(a, b string) bool {
 var artifacts = map[string]*regexp.Regexp{
 	"darwin":  regexp.MustCompile(`^[Mm]imic-.+-macos-universal\.zip$`),
 	"windows": regexp.MustCompile(`^[Mm]imic-.+-windows-%s\.zip$`),
-	"linux":   regexp.MustCompile(`^[Mm]imic-.+-linux-%s\.AppImage$`),
+	"linux":   regexp.MustCompile(`^[Mm]imic-.+-linux-%s\.flatpak$`),
 }
 
 // Pick returns the asset that updates an app running on goos and goarch, or nil
 // when the release has none. A release published before its files were uploaded
-// has none, which is how an early check sees no update
+// has none, which is how an early check sees no update. A release without a
+// Windows arm64 zip falls back to the amd64 one, which Windows on Arm runs under
+// emulation
 func Pick(assets []Asset, goos, goarch string) *Asset {
 	pattern, ok := artifacts[goos]
 	if !ok {
 		return nil
 	}
+	if a := match(assets, pattern, goarch); a != nil {
+		return a
+	}
+	if goos == "windows" && goarch == "arm64" {
+		return match(assets, pattern, "amd64")
+	}
+	return nil
+}
+
+func match(assets []Asset, pattern *regexp.Regexp, goarch string) *Asset {
 	re := pattern
 	if strings.Contains(pattern.String(), "%s") {
 		re = regexp.MustCompile(fmt.Sprintf(pattern.String(), regexp.QuoteMeta(goarch)))

@@ -29,7 +29,7 @@ func installer(version string) string {
 	case "windows":
 		return "mimic-" + version + "-windows-" + runtime.GOARCH + ".zip"
 	default:
-		return "mimic-" + version + "-linux-" + runtime.GOARCH + ".AppImage"
+		return "mimic-" + version + "-linux-" + runtime.GOARCH + ".flatpak"
 	}
 }
 

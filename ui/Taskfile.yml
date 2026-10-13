@@ -6,7 +6,7 @@
 #
 # build makes the binary for this machine, and package makes what a release
 # ships for it: the dmg and zip on macOS, the installer and zip on Windows, the
-# AppImage, deb and rpm on Linux. Every platform's files land in bin/. A package
+# Flatpak bundle and deb on Linux. Every platform's files land in bin/. A package
 # run stamps VERSION into the build assets first, so run it on a throwaway
 # checkout, which CI does, or revert build/ afterward
 version: '3'

@@ -38,8 +38,8 @@ and WebKitGTK 4.1 that Ubuntu 22.04 ships.
 
 Flags:
 
-- `-fonts <dir>` renders with the font overrides in dir, laid out one subfolder
-  per role, ahead of every other font source.
+- `-fonts <dir>` offers the fonts in dir, subfolders included, to assign to roles,
+  ahead of every other font source.
 - `-smoke` runs the launch check against a scratch config folder and exits. It
   opens the window, boots the page, renders a card through the bridge, loads the
   images, drives a few flows in the page (a popover, the settings dialog, a
@@ -323,14 +323,18 @@ syntax. Art comes from Scryfall's image host either way. Scryfall refreshes the
 files daily, and the panel offers an update once a copy is a week old or a
 newer one is out.
 
-Fonts, also in Sources, lists each font role with the font it draws with and
-whether that is yours or a default. A role whose file could not be read says
-why and stays on its default. Add or Replace stores a `.ttf` or `.otf` for that
-role in a `fonts` folder beside `prefs.json`, and Remove returns the role to
-its default. These write at once rather than on Save, and the next render uses
+Fonts, also in Sources, lists each text role of the installed templates with a
+picker for the font it draws with. The picker offers the template's own font and
+every font in the folder, and a choice is kept by Save. A role whose chosen font
+is no longer in the folder says so and draws with the template's own. Add font
+copies a `.ttf` or `.otf` into a `fonts` folder beside `prefs.json`, and Remove
+deletes one. Those write at once rather than on Save, and the next render uses
 them. When `-fonts` or a checkout's `local-fonts/` is in use instead, the panel
-shows that folder read-only. The role folders and the fonts real cards use are
-listed in the [top-level README](../README.md#templates-and-fonts).
+lists that folder's fonts and cannot add or remove them. Fonts added by an
+earlier version, one folder for each role, are moved up into the folder and
+assigned to their roles the first time the app starts. The standard roles and the
+fonts real cards use are listed in the
+[top-level README](../README.md#templates-and-fonts).
 
 ## Scryfall rate limits
 

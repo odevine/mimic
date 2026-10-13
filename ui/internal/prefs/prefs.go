@@ -139,6 +139,9 @@ type Settings struct {
 	// DismissedUpdate is the release whose banner was closed, so the banner
 	// stays away until a newer one comes out
 	DismissedUpdate string `json:"dismissedUpdate,omitempty"`
+	// FontOverrides assigns a font to a text role, by the role's name and the
+	// font's "Family Style" name. A role with no entry draws with its own font
+	FontOverrides map[string]string `json:"fontOverrides,omitempty"`
 }
 
 // On reports whether a setting that reads as on when unset is on

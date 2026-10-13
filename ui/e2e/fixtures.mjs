@@ -23,7 +23,7 @@ async function restoreDefaults(page, defaults) {
     await api.saveRules([]);
     for (const p of await api.presets()) await api.deletePreset(p.name);
     await api.saveSettings(defaults);
-    for (const r of (await api.fonts()).roles) if (r.source === "user") await api.removeFont(r.folder);
+    for (const f of (await api.fonts()).pool) if (f.removable) await api.removeFont(f.name);
   }, defaults);
 }
 

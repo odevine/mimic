@@ -27,27 +27,36 @@ type pipCache struct {
 }
 
 // manaKey identifies the mana font a render would use now: the file and its
-// modification time for a user font, else the embedded default's path
-func manaKey(dir string) string {
-	res := fonts.Inspect(fonts.Mana, dir)
-	if res.Source == fonts.SourceUser {
+// modification time for an assigned font, else the template that supplies it
+func manaKey(res fonts.Resolution, template string) string {
+	if res.Source == fonts.SourceOverride {
 		if info, err := os.Stat(res.Path); err == nil {
 			return fmt.Sprintf("%s:%d:%d", res.Path, info.Size(), info.ModTime().UnixNano())
 		}
 	}
-	return string(res.Source) + ":" + res.Path
+	return fmt.Sprintf("%s:%s:%s:%s %s", res.Source, res.Path, template, res.Family, res.Style)
 }
 
-// get returns the renderer for the mana font in dir and the key it was built
+// manaFont resolves the mana role the way a render of the active template would
+func (s *Service) manaFont() (*fonts.Sizer, string) {
+	var cat *fonts.Catalog
+	var template string
+	if at := s.ws.Pipe.Active(); at != nil {
+		cat, template = at.Fonts(), at.Name+"@"+at.Version
+	}
+	r := fonts.NewResolver(cat, s.ws.FontPool.Get(), s.ws.Prefs.Settings().FontOverrides)
+	return r.Font(fonts.Mana), manaKey(r.Inspect(fonts.Mana), template)
+}
+
+// get returns the renderer for the mana font in use and the key it was built
 // for, rebuilding when the font has changed since the last call
-func (c *pipCache) get(dir string) (*mana.Symbols, string) {
-	key := manaKey(dir)
+func (c *pipCache) get(sizer *fonts.Sizer, key string) *mana.Symbols {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.sym == nil || c.key != key {
-		c.sym, c.key = mana.NewSymbols(dir), key
+		c.sym, c.key = mana.NewSymbols(sizer), key
 	}
-	return c.sym, key
+	return c.sym
 }
 
 // Symbol draws one braced code as a pip px pixels across, returning a not found
@@ -61,7 +70,8 @@ func (s *Service) Symbol(code string, px int, known string) (image.Image, string
 		px = 32
 	}
 	px = min(px, symbolMaxPx)
-	sym, key := s.pips.get(s.ws.Fonts.Path)
+	sizer, key := s.manaFont()
+	sym := s.pips.get(sizer, key)
 	if sym == nil {
 		return nil, "", apierr.New(apierr.NotFound, "no mana font available")
 	}

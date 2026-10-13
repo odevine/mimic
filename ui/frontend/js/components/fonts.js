@@ -1,73 +1,82 @@
 import { api } from "../api.js";
 import { $, h } from "../dom.js";
 import { toast } from "./toast.js";
+import { folderNote, mergeOverrides, ownFont, pickedState, pickedValue, roleChoices } from "../fontmodel.js";
 
-// The Fonts setting: which font each card role draws with, and for the app's
-// own fonts folder, adding and removing them. Changes write straight to the
-// folder and apply on the next render, independent of the Save button
+// The Fonts setting: which font each text role draws with, chosen from the fonts
+// in the fonts folder, and for the app's own folder, adding and removing them.
+// Adding and removing write straight to the folder and apply on the next render.
+// The font picked for a role is kept with the other settings, by Save
 
-// What each role is called here, keyed by its manifest name
-const ROLE_LABELS = {
-  title: "Title",
-  body: "Rules",
-  "body-italic": "Flavor",
-  mana: "Mana",
-  "small-caps": "Artist",
-  info: "Collector info",
-};
+let status = null; // the last Data.Fonts
+let picks = null; // the font each role's picker shows, by role, once they have drawn
 
-const SOURCE_TEXT = {
-  checkout: (p) => `Using ${p} from the checkout, so fonts are changed there rather than here.`,
-  flag: (p) => `Using ${p} from the -fonts flag, so fonts are changed there rather than here.`,
-  managed: () => "Fonts you add here are kept in the app's fonts folder and used on the next render.",
-  none: () => "There is no config folder to keep fonts in, so every role uses its default.",
-};
+function roleRow(r) {
+  const state = h("span", { class: "fonts-role-state" });
+  const show = () => {
+    const s = pickedState(r, status.pool, picks[r.role]);
+    state.textContent = s.text;
+    state.className = `fonts-role-state ${s.tone}`;
+  };
+  const select = h(
+    "select",
+    {
+      class: "fonts-role-pick",
+      "aria-label": `Font for ${r.label}`,
+      title: ownFont(r),
+      onchange: (e) => {
+        picks[r.role] = e.target.value;
+        show();
+      },
+    },
+    ...roleChoices(r, status.pool, picks[r.role]).map((c) => h("option", { value: c.value }, c.label)),
+  );
+  select.value = picks[r.role];
+  show();
+  return h("li", { class: "fonts-role" }, h("span", { class: "fonts-role-name" }, r.label), select, state, r.error && h("p", { class: "fonts-note err" }, r.error));
+}
 
-let status = null; // the last GET /api/fonts
-
-const fontName = (r) => [r.family, r.style].filter(Boolean).join(" ") || r.file || "Unknown font";
-
-function roleRow(r, writable) {
-  let source = "Yours";
-  if (r.source === "default") source = "Default";
-  else if (r.source === "borrowed") source = `Default, from ${ROLE_LABELS[r.borrows] || r.borrows}`;
-  else if (r.source === "fallback") source = "Built-in fallback";
-
-  const notes = [];
-  if (r.rejected) notes.push(h("p", { class: "fonts-note err" }, `${r.rejected} could not be read: ${r.error}`));
-  if (r.ignored && r.ignored.length) {
-    notes.push(h("p", { class: "fonts-note warn" }, `Only the first font is used, so ${r.ignored.join(", ")} ${r.ignored.length === 1 ? "is" : "are"} ignored.`));
-  }
-
+function poolRow(f) {
   return h(
     "li",
-    { class: "fonts-role" },
-    h("span", { class: "fonts-role-name" }, ROLE_LABELS[r.role] || r.role),
-    h("span", { class: "fonts-role-font", title: r.file || "" }, fontName(r)),
-    h("span", { class: `fonts-role-source ${r.source}` }, source),
-    h(
-      "span",
-      { class: "fonts-role-actions" },
-      writable && h("button", { class: "btn subtle", type: "button", onclick: () => choose(r.folder) }, r.source === "user" ? "Replace" : "Add"),
-      writable && r.source === "user" && h("button", { class: "btn subtle", type: "button", onclick: () => remove(r) }, "Remove"),
-    ),
-    notes,
+    { class: "fonts-file" },
+    h("span", { class: "fonts-file-name" }, f.name),
+    h("span", { class: "fonts-file-path" }, f.file),
+    f.removable && h("button", { class: "btn subtle", type: "button", "aria-label": `Remove ${f.name}`, onclick: () => remove(f) }, "Remove"),
   );
 }
 
 function draw() {
-  const box = $("fonts");
   const list = $("fonts-roles");
   if (!status) {
     $("fonts-source").textContent = "Checking the fonts…";
     list.replaceChildren();
     return;
   }
-  $("fonts-source").textContent = (SOURCE_TEXT[status.kind] || SOURCE_TEXT.none)(status.path);
-  list.replaceChildren(...status.roles.map((r) => roleRow(r, status.writable)));
-  box.classList.toggle("warn", status.roles.some((r) => r.rejected));
+  $("fonts-source").textContent = folderNote(status.kind, status.path);
+  if (!picks) {
+    picks = {};
+    for (const r of status.roles) picks[r.role] = pickedValue(r, status.pool);
+  }
+  for (const r of status.roles) if (!(r.role in picks)) picks[r.role] = pickedValue(r, status.pool);
+
+  list.replaceChildren(
+    ...(status.roles.length ? status.roles.map(roleRow) : [h("li", { class: "fonts-note" }, "Install a template to choose fonts for its text.")]),
+  );
+  $("fonts-metrics").hidden = !status.roles.length;
+
+  const pool = $("fonts-pool");
+  $("fonts-pool-title").textContent = status.writable ? "Fonts you added" : "Fonts in this folder";
+  $("fonts-pool-title").hidden = !status.pool.length;
+  pool.replaceChildren(
+    ...status.pool.map(poolRow),
+    ...status.rejected.map((f) => h("li", { class: "fonts-note err" }, `${f.file} could not be read: ${f.error}`)),
+    ...status.duplicates.map((f) => h("li", { class: "fonts-note warn" }, `${f} has the same name as another font, so it is not used.`)),
+  );
+  $("fonts").classList.toggle("warn", status.rejected.length > 0);
+  $("fonts-add").hidden = !status.writable;
   $("fonts-open").hidden = !status.path;
-  $("fonts-reset").hidden = !status.writable || !status.roles.some((r) => r.source === "user");
+  $("fonts-reset").hidden = !status.writable || !status.pool.some((f) => f.removable);
 }
 
 async function refresh() {
@@ -76,26 +85,27 @@ async function refresh() {
   } catch (err) {
     status = null;
     $("fonts-source").textContent = `Could not read the fonts: ${err.message}`;
+    $("fonts-roles").replaceChildren();
     return;
   }
   draw();
 }
 
-async function choose(folder) {
+async function add() {
   try {
-    const next = await api.addFont(folder);
+    const next = await api.addFont();
     if (!next) return;
     status = next;
     draw();
-    toast(`${status.roles.find((r) => r.folder === folder)?.file || "The font"} added`, "ok");
+    toast("Font added", "ok");
   } catch (err) {
     toast(err.message, "err", 6000);
   }
 }
 
-async function remove(r) {
+async function remove(f) {
   try {
-    status = await api.removeFont(r.folder);
+    status = await api.removeFont(f.name);
     draw();
   } catch (err) {
     toast(err.message, "err");
@@ -103,9 +113,10 @@ async function remove(r) {
 }
 
 async function resetAll() {
-  if (!(await api.confirm("Remove added fonts", "Remove every font you added? Each role goes back to its default.", "Remove"))) return;
+  const mine = status.pool.filter((f) => f.removable);
+  if (!(await api.confirm("Remove added fonts", "Remove every font you added? A role using one goes back to its own font.", "Remove"))) return;
   try {
-    for (const r of status.roles.filter((r) => r.source === "user")) status = await api.removeFont(r.folder);
+    for (const f of mine) status = await api.removeFont(f.name);
   } catch (err) {
     toast(err.message, "err");
   }
@@ -120,12 +131,21 @@ async function openFolder() {
   }
 }
 
-// openFonts refreshes the row when settings open
+// openFonts refreshes the row when settings open, with each picker back at the
+// saved font
 export function openFonts() {
+  picks = null;
   refresh();
 }
 
+// fontOverrides is the font assignments to save: what is saved now, changed by
+// the pickers. It leaves them alone when the row never drew
+export function fontOverrides(saved) {
+  return mergeOverrides(saved, picks);
+}
+
 export function initFonts() {
+  $("fonts-add").addEventListener("click", add);
   $("fonts-open").addEventListener("click", openFolder);
   $("fonts-reset").addEventListener("click", resetAll);
 }

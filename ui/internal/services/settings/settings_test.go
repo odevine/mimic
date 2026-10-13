@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/odevine/mimic/engine/template"
@@ -267,5 +269,42 @@ func TestSettingsKeepOnlyKnownOutputFormats(t *testing.T) {
 		if got := ws.Prefs.Settings().OutputFormat; got != want {
 			t.Errorf("outputFormat %q stored as %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestSettingsKeepOnlyWellFormedFontAssignments(t *testing.T) {
+	ws := workspacetest.New(t)
+	svc := New(ws)
+	in := map[string]string{
+		" title ":               " Gotham Medium ",
+		"body":                  "",
+		"":                      "Plantin MT Pro Italic",
+		strings.Repeat("r", 41): "Gotham Medium",
+		"info":                  strings.Repeat("n", 201),
+		"saga-chapter":          "Plantin MT Pro Italic",
+	}
+	got := svc.Put(prefs.Settings{FontOverrides: in}).FontOverrides
+	want := map[string]string{"title": "Gotham Medium", "saga-chapter": "Plantin MT Pro Italic"}
+	if len(got) != len(want) || got["title"] != want["title"] || got["saga-chapter"] != want["saga-chapter"] {
+		t.Errorf("overrides stored as %v, want %v", got, want)
+	}
+
+	in["title"] = "changed after the write"
+	if ws.Prefs.Settings().FontOverrides["title"] != "Gotham Medium" {
+		t.Error("the stored assignments share a map with the caller's")
+	}
+	if got := svc.Put(prefs.Settings{FontOverrides: map[string]string{"a": ""}}).FontOverrides; got != nil {
+		t.Errorf("an assignment with no font was kept: %v", got)
+	}
+}
+
+func TestSettingsCapTheFontAssignments(t *testing.T) {
+	svc := New(workspacetest.New(t))
+	in := map[string]string{}
+	for i := range maxFontOverrides + 20 {
+		in[fmt.Sprintf("role-%d", i)] = "Gotham Medium"
+	}
+	if got := len(svc.Put(prefs.Settings{FontOverrides: in}).FontOverrides); got != maxFontOverrides {
+		t.Errorf("%d assignments kept, want the cap of %d", got, maxFontOverrides)
 	}
 }

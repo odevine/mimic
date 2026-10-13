@@ -34,6 +34,26 @@ export const done = (seq, extra = {}) => ({ seq, frac: 1, done: true, ...extra }
 // A resolved list row, as the resolver reports it
 export const matched = (index, name, extra) => ({ index, status: "matched", card: card(name, extra) });
 
+// What the Fonts setting reports with a template installed: the standard roles,
+// each on its own built-in font, and nothing in the folder
+const standardRole = (role, label, family, style) => ({ role, label, source: "template", family, style, own: `${family} ${style}` });
+export const installedFonts = {
+  kind: "managed",
+  path: "/fonts",
+  writable: true,
+  roles: [
+    standardRole("title", "Card name, type line and power/toughness", "Beleren Proxy", "Bold"),
+    standardRole("body", "Rules text", "Plantin MT Pro", "Regular"),
+    standardRole("body-italic", "Flavor text", "Plantin MT Pro", "Italic"),
+    standardRole("mana", "Mana and other card symbols", "Mana", "Regular"),
+    standardRole("small-caps", "Artist credit", "Beleren Small Caps", "Bold"),
+    standardRole("info", "Collector number and set code", "Gotham", "Medium"),
+  ],
+  pool: [],
+  rejected: [],
+  duplicates: [],
+};
+
 // An installed template, as the app reports the active one when a bundle is in use
 export const installedTemplate = {
   name: "mimic.m15",

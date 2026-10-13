@@ -247,14 +247,15 @@ export const api = {
   cardDataEvents: (jobId, onStep) => watchJob(jobId, onStep),
   removeCardData: () => rpc("Data", "RemoveCardData"),
 
-  // fonts reports which font each role draws with, and addFont and removeFont
-  // change the app's own fonts folder, each answering with the new status.
-  // addFont asks for the font file, and resolves to null when the user cancelled
+  // fonts reports the fonts in the folder and which font each role draws with,
+  // and addFont and removeFont change the app's own fonts folder, each answering
+  // with the new status. addFont asks for the font file, and resolves to null when
+  // the user cancelled. removeFont takes a font's "Family Style" name
   fonts: () => rpc("Data", "Fonts"),
-  addFont: async (folder) => {
+  addFont: async () => {
     const path = await pickFile({ title: "Choose a font", filters: FONTS });
-    return path ? rpc("Data", "AddFont", folder, path) : null;
+    return path ? rpc("Data", "AddFont", path) : null;
   },
-  removeFont: (folder) => rpc("Data", "RemoveFont", folder),
+  removeFont: (name) => rpc("Data", "RemoveFont", name),
   openFonts: () => rpc("Data", "OpenFonts"),
 };

@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { Bridge, loadReplies } from "./bridge.mjs";
-import { installedTemplate } from "./bridge/cards.mjs";
+import { installedFonts, installedTemplate } from "./bridge/cards.mjs";
 
 // A page test gets a bridge on a fresh page. It sets replies, then boots the
 // page, and fails if the page made a call no reply covers. The app is answered as
@@ -11,6 +11,7 @@ export const test = base.extend({
     const bridge = new Bridge(page, await loadReplies());
     await bridge.install();
     bridge.reply("Templates.Active", installedTemplate);
+    bridge.reply("Data.Fonts", installedFonts);
     const external = [];
     await page.route((url) => !["app.test", "127.0.0.1", "localhost"].includes(url.hostname), (route) => {
       external.push(route.request().url());
@@ -23,6 +24,9 @@ export const test = base.extend({
 });
 
 // noTemplate answers as a fresh app does, with nothing installed to render with
-export const noTemplate = (bridge) => bridge.reply("Templates.Active", bridge.defaults["Templates.Active"]);
+export const noTemplate = (bridge) => {
+  bridge.reply("Templates.Active", bridge.defaults["Templates.Active"]);
+  bridge.reply("Data.Fonts", bridge.defaults["Data.Fonts"]);
+};
 
 export { expect };

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/odevine/mimic/engine/card"
+	enginefonts "github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/fontdir"
@@ -64,8 +65,8 @@ func init() {
 
 // Options is what the workspace needs from the binary around it
 type Options struct {
-	// FontDir is the -fonts flag, a font override directory that wins over
-	// every other source. Empty means the usual lookup
+	// FontDir is the -fonts flag, a folder of fonts that wins over every other
+	// source. Empty means the usual lookup
 	FontDir string
 	// StandInRenders lets the built-in stand-in render when nothing is installed,
 	// for the launch check, which tests the app and not a template
@@ -83,8 +84,10 @@ type Workspace struct {
 	// HTTP is the paced Scryfall client the card client uses, shared with the
 	// bulk data download
 	HTTP *http.Client
-	// Fonts is the font override directory every render uses, fixed at startup
-	Fonts fontdir.Dir
+	// Fonts is the folder of fonts a user can assign to a role, fixed at startup,
+	// and FontPool is the engine's index of it
+	Fonts    fontdir.Dir
+	FontPool *fontdir.Pool
 	// Run is the latest batch run
 	Run RunState
 	// Startup is the template the workspace began with and where it came from,
@@ -124,7 +127,11 @@ func New(o Options) *Workspace {
 	pipeline.SetLayerCacheBytes(int64(resource.CacheBytes(p.Settings().LayerCache)))
 	pipe := pipeline.New(card.NewClient(card.WithHTTPClient(httpc)), p.FaceTemplates)
 	fd := fontdir.Resolve(o.FontDir, ManagedFontsDir())
-	pipe.SetFontDir(fd.Path)
+	migrateRoleFonts(p, fd)
+	fontPool := fontdir.NewPool(fd)
+	pipe.SetFonts(func() (*enginefonts.Pool, map[string]string) {
+		return fontPool.Get(), p.Settings().FontOverrides
+	})
 	pipe.SetFeatures(p.Features)
 	pipe.SetStandInRenders(o.StandInRenders)
 	catalog.RemoveLegacy()
@@ -143,12 +150,42 @@ func New(o Options) *Workspace {
 		Cards:         carddata.New(CardDir()),
 		HTTP:          httpc,
 		Fonts:         fd,
+		FontPool:      fontPool,
 		Startup:       StartupTemplate{Name: want, Source: source},
 		artCache:      make(map[string]image.Image),
 		activeName:    at.Name,
 		activeVersion: at.Version,
 		recents:       prefs.NewRecents(p.RecentSearches()),
 	}
+}
+
+// migrateRoleFonts brings fonts an earlier version kept in one folder per role
+// into the folder itself, and assigns each role the font it drew with, unless the
+// role already has one. Without it, a person's added fonts would sit unused after
+// the update
+func migrateRoleFonts(p *prefs.Store, fd fontdir.Dir) {
+	moved := fd.FlattenRoleFolders()
+	if len(moved) == 0 {
+		return
+	}
+	pool := enginefonts.NewPool(fd.Path)
+	s := p.Settings()
+	overrides := map[string]string{}
+	for role, name := range s.FontOverrides {
+		overrides[role] = name
+	}
+	for _, m := range moved {
+		if !m.Used || overrides[m.Role] != "" {
+			continue
+		}
+		for _, f := range pool.Fonts() {
+			if f.Path == m.Path {
+				overrides[m.Role] = f.Name
+			}
+		}
+	}
+	s.FontOverrides = overrides
+	p.SetSettings(s)
 }
 
 // Close releases every template the workspace installed. Call it once at

@@ -13,6 +13,7 @@ import (
 
 	"github.com/odevine/impasto/raster"
 	"github.com/odevine/mimic/engine/card"
+	"github.com/odevine/mimic/engine/fonts"
 	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
@@ -33,6 +34,9 @@ type Template struct {
 	// files looked like when it was loaded, so a change to them is noticed
 	dir, stamp string
 }
+
+// Fonts is what the template says about its text roles and fonts
+func (t *Template) Fonts() *fonts.Catalog { return t.tmpl.Fonts() }
 
 // IsPlaceholder reports whether this is the built-in stand-in the app runs on when
 // nothing is installed, which renders no card
@@ -76,10 +80,11 @@ type Pipeline struct {
 	standIn bool
 	// checked is when the loose folders were last compared with what was loaded
 	checked time.Time
-	// fontDir is the font override directory every render uses, "" for the
-	// engine's embedded defaults. It is caller configuration rather than part of
-	// any template, so it is shared by all of them
-	fontDir string
+	// fonts returns the pool of fonts a user can assign to a role and what is
+	// assigned, which every render uses. Nil means none are assigned. It is caller
+	// configuration rather than part of any template, so it is shared by all of
+	// them
+	fonts func() (*fonts.Pool, map[string]string)
 }
 
 // New returns a pipeline that fetches art through client. preferences returns
@@ -120,20 +125,23 @@ func (p *Pipeline) chosenFeatures(id string) frame.Features {
 	return frame.Features(f(id))
 }
 
-// SetFontDir sets the font override directory for later renders. The engine
-// reads the folder on each render, so fonts added to it later apply without
-// calling this again
-func (p *Pipeline) SetFontDir(dir string) {
+// SetFonts sets where the pool of fonts and the role assignments come from. A
+// render reads them when it starts, so a change applies to the next render
+func (p *Pipeline) SetFonts(f func() (*fonts.Pool, map[string]string)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.fontDir = dir
+	p.fonts = f
 }
 
-// FontDir is the font override directory renders use
-func (p *Pipeline) FontDir() string {
+// chosenFonts is the pool and the assignments a render starts with
+func (p *Pipeline) chosenFonts() (*fonts.Pool, map[string]string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.fontDir
+	f := p.fonts
+	p.mu.Unlock()
+	if f == nil {
+		return nil, nil
+	}
+	return f()
 }
 
 // Client is the card client the pipeline fetches art through, shared with
@@ -236,13 +244,15 @@ func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image
 	if err != nil {
 		return nil, err
 	}
+	pool, overrides := p.chosenFonts()
 	req := template.RenderRequest{
-		Card:     d,
-		Face:     face,
-		Art:      art,
-		Features: p.chosenFeatures(at.Name),
-		FontDir:  p.FontDir(),
-		DPI:      dpi,
+		Card:          d,
+		Face:          face,
+		Art:           art,
+		Features:      p.chosenFeatures(at.Name),
+		FontPool:      pool,
+		FontOverrides: overrides,
+		DPI:           dpi,
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to

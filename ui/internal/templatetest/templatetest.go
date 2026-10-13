@@ -46,6 +46,12 @@ type Spec struct {
 	Features map[string]manifest.Feature
 	// MinEngine is the oldest engine that renders it. Empty is none
 	MinEngine string
+	// Fonts and Roles add fonts the template ships and text roles it defines.
+	// FontFiles holds the bytes of each font by the path its entry names, which is
+	// directly in font/
+	Fonts     map[string]manifest.FontFile
+	Roles     map[string]manifest.FontRole
+	FontFiles map[string][]byte
 }
 
 // Features is a feature of each type. The banner draws a strip across the top of
@@ -128,6 +134,15 @@ func (s Spec) source() fstest.MapFS {
 	if len(s.Features) > 0 {
 		tmpl["features"] = s.Features
 	}
+	if len(s.Fonts) > 0 {
+		tmpl["fonts"] = s.Fonts
+	}
+	if len(s.Roles) > 0 {
+		tmpl["roles"] = s.Roles
+	}
+	for path, data := range s.FontFiles {
+		fsys[path] = &fstest.MapFile{Data: data}
+	}
 	box := func(x, y, w, h int, size float64, font, align string) map[string]any {
 		return map[string]any{
 			"rect": map[string]any{"x": x, "y": y, "width": w, "height": h},
@@ -177,7 +192,7 @@ var built = struct {
 // encoding its images is the slow part
 func (s Spec) Pack() (*author.Built, error) {
 	s = s.filled()
-	key := fmt.Sprintf("%s|%s|%s|%v|%v|%s", s.ID, s.Version, s.Name, s.Shapes, s.Features, s.MinEngine)
+	key := fmt.Sprintf("%s|%s|%s|%v|%v|%s|%v|%v|%d", s.ID, s.Version, s.Name, s.Shapes, s.Features, s.MinEngine, s.Fonts, s.Roles, len(s.FontFiles))
 	built.Lock()
 	defer built.Unlock()
 	if b, ok := built.byKey[key]; ok {

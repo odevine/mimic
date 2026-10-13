@@ -4,7 +4,7 @@
 Cards.Printings(string) -> []cardlist.ShapedCard !
 Cards.Recents() -> []string
 Cards.Search(string) -> []cards.SearchResult !
-Data.AddFont(string, string) -> data.FontsStatus !
+Data.AddFont(string) -> data.FontsStatus !
 Data.CardData() -> data.CardDataView
 Data.DownloadCardData() -> string !
 Data.Fonts() -> data.FontsStatus
@@ -250,17 +250,30 @@ data.CardDataView struct {
 	remote carddata.Remote (omitempty)
 }
 
+data.FontFile struct {
+	name string
+	family string
+	style string
+	file string
+	removable bool
+}
+
+data.FontReject struct {
+	file string
+	error string
+}
+
 data.FontRole struct {
 	role string
-	folder string
+	label string
 	source string
-	file string (omitempty)
 	family string (omitempty)
 	style string (omitempty)
-	borrows string (omitempty)
-	rejected string (omitempty)
+	own string
+	bundled bool (omitempty)
+	override string (omitempty)
+	file string (omitempty)
 	error string (omitempty)
-	ignored []string (omitempty)
 }
 
 data.FontsStatus struct {
@@ -268,6 +281,9 @@ data.FontsStatus struct {
 	path string (omitempty)
 	writable bool
 	roles []data.FontRole
+	pool []data.FontFile
+	rejected []data.FontReject
+	duplicates []string
 }
 
 desktop.ConfirmRequest struct {
@@ -422,6 +438,7 @@ prefs.Settings struct {
 	checkUpdates bool (omitempty)
 	notifyRunDone bool (omitempty)
 	dismissedUpdate string (omitempty)
+	fontOverrides map[string]string (omitempty)
 }
 
 prefs.TemplateChoice struct {

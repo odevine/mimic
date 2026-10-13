@@ -3,7 +3,7 @@ import { $ } from "../dom.js";
 import { app } from "../state.js";
 import { toast } from "./toast.js";
 import { openCardData, cardDataChoice, initCardData } from "./cardData.js";
-import { openFonts, initFonts } from "./fonts.js";
+import { openFonts, initFonts, fontOverrides } from "./fonts.js";
 import { openUpdates } from "./updates.js";
 
 // The settings panel. Resolutions go through their own endpoint, which clamps
@@ -203,6 +203,7 @@ async function save() {
       pngCompression: $("png-compression-select").value,
       outputDir: $("output-dir-input").value.trim(),
       cardData: cardDataChoice(),
+      fontOverrides: fontOverrides(app.settings.peek().fontOverrides),
     };
     app.settings.value = await api.saveSettings(next);
     applyTheme(app.settings.peek().theme);

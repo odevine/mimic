@@ -33,7 +33,7 @@ func main() {
 }
 
 func launch() error {
-	fontDir := flag.String("fonts", "", "folder of font overrides, one subfolder per role, used ahead of the app's own fonts folder")
+	fontDir := flag.String("fonts", "", "folder of fonts to assign to roles, used in place of the app's own fonts folder")
 	smoke := flag.Bool("smoke", false, "run the launch check against a scratch config folder and exit")
 	flag.Parse()
 

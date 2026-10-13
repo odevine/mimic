@@ -259,52 +259,10 @@
     "kind": "managed",
     "path": "/Users/owendevine/Repos/mimic/ui/e2e/.scratch/capture-home/mimic/fonts",
     "writable": true,
-    "roles": [
-      {
-        "role": "title",
-        "folder": "title",
-        "source": "default",
-        "family": "Big Shoulders",
-        "style": "Bold"
-      },
-      {
-        "role": "body",
-        "folder": "body",
-        "source": "default",
-        "family": "Merriweather",
-        "style": "Regular"
-      },
-      {
-        "role": "body-italic",
-        "folder": "body-italic",
-        "source": "default",
-        "family": "Merriweather",
-        "style": "Italic"
-      },
-      {
-        "role": "mana",
-        "folder": "mana",
-        "source": "default",
-        "family": "Mana",
-        "style": "Regular"
-      },
-      {
-        "role": "small-caps",
-        "folder": "type",
-        "source": "borrowed",
-        "family": "Big Shoulders",
-        "style": "Bold",
-        "borrows": "title"
-      },
-      {
-        "role": "info",
-        "folder": "info",
-        "source": "borrowed",
-        "family": "Merriweather",
-        "style": "Regular",
-        "borrows": "body"
-      }
-    ]
+    "roles": [],
+    "pool": [],
+    "rejected": [],
+    "duplicates": []
   },
   "Overrides.Rules": [],
   "Overrides.Presets": [],

@@ -4,6 +4,8 @@
 package settings
 
 import (
+	"strings"
+
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/pipeline"
@@ -17,6 +19,14 @@ var themes = map[string]bool{"dark": true, "light": true, "system": true}
 
 // maxRecentOutputDirs bounds the recent output folders a settings write keeps
 const maxRecentOutputDirs = 6
+
+// The bounds on the font assignments a settings write keeps: how many, and how
+// long a role name and a font name may be
+const (
+	maxFontOverrides = 64
+	maxRoleName      = 40
+	maxFontName      = 200
+)
 
 // concurrencyPresets are the worker counts the settings offer beside automatic,
 // those that fit under the maximum
@@ -55,9 +65,27 @@ func (s *Service) Put(in prefs.Settings) prefs.Settings {
 	if len(in.RecentOutputDirs) > maxRecentOutputDirs {
 		in.RecentOutputDirs = in.RecentOutputDirs[:maxRecentOutputDirs]
 	}
+	in.FontOverrides = cleanFontOverrides(in.FontOverrides)
 	s.ws.Prefs.SetSettings(in)
 	pipeline.SetLayerCacheBytes(int64(resource.CacheBytes(s.ws.LayerCacheName())))
 	return s.ws.Prefs.Settings()
+}
+
+// cleanFontOverrides keeps the font assignments that name a role and a font, in
+// a map of its own so what is stored never shares one with a caller
+func cleanFontOverrides(in map[string]string) map[string]string {
+	var out map[string]string
+	for role, name := range in {
+		role, name = strings.TrimSpace(role), strings.TrimSpace(name)
+		if role == "" || name == "" || len(role) > maxRoleName || len(name) > maxFontName || len(out) >= maxFontOverrides {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[role] = name
+	}
+	return out
 }
 
 // Resolutions is what Resolution returns: the two chosen resolutions, the

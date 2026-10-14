@@ -74,3 +74,27 @@ export const draftView = (draft, extra = {}) => ({
   valid: true,
   ...extra,
 });
+
+// What a draft's layout draws for the test card, in draw order. Places are in the
+// finished image's pixels, and a thing that is drawn has the same place in the
+// layout's own canvas unless a test says the card is turned
+export const at = (x, y, width, height) => ({ x, y, width, height });
+export const drawn = (kind, key, rect, extra = {}) => ({ kind, key, drawn: true, authored: rect, delivered: rect, ...extra });
+export const standardItems = [
+  drawn("layer", "background", at(0, 0, 1000, 1400), { part: "background" }),
+  drawn("layer", "frame", at(50, 50, 900, 1300), { part: "frame" }),
+  drawn("art", "0", at(80, 200, 840, 600), { after: "frame" }),
+  drawn("text", "title", at(100, 80, 600, 80)),
+  drawn("text", "type", at(100, 820, 800, 60)),
+  drawn("text", "oracle", at(100, 900, 800, 300)),
+  { kind: "text", key: "pt", drawn: false, why: "the card has no pt to draw", authored: at(780, 1250, 120, 80), delivered: at(780, 1250, 120, 80) },
+];
+export const describeView = (items = standardItems, extra = {}) => ({
+  layout: "normal",
+  authored: { width: 1000, height: 1400 },
+  delivered: { width: 1000, height: 1400 },
+  items,
+  editable: true,
+  rev: 0,
+  ...extra,
+});

@@ -224,6 +224,19 @@ async function flows(outDir) {
       30000,
     );
     notes.push("the editor draws a test card with a new template");
+
+    // A layer picked from the list is moved a pixel with an arrow key, which is saved
+    // and read back as the new place
+    const rows = await until("the layers", () => doc.querySelectorAll("#ed-layers .ed-layer").length > 3 && [...doc.querySelectorAll("#ed-layers .ed-layer")]);
+    rows.find((row) => /^title/.test(row.textContent)).click();
+    const readX = () => Number($("ed-sel-x").textContent);
+    await until("the selection", () => shown($("ed-selection")) && $("ed-selection-name").textContent === "title");
+    const x = readX();
+    doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await until(() => `the title to move (it is at ${readX()}, from ${x})`, () => readX() === x + 1 && !$("ed-undo").disabled);
+    doc.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    await until("the move to be undone", () => readX() === x && $("ed-undo").disabled);
+    notes.push("an edit in the editor is saved, shown and undone");
   }
 
   return notes;

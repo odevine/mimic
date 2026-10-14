@@ -40,8 +40,10 @@ Settings.Put(prefs.Settings) -> prefs.Settings
 Settings.Resolution() -> settings.Resolutions !
 Settings.Resources(string) -> settings.ResourcesView
 Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
+Studio.Apply(studio.ApplyRequest) -> studio.ApplyResult !
 Studio.Create(studio.CreateRequest) -> drafts.Summary !
 Studio.Delete(string) !
+Studio.Describe(studio.DescribeRequest) -> studio.DescribeView !
 Studio.Fork(studio.ForkRequest) -> drafts.Summary !
 Studio.List() -> []drafts.Summary !
 Studio.Open(string) -> studio.OpenView !
@@ -340,6 +342,24 @@ desktop.VersionInfo struct {
 	testBuild bool (omitempty)
 }
 
+draftedit.Op struct {
+	op string
+	layout string
+	kind string
+	key string
+	dx int (omitempty)
+	dy int (omitempty)
+	rect draftedit.Rect (omitempty)
+	to int (omitempty)
+}
+
+draftedit.Rect struct {
+	x int
+	y int
+	width int
+	height int
+}
+
 drafts.Meta struct {
 	forkedFrom string (omitempty)
 	testCard card.Data (omitempty)
@@ -573,9 +593,35 @@ settings.ResourcesView struct {
 
 string = string
 
+studio.ApplyRequest struct {
+	id string
+	ops []draftedit.Op
+}
+
+studio.ApplyResult struct {
+	rev int
+	inverse []draftedit.Op
+}
+
 studio.CreateRequest struct {
 	name string
 	dpi int
+}
+
+studio.DescribeRequest struct {
+	id string
+	card card.Data
+	face int
+}
+
+studio.DescribeView struct {
+	layout string
+	authored studio.SizeView
+	delivered studio.SizeView
+	items []studio.ItemView
+	editable bool
+	reason string (omitempty)
+	rev int
 }
 
 studio.DiagnosticView struct {
@@ -588,6 +634,18 @@ studio.ForkRequest struct {
 	template string
 	version string
 	name string
+}
+
+studio.ItemView struct {
+	kind string
+	key string
+	part string (omitempty)
+	after string (omitempty)
+	images []string (omitempty)
+	drawn bool
+	why string (omitempty)
+	authored studio.RectView
+	delivered studio.RectView
 }
 
 studio.LayoutView struct {
@@ -613,6 +671,13 @@ studio.Preset struct {
 	card cardlist.ShapedCard
 }
 
+studio.RectView struct {
+	x int
+	y int
+	width int
+	height int
+}
+
 studio.RenameRequest struct {
 	id string
 	name string
@@ -622,6 +687,11 @@ studio.RenderRequest struct {
 	id string
 	card card.Data
 	face int
+}
+
+studio.SizeView struct {
+	width int
+	height int
 }
 
 studio.TestCardRequest struct {

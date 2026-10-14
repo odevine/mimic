@@ -361,6 +361,26 @@ func (s *Store) Delete(id string) error {
 	return os.RemoveAll(p)
 }
 
+// WriteFile replaces a file of a draft in one step. The name is a slash separated
+// path inside the draft, so one that leaves it is refused, and so is one that does
+// not name a file already there, which keeps an edit from adding files the draft
+// does not have
+func (s *Store) WriteFile(id, name string, data []byte) error {
+	p, err := s.path(id)
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(name) || name == "." {
+		return apierr.Newf(apierr.BadRequest, "%q is not a file in the template", name)
+	}
+	file := filepath.Join(p, filepath.FromSlash(name))
+	st, err := os.Stat(file)
+	if err != nil || !st.Mode().IsRegular() {
+		return apierr.Newf(apierr.NotFound, "The template has no file %s", name)
+	}
+	return writeAtomic(file, data)
+}
+
 // Meta reads what the editor remembers about a draft. A draft with nothing
 // remembered has the zero Meta
 func (s *Store) Meta(id string) (Meta, error) {

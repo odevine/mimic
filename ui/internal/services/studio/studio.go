@@ -33,6 +33,10 @@ type Service struct {
 
 	mu   sync.Mutex
 	open map[string]*author.Draft
+	// revs counts the edits made to each draft, and editMu keeps two batches of
+	// edits from reading the same files and each writing over the other
+	revs   map[string]int
+	editMu sync.Mutex
 }
 
 // New returns the service over a workspace, keeping drafts in the app's drafts
@@ -43,7 +47,7 @@ func New(ws *workspace.Workspace) *Service {
 
 // NewWith returns the service over a workspace and the store of its drafts
 func NewWith(ws *workspace.Workspace, store *drafts.Store) *Service {
-	return &Service{ws: ws, store: store, open: map[string]*author.Draft{}}
+	return &Service{ws: ws, store: store, open: map[string]*author.Draft{}, revs: map[string]int{}}
 }
 
 // Shutdown releases the images every open draft holds

@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { Bridge, loadReplies } from "./bridge.mjs";
-import { installedFonts, installedTemplate } from "./bridge/cards.mjs";
+import { describeView, installedFonts, installedTemplate } from "./bridge/cards.mjs";
 
 // A page test gets a bridge on a fresh page. It sets replies, then boots the
 // page, and fails if the page made a call no reply covers. The app is answered as
@@ -12,6 +12,9 @@ export const test = base.extend({
     await bridge.install();
     bridge.reply("Templates.Active", installedTemplate);
     bridge.reply("Data.Fonts", installedFonts);
+    // A draft draws the standard layers, and an edit to it is saved and can be undone
+    bridge.reply("Studio.Describe", () => describeView());
+    bridge.reply("Studio.Apply", (req) => ({ rev: 1, inverse: req.ops.map((op) => ({ ...op, dx: -(op.dx || 0), dy: -(op.dy || 0) })).reverse() }));
     const external = [];
     await page.route((url) => !["app.test", "127.0.0.1", "localhost"].includes(url.hostname), (route) => {
       external.push(route.request().url());

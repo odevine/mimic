@@ -139,6 +139,8 @@ type studioAPI interface {
 	Presets() []studio.Preset
 	SetTestCard(req studio.TestCardRequest) error
 	Render(req studio.RenderRequest) (render.Started, error)
+	Describe(req studio.DescribeRequest) (studio.DescribeView, error)
+	Apply(req studio.ApplyRequest) (studio.ApplyResult, error)
 }
 
 // Studio is the bound template editor service

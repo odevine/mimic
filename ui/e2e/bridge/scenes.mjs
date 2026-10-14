@@ -128,6 +128,27 @@ export const scenes = {
       await expect(editor.problems).toHaveCount(1);
     },
   },
+  "editor-selection": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.activity).toHaveAttribute("data-state", "done");
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "oracle" }).click();
+      await expect(editor.handles).toHaveCount(8);
+      // The first edit is made, so undo is there and the stand-in for the card is hidden
+      await page.keyboard.press("ArrowRight");
+      await expect(editor.undoButton).toBeEnabled();
+    },
+  },
   "editor-problems": {
     mask: ["#ed-activity"],
     run: async ({ bridge, page }) => {

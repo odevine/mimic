@@ -314,12 +314,31 @@ independent of the original from then on.
 The left column picks the draft and the card it is drawn with, from a set of
 preset cards that differ in colors, types and amount of text, or from a Scryfall
 search. The card is kept with the draft. The right column lists the draft's
-layouts and every problem found in its files, with the path to each. A draft
-that does not load shows its problems and draws nothing.
+layers, the selection, the layouts and every problem found in its files, with the
+path to each. A draft that does not load shows its problems and draws nothing.
 
-Selecting and moving layers on the preview, editing a layer's settings, the
-JSON editor, adding images and fonts, and exporting a draft are not built yet,
-and each appears locked with the issue that tracks it.
+Clicking the card selects what is drawn on top at that point, and clicking the same
+place again selects what lies beneath it. The layers list selects too, and shows in
+a dimmer type what the test card does not draw, with the reason on hover. Dragging
+moves the selection, and the handles on a text box, an art window or a symbol
+resize it. A layer moves but has no handles, since its image is drawn at its own
+size. Edges and middles snap to the card's and to the other items' within a few
+pixels, and holding Option or Alt turns that off. The arrow keys move the
+selection one pixel, and ten with Shift. Raise and Lower change a layer's place in
+the stack.
+
+Every change is saved to the layout file as it is made, with the file's order and
+layout kept and only the numbers changed, and the card is drawn again a moment
+later. Undo and Redo, in the layers heading and on `⌘Z` and `⇧⌘Z` (`Ctrl` on
+Windows and Linux), take changes back and make them again, and a run of arrow keys
+is one change. The numbers are the finished image's pixels, and the app turns them
+into the layout's own when the layout turns the card. A layout that builds on
+another with `extends` or `patch` can be looked at and not changed here, since its
+numbers are not all in its own file.
+
+Editing a layer's settings, the JSON editor, adding images and fonts, and
+exporting a draft are not built yet, and each appears locked with the issue that
+tracks it.
 
 ## Features that are not built yet
 

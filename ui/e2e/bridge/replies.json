@@ -30,8 +30,7 @@
       "reason": "Editing a layer's settings is planned. Tracked in #115"
     },
     "editor.move": {
-      "state": "planned",
-      "reason": "Selecting and dragging layers on the preview is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.use": {
       "state": "planned",

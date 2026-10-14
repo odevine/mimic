@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect } from "../fixtures.mjs";
 
@@ -144,4 +144,128 @@ test("the editor shows what is not built yet as locked", async ({ editor }) => {
   await expect(editor.page.locator("#ed-export")).toHaveAttribute("aria-disabled", "true");
   await expect(editor.page.locator("#ed-json")).toHaveAttribute("aria-disabled", "true");
   await expect(editor.page.locator("#ed-use")).toHaveAttribute("data-gate-reason", /#115/);
+});
+
+// The starter's canvas at 100 dpi is 272 pixels across, and the preview is drawn at
+// that size, so the overlay's box tells how many pixels on screen make one of the card's
+const CARD = { width: 272, height: 370 };
+
+async function titleBox(editor) {
+  const box = await editor.overlay.boundingBox();
+  await editor.layers.filter({ hasText: "title" }).click();
+  await expect(editor.selectionName).toHaveText("title");
+  return { box, x: Number(await editor.page.locator("#ed-sel-x").textContent()) };
+}
+
+test("dragging a text box on the card saves the layout and draws the card again", async ({ editor, scratch, page }) => {
+  await editor.create("Edits", 100);
+  await expect(editor.layers.first()).toBeVisible();
+  const file = draftFile(scratch, "edits", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const src = await editor.preview.getAttribute("src");
+
+  // Pick the title where it is on the card, not from the list
+  const box = await editor.overlay.boundingBox();
+  await editor.layers.filter({ hasText: "title" }).click();
+  const x = Number(await page.locator("#ed-sel-x").textContent());
+  const y = Number(await page.locator("#ed-sel-y").textContent());
+  const w = Number(await page.locator("#ed-sel-w").textContent());
+  const h = Number(await page.locator("#ed-sel-h").textContent());
+  await page.keyboard.press("Escape");
+  await expect(editor.selection).toBeHidden();
+  const from = { x: box.x + ((x + w / 2) / CARD.width) * box.width, y: box.y + ((y + h / 2) / CARD.height) * box.height };
+  await page.mouse.click(from.x, from.y);
+  await expect(editor.selectionName).toHaveText("title");
+
+  const per = CARD.width / box.width;
+  await page.keyboard.down("Alt");
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 30, from.y, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  const moved = Math.round(30 * per);
+
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + moved));
+  const edited = await readFile(file, "utf8");
+  expect(edited).not.toBe(original);
+  // Only the title's x changed, and the file kept its order and layout
+  const was = JSON.parse(original);
+  const now = JSON.parse(edited);
+  expect(Object.keys(now)).toEqual(Object.keys(was));
+  was.textBoxes.title.rect.x += moved;
+  expect(now).toEqual(was);
+  expect(edited.split("\n").length).toBe(original.split("\n").length);
+
+  // The card is drawn again with the title in its new place
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  await editor.waitForPreview();
+
+  // Undo puts the file back as it was, byte for byte
+  await editor.undoButton.click();
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x));
+  expect(await readFile(file, "utf8")).toBe(original);
+  await expect(editor.undoButton).toBeDisabled();
+  await editor.redoButton.click();
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + moved));
+  expect(await readFile(file, "utf8")).toBe(edited);
+});
+
+test("arrow keys nudge a selection and the keyboard undoes the run", async ({ editor, scratch, page }) => {
+  await editor.create("Nudge", 100);
+  const file = draftFile(scratch, "nudge", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const { x } = await titleBox(editor);
+
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(editor.undoButton).toBeEnabled();
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + 2));
+  expect(JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect.x).toBe(JSON.parse(original).textBoxes.title.rect.x + 2);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x));
+  expect(await readFile(file, "utf8")).toBe(original);
+});
+
+test("a layer is raised in the stack and the layout keeps its other keys", async ({ editor, scratch, page }) => {
+  await editor.create("Stack", 100);
+  const file = draftFile(scratch, "stack", "layouts", "normal.json");
+  const original = JSON.parse(await readFile(file, "utf8"));
+  // The starter has one layer, so a second is added to have two to order
+  const next = structuredClone(original);
+  next.stack.push({ id: "mark", part: "background" });
+  await writeFile(file, JSON.stringify(next, null, 2) + "\n");
+  await editor.page.reload();
+  await editor.page.locator("html.booted").waitFor();
+  await editor.page.locator('button[data-mode="editor"]').click();
+  await editor.waitForPreview();
+
+  await editor.layers.filter({ hasText: "background" }).click();
+  await page.locator("#ed-raise").click();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack.map((e) => e.id)).toEqual(["mark", "background"]);
+  const after = JSON.parse(await readFile(file, "utf8"));
+  expect(after.textBoxes).toEqual(original.textBoxes);
+});
+
+test("a layout that builds on another can be looked at and not changed", async ({ editor, scratch, page }) => {
+  await editor.create("Built", 100);
+  const dir = path.join(scratch.home, "mimic", "drafts", "built", "layouts");
+  const raw = await readFile(path.join(dir, "normal.json"), "utf8");
+  await writeFile(path.join(dir, "base.json"), raw.replace('"role": "single"', '"role": "split"'));
+  await writeFile(path.join(dir, "normal.json"), JSON.stringify({ serves: [{ role: "single", kind: "standard" }], extends: ["base"] }));
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await page.locator('button[data-mode="editor"]').click();
+  await editor.waitForPreview();
+
+  await expect(page.locator("#ed-edit-note")).toContainText("extends another one");
+  await editor.layers.filter({ hasText: "title" }).click();
+  await expect(editor.selectionName).toHaveText("title");
+  await expect(editor.handles).toHaveCount(0);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(500);
+  await expect(editor.undoButton).toBeDisabled();
+  expect(JSON.parse(await readFile(path.join(dir, "normal.json"), "utf8")).extends).toEqual(["base"]);
 });

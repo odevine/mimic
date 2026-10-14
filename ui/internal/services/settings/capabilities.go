@@ -80,7 +80,7 @@ var features = []feature{
 	{key: "settings.restoreSession", state: gatePlanned, reason: "Restoring the last session is planned. Tracked in #82"},
 
 	{key: "flow.editor", state: gateLive},
-	{key: "editor.move", state: gatePlanned, reason: "Selecting and dragging layers on the preview is planned. Tracked in #115"},
+	{key: "editor.move", state: gateLive},
 	{key: "editor.levers", state: gatePlanned, reason: "Editing a layer's settings is planned. Tracked in #115"},
 	{key: "editor.json", state: gatePlanned, reason: "Editing the template's JSON is planned. Tracked in #115"},
 	{key: "editor.assets", state: gatePlanned, reason: "Adding and replacing images is planned. Tracked in #115"},

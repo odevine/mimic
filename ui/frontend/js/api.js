@@ -217,6 +217,15 @@ export const api = {
   testCards: () => rpc("Studio", "Presets"),
   setTestCard: (id, card, face) => rpc("Studio", "SetTestCard", { id, card, face: face || 0 }),
   renderDraft: (id, card, face) => rpc("Studio", "Render", { id, card, face: face || 0 }),
+  // describeDraft resolves to what the draft's layout draws for the card, in draw
+  // order: { layout, authored, delivered, items, editable, reason, rev }, where an
+  // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
+  // the places as { x, y, width, height }. applyDraft makes edits to the draft and
+  // saves them, each { op, layout, kind, key, dx, dy, rect, to } with its numbers in
+  // the finished image's pixels, and resolves to { rev, inverse }, the edits that
+  // undo them
+  describeDraft: (id, card, face) => rpc("Studio", "Describe", { id, card, face: face || 0 }),
+  applyDraft: (id, ops) => rpc("Studio", "Apply", { id, ops }),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

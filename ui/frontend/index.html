@@ -502,7 +502,10 @@ Sideboard
             <div id="ed-stage" class="stage fit">
               <div class="stage-inner">
                 <div id="ed-placeholder" class="placeholder-card" aria-hidden="true"></div>
-                <img id="ed-img" class="card" alt="The test card drawn with the template" hidden draggable="false">
+                <div id="ed-canvas" class="ed-canvas" hidden>
+                  <img id="ed-img" class="card" alt="The test card drawn with the template" draggable="false">
+                  <div id="ed-overlay" class="ed-overlay" aria-hidden="true"></div>
+                </div>
               </div>
             </div>
             <div id="ed-activity" class="activity" data-state="idle" role="status" aria-live="polite">
@@ -522,6 +525,36 @@ Sideboard
 
           <div class="region fixed" data-region="2" style="width: 320px">
             <div class="ed-side panel-body">
+              <section class="ed-section" aria-labelledby="ed-layers-heading">
+                <div class="ed-heading-row">
+                  <h3 id="ed-layers-heading" class="section-heading">Layers</h3>
+                  <span class="ed-history">
+                    <button id="ed-undo" class="btn subtle icon-only" type="button" aria-label="Undo" data-tip="Undo (⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                    <button id="ed-redo" class="btn subtle icon-only ed-redo" type="button" aria-label="Redo" data-tip="Redo (⇧⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                  </span>
+                </div>
+                <p id="ed-layers-none" class="dim">Nothing is drawn yet.</p>
+                <ul id="ed-layers" class="ed-layers" role="listbox" aria-label="Layers" hidden></ul>
+              </section>
+              <section class="ed-section" aria-labelledby="ed-selection-heading">
+                <h3 id="ed-selection-heading" class="section-heading">Selection</h3>
+                <p id="ed-selection-none" class="dim">Click the card, or a layer in the list.</p>
+                <div id="ed-selection" hidden>
+                  <p id="ed-selection-name" class="ed-about-name"></p>
+                  <p id="ed-selection-kind" class="dim"></p>
+                  <dl class="ed-readout">
+                    <dt>X</dt><dd id="ed-sel-x"></dd>
+                    <dt>Y</dt><dd id="ed-sel-y"></dd>
+                    <dt>Width</dt><dd id="ed-sel-w"></dd>
+                    <dt>Height</dt><dd id="ed-sel-h"></dd>
+                  </dl>
+                  <div id="ed-reorder" class="ed-reorder">
+                    <button id="ed-raise" class="btn" type="button">Raise</button>
+                    <button id="ed-lower" class="btn" type="button">Lower</button>
+                  </div>
+                </div>
+                <p id="ed-edit-note" class="dim" hidden></p>
+              </section>
               <section class="ed-section" aria-labelledby="ed-about-heading">
                 <h3 id="ed-about-heading" class="section-heading">About</h3>
                 <p id="ed-about-name" class="ed-about-name"></p>

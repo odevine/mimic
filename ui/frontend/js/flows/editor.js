@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { $, h, icon } from "../dom.js";
+import { $, h, isTyping } from "../dom.js";
 import { app, signal, effect, batch } from "../state.js";
 import { toast } from "../components/toast.js";
 import {
@@ -15,6 +15,8 @@ import {
   problems,
   startingCard,
 } from "../studio.js";
+import { asPercent, hitTest, moveRect, nudgeFor, pickAt, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../studiogeometry.js";
+import { createHistory } from "../studiohistory.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
 // template on disk that the app renders as it is, so everything shown here is read
@@ -31,7 +33,20 @@ const store = {
   results: signal([]), // search results for a test card
   searched: signal(""), // the query behind the results
   activity: signal({ state: "idle", title: "Nothing drawn yet", step: "Open a template to draw a test card with it", frac: 0 }),
+  // what the layout draws for the test card, from the app: { layout, delivered, items,
+  // editable, reason }, or null when there is none
+  layout: signal(null),
+  selected: signal(""), // the ref of the item selected, or ""
+  hover: signal(""),
+  // the selected item as it is being dragged, { rect, guides }, or null when it is not
+  live: signal(null),
+  canUndo: signal(false),
+  canRedo: signal(false),
 };
+
+const history = createHistory();
+let renderTimer = 0;
+let describeSeq = 0;
 
 let renderJob = null;
 let renderJobId = "";
@@ -81,8 +96,12 @@ function abandonRender() {
 }
 
 function clearPreview() {
-  $("ed-img").hidden = true;
+  $("ed-canvas").hidden = true;
   $("ed-placeholder").hidden = false;
+  batch(() => {
+    store.layout.value = null;
+    store.live.value = null;
+  });
 }
 
 // render draws the test card through the draft as it is on disk
@@ -110,8 +129,9 @@ async function render() {
     renderJobId = "";
     const img = $("ed-img");
     img.src = api.renderImageURL(jobId);
-    img.hidden = false;
+    $("ed-canvas").hidden = false;
     $("ed-placeholder").hidden = true;
+    loadLayout();
     if (done.artMissing) finish("warn", `Drew ${card.Name}`, "The art could not be fetched, so the art window is empty");
     else finish("done", `Drew ${card.Name}`, "");
   } catch (err) {
@@ -160,7 +180,10 @@ async function open(id) {
   if (seq !== openSeq) return;
   await loadPresets();
   const start = startingCard(view.meta, store.presets.peek());
+  history.clear();
+  syncHistory();
   batch(() => {
+    store.selected.value = "";
     store.current.value = id;
     store.view.value = view;
     store.card.value = start ? start.card : null;
@@ -426,6 +449,435 @@ function drawChosen() {
   $("ed-card-line").textContent = card ? cardLine(card) : "No card chosen";
 }
 
+// --- the layout on the preview ---
+
+const KIND_LABEL = { layer: "Layer", text: "Text box", art: "Art window", symbol: "Symbol" };
+
+// nameOf is what an item is called in the lists
+function nameOf(item) {
+  if (item.kind === "art") return "Art window";
+  if (item.kind === "symbol" && item.key === "set") return "Set symbol";
+  return item.key;
+}
+
+const itemOf = (view, ref) => (view && ref ? view.items.find((it) => refOf(it) === ref) : null);
+const selectedItem = () => itemOf(store.layout.peek(), store.selected.peek());
+
+// loadLayout asks the app what the layout draws for the test card, which is where the
+// selection comes from. It is asked again after each edit and each render
+async function loadLayout() {
+  const id = store.current.peek();
+  const card = store.card.peek();
+  if (!id || !card) return;
+  const seq = ++describeSeq;
+  try {
+    const view = await api.describeDraft(id, card, store.face.peek());
+    if (seq !== describeSeq || id !== store.current.peek()) return;
+    batch(() => {
+      store.layout.value = view;
+      // A selection that is no longer drawn is let go
+      if (store.selected.peek() && !itemOf(view, store.selected.peek())) store.selected.value = "";
+    });
+  } catch {
+    if (seq === describeSeq) store.layout.value = null;
+  }
+}
+
+function select(ref) {
+  flushNudge();
+  store.selected.value = ref || "";
+}
+
+// --- edits ---
+
+let chain = Promise.resolve();
+
+// scheduleRender draws the card again once the edits stop for a moment
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 150);
+}
+
+function syncHistory() {
+  store.canUndo.value = history.canUndo;
+  store.canRedo.value = history.canRedo;
+}
+
+// commit makes edits to the draft, one batch after another, and remembers how to take
+// them back. merge marks an edit that joins the one before it when they are close
+function commit(ops, label, merge) {
+  const id = store.current.peek();
+  const run = async () => {
+    try {
+      const res = await api.applyDraft(id, ops);
+      history.record({ ops, inverse: res.inverse, label, merge });
+      syncHistory();
+      await loadLayout();
+      scheduleRender();
+    } catch (err) {
+      toast(err.message, "err", 6000);
+      await loadLayout();
+    } finally {
+      store.live.value = null;
+    }
+  };
+  chain = chain.then(run, run);
+  return chain;
+}
+
+// replay makes the edits of an undo or a redo. One the app refuses leaves the history
+// where it was
+function replay(ops, undoing) {
+  const id = store.current.peek();
+  const run = async () => {
+    try {
+      await api.applyDraft(id, ops);
+      await loadLayout();
+      scheduleRender();
+    } catch (err) {
+      toast(err.message, "err", 6000);
+      if (undoing) history.redo();
+      else history.undo();
+    }
+    syncHistory();
+  };
+  chain = chain.then(run, run);
+  return chain;
+}
+
+function undo() {
+  flushNudge();
+  const entry = history.undo();
+  if (!entry) return;
+  syncHistory();
+  app.status.value = `Undid: ${entry.label}`;
+  replay(entry.inverse, true);
+}
+
+function redo() {
+  flushNudge();
+  const entry = history.redo();
+  if (!entry) return;
+  syncHistory();
+  app.status.value = `Redid: ${entry.label}`;
+  replay(entry.ops, false);
+}
+
+// --- nudging ---
+
+let nudge = null;
+
+// nudgeSelected moves the selection a little, showing it at once and saving the whole
+// run of keys as one edit once they stop
+function nudgeSelected(dx, dy) {
+  const item = selectedItem();
+  const view = store.layout.peek();
+  if (!item || !view || !view.editable) return;
+  if (nudge && nudge.ref !== refOf(item)) flushNudge();
+  nudge = nudge || { ref: refOf(item), item, dx: 0, dy: 0, timer: 0 };
+  nudge.dx += dx;
+  nudge.dy += dy;
+  store.live.value = { rect: moveRect(item.delivered, nudge.dx, nudge.dy), guides: [] };
+  clearTimeout(nudge.timer);
+  nudge.timer = setTimeout(flushNudge, 250);
+}
+
+function flushNudge() {
+  if (!nudge) return;
+  const n = nudge;
+  nudge = null;
+  clearTimeout(n.timer);
+  if (!n.dx && !n.dy) {
+    store.live.value = null;
+    return;
+  }
+  const view = store.layout.peek();
+  commit([{ op: "move", layout: view.layout, kind: n.item.kind, key: n.item.key, dx: n.dx, dy: n.dy }], `Move ${nameOf(n.item)}`, "nudge");
+}
+
+// --- the pointer ---
+
+let gesture = null;
+
+// A press that moves less than this many pixels on screen is a click
+const CLICK_SLOP = 3;
+// Edges snap to a line within this many pixels on screen
+const SNAP_PX = 6;
+
+function overlayBox() {
+  return $("ed-overlay").getBoundingClientRect();
+}
+
+// nativePoint is where an event is on the finished image, in its own pixels
+function nativePoint(e) {
+  const r = overlayBox();
+  const c = store.layout.peek().delivered;
+  return { x: ((e.clientX - r.left) * c.width) / r.width, y: ((e.clientY - r.top) * c.height) / r.height };
+}
+
+function onPointerDown(e) {
+  const view = store.layout.peek();
+  if (e.button !== 0 || !view) return;
+  flushNudge();
+  const overlay = $("ed-overlay");
+  const handle = e.target.closest && e.target.closest(".ed-handle");
+  const current = selectedItem();
+  if (handle && current && view.editable) {
+    gesture = { kind: "resize", handle: handle.dataset.handle, item: current, start: { x: e.clientX, y: e.clientY }, rect0: current.delivered, moved: false };
+  } else {
+    const p = nativePoint(e);
+    const was = store.selected.peek();
+    const hit = pickAt(view.items, p, was);
+    store.selected.value = hit ? refOf(hit) : "";
+    if (!hit) return;
+    gesture = { kind: view.editable ? "move" : "click", item: hit, start: { x: e.clientX, y: e.clientY }, rect0: hit.delivered, moved: false, p, wasSelected: refOf(hit) === was };
+  }
+  try {
+    // Capture keeps the drag going when the pointer leaves the card. A press with no
+    // pointer behind it, such as one a script sends, has nothing to capture
+    overlay.setPointerCapture(e.pointerId);
+  } catch {
+    // The gesture still ends on the overlay's own events
+  }
+  e.preventDefault();
+}
+
+function onPointerMove(e) {
+  const view = store.layout.peek();
+  if (!view) return;
+  if (!gesture) {
+    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e), null);
+    store.hover.value = hit ? refOf(hit) : "";
+    return;
+  }
+  const g = gesture;
+  const sx = e.clientX - g.start.x;
+  const sy = e.clientY - g.start.y;
+  if (!g.moved && Math.hypot(sx, sy) < CLICK_SLOP) return;
+  g.moved = true;
+  if (g.kind === "click") return;
+  const r = overlayBox();
+  const per = view.delivered.width / r.width; // pixels of the finished image for one on screen
+  let dx = Math.round(sx * per);
+  let dy = Math.round(sy * per);
+  $("ed-overlay").classList.add("moving");
+  if (g.kind === "resize") {
+    store.live.value = { rect: resizeRect(g.rect0, g.handle, dx, dy), guides: [] };
+    return;
+  }
+  let guides = [];
+  if (!e.altKey) {
+    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item)), SNAP_PX * per);
+    ({ dx, dy, guides } = snapped);
+  }
+  store.live.value = { rect: moveRect(g.rect0, dx, dy), guides, dx, dy };
+}
+
+function endGesture() {
+  gesture = null;
+  $("ed-overlay").classList.remove("moving");
+}
+
+function onPointerUp(e) {
+  const g = gesture;
+  if (!g) return;
+  const view = store.layout.peek();
+  endGesture();
+  if ($("ed-overlay").hasPointerCapture?.(e.pointerId)) $("ed-overlay").releasePointerCapture(e.pointerId);
+  if (!g.moved) {
+    // A click on what is selected already reaches what lies beneath it
+    if (g.wasSelected) {
+      const hit = hitTest(view.items, g.p, refOf(g.item));
+      store.selected.value = hit ? refOf(hit) : "";
+    }
+    return;
+  }
+  const live = store.live.peek();
+  if (!live || g.kind === "click") {
+    store.live.value = null;
+    return;
+  }
+  const target = { layout: view.layout, kind: g.item.kind, key: g.item.key };
+  if (g.kind === "move" && (live.dx || live.dy)) {
+    commit([{ op: "move", ...target, dx: live.dx, dy: live.dy }], `Move ${nameOf(g.item)}`, "");
+  } else if (g.kind === "resize") {
+    commit([{ op: "resize", ...target, rect: live.rect }], `Resize ${nameOf(g.item)}`, "");
+  } else {
+    store.live.value = null;
+  }
+}
+
+function cancelGesture() {
+  endGesture();
+  store.live.value = null;
+}
+
+function reorder(by) {
+  const view = store.layout.peek();
+  const item = selectedItem();
+  if (!view || !item || item.kind !== "layer" || !view.editable) return;
+  const layers = view.items.filter((it) => it.kind === "layer");
+  const at = layers.findIndex((it) => refOf(it) === refOf(item));
+  const to = at + by;
+  if (to < 0 || to >= layers.length) return;
+  commit([{ op: "reorder", layout: view.layout, kind: "layer", key: item.key, to }], `${by > 0 ? "Raise" : "Lower"} ${nameOf(item)}`, "");
+}
+
+function onKey(e) {
+  if (app.mode.peek() !== "editor" || e.defaultPrevented || isTyping() || document.querySelector("dialog[open]")) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && !e.altKey && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    if (e.shiftKey) redo();
+    else undo();
+    return;
+  }
+  if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "y") {
+    e.preventDefault();
+    redo();
+    return;
+  }
+  if (mod || e.altKey) return;
+  if (e.key === "Escape") {
+    if (gesture) cancelGesture();
+    else if (store.selected.peek()) select("");
+    return;
+  }
+  const n = nudgeFor(e.key, e.shiftKey);
+  if (n && store.selected.peek()) {
+    e.preventDefault();
+    nudgeSelected(n.dx, n.dy);
+  }
+}
+
+// --- drawing the layout ---
+
+function drawOverlay() {
+  const view = store.layout.value;
+  const sel = store.selected.value;
+  const hover = store.hover.value;
+  const live = store.live.value;
+  const overlay = $("ed-overlay");
+  if (!view) {
+    overlay.replaceChildren();
+    return;
+  }
+  const canvas = view.delivered;
+  const box = (rect, cls, ...children) => {
+    const p = asPercent(rect, canvas);
+    return h("div", { class: `ed-box ${cls}`, style: `left:${p.left}%;top:${p.top}%;width:${p.width}%;height:${p.height}%` }, ...children);
+  };
+  const out = [];
+  const over = hover && hover !== sel ? itemOf(view, hover) : null;
+  if (over && over.drawn) out.push(box(over.delivered, "hover"));
+  const item = itemOf(view, sel);
+  if (item) {
+    const rect = live ? live.rect : item.delivered;
+    if (rect.width > 0 && rect.height > 0) {
+      let handles = [];
+      if (view.editable && item.kind !== "layer") {
+        const per = overlayBox().width / canvas.width;
+        handles = visibleHandles(rect.width * per, rect.height * per).map((name) => h("div", { class: "ed-handle", dataset: { handle: name } }));
+      }
+      out.push(box(rect, `sel${item.drawn ? "" : " idle"}`, ...handles));
+    }
+  }
+  if (live) {
+    for (const g of live.guides) {
+      const at = g.axis === "x" ? (g.at / canvas.width) * 100 : (g.at / canvas.height) * 100;
+      out.push(h("div", { class: `ed-guide ${g.axis}`, style: g.axis === "x" ? `left:${at}%` : `top:${at}%` }));
+    }
+  }
+  overlay.replaceChildren(...out);
+  overlay.classList.toggle("can-move", view.editable && !!hover);
+}
+
+function drawLayers() {
+  const view = store.layout.value;
+  const list = $("ed-layers");
+  // A list with nothing in it is hidden, since a listbox has to hold options
+  list.hidden = !view;
+  $("ed-layers-none").hidden = !!view;
+  if (!view) {
+    list.replaceChildren();
+    return;
+  }
+  list.replaceChildren(
+    ...[...view.items].reverse().map((it) =>
+      h(
+        "li",
+        {
+          class: `ed-layer${it.drawn ? "" : " undrawn"}`,
+          role: "option",
+          "aria-selected": "false",
+          tabIndex: -1,
+          title: it.why || "",
+          dataset: { ref: refOf(it) },
+          onclick: () => select(refOf(it)),
+        },
+        h("span", { class: "ed-layer-name" }, nameOf(it)),
+        h("span", { class: "ed-layer-kind" }, KIND_LABEL[it.kind] || it.kind),
+      ),
+    ),
+  );
+  markSelected(store.selected.peek());
+}
+
+// markSelected shows which row is selected without rebuilding the list, so a row
+// keeps the keyboard focus it has
+function markSelected(sel) {
+  const rows = [...$("ed-layers").querySelectorAll(".ed-layer")];
+  rows.forEach((row, i) => {
+    const on = row.dataset.ref === sel;
+    row.setAttribute("aria-selected", String(on));
+    row.tabIndex = on || (!sel && i === 0) ? 0 : -1;
+  });
+}
+
+function onLayersKey(e) {
+  // An arrow with a modifier is a nudge, which the page handles wherever the focus is
+  if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+  const rows = [...$("ed-layers").querySelectorAll(".ed-layer")];
+  const at = rows.indexOf(document.activeElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = rows[Math.min(rows.length - 1, Math.max(0, at + (e.key === "ArrowDown" ? 1 : -1)))];
+    if (next) {
+      select(next.dataset.ref);
+      next.focus();
+    }
+  } else if ((e.key === "Enter" || e.key === " ") && at >= 0) {
+    e.preventDefault();
+    select(rows[at].dataset.ref);
+  }
+}
+
+function drawSelection() {
+  const view = store.layout.value;
+  const item = itemOf(view, store.selected.value);
+  const live = store.live.value;
+  $("ed-selection-none").hidden = !!item;
+  $("ed-selection").hidden = !item;
+  $("ed-edit-note").hidden = !(view && !view.editable);
+  $("ed-edit-note").textContent = view && !view.editable ? view.reason : "";
+  if (!item) return;
+  const rect = live ? live.rect : item.delivered;
+  $("ed-selection-name").textContent = nameOf(item);
+  $("ed-selection-kind").textContent = item.drawn ? KIND_LABEL[item.kind] : `${KIND_LABEL[item.kind]}, not drawn: ${item.why}`;
+  const blank = rect.width === 0 && rect.height === 0;
+  $("ed-sel-x").textContent = blank ? "" : String(rect.x);
+  $("ed-sel-y").textContent = blank ? "" : String(rect.y);
+  $("ed-sel-w").textContent = blank ? "" : String(rect.width);
+  $("ed-sel-h").textContent = blank ? "" : String(rect.height);
+  const layers = view.items.filter((it) => it.kind === "layer");
+  const at = layers.findIndex((it) => refOf(it) === refOf(item));
+  const reorderable = item.kind === "layer" && view.editable;
+  $("ed-reorder").hidden = !reorderable;
+  $("ed-raise").disabled = !reorderable || at >= layers.length - 1;
+  $("ed-lower").disabled = !reorderable || at <= 0;
+}
+
 // enter reads what the mode shows each time it is opened, so a draft made or
 // changed elsewhere is never stale, and opens the newest draft when none is open
 async function enter() {
@@ -447,6 +899,21 @@ export function initEditor() {
   $("ed-rename").addEventListener("click", rename);
   $("ed-delete").addEventListener("click", remove);
   $("ed-draft-select").addEventListener("change", (e) => open(e.target.value));
+
+  const overlay = $("ed-overlay");
+  overlay.addEventListener("pointerdown", onPointerDown);
+  overlay.addEventListener("pointermove", onPointerMove);
+  overlay.addEventListener("pointerup", onPointerUp);
+  overlay.addEventListener("pointercancel", cancelGesture);
+  overlay.addEventListener("pointerleave", () => {
+    if (!gesture) store.hover.value = "";
+  });
+  $("ed-layers").addEventListener("keydown", onLayersKey);
+  $("ed-undo").addEventListener("click", undo);
+  $("ed-redo").addEventListener("click", redo);
+  $("ed-raise").addEventListener("click", () => reorder(1));
+  $("ed-lower").addEventListener("click", () => reorder(-1));
+  document.addEventListener("keydown", onKey);
 
   $("ed-search-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -485,6 +952,14 @@ export function initEditor() {
   effect(drawSide);
   effect(drawActivity);
   effect(drawChosen);
+  effect(drawOverlay);
+  effect(drawLayers);
+  effect(() => markSelected(store.selected.value));
+  effect(drawSelection);
+  effect(() => {
+    $("ed-undo").disabled = !store.canUndo.value;
+    $("ed-redo").disabled = !store.canRedo.value;
+  });
   effect(() => {
     if (app.mode.value === "editor") enter();
   });

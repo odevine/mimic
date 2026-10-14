@@ -138,6 +138,8 @@ type studioAPI interface {
 	Open(id string) (studio.OpenView, error)
 	Presets() []studio.Preset
 	ResolvePreset(id string) (*cardlist.ShapedCard, error)
+	SavePreset(req studio.SavePresetRequest) (studio.Preset, error)
+	DeletePreset(id string) error
 	SetTestCard(req studio.TestCardRequest) error
 	Render(req studio.RenderRequest) (render.Started, error)
 	Describe(req studio.DescribeRequest) (studio.DescribeView, error)
@@ -150,6 +152,10 @@ type studioAPI interface {
 	ImportImage(req studio.ImageRequest) (studio.ImportResult, error)
 	ImportFont(req studio.FontRequest) (studio.ImportResult, error)
 	SetMarks(req studio.MarksRequest) error
+	Release(id string) (studio.ReleaseView, error)
+	Use(id string) (studio.UseResult, error)
+	Export(req studio.ExportRequest) (studio.ExportResult, error)
+	ShowFolder(id string) error
 }
 
 // Studio is the bound template editor service

@@ -705,3 +705,82 @@ test("the template's undo and redo are in its section and take back a change mad
   await page.locator(".ed-draft #ed-redo").click();
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(99);
 });
+
+test("exporting writes a bundle from the template, after showing what it says", async ({ editor, scratch }) => {
+  await editor.create("Mine", 100);
+  await editor.exportButton.click();
+  await expect(editor.exportDialog).toBeVisible();
+  await expect(editor.exportFacts).toContainText("user.mine");
+  await expect(editor.exportFacts).toContainText("0.1.0");
+  await expect(editor.exportProblems).toHaveCount(0);
+  // The dialog writes nothing until a place is chosen
+  expect(await scratch.saved()).toEqual([]);
+  await editor.exportConfirm.click();
+  await expect(editor.toasts.last()).toContainText("Saved user.mine-0.1.0.mimic");
+  await expect(editor.exportDialog).toBeHidden();
+  expect(await scratch.saved()).toEqual(["user.mine-0.1.0.mimic"]);
+  const bytes = await readFile(scratch.savedPath("user.mine-0.1.0.mimic"));
+  expect(bytes.subarray(0, 2).toString()).toBe("PK");
+  expect(bytes.includes("bundle.json") && bytes.includes("manifest.json")).toBe(true);
+});
+
+test("a copy's export shows the credit that names the template it came from", async ({ editor, templates }) => {
+  await templates.show();
+  await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();
+  await editor.dialogName.fill("Kept");
+  await editor.dialogConfirm.click();
+  await editor.waitForPreview();
+  await editor.exportButton.click();
+  await expect(editor.exportDialog).toBeVisible();
+  await expect(editor.exportCredits.first()).toContainText("Forked from mimic.m15");
+  await expect(editor.exportNoCredits).toBeHidden();
+});
+
+test("show folder opens the template's own folder", async ({ editor, scratch }) => {
+  await editor.create("Mine", 100);
+  await editor.folderButton.click();
+  await expect.poll(async () => (await scratch.events()).filter(([kind]) => kind === "path").map(([, detail]) => detail)).toContain(path.join(scratch.home, "mimic", "drafts", "mine"));
+});
+
+test("a test card that is saved is there after a reload, drawn from what was saved", async ({ editor, page }) => {
+  await editor.create("Mine", 100);
+  await editor.preset("Land").click();
+  await editor.waitForPreview();
+  await editor.savePreset.click();
+  await expect(editor.dialogName).toHaveValue("Flooded Strand");
+  await editor.dialogName.fill("My strand");
+  await editor.dialogConfirm.click();
+  await expect(editor.userPresets).toHaveCount(1);
+  await expect(editor.userPresets.locator(".chip").first()).toHaveAttribute("aria-pressed", "true");
+  await editor.waitForPreview();
+  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
+
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await editor.show();
+  await expect(editor.userPresets.locator(".chip").first()).toHaveText("My strand");
+  await editor.preset("Monocolored").click();
+  await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
+  await editor.userPresets.locator(".chip").first().click();
+  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
+  await editor.waitForPreview();
+
+  await editor.userPresets.getByRole("button", { name: "Remove the test card My strand" }).click();
+  await expect(editor.userPresets).toHaveCount(0);
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await editor.show();
+  await expect(editor.userPresets).toHaveCount(0);
+});
+
+test("the coverage strip draws the six test cards through the template", async ({ editor }) => {
+  await editor.create("Mine", 100);
+  await editor.coverage.locator("summary").click();
+  await editor.coverageRun.click();
+  await expect(editor.coverageLine).toHaveText("6 of 6 drawn", { timeout: 60_000 });
+  await expect(editor.tiles).toHaveCount(6);
+  const sizes = await editor.tiles.locator("img").evaluateAll((imgs) => imgs.map((i) => [i.naturalWidth, i.naturalHeight]));
+  expect(sizes).toHaveLength(6);
+  // A strip tile is smaller than the card drawn for the preview at 100 dpi
+  for (const [w] of sizes) expect(w).toBeLessThan(272);
+});

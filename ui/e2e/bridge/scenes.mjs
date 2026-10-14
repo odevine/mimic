@@ -9,7 +9,7 @@ import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
 import { noTemplate } from "../bridge-fixtures.mjs";
-import { assetsView, card, done, draftSummary, draftView, partView, result, standardAssets } from "./cards.mjs";
+import { assetsView, card, done, draftSummary, draftView, partView, presetCards, result, standardAssets } from "./cards.mjs";
 
 const ELF = {
   ManaCost: "{G}",
@@ -202,6 +202,61 @@ export const scenes = {
       await editor.addPart.selectOption({ label: "A new part from a PNG image" });
       await editor.addPartName.fill("glow");
       await expect(editor.addSlot).toBeVisible();
+    },
+  },
+  "editor-export": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      bridge.reply("Studio.Release", {
+        templateId: "user.my-frame",
+        name: "My frame",
+        version: "0.1.0",
+        author: "Jane Doe",
+        license: "CC-BY-4.0",
+        credits: [
+          { name: "Forked from mimic.m15 1.2.0", note: "frame art", url: "https://example.com/m15" },
+          { name: "Jane Doe", note: "new pinlines" },
+        ],
+        filename: "user.my-frame-0.1.0.mimic",
+        installed: false,
+        active: false,
+        diagnostics: [{ severity: "warning", message: "parts/frame/w.png is larger than the canvas" }],
+        ready: true,
+      });
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.exportButton.click();
+      await expect(editor.exportDialog).toBeVisible();
+      await expect(editor.exportCredits).toHaveCount(2);
+    },
+  },
+  "editor-coverage": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      let issued = 0;
+      bridge.reply("Studio.Render", () => ({ jobId: `job-${++issued}`, dpi: 40 }));
+      bridge.reply("Studio.ResolvePreset", (id) => presetCards[id]);
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.coverage.locator("summary").click();
+      await editor.coverageRun.click();
+      for (let n = 2; n <= 7; n++) {
+        await expect.poll(() => issued).toBeGreaterThanOrEqual(n);
+        await bridge.job(`job-${n}`, [n === 7 ? { seq: 1, done: true, error: "no frame for a land with this condition" } : done(1)]);
+      }
+      await expect(editor.coverageLine).toHaveText("5 of 6 drawn. Not drawn: Land");
     },
   },
   "editor-fonts": {

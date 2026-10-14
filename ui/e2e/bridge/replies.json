@@ -9,12 +9,10 @@
       "state": "live"
     },
     "editor.coverage": {
-      "state": "planned",
-      "reason": "Rendering a set of cards at once to check a frame is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.export": {
-      "state": "planned",
-      "reason": "Exporting a draft as a bundle is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.fonts": {
       "state": "live"
@@ -29,8 +27,7 @@
       "state": "live"
     },
     "editor.use": {
-      "state": "planned",
-      "reason": "Rendering with a draft from the other modes is planned. Tracked in #115"
+      "state": "live"
     },
     "flow.art": {
       "state": "needs-engine",

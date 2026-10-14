@@ -84,3 +84,79 @@ const CANVAS_INCHES = { width: 2.72, height: 3.7 };
 export function canvasSize(dpi) {
   return { width: Math.round(CANVAS_INCHES.width * dpi), height: Math.round(CANVAS_INCHES.height * dpi) };
 }
+
+// --- finishing a template ---
+
+// creditLine is one credit as the export dialog lists it
+export function creditLine(c) {
+  const name = String(c.name || "").trim() || "Unnamed credit";
+  const note = String(c.note || "").trim();
+  return note ? `${name}, ${note}` : name;
+}
+
+// bytesLabel is a file size in the units a person reads
+export function bytesLabel(bytes) {
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(bytes >= 1e7 ? 0 : 1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+}
+
+// useMessage says what Use in mimic did, for the toast
+export function useMessage(res, title) {
+  const made = res.replaced ? `${title} is up to date in Single, List and Run as ${res.template}` : `${title} is ready in Single, List and Run as ${res.template}`;
+  return res.active ? `${made}. It is the template in use, so the next card shows the change.` : `${made}. Choose it in Templates to draw with it.`;
+}
+
+// exportMessage says where an export went, for the toast
+export function exportMessage(res) {
+  const name = String(res.path || "").split(/[\\/]/).pop();
+  return `Saved ${name} (${bytesLabel(res.bytes)})`;
+}
+
+// releaseFacts are the lines the export dialog states before a bundle is written,
+// leaving out what the template does not say
+export function releaseFacts(r) {
+  const facts = [
+    ["Template", r.name],
+    ["Id", r.templateId],
+    ["Version", r.version],
+    ["Author", r.author],
+    ["License", r.license],
+  ];
+  return facts.filter(([, value]) => String(value || "").trim() !== "").map(([label, value]) => ({ label, value }));
+}
+
+// The longest name a saved test card can have, which the app also holds it to
+export const TEST_CARD_LABEL_MAX = 40;
+
+// checkTestCardLabel reads the name of a test card to save, and says what is wrong
+export function checkTestCardLabel(text) {
+  const label = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (!label) return { label: "", error: "Give the test card a name" };
+  if ([...label].length > TEST_CARD_LABEL_MAX) return { label: "", error: `A name is at most ${TEST_CARD_LABEL_MAX} characters` };
+  return { label, error: "" };
+}
+
+// suggestedLabel is the name a test card is offered under, from the card's own
+export function suggestedLabel(card) {
+  const name = String((card && card.Name) || "").trim();
+  return [...name].slice(0, TEST_CARD_LABEL_MAX).join("").trim();
+}
+
+// coverageTile is one preset's place in the coverage strip. An outcome is
+// { state: "waiting" | "drawing" | "drawn" | "failed", reason }
+export function coverageTile(preset, outcome) {
+  const o = outcome || { state: "waiting" };
+  const text = { waiting: "Not drawn yet", drawing: "Drawing", drawn: "Drawn", failed: o.reason || "Could not be drawn" }[o.state];
+  return { id: preset.id, label: preset.label, state: o.state, text };
+}
+
+// coverageSummary is the line above the strip, saying how many cards the template drew
+// and which it could not
+export function coverageSummary(tiles, stale) {
+  const done = tiles.filter((t) => t.state === "drawn").length;
+  const failed = tiles.filter((t) => t.state === "failed");
+  if (tiles.every((t) => t.state === "waiting")) return "Draws every test card small, to see the frame each one gets";
+  const said = `${done} of ${tiles.length} drawn`;
+  const missing = failed.length ? `. Not drawn: ${failed.map((t) => t.label).join(", ")}` : "";
+  return `${said}${missing}${stale ? ". The template has changed since" : ""}`;
+}

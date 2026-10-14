@@ -118,10 +118,14 @@ func catalogRow(v catalog.Version, cached bool) versionRow {
 // the engine-compatibility decision without stamping a binary
 var templateVersionSatisfied = defaultVersionSatisfied
 
-// versionLabel renders a version for display, naming the synthetic local one
+// versionLabel renders a version for display, naming the synthetic local one and the
+// draft the editor made
 func versionLabel(version string) string {
-	if version == pipeline.LocalVersion {
+	switch version {
+	case pipeline.LocalVersion:
 		return "local (developer assets)"
+	case pipeline.DraftVersion:
+		return "draft (from the editor)"
 	}
 	return version
 }

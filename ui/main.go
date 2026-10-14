@@ -110,7 +110,7 @@ func checkSmokeOutput(dir string) error {
 // newStudio is the editor's service. The launch check has no network, so its presets look
 // up made-up cards
 func newStudio(ws *workspace.Workspace, smoke bool) *studio.Service {
-	s := studio.New(ws)
+	s := studio.New(ws, desktop.OpenPath)
 	if smoke {
 		s.UseStandIn()
 	}

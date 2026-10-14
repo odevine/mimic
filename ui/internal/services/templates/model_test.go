@@ -129,3 +129,25 @@ func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
 		t.Fatalf("local-only row = %+v, want a single local version", row)
 	}
 }
+
+func TestVersionLabelNamesTheVersionsThatAreNotReleases(t *testing.T) {
+	cases := map[string]string{
+		pipeline.LocalVersion: "local (developer assets)",
+		pipeline.DraftVersion: "draft (from the editor)",
+		"1.2.3":               "1.2.3",
+	}
+	for in, want := range cases {
+		if got := versionLabel(in); got != want {
+			t.Errorf("versionLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestATemplateTheEditorMadeIsListedAtTheDraftVersion(t *testing.T) {
+	in := pipeline.Installed{ID: "user.mine", Info: template.Info{Name: "Mine"}}
+	rows := buildTemplateRows(nil, []pipeline.Installed{in}, func(string) bool { return false }, func(string, string) bool { return true }, func(string) []string { return []string{pipeline.DraftVersion} })
+	row, ok := findRow(rows, "user.mine")
+	if !ok || len(row.versions) != 1 || row.versions[0].version != "draft" || !row.versions[0].selectable || !row.versions[0].cached {
+		t.Fatalf("row = %+v, %v", row, ok)
+	}
+}

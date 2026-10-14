@@ -85,9 +85,9 @@ var features = []feature{
 	{key: "editor.json", state: gateLive},
 	{key: "editor.assets", state: gateLive},
 	{key: "editor.fonts", state: gateLive},
-	{key: "editor.use", state: gatePlanned, reason: "Rendering with a draft from the other modes is planned. Tracked in #115"},
-	{key: "editor.export", state: gatePlanned, reason: "Exporting a draft as a bundle is planned. Tracked in #115"},
-	{key: "editor.coverage", state: gatePlanned, reason: "Rendering a set of cards at once to check a frame is planned. Tracked in #115"},
+	{key: "editor.use", state: gateLive},
+	{key: "editor.export", state: gateLive},
+	{key: "editor.coverage", state: gateLive},
 
 	{key: "output.mpc", state: gateLive},
 	{key: "output.pdf", state: gatePlanned, reason: "Print sheets are planned. Tracked in #85"},

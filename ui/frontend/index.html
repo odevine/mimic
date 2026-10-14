@@ -1264,6 +1264,15 @@ Sideboard
                       role="group"
                       aria-label="Preset cards"
                     ></div>
+                    <button
+                      id="ed-save-preset"
+                      class="btn subtle ed-save-preset"
+                      type="button"
+                      data-tip="Keep this card, with the changes made to its fields, in the list of test cards"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-star" /></svg
+                      >Save as a test card…
+                    </button>
                     <details
                       id="ed-fine-details"
                       class="disclosure ed-properties"
@@ -1487,6 +1496,24 @@ Sideboard
                   <div id="ed-activity-fill" class="fill"></div>
                 </div>
               </div>
+              <details id="ed-coverage" class="disclosure ed-coverage">
+                <summary>
+                  <svg class="icon" aria-hidden="true">
+                    <use href="icons.svg#i-chevron-down" /></svg
+                  >Coverage
+                </summary>
+                <div class="ed-coverage-head">
+                  <p id="ed-coverage-line" class="dim"></p>
+                  <button id="ed-coverage-run" class="btn" type="button">
+                    Draw every test card
+                  </button>
+                </div>
+                <ul
+                  id="ed-coverage-tiles"
+                  class="ed-coverage-tiles"
+                  aria-label="Test cards drawn small"
+                ></ul>
+              </details>
               <div id="ed-json-pane" class="ed-json" hidden>
                 <div class="ed-json-head">
                   <div
@@ -1760,21 +1787,14 @@ Sideboard
                   role="group"
                   aria-label="Use the template"
                 >
-                  <button
-                    id="ed-use"
-                    class="btn"
-                    type="button"
-                    data-feature="editor.use"
-                  >
+                  <button id="ed-use" class="btn primary" type="button">
                     Use in mimic
                   </button>
-                  <button
-                    id="ed-export"
-                    class="btn"
-                    type="button"
-                    data-feature="editor.export"
-                  >
+                  <button id="ed-export" class="btn" type="button">
                     Export…
+                  </button>
+                  <button id="ed-folder" class="btn" type="button">
+                    Show folder
                   </button>
                   <button
                     id="ed-json"
@@ -2388,6 +2408,44 @@ Sideboard
       <div class="dialog-foot">
         <button class="btn" type="button" data-close>Cancel</button>
         <button id="draft-confirm" class="btn primary" type="button"></button>
+      </div>
+    </dialog>
+
+    <dialog
+      id="ed-export-dialog"
+      class="dialog"
+      aria-labelledby="ed-export-title"
+      style="width: min(520px, calc(100vw - 32px))"
+    >
+      <div class="dialog-head">
+        <h2 id="ed-export-title">Export the template</h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="dim">
+          The bundle carries the template's images, license and credits, and
+          anyone who has it can use them. Check what it says before it goes
+          anywhere.
+        </p>
+        <dl id="ed-export-facts" class="ed-readout ed-export-facts"></dl>
+        <h3 class="ed-subheading">Credits</h3>
+        <p id="ed-export-nocredits" class="dim">This template lists no credits.</p>
+        <ul id="ed-export-credits" class="ed-export-credits"></ul>
+        <ul id="ed-export-problems" class="ed-problems" role="alert"></ul>
+        <p id="ed-export-error" class="rules-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button id="ed-export-confirm" class="btn primary" type="button">
+          Choose where to save…
+        </button>
       </div>
     </dialog>
 

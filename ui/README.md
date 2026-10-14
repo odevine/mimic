@@ -452,8 +452,36 @@ list still change it. Items a drag snaps to are marked the same way, and none ar
 marked to begin with. Both are kept with the draft, beside its test card, and are not
 part of the template.
 
-Using a draft from the other modes and exporting it are not built yet, and each
-appears locked with the issue that tracks it.
+Three buttons at the bottom of the right column finish a template. Use in mimic builds
+the draft into a template and keeps it among the installed ones as `user.<name>` at the
+version `draft`, so Single, List and Run can draw with it once it is chosen in Templates,
+where its version is listed as a draft from the editor and can be copied back into the
+editor like any other. Using it again after more edits replaces what was kept, and when
+the template in use is that one it is opened again, so the next card shows the change. A
+run in progress keeps the template it started with, so the button waits until it ends.
+Deleting the template in the editor takes it back out of the installed ones, and the
+default template is in use if the deleted one was. Export asks first, in a dialog that
+states the name, id, version, author and license, lists every credit, including the one
+a copy keeps that names its original, and lists what stops the template being built, and
+then asks where to save a `.mimic` file named after the template and its version. The
+bundle is the same one Use in mimic keeps, with its license and credits. Submitting it
+to the template catalog stays a step done by hand. Show folder opens the draft's folder in
+the system's file browser, for editing a file in another tool.
+
+Save as a test card, under the presets, keeps the card being tested, with the changes made
+to its fields, under a name of up to 40 characters, in `testcards.json` beside the drafts.
+It is offered in every draft after the six presets, needs no lookup and works with no
+network, and a small cross beside it takes it out of the list again. Up to 24 can be kept.
+The built-in presets cannot be removed.
+
+Coverage, under the card's view, draws every test card, the presets and the ones saved,
+small and without their art through the draft as it is, one after another, when Draw every
+test card is pressed. Each tile says whether its card was drawn, and one the template could
+not draw says why, so a material with no image shows as a card drawn with a hole or as
+a tile with a reason. The line above the tiles counts the cards drawn and names those
+that were not. Choosing a tile tests the template with that card. An edit to the template
+leaves the tiles in place, dimmed, with the line saying the template has changed, until
+they are drawn again, and opening another template clears them.
 
 ## Features that are not built yet
 

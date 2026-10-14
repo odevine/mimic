@@ -7,13 +7,21 @@ import {
   canvasSize,
   cardLine,
   checkName,
+  checkTestCardLabel,
+  coverageSummary,
+  coverageTile,
   draftLabel,
+  exportMessage,
   forkName,
   forkedFrom,
   layoutLine,
   parseDpi,
   problems,
+  releaseFacts,
+  creditLine,
   startingCard,
+  suggestedLabel,
+  useMessage,
 } from "../editor.js";
 import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
 import { createHistory } from "../editorhistory.js";
@@ -26,6 +34,7 @@ import { LEFT_DEFAULTS, LEFT_SECTIONS } from "../sectionlayout.js";
 import { createCardEditor, valuesOf } from "../components/cardEditor.js";
 import { createViewport } from "../components/viewport.js";
 import { initAssets } from "./editorassets.js";
+import { loadActiveTemplate } from "../components/templatePicker.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, keepRatio, layerAt, parseField, readPath, shadowOps, sizeOps } from "../editorlevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
@@ -63,6 +72,9 @@ const store = {
   assets: signal(null),
   // which items are locked and which ones a drag snaps to, as "layout/kind:key"
   marks: signal({ locked: [], snap: [] }),
+  // the coverage strip: how each preset was drawn, { [id]: { state, src, reason } }, and
+  // whether the template has changed since
+  coverage: signal({ outcomes: {}, stale: false }),
 };
 
 const history = createHistory();
@@ -232,6 +244,7 @@ async function open(id) {
   });
   savedMarks = JSON.stringify([id, store.marks.peek()]);
   clearPreview();
+  resetCoverage();
   if (viewport) viewport.reset();
   store.source.value = null;
   store.assets.value = null;
@@ -375,7 +388,7 @@ let dialogAction = null;
 // ask opens the one dialog that makes, copies and renames a template. confirm gets
 // the name, and the resolution when the dialog has that field, and resolves when
 // done. It stays open and shows the reason when confirm throws
-function ask({ title, lede, confirm, name, dpi, onDone }) {
+function ask({ title, lede, confirm, name, dpi, onDone, check }) {
   $("draft-dialog-title").textContent = title;
   $("draft-dialog-lede").textContent = lede;
   $("draft-name").value = name;
@@ -385,7 +398,7 @@ function ask({ title, lede, confirm, name, dpi, onDone }) {
   $("draft-confirm").textContent = confirm;
   $("draft-error").hidden = true;
   showSize();
-  dialogAction = { withDpi, onDone };
+  dialogAction = { withDpi, onDone, check };
   const dlg = $("draft-dialog");
   dlg.showModal();
   $("draft-name").focus();
@@ -406,7 +419,7 @@ function showError(message) {
 
 async function confirmDialog() {
   if (!dialogAction) return;
-  const { name, error } = checkName($("draft-name").value);
+  const { name, error } = (dialogAction.check || checkName)($("draft-name").value);
   if (error) return showError(error);
   let dpi = 0;
   if (dialogAction.withDpi) {
@@ -483,6 +496,8 @@ async function remove() {
     return;
   }
   abandonRender();
+  // The template the draft gave the other modes goes with it, and the top bar says what is in use now
+  loadActiveTemplate();
   batch(() => {
     store.current.value = "";
     store.view.value = null;
@@ -492,6 +507,208 @@ async function remove() {
   await loadDrafts();
   const next = (store.drafts.peek() || [])[0];
   if (next) await open(next.id);
+}
+
+// --- finishing ---
+
+// saveTestCard keeps the card being tested, with the changes made to its fields, in the
+// list of test cards, which every draft offers
+function saveTestCard() {
+  const card = store.card.peek();
+  if (!card) return;
+  const edits = store.edits.peek();
+  ask({
+    title: "Save as a test card",
+    lede: "The card is kept with the changes made to its fields, and any template you edit can be tried with it.",
+    confirm: "Save",
+    name: suggestedLabel({ Name: (edits && edits.name) || card.Name }),
+    check: (text) => {
+      const r = checkTestCardLabel(text);
+      return { name: r.label, error: r.error };
+    },
+    onDone: async (label) => {
+      const saved = await api.saveTestCard(label, card, edits, store.face.peek());
+      store.presets.value = [...store.presets.peek(), saved];
+      toast(`Saved ${saved.label}`, "ok");
+      await choosePreset(saved);
+    },
+  });
+}
+
+async function removeTestCard(p) {
+  const ok = await api.confirm("Remove this test card?", `${p.label} is taken out of the list. No template changes.`, "Remove");
+  if (!ok) return;
+  try {
+    await api.deleteTestCard(p.id);
+  } catch (err) {
+    toast(err.message, "err", 6000);
+    return;
+  }
+  batch(() => {
+    store.presets.value = store.presets.peek().filter((q) => q.id !== p.id);
+    if (store.preset.peek() === p.id) store.preset.value = "";
+    const { [p.id]: _gone, ...rest } = store.coverage.peek().outcomes;
+    store.coverage.value = { ...store.coverage.peek(), outcomes: rest };
+  });
+}
+
+// useTemplate makes the draft a template Single, List and Run can draw with
+async function useTemplate() {
+  const view = store.view.peek();
+  if (!view) return;
+  const btn = $("ed-use");
+  btn.disabled = true;
+  try {
+    const res = await api.useDraft(view.draft.id);
+    await loadActiveTemplate();
+    toast(useMessage(res, view.draft.name), "ok", 7000);
+  } catch (err) {
+    toast(err.message, "err", 7000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let exportId = "";
+
+// exportTemplate shows what the bundle will say, and asks where to save it when that
+// is agreed
+async function exportTemplate() {
+  const view = store.view.peek();
+  if (!view) return;
+  let release;
+  try {
+    release = await api.releaseDraft(view.draft.id);
+  } catch (err) {
+    toast(err.message, "err", 6000);
+    return;
+  }
+  exportId = view.draft.id;
+  $("ed-export-facts").replaceChildren(...releaseFacts(release).flatMap((f) => [h("dt", {}, f.label), h("dd", {}, f.value)]));
+  $("ed-export-nocredits").hidden = release.credits.length > 0;
+  $("ed-export-credits").replaceChildren(...release.credits.map((c) => h("li", {}, creditLine(c), c.url ? h("span", { class: "dim" }, ` ${c.url}`) : null)));
+  const found = problems(release.diagnostics);
+  $("ed-export-problems").replaceChildren(
+    ...found.errors.map((t) => h("li", { class: "error" }, t)),
+    ...found.warnings.map((t) => h("li", { class: "warning" }, t)),
+  );
+  $("ed-export-error").hidden = true;
+  const go = $("ed-export-confirm");
+  go.disabled = !release.ready;
+  go.dataset.filename = release.filename;
+  $("ed-export-dialog").showModal();
+  go.focus();
+}
+
+async function confirmExport() {
+  const go = $("ed-export-confirm");
+  go.disabled = true;
+  try {
+    const res = await api.exportDraft(exportId, go.dataset.filename);
+    // A save dialog that was cancelled leaves this one open for another try
+    if (!res) return;
+    $("ed-export-dialog").close();
+    toast(exportMessage(res), "ok", 7000);
+  } catch (err) {
+    const el = $("ed-export-error");
+    el.textContent = err.message;
+    el.hidden = false;
+  } finally {
+    go.disabled = false;
+  }
+}
+
+async function showFolder() {
+  const view = store.view.peek();
+  if (!view) return;
+  try {
+    await api.showDraftFolder(view.draft.id);
+  } catch (err) {
+    toast(err.message, "err", 6000);
+  }
+}
+
+// --- coverage ---
+
+let coverageRun = 0;
+let coverageJob = "";
+
+function setOutcome(id, outcome) {
+  const c = store.coverage.peek();
+  store.coverage.value = { ...c, outcomes: { ...c.outcomes, [id]: outcome } };
+}
+
+function resetCoverage() {
+  coverageRun++;
+  if (coverageJob) api.cancelRender(coverageJob);
+  coverageJob = "";
+  store.coverage.value = { outcomes: {}, stale: false };
+}
+
+// markStale says the strip no longer shows the template as it is, once it shows anything
+function markStale() {
+  const c = store.coverage.peek();
+  if (!c.stale && Object.keys(c.outcomes).length) store.coverage.value = { ...c, stale: true };
+}
+
+// drawEveryCard draws every test card small, one after another, through the draft as it is,
+// so a frame variant that is missing shows as a card drawn wrong or not at all
+async function drawEveryCard() {
+  const id = store.current.peek();
+  const view = store.view.peek();
+  if (!id || !view || !view.valid) return;
+  resetCoverage();
+  const run = coverageRun;
+  const list = store.presets.peek();
+  for (const p of list) {
+    setOutcome(p.id, { state: "waiting" });
+  }
+  for (const p of list) {
+    if (run !== coverageRun || id !== store.current.peek()) return;
+    setOutcome(p.id, { state: "drawing" });
+    try {
+      const found = await api.resolveTestCard(p.id);
+      if (run !== coverageRun) return;
+      const { jobId } = await api.renderDraft(id, found, null, 0, true);
+      if (run !== coverageRun) {
+        api.cancelRender(jobId);
+        return;
+      }
+      coverageJob = jobId;
+      await api.renderEvents(jobId, () => {});
+      if (run !== coverageRun) return;
+      coverageJob = "";
+      setOutcome(p.id, { state: "drawn", src: api.renderImageURL(jobId) });
+    } catch (err) {
+      if (run !== coverageRun) return;
+      coverageJob = "";
+      setOutcome(p.id, { state: "failed", reason: err.message });
+    }
+  }
+}
+
+function drawCoverage() {
+  const { outcomes, stale } = store.coverage.value;
+  const tiles = store.presets.value.map((p) => ({ ...coverageTile(p, outcomes[p.id]), src: (outcomes[p.id] || {}).src, preset: p }));
+  $("ed-coverage-line").textContent = coverageSummary(tiles, stale);
+  const running = tiles.some((t) => t.state === "drawing");
+  $("ed-coverage-run").disabled = running || !store.view.value || !store.view.value.valid;
+  $("ed-coverage-run").textContent = Object.keys(outcomes).length ? "Draw again" : "Draw every test card";
+  $("ed-coverage-tiles").replaceChildren(
+    ...tiles.map((t) =>
+      h(
+        "li",
+        { class: "ed-tile", "data-state": t.state, "data-stale": String(stale && t.state === "drawn") },
+        h(
+          "button",
+          { type: "button", class: "ed-tile-btn", onclick: () => choosePreset(t.preset), "aria-label": `${t.label}: ${t.text}. Test with this card` },
+          t.src ? h("img", { src: t.src, alt: "", class: "ed-tile-img" }) : h("span", { class: "ed-tile-img ed-tile-empty", "aria-hidden": "true" }),
+          h("span", { class: "ed-tile-label" }, t.label),
+          h("span", { class: "ed-tile-text dim" }, t.text),
+        ),
+      ),
+    ),
+  );
 }
 
 // --- drawing ---
@@ -509,9 +726,17 @@ function drawPresets() {
   // longer the one in use
   const on = cardEditor && cardEditor.dirty.value ? "" : store.preset.value;
   $("ed-presets").replaceChildren(
-    ...store.presets.value.map((p) =>
-      h("button", { type: "button", class: "chip", "aria-pressed": String(p.id === on), onclick: () => choosePreset(p) }, p.label),
-    ),
+    ...store.presets.value.map((p) => {
+      const chip = h("button", { type: "button", class: "chip", "aria-pressed": String(p.id === on), onclick: () => choosePreset(p) }, p.label);
+      if (!p.user) return chip;
+      // A card the person saved can be taken out of the list again
+      const drop = h(
+        "button",
+        { type: "button", class: "chip ed-preset-drop", "aria-label": `Remove the test card ${p.label}`, onclick: () => removeTestCard(p) },
+        h("span", { "aria-hidden": "true" }, "×"),
+      );
+      return h("span", { class: "ed-preset-user" }, chip, drop);
+    }),
   );
 }
 
@@ -706,6 +931,7 @@ let chain = Promise.resolve();
 
 // scheduleRender draws the card again once the edits stop for a moment
 function scheduleRender() {
+  markStale();
   clearTimeout(renderTimer);
   renderTimer = setTimeout(render, 150);
 }
@@ -2004,6 +2230,12 @@ export function initEditor() {
   initAssets({ store, commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
   document.addEventListener("keydown", onKey);
   $("ed-credit-add").addEventListener("click", addCredit);
+  $("ed-use").addEventListener("click", useTemplate);
+  $("ed-export").addEventListener("click", exportTemplate);
+  $("ed-export-confirm").addEventListener("click", confirmExport);
+  $("ed-folder").addEventListener("click", showFolder);
+  $("ed-save-preset").addEventListener("click", saveTestCard);
+  $("ed-coverage-run").addEventListener("click", drawEveryCard);
   $("ed-json").addEventListener("click", () => toggleJson(!json.open));
   $("ed-json-close").addEventListener("click", () => toggleJson(false));
   $("ed-json-text").addEventListener("input", onJsonInput);
@@ -2044,6 +2276,14 @@ export function initEditor() {
   });
   effect(drawPicker);
   effect(drawPresets);
+  effect(drawCoverage);
+  effect(() => {
+    $("ed-save-preset").disabled = !store.card.value;
+  });
+  effect(() => {
+    const view = store.view.value;
+    for (const id of ["ed-use", "ed-export"]) $(id).disabled = !view || !view.valid;
+  });
   effect(drawResults);
   effect(drawSide);
   effect(drawActivity);

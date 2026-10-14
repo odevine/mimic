@@ -126,6 +126,18 @@ func (s *Store) path(id string) (string, error) {
 	return filepath.Join(s.dir, id), nil
 }
 
+// Path is the folder of a draft on disk
+func (s *Store) Path(id string) (string, error) {
+	p, err := s.path(id)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(p); err != nil {
+		return "", apierr.New(apierr.NotFound, "That draft no longer exists")
+	}
+	return p, nil
+}
+
 // FS is the draft's folder, for the engine to read
 func (s *Store) FS(id string) (fs.FS, error) {
 	p, err := s.path(id)

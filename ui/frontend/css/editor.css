@@ -1102,3 +1102,123 @@ body.resizing-rows * {
 #ed-stage.panning .ed-overlay {
   cursor: grabbing;
 }
+
+/* A test card the person saved sits with a button that takes it out of the list */
+.ed-preset-user {
+  display: inline-flex;
+}
+
+.ed-preset-user > .chip:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.ed-preset-user > .ed-preset-drop {
+  padding: 0 6px;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.ed-save-preset {
+  margin-top: 6px;
+}
+
+/* The coverage strip draws every test card small under the card's view */
+.ed-coverage {
+  flex: none;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.ed-coverage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin: 6px 0;
+}
+
+.ed-coverage-head p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ed-coverage-tiles {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 4px;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.ed-tile {
+  flex: none;
+  width: 88px;
+}
+
+.ed-tile-btn {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ed-tile-btn:hover {
+  border-color: var(--border-strong);
+}
+
+.ed-tile-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  object-fit: contain;
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+.ed-tile[data-state="failed"] .ed-tile-btn {
+  border-color: var(--err);
+}
+
+.ed-tile[data-stale="true"] .ed-tile-img {
+  opacity: 0.45;
+}
+
+.ed-tile-label {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ed-tile-text {
+  font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* What an export says before it writes the bundle */
+.ed-export-facts {
+  grid-template-columns: 80px 1fr;
+}
+
+.ed-export-facts dd {
+  overflow-wrap: anywhere;
+}
+
+.ed-export-credits {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

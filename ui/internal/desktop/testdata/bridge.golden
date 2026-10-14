@@ -45,20 +45,26 @@ Studio.Assets(string) -> studio.AssetsView !
 Studio.CheckFile(studio.CheckRequest) -> studio.CheckResult !
 Studio.Create(studio.CreateRequest) -> drafts.Summary !
 Studio.Delete(string) !
+Studio.DeletePreset(string) !
 Studio.Describe(studio.DescribeRequest) -> studio.DescribeView !
+Studio.Export(studio.ExportRequest) -> studio.ExportResult !
 Studio.Fork(studio.ForkRequest) -> drafts.Summary !
 Studio.ImportFont(studio.FontRequest) -> studio.ImportResult !
 Studio.ImportImage(studio.ImageRequest) -> studio.ImportResult !
 Studio.List() -> []drafts.Summary !
 Studio.Open(string) -> studio.OpenView !
 Studio.Presets() -> []studio.Preset
+Studio.Release(string) -> studio.ReleaseView !
 Studio.Rename(studio.RenameRequest) -> drafts.Summary !
 Studio.Render(studio.RenderRequest) -> render.Started !
 Studio.ResolvePreset(string) -> cardlist.ShapedCard !
+Studio.SavePreset(studio.SavePresetRequest) -> studio.Preset !
 Studio.SetMarks(studio.MarksRequest) !
 Studio.SetTestCard(studio.TestCardRequest) !
+Studio.ShowFolder(string) !
 Studio.Source(string) -> studio.SourceView !
 Studio.Thumbs(studio.ThumbRequest) -> map[string]string !
+Studio.Use(string) -> studio.UseResult !
 Studio.Vocabulary() -> studio.VocabView
 System.Confirm(desktop.ConfirmRequest) -> bool
 System.OpenURL(string) !
@@ -676,6 +682,16 @@ studio.DiagnosticView struct {
 	message string
 }
 
+studio.ExportRequest struct {
+	id string
+	path string
+}
+
+studio.ExportResult struct {
+	path string
+	bytes int64
+}
+
 studio.FileView struct {
 	name string
 	content string
@@ -780,6 +796,7 @@ studio.Preset struct {
 	name string
 	set string
 	number string
+	user bool (omitempty)
 }
 
 studio.Problem struct {
@@ -797,6 +814,20 @@ studio.RectView struct {
 	height int
 }
 
+studio.ReleaseView struct {
+	templateId string
+	name string
+	version string
+	author string
+	license string
+	credits []manifest.Credit
+	filename string
+	installed bool
+	active bool
+	diagnostics []studio.DiagnosticView
+	ready bool
+}
+
 studio.RenameRequest struct {
 	id string
 	name string
@@ -807,6 +838,7 @@ studio.RenderRequest struct {
 	card card.Data
 	edits cardlist.Edits (omitempty)
 	face int
+	coverage bool (omitempty)
 }
 
 studio.RoleView struct {
@@ -816,6 +848,13 @@ studio.RoleView struct {
 	font string (omitempty)
 	builtin string (omitempty)
 	default string (omitempty)
+}
+
+studio.SavePresetRequest struct {
+	label string
+	card card.Data
+	edits cardlist.Edits (omitempty)
+	face int
 }
 
 studio.SizeView struct {
@@ -843,6 +882,13 @@ studio.ThumbRequest struct {
 	id string
 	files []string
 	edge int
+}
+
+studio.UseResult struct {
+	template string
+	version string
+	replaced bool
+	active bool
 }
 
 studio.VocabView struct {

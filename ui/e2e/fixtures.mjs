@@ -26,6 +26,7 @@ async function restoreDefaults(page, defaults) {
     await api.saveSettings(defaults);
     for (const f of (await api.fonts()).pool) if (f.removable) await api.removeFont(f.name);
     for (const d of await api.drafts()) await api.deleteDraft(d.id);
+    for (const p of await api.testCards()) if (p.user) await api.deleteTestCard(p.id);
   }, defaults);
 }
 

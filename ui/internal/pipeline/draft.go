@@ -57,3 +57,14 @@ func OpenSource(id, version string) (template.AssetProvider, template.BundleHead
 	}
 	return zp, zp.Header(), func() { zp.Close() }, nil
 }
+
+// Forget lets go of a template other than the active one that was loaded for a face,
+// so the next render opens it again from the files that are there now
+func (p *Pipeline) Forget(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if at := p.loaded[id]; at != nil {
+		delete(p.loaded, id)
+		at.dropLayers()
+	}
+}

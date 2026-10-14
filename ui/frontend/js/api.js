@@ -110,6 +110,7 @@ const TEXT_LISTS = [{ name: "Card lists", pattern: "*.txt;*.csv;*.dek;*.mtga" }]
 const IMAGES = [{ name: "Images", pattern: "*.png;*.jpg;*.jpeg" }];
 const FONTS = [{ name: "Fonts", pattern: "*.ttf;*.otf" }];
 const PNGS = [{ name: "PNG images", pattern: "*.png" }];
+const BUNDLES = [{ name: "mimic templates", pattern: "*.mimic" }];
 
 const SYSTEM = "System";
 
@@ -217,12 +218,17 @@ export const api = {
   // testCards lists the preset test cards, each { id, label, name, set, number }, real
   // printings that are looked up when one is chosen. resolveTestCard resolves to the
   // card a preset names, as Scryfall has it, or rejects with why it could not be found
+  // A test card a person saved has user: true and can be removed. saveTestCard keeps a
+  // card, as the form has edited it, under a name, and resolves to its preset
   testCards: () => rpc("Studio", "Presets"),
   resolveTestCard: (id) => rpc("Studio", "ResolvePreset", id),
+  saveTestCard: (label, card, edits, face) => rpc("Studio", "SavePreset", { label, card, edits: edits || null, face: face || 0 }),
+  deleteTestCard: (id) => rpc("Studio", "DeletePreset", id),
   // edits are the card form's field values, as Single sends them, laid over the card by
   // the app, and may be null for none. setTestCard keeps the card as edited
   setTestCard: (id, card, edits, face) => rpc("Studio", "SetTestCard", { id, card, edits: edits || null, face: face || 0 }),
-  renderDraft: (id, card, edits, face) => rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0 }),
+  // coverage draws the card small and without its art, for a strip of many
+  renderDraft: (id, card, edits, face, coverage) => rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage }),
   // describeDraft resolves to what the draft's layout draws for the card, in draw
   // order: { layout, authored, delivered, items, editable, reason, rev }, where an
   // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
@@ -264,6 +270,19 @@ export const api = {
   // setDraftMarks keeps which elements are locked and which ones a drag snaps to,
   // each named "layout/kind:key"
   setDraftMarks: (id, locked, snapTo) => rpc("Studio", "SetMarks", { id, locked, snapTo }),
+  // releaseDraft resolves to what a bundle of the draft would say and whether it can be
+  // made: { templateId, name, version, author, license, credits, filename, installed,
+  // active, diagnostics, ready }. useDraft makes the draft a template the other modes
+  // can use, and resolves to { template, version, replaced, active }. exportDraft asks
+  // where to save a bundle and resolves to { path, bytes }, or null when the user
+  // cancelled. showDraftFolder opens the draft's folder
+  releaseDraft: (id) => rpc("Studio", "Release", id),
+  useDraft: (id) => rpc("Studio", "Use", id),
+  exportDraft: async (id, filename) => {
+    const path = await pickFile({ title: "Export the template", name: filename, save: true, filters: BUNDLES });
+    return path ? rpc("Studio", "Export", { id, path }) : null;
+  },
+  showDraftFolder: (id) => rpc("Studio", "ShowFolder", id),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

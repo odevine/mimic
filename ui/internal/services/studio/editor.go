@@ -20,6 +20,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/progress"
 	"github.com/odevine/mimic/ui/internal/services/render"
+	"github.com/odevine/mimic/ui/internal/testcards"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -31,6 +32,10 @@ const imageBudget = template.DefaultImageCacheBytes
 type Service struct {
 	ws    *workspace.Workspace
 	store *drafts.Store
+	// cards are the test cards the person saved
+	cards *testcards.Store
+	// show opens a folder in the system file browser
+	show func(path string) error
 
 	mu   sync.Mutex
 	open map[string]*author.Draft
@@ -48,14 +53,16 @@ type Service struct {
 }
 
 // New returns the service over a workspace, keeping drafts in the app's drafts
-// folder
-func New(ws *workspace.Workspace) *Service {
-	return NewWith(ws, drafts.NewStore(workspace.DraftsDir()))
+// folder. show opens a folder in the system file browser
+func New(ws *workspace.Workspace, show func(path string) error) *Service {
+	s := NewWith(ws, drafts.NewStore(workspace.DraftsDir()))
+	s.show = show
+	return s
 }
 
 // NewWith returns the service over a workspace and the store of its drafts
 func NewWith(ws *workspace.Workspace, store *drafts.Store) *Service {
-	return &Service{ws: ws, store: store, open: map[string]*author.Draft{}, revs: map[string]int{}, held: newStash(stashBytes)}
+	return &Service{ws: ws, store: store, cards: testcards.NewStore(workspace.TestCardsPath()), open: map[string]*author.Draft{}, revs: map[string]int{}, held: newStash(stashBytes)}
 }
 
 // Shutdown releases the images every open draft holds
@@ -111,12 +118,17 @@ func (s *Service) Rename(req RenameRequest) (drafts.Summary, error) {
 	return s.store.Rename(req.ID, req.Name)
 }
 
-// Delete removes a draft
+// Delete removes a draft, and the template the other modes were given from it
 func (s *Service) Delete(id string) error {
+	sum, err := s.store.Get(id)
+	if err != nil {
+		return err
+	}
 	if err := s.store.Delete(id); err != nil {
 		return err
 	}
 	s.forget(id)
+	s.withdraw(sum.TemplateID)
 	return nil
 }
 
@@ -278,7 +290,14 @@ type RenderRequest struct {
 	Card  card.Data       `json:"card"`
 	Edits *cardlist.Edits `json:"edits,omitempty"`
 	Face  int             `json:"face"`
+	// Coverage draws it small and without the art, for a strip of many cards, where
+	// what is wanted is the frame each card gets
+	Coverage bool `json:"coverage,omitempty"`
 }
+
+// coverageDPI is the resolution a coverage render is drawn at, which is the layout's
+// nearest one when it cannot be drawn this small
+const coverageDPI = 40
 
 // Render draws the card through the draft as it is on disk, at the preview
 // resolution, and returns the job to watch. Its image is read with the same route
@@ -303,12 +322,15 @@ func (s *Service) Render(req RenderRequest) (render.Started, error) {
 		return render.Started{}, apierr.Newf(apierr.BadRequest, "This template does not render %s", shapes[req.Face])
 	}
 	dpi := layout.ClampDPI(s.ws.RenderDPI(workspace.TargetPreview))
+	if req.Coverage {
+		dpi = layout.ClampDPI(coverageDPI)
+	}
 	at := pipeline.NewDraftTemplate(t.ID(), t)
 
 	j := s.ws.Jobs.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	j.SetCancel(cancel)
-	go s.do(ctx, j, at, &req.Card, req.Face, dpi)
+	go s.do(ctx, j, at, &req.Card, req.Face, dpi, req.Coverage)
 	return render.Started{JobID: j.ID(), DPI: dpi}, nil
 }
 
@@ -325,11 +347,15 @@ func firstProblem(ds manifest.Diagnostics, err error) string {
 	return "The template did not load"
 }
 
-func (s *Service) do(parent context.Context, j *jobs.Job, at *pipeline.Template, d *card.Data, face, dpi int) {
+func (s *Service) do(parent context.Context, j *jobs.Job, at *pipeline.Template, d *card.Data, face, dpi int, noArt bool) {
 	defer j.Cancel()
-	artCtx, cancelArt := context.WithTimeout(parent, workspace.NetTimeout)
-	art, artErr := s.ws.ArtFor(artCtx, d.Face(face))
-	cancelArt()
+	var art image.Image
+	var artErr error
+	if !noArt {
+		artCtx, cancelArt := context.WithTimeout(parent, workspace.NetTimeout)
+		art, artErr = s.ws.ArtFor(artCtx, d.Face(face))
+		cancelArt()
+	}
 
 	ctx, cancel := context.WithTimeout(parent, workspace.RenderTimeout)
 	defer cancel()

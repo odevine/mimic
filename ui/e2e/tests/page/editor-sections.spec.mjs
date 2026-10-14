@@ -89,7 +89,7 @@ test("collapsed sections at the bottom rest against the buttons, and the open on
   // About and problems are collapsed, and the last of them touches the buttons
   expect(bottom(await box(page, sec("problems")))).toBeCloseTo(footer.y, 0);
   expect(bottom(await box(page, sec("selection")))).toBeLessThan((await box(page, sec("about"))).y + 2);
-  const column = await box(page, ".ed-sections");
+  const column = await box(page, "#ed-sections");
   // The open sections fill what the collapsed ones leave
   const used = (await box(page, sec("layers"))).height + (await box(page, sec("selection"))).height + (await box(page, sec("about"))).height + (await box(page, sec("problems"))).height;
   expect(used).toBeCloseTo(column.height, -1);
@@ -237,7 +237,7 @@ test("the canvas is under the template in the left column and not in the right",
   await expect(page.locator('[data-region="0"] #ed-canvas-levers')).toHaveCount(1);
   const template = await box(page, ".ed-draft");
   const canvas = await box(page, "#ed-canvas-sec");
-  const testCard = await box(page, ".ed-card");
+  const testCard = await box(page, '[data-sec="card"]');
   expect(canvas.y).toBeGreaterThanOrEqual(template.y + template.height - 1);
   expect(canvas.y + canvas.height).toBeLessThanOrEqual(testCard.y + 1);
 });

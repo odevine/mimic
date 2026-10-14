@@ -114,7 +114,7 @@ func TestAssetsOfADraftThatDoesNotReadIsEmptyAndNotAFailure(t *testing.T) {
 func TestImportingAnImageReplacesTheOneThereAndUndoPutsItBack(t *testing.T) {
 	svc, ws, dir := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	card := presetCard(t, "white-creature")
+	card := presetCard(t, "monocolored")
 	was := readDraft(t, dir, sum.ID, "parts/background/any.png")
 	before := renderDraft(t, svc, ws, sum.ID, card)
 

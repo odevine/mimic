@@ -54,6 +54,7 @@ Studio.Open(string) -> studio.OpenView !
 Studio.Presets() -> []studio.Preset
 Studio.Rename(studio.RenameRequest) -> drafts.Summary !
 Studio.Render(studio.RenderRequest) -> render.Started !
+Studio.ResolvePreset(string) -> cardlist.ShapedCard !
 Studio.SetMarks(studio.MarksRequest) !
 Studio.SetTestCard(studio.TestCardRequest) !
 Studio.Source(string) -> studio.SourceView !
@@ -655,6 +656,7 @@ studio.CreateRequest struct {
 studio.DescribeRequest struct {
 	id string
 	card card.Data
+	edits cardlist.Edits (omitempty)
 	face int
 }
 
@@ -775,7 +777,9 @@ studio.PartView struct {
 studio.Preset struct {
 	id string
 	label string
-	card cardlist.ShapedCard
+	name string
+	set string
+	number string
 }
 
 studio.Problem struct {
@@ -801,6 +805,7 @@ studio.RenameRequest struct {
 studio.RenderRequest struct {
 	id string
 	card card.Data
+	edits cardlist.Edits (omitempty)
 	face int
 }
 
@@ -830,6 +835,7 @@ studio.SourceView struct {
 studio.TestCardRequest struct {
 	id string
 	card card.Data
+	edits cardlist.Edits (omitempty)
 	face int
 }
 

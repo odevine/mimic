@@ -252,6 +252,7 @@ test("typing in a field does not nudge the selection", async ({ bridge, page }) 
   const { editor, point } = await ready(bridge, page);
   const p = point(150, 100);
   await page.mouse.click(p.x, p.y);
+  await editor.openSearch();
   await editor.searchInput.focus();
   await page.keyboard.press("ArrowRight");
   await page.waitForTimeout(400);

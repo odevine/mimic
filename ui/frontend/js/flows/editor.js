@@ -22,8 +22,10 @@ import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
 import { kindIcon, moveTarget, reorderTarget, rowMenu } from "../editorlayers.js";
 import { closePopover, openPopover } from "../components/popover.js";
 import { initSections } from "../components/sections.js";
+import { LEFT_DEFAULTS, LEFT_SECTIONS } from "../sectionlayout.js";
+import { createCardEditor, valuesOf } from "../components/cardEditor.js";
 import { initAssets } from "./editorassets.js";
-import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
+import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, keepRatio, layerAt, parseField, readPath, shadowOps, sizeOps } from "../editorlevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
 // template on disk that the app renders as it is, so everything shown here is read
@@ -35,6 +37,9 @@ const store = {
   view: signal(null), // what openDraft told about it
   presets: signal([]),
   card: signal(null), // the test card, as the app sent it
+  // the card form's values, which the card is edited with, and the ones it began with
+  edits: signal(null),
+  reference: signal({}),
   face: signal(0),
   preset: signal(""), // the id of the preset the card came from, or ""
   results: signal([]), // search results for a test card
@@ -60,6 +65,7 @@ const store = {
 };
 
 const history = createHistory();
+let cardEditor = null;
 let renderTimer = 0;
 let describeSeq = 0;
 
@@ -127,9 +133,11 @@ async function render() {
   if (!id || !card || !view || !view.valid) return;
   abandonRender();
   const seq = renderSeq;
-  begin(`Drawing ${card.Name}`);
+  // The card is named as the form has it, so a changed name is the one the strip says
+  const name = (store.edits.peek() && store.edits.peek().name) || card.Name;
+  begin(`Drawing ${name}`);
   try {
-    const { jobId } = await api.renderDraft(id, card, store.face.peek());
+    const { jobId } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek());
     if (seq !== renderSeq) {
       api.cancelRender(jobId);
       return;
@@ -147,8 +155,8 @@ async function render() {
     $("ed-canvas").hidden = false;
     $("ed-placeholder").hidden = true;
     loadLayout();
-    if (done.artMissing) finish("warn", `Drew ${card.Name}`, "The art could not be fetched, so the art window is empty");
-    else finish("done", `Drew ${card.Name}`, "");
+    if (done.artMissing) finish("warn", `Drew ${name}`, "The art could not be fetched, so the art window is empty");
+    else finish("done", `Drew ${name}`, "");
   } catch (err) {
     if (seq !== renderSeq) return;
     renderJob = null;
@@ -213,6 +221,7 @@ async function open(id) {
     store.card.value = start ? start.card : null;
     store.face.value = start ? start.face : 0;
     store.preset.value = start ? start.preset : "";
+    setForm(start ? start.card : null);
     store.marks.value = { locked: view.meta.locked || [], snap: view.meta.snapTo || [] };
   });
   savedMarks = JSON.stringify([id, store.marks.peek()]);
@@ -225,19 +234,76 @@ async function open(id) {
     finish("error", "This template does not load", "The problems are listed on the right");
     return;
   }
+  // A template tested with nothing yet starts with the first preset, which is looked up
+  if (start && !start.card) {
+    const first = store.presets.peek().find((p) => p.id === start.preset);
+    if (first) choosePreset(first);
+    return;
+  }
   render();
+}
+
+// setForm fills the card form with a card's own values, as the card it is measured
+// against, so nothing in it is changed yet
+function setForm(card) {
+  const values = card ? valuesOf(card) : {};
+  store.reference.value = values;
+  store.edits.value = card ? values : null;
+  appliedEdits = JSON.stringify(store.edits.peek());
+}
+
+let appliedEdits = "";
+let cardTimer = 0;
+
+// keepCardEdits keeps the card with the changes made in the form and draws it, a moment
+// after the changes stop. The form's own values start as the card's, and a change from
+// the card is the person's
+function keepCardEdits() {
+  const key = JSON.stringify(store.edits.value);
+  if (!store.card.peek() || key === appliedEdits) return;
+  clearTimeout(cardTimer);
+  cardTimer = setTimeout(() => {
+    appliedEdits = key;
+    const id = store.current.peek();
+    if (!id || !store.card.peek()) return;
+    api.setTestCard(id, store.card.peek(), store.edits.peek(), store.face.peek()).catch(() => {});
+    render();
+  }, 350);
+}
+
+let presetSeq = 0;
+
+// choosePreset looks up the card a preset names and makes it the test card. A lookup that
+// fails is said, and a newer choice made while it waits is the one that stands
+async function choosePreset(p) {
+  const id = store.current.peek();
+  if (!id) return;
+  const seq = ++presetSeq;
+  abandonRender();
+  begin(`Looking up ${p.name}`);
+  try {
+    const found = await api.resolveTestCard(p.id);
+    if (seq !== presetSeq || id !== store.current.peek()) return;
+    chooseCard(found, p.id);
+  } catch (err) {
+    if (seq !== presetSeq) return;
+    finish("error", `Could not look up ${p.name}`, err.message);
+    toast(err.message, "err", 6000);
+  }
 }
 
 // chooseCard sets the card the draft is tested with, remembers it, and draws it
 function chooseCard(card, preset) {
   const id = store.current.peek();
   if (!id) return;
+  presetSeq++;
   batch(() => {
     store.card.value = card;
     store.face.value = 0;
     store.preset.value = preset || "";
+    setForm(card);
   });
-  api.setTestCard(id, card, 0).catch(() => {
+  api.setTestCard(id, card, store.edits.peek(), 0).catch(() => {
     // The card is a convenience, so a draft that cannot remember it still draws it
   });
   render();
@@ -414,6 +480,7 @@ async function remove() {
     store.current.value = "";
     store.view.value = null;
     store.card.value = null;
+    store.edits.value = null;
   });
   await loadDrafts();
   const next = (store.drafts.peek() || [])[0];
@@ -431,10 +498,12 @@ function drawPicker() {
 }
 
 function drawPresets() {
-  const on = store.preset.value;
+  // A preset is the card as it was made, so one whose fields have been changed is no
+  // longer the one in use
+  const on = cardEditor && cardEditor.dirty.value ? "" : store.preset.value;
   $("ed-presets").replaceChildren(
     ...store.presets.value.map((p) =>
-      h("button", { type: "button", class: "chip", "aria-pressed": String(p.id === on), onclick: () => chooseCard(p.card, p.id) }, p.label),
+      h("button", { type: "button", class: "chip", "aria-pressed": String(p.id === on), onclick: () => choosePreset(p) }, p.label),
     ),
   );
 }
@@ -478,7 +547,10 @@ function drawActivity() {
 
 function drawChosen() {
   const card = store.card.value;
-  $("ed-card-line").textContent = card ? cardLine(card) : "No card chosen";
+  const edits = store.edits.value;
+  // The line names the card as the form has it, so a changed name or set shows at once
+  const shown = card && edits ? { ...card, Name: edits.name ?? card.Name, SetCode: edits.setCode ?? card.SetCode } : card;
+  $("ed-card-line").textContent = shown ? cardLine(shown) : "No card chosen";
 }
 
 // --- the layout on the preview ---
@@ -503,7 +575,7 @@ async function loadLayout() {
   if (!id || !card) return;
   const seq = ++describeSeq;
   try {
-    const view = await api.describeDraft(id, card, store.face.peek());
+    const view = await api.describeDraft(id, card, store.edits.peek(), store.face.peek());
     if (seq !== describeSeq || id !== store.current.peek()) return;
     batch(() => {
       store.layout.value = view;
@@ -1322,6 +1394,7 @@ function buildForm(container, scope, groups, spec) {
     } else {
       box.append(title);
     }
+    const made = [];
     for (const f of g.fields) {
       const id = `${scope}-${f.id}`;
       const c = controlFor(f, id);
@@ -1339,7 +1412,14 @@ function buildForm(container, scope, groups, spec) {
           apply(form, ctl);
         });
       }
-      rows.append(field(f.label, id, c, err));
+      made.push([f.id, field(f.label, id, c, err)]);
+    }
+    // A pair of fields that can be kept in proportion is drawn with a bracket joining
+    // them and a padlock on it, which is the one a layer's row has
+    const pair = g.ratio && spec.ratio ? made.filter(([id]) => g.ratio.includes(id)) : [];
+    for (const [id, el] of made) {
+      if (pair.length === 2 && id === pair[0][0]) rows.append(ratioPair(form, spec, pair.map(([, row]) => row)));
+      else if (!pair.some(([pid]) => pid === id)) rows.append(el);
     }
     box.append(rows);
     form.groups.push(entry);
@@ -1347,6 +1427,37 @@ function buildForm(container, scope, groups, spec) {
   });
   container.replaceChildren(...nodes);
   return form;
+}
+
+// ratioPair is two rows of fields with a bracket from the middle of one to the middle of
+// the other, and a padlock on the bracket. Locked, a change to one is made to the other
+// as well so the two stay in proportion
+function ratioPair(form, spec, rows) {
+  const lock = h("button", { class: "ed-row-btn ed-ratio-lock", type: "button", "aria-pressed": "false", "aria-label": "Keep the width and height in proportion", dataset: { ratio: "lock" } });
+  lock.addEventListener("click", () => {
+    const now = spec.ratio.get();
+    if (now.locked) {
+      spec.ratio.set({ locked: false });
+    } else {
+      const w = valueIn(form, form.controls.find((c) => c.f.id === "width").f);
+      const ht = valueIn(form, form.controls.find((c) => c.f.id === "height").f);
+      if (!(w > 0 && ht > 0)) return;
+      spec.ratio.set({ locked: true, ratio: w / ht });
+    }
+    syncRatio(form);
+  });
+  form.ratioLock = lock;
+  return h("div", { class: "ed-ratio" }, h("div", { class: "ed-ratio-rows" }, ...rows), h("div", { class: "ed-ratio-link" }, h("span", { class: "ed-ratio-bracket", "aria-hidden": "true" }), lock));
+}
+
+// syncRatio shows whether the proportion is kept, as a layer's padlock shows it is locked
+function syncRatio(form) {
+  if (!form.ratioLock) return;
+  const on = !!form.spec.ratio.get().locked;
+  form.ratioLock.setAttribute("aria-pressed", String(on));
+  form.ratioLock.setAttribute("data-tip", on ? "Width and height are kept in proportion" : "Keep width and height in proportion");
+  form.ratioLock.disabled = !!form.spec.disabled;
+  form.ratioLock.replaceChildren(icon(on ? "lock" : "lock-open"));
 }
 
 // valueIn is what the files hold for a field
@@ -1359,6 +1470,7 @@ function valueIn(form, f) {
 
 // fill shows the files' values in the fields, leaving the one in use alone
 function fill(form) {
+  syncRatio(form);
   for (const entry of form.groups) {
     if (entry.toggle) {
       const on = !!readPath(form.spec.at(entry.group.fields[0]), ["text", "shadow"]);
@@ -1390,6 +1502,20 @@ function apply(form, ctl) {
   err.hidden = true;
   const now = valueIn(form, f);
   if (parsed.unset ? now === undefined : now === parsed.value) return;
+  // With the proportion kept, the other side of the canvas follows
+  const kept = form.spec.ratio && form.spec.ratio.get();
+  if (kept && kept.locked && !parsed.unset && (f.id === "width" || f.id === "height")) {
+    const sides = ["width", "height"].map((id) => valueIn(form, form.controls.find((c) => c.f.id === id).f));
+    // The shape the canvas has now is the one to keep, taken once and held
+    if (!(kept.ratio > 0)) {
+      if (!(sides[0] > 0 && sides[1] > 0)) return;
+      kept.ratio = sides[0] / sides[1];
+      form.spec.ratio.set(kept);
+    }
+    const ops = sizeOps(form.spec.target, keepRatio(f.id, parsed.value, kept.ratio), { width: sides[0], height: sides[1] });
+    if (ops.length) commit(ops, "Change the size of the canvas", "");
+    return;
+  }
   const ops = editOps(form.spec.target, f, parsed, { at: layerAt(form.spec.entry(), form.spec.origin()), part: form.spec.part });
   commit(ops, editLabel(form.spec.target, f), `lever:${form.spec.target.kind}:${form.spec.target.key}:${f.id}`);
 }
@@ -1398,6 +1524,10 @@ let itemForm = null;
 let itemFormKey = "";
 let canvasForm = null;
 let canvasFormKey = "";
+// whether each layout's width and height are kept in proportion, which they are unless it
+// was let go of, and the proportion, which is for this page and not kept with the draft
+const ratioLocks = new Map();
+const ratioKey = () => `${store.current.peek()}|${(store.layout.peek() || {}).layout}`;
 let templateForm = null;
 let templateFormKey = "";
 
@@ -1461,6 +1591,9 @@ function drawLevers() {
         at: () => (store.source.peek().docs[layoutFileOf(view)] || {}).canvas,
         entry: () => null,
         origin: () => null,
+        // The proportion is kept until it is let go of, and it is the canvas's own shape
+        // the first time an edit needs it
+        ratio: { get: () => ratioLocks.get(ratioKey()) || { locked: true, ratio: null }, set: (v) => ratioLocks.set(ratioKey(), v) },
       });
       canvasFormKey = ckey;
     }
@@ -1735,13 +1868,13 @@ function keepLayout(key, list) {
   layoutTimer = setTimeout(() => api.saveSettings(app.settings.peek()).catch(() => {}), 400);
 }
 
-// initCanvasSection makes the canvas section of the left column open and collapse, which
-// is kept. It starts collapsed
-function initCanvasSection() {
-  const box = $("ed-canvas-sec");
-  const toggle = $("ed-canvas-toggle");
-  const body = $("ed-canvas-body");
-  const saved = (app.settings.peek().splits || {}).editorCanvas;
+// initFold makes a section of the left column open and collapse with its arrow, which is
+// kept under key with the rest of the layout. It starts collapsed
+function initFold(sectionId, toggleId, bodyId, key) {
+  const box = $(sectionId);
+  const toggle = $(toggleId);
+  const body = $(bodyId);
+  const saved = (app.settings.peek().splits || {})[key];
   const show = (open) => {
     box.classList.toggle("collapsed", !open);
     toggle.setAttribute("aria-expanded", String(open));
@@ -1751,7 +1884,7 @@ function initCanvasSection() {
   toggle.addEventListener("click", () => {
     const open = toggle.getAttribute("aria-expanded") !== "true";
     show(open);
-    keepLayout("editorCanvas", [open ? 0 : 1]);
+    keepLayout(key, [open ? 0 : 1]);
   });
 }
 
@@ -1764,7 +1897,20 @@ export function initEditor() {
   $("ed-rename").addEventListener("click", rename);
   $("ed-delete").addEventListener("click", remove);
   const sections = initSections($("ed-sections"), (app.settings.peek().splits || {}).editorSections, (list) => keepLayout("editorSections", list));
-  initCanvasSection();
+  initFold("ed-canvas-sec", "ed-canvas-toggle", "ed-canvas-body", "editorCanvas");
+  // The test card, its properties and the search are sections that collapse and can be
+  // given the height their reader likes, as the right column's are
+  initSections($("ed-left-sections"), (app.settings.peek().splits || {}).editorLeft, (list) => keepLayout("editorLeft", list), { ids: LEFT_SECTIONS, defaults: LEFT_DEFAULTS });
+  // The test card's fields are the same form Single edits a card with
+  cardEditor = createCardEditor({ idPrefix: "ed", base: store.card, edits: store.edits, reference: store.reference, onEnter: keepCardEdits });
+  cardEditor.mount($("ed-card-form"));
+  $("ed-fine-revert").addEventListener("click", () => {
+    store.edits.value = store.reference.peek();
+  });
+  effect(keepCardEdits);
+  effect(() => {
+    $("ed-fine-revert").hidden = !cardEditor.dirty.value;
+  });
   // A template that does not load has its problems shown, however the column was left
   let seen = "";
   effect(() => {

@@ -1,0 +1,22 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0015",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0015",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Sensei's Divining Top",
+  "type_line": "Artifact",
+  "oracle_text": "{1}: Look at the top three cards of your library, then put them back in any order.\n{T}: Draw a card, then put Sensei's Divining Top on top of its owner's library.",
+  "colors": [],
+  "color_identity": [],
+  "rarity": "rare",
+  "collector_number": "314",
+  "set": "2x2",
+  "set_name": "Double Masters 2022",
+  "released_at": "2022-07-08",
+  "artist": "Hiroshi Sakurai",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/sensei-s-divining-top-2x2.jpg"
+  },
+  "mana_cost": "{1}"
+}

@@ -1,0 +1,21 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0016",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0016",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Flooded Strand",
+  "type_line": "Land",
+  "oracle_text": "{T}, Pay 1 life, Sacrifice Flooded Strand: Search your library for a Plains or Island card, put it onto the battlefield, then shuffle.",
+  "colors": [],
+  "color_identity": [],
+  "rarity": "rare",
+  "collector_number": "233",
+  "set": "ktk",
+  "set_name": "Khans of Tarkir",
+  "released_at": "2014-09-26",
+  "artist": "Noah Bradley",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/flooded-strand-ktk.jpg"
+  }
+}

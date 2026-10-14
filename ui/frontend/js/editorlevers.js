@@ -113,13 +113,18 @@ export function fieldGroups(kind, ctx) {
     case "canvas":
       return [
         {
-          title: "Size and turn",
+          title: "Size",
+          // The width and the height can be kept in proportion, which the page draws
+          ratio: ["width", "height"],
           fields: [
             int("width", "Width", ["width"], { min: 1, required: true }),
             int("height", "Height", ["height"], { min: 1, required: true }),
             int("dpi", "Resolution", ["dpi"], { min: 1, max: 10000 }),
-            { id: "rotate", label: "Turned", path: ["rotate"], type: "choice", options: choice(TURNS), empty: "0" },
           ],
+        },
+        {
+          title: "Rotation",
+          fields: [{ id: "rotate", label: "Turned", path: ["rotate"], type: "choice", options: choice(TURNS), empty: "0" }],
         },
       ];
     case "template":
@@ -206,6 +211,20 @@ export function editOps(target, field, parsed, ctx = {}) {
     return parsed.unset ? [{ op: "unset", ...part, path: field.path }] : [{ op: "set", ...part, path: field.path, value: parsed.value }];
   }
   return parsed.unset ? [{ op: "unset", ...base, path: field.path }] : [{ op: "set", ...base, path: field.path, value: parsed.value }];
+}
+
+// keepRatio is the canvas that has a width or a height changed to a value while the
+// other follows it, so that width over height stays ratio. Neither goes under one pixel
+export function keepRatio(id, value, ratio) {
+  if (id === "width") return { width: value, height: Math.max(1, Math.round(value / ratio)) };
+  return { width: Math.max(1, Math.round(value * ratio)), height: value };
+}
+
+// sizeOps are the edits that make a canvas the size next from the size now, for the
+// width and the height that differ
+export function sizeOps(target, next, now) {
+  const base = { layout: target.layout, kind: target.kind, key: target.key };
+  return ["width", "height"].filter((k) => next[k] !== now[k]).map((k) => ({ op: "set", ...base, path: [k], value: next[k] }));
 }
 
 // shadowOps turns a text box's shadow on, with the usual numbers, or off

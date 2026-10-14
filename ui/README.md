@@ -311,9 +311,26 @@ starts from that template instead. The copy keeps the original's license and
 credits and adds a credit that names the original and its version, and it is
 independent of the original from then on.
 
-The left column picks the draft, has the template's canvas under it, and picks the card
-the draft is drawn with, from a set of preset cards that differ in colors, types and
-amount of text, or from a Scryfall search. The card is kept with the draft. The right column has four sections, Layers,
+The left column picks the draft, with Undo and Redo beside its name since they take
+back a change made anywhere in the template, has the template's canvas under it, and picks
+the card the draft is drawn with, from six presets, which are real cards that are looked
+up when one is chosen, Mirran Spy as a monocolored creature, Consuming Aberration for two
+colors, Eerie Ultimatum for three, Norin the Wary as a legendary creature, Sensei's
+Divining Top as an artifact and Flooded Strand as a land, or from a Scryfall search in its
+own section, Search Scryfall. A preset that cannot be looked up, with no network, says so
+and leaves the card as it was. Test card and Search Scryfall are sections like the right
+column's, each collapsing to its heading and given the height its reader likes by dragging
+the line between the two when both are open, and kept the same way. Only the test card
+starts open. Under the presets, Properties is a part of the test card that is open to begin
+with and collapses like the printing details inside it, and holds the same fields Single
+edits a card with: name, cost, colors, type, rules, flavor, power,
+toughness, loyalty, artist and the printing details, and the halves of a split card. A
+change draws the card again a moment after the typing stops, and the card is kept as it
+was changed, so a template can be tested against a rule without finding a real card that
+meets it. A preset stops being highlighted once a field is changed, comes back when the
+fields are put back with Revert all, and a card that is chosen next starts the fields
+over. A card, a preset or one found by searching, brings its artwork, which fills the art
+window, and a change to its fields keeps the art. The card is kept with the draft. The right column has four sections, Layers,
 Selection, About and Problems, and the buttons that use or export the draft and
 open its JSON stay at the bottom of the column whatever the sections do. A section's
 heading is a button that collapses it down to the heading and opens it again. A
@@ -357,9 +374,14 @@ its place and size, what it draws and when, its font role, size, color, alignmen
 spacing, padding, tracking and shadow. A layer has its position, opacity, blend mode
 and the conditions it draws under, and the slot its part reads. An art window has
 its place, the layer it sits above and its turn, and a symbol its place, alignment
-and scale. Canvas, under the template in the left column, holds the canvas size, resolution and
-turn, which belong to the whole template, and it starts collapsed and opens with its own
-arrow like the sections of the right column. About holds the template's
+and scale. Canvas, under the template in the left column, holds the canvas size and resolution, in
+a Size group, and its turn, in a Rotation group, which belong to the whole template, and
+it starts collapsed and opens with its own arrow like the sections of the right column.
+A bracket joins the width and the height with a padlock on it, the padlock a layer's row
+has, and it is closed to begin with, so a change to one side changes the other to keep the
+shape the canvas had, in one change that undo takes back. Opening the padlock lets the
+two change on their own, and closing it again keeps the shape the canvas has then. It is
+closed again after the page is reloaded, since it is not kept with the template. About holds the template's
 name, description, author, license and credits. A number, a color or a
 condition is checked as it is typed and its mistake shown under the field, a change
 is made a moment after typing stops, and an empty optional field takes its setting

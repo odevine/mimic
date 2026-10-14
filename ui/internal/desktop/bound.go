@@ -137,6 +137,7 @@ type studioAPI interface {
 	Delete(id string) error
 	Open(id string) (studio.OpenView, error)
 	Presets() []studio.Preset
+	ResolvePreset(id string) (*cardlist.ShapedCard, error)
 	SetTestCard(req studio.TestCardRequest) error
 	Render(req studio.RenderRequest) (render.Started, error)
 	Describe(req studio.DescribeRequest) (studio.DescribeView, error)

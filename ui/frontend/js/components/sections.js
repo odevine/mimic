@@ -7,10 +7,11 @@ import { DEFAULTS, MIN_HEIGHT, SECTIONS, nextOpen, pack, resizePair, restFrom, r
 const STEP = 16;
 
 // initSections wires the column in root, whose sections are the elements with a
-// data-sec in the order of SECTIONS. saved is the list pack made, if there is one
-export function initSections(root, saved, onChange) {
-  const state = restore(saved);
-  const secs = SECTIONS.map((id) => root.querySelector(`[data-sec="${id}"]`));
+// data-sec named in ids, in that order, starting as defaults say unless saved, the list
+// pack made, is there. The right column's are the default ids and defaults
+export function initSections(root, saved, onChange, { ids = SECTIONS, defaults = DEFAULTS } = {}) {
+  const state = restore(saved, defaults);
+  const secs = ids.map((id) => root.querySelector(`[data-sec="${id}"]`));
   const splits = [...root.querySelectorAll(".ed-vsplit")];
   const toggles = secs.map((s) => s.querySelector(".ed-sec-toggle"));
   const bodies = secs.map((s) => s.querySelector(".ed-sec-body"));
@@ -61,8 +62,8 @@ export function initSections(root, saved, onChange) {
       const others = state.collapsed.map((c, k) => (!c && k !== i ? k : -1)).filter((k) => k >= 0);
       if (others.length) {
         const have = others.reduce((sum, k) => sum + state.weights[k], 0);
-        const was = others.reduce((sum, k) => sum + DEFAULTS.weights[k], 0);
-        state.weights[i] = Math.max(1, (DEFAULTS.weights[i] * have) / was);
+        const was = others.reduce((sum, k) => sum + defaults.weights[k], 0);
+        state.weights[i] = Math.max(1, (defaults.weights[i] * have) / was);
       }
     }
     state.collapsed[i] = !state.collapsed[i];
@@ -131,11 +132,11 @@ export function initSections(root, saved, onChange) {
   });
 
   return {
-    isOpen: (id) => !state.collapsed[SECTIONS.indexOf(id)],
+    isOpen: (id) => !state.collapsed[ids.indexOf(id)],
     // open shows a section without keeping that as a choice, for one the page opens
     // itself, such as the problems of a template that does not load
     open(id) {
-      const i = SECTIONS.indexOf(id);
+      const i = ids.indexOf(id);
       if (i >= 0 && state.collapsed[i]) toggle(i, false);
     },
   };

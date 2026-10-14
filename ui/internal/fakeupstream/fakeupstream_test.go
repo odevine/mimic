@@ -77,8 +77,17 @@ func TestSearchExactNamePrintingsAndFilters(t *testing.T) {
 		t.Errorf("set filter = %v", got)
 	}
 	_, got = search(t, s, "t:artifact")
-	if len(got) != 1 || got[0] != "Sol Ring/c21" {
+	if strings.Join(got, ",") != "Sensei's Divining Top/2x2,Sol Ring/c21" {
 		t.Errorf("type filter = %v", got)
+	}
+	// A printing is found by its set and collector number, as a list row names it
+	_, got = search(t, s, `!"Sensei's Divining Top" set:2x2 cn:314 unique:prints`)
+	if len(got) != 1 || got[0] != "Sensei's Divining Top/2x2" {
+		t.Errorf("set and collector number = %v", got)
+	}
+	_, got = search(t, s, `!"Sensei's Divining Top" set:2x2 cn:999`)
+	if len(got) != 0 {
+		t.Errorf("a collector number that is not there matched %v", got)
 	}
 	_, got = search(t, s, `!"Delver of Secrets"`)
 	if len(got) != 1 {

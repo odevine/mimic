@@ -311,379 +311,46 @@
   "Studio.List": [],
   "Studio.Presets": [
     {
-      "id": "white-creature",
-      "label": "White creature",
-      "card": {
-        "Name": "Dawnwatch Sentinel",
-        "ManaCost": "{1}{W}",
-        "TypeLine": "Creature - Human Soldier",
-        "OracleText": "Vigilance\nWhen Dawnwatch Sentinel enters, you gain 2 life.",
-        "FlavorText": "\"The first light finds us ready.\"",
-        "Power": "2",
-        "Toughness": "2",
-        "Loyalty": "",
-        "Colors": [
-          "W"
-        ],
-        "ColorIdentity": [
-          "W"
-        ],
-        "ProducedMana": null,
-        "Rarity": "common",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "id": "monocolored",
+      "label": "Monocolored",
+      "name": "Mirran Spy",
+      "set": "mbs",
+      "number": "26"
     },
     {
-      "id": "two-color",
-      "label": "Two colors",
-      "card": {
-        "Name": "Tidecaller Savant",
-        "ManaCost": "{1}{W}{U}",
-        "TypeLine": "Creature - Merfolk Wizard",
-        "OracleText": "Flying\nWhenever you cast a spell with mana value 3 or less, scry 1.",
-        "FlavorText": "",
-        "Power": "2",
-        "Toughness": "3",
-        "Loyalty": "",
-        "Colors": [
-          "W",
-          "U"
-        ],
-        "ColorIdentity": [
-          "W",
-          "U"
-        ],
-        "ProducedMana": null,
-        "Rarity": "uncommon",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "id": "two-colors",
+      "label": "Two Colors",
+      "name": "Consuming Aberration",
+      "set": "gtc",
+      "number": "152"
     },
     {
-      "id": "three-color",
-      "label": "Three colors",
-      "card": {
-        "Name": "Convergence Drake",
-        "ManaCost": "{W}{U}{B}",
-        "TypeLine": "Creature - Drake",
-        "OracleText": "Flying, lifelink\nWhen Convergence Drake dies, each opponent loses 2 life.",
-        "FlavorText": "",
-        "Power": "3",
-        "Toughness": "3",
-        "Loyalty": "",
-        "Colors": [
-          "W",
-          "U",
-          "B"
-        ],
-        "ColorIdentity": [
-          "W",
-          "U",
-          "B"
-        ],
-        "ProducedMana": null,
-        "Rarity": "rare",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
-    },
-    {
-      "id": "five-color",
-      "label": "Five colors",
-      "card": {
-        "Name": "Prism Warden",
-        "ManaCost": "{W}{U}{B}{R}{G}",
-        "TypeLine": "Legendary Creature - Elemental",
-        "OracleText": "Protection from monocolored\nAt the beginning of your upkeep, add one mana of any color.",
-        "FlavorText": "",
-        "Power": "5",
-        "Toughness": "5",
-        "Loyalty": "",
-        "Colors": [
-          "W",
-          "U",
-          "B",
-          "R",
-          "G"
-        ],
-        "ColorIdentity": [
-          "W",
-          "U",
-          "B",
-          "R",
-          "G"
-        ],
-        "ProducedMana": null,
-        "Rarity": "mythic",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "id": "three-colors",
+      "label": "Three Colors",
+      "name": "Eerie Ultimatum",
+      "set": "iko",
+      "number": "184"
     },
     {
       "id": "legendary",
-      "label": "Legendary creature",
-      "card": {
-        "Name": "Ilvara, the Hollow King",
-        "ManaCost": "{2}{B}{R}",
-        "TypeLine": "Legendary Creature - Vampire Noble",
-        "OracleText": "Menace\nWhenever Ilvara attacks, each opponent sacrifices a creature with the least power.",
-        "FlavorText": "",
-        "Power": "4",
-        "Toughness": "3",
-        "Loyalty": "",
-        "Colors": [
-          "B",
-          "R"
-        ],
-        "ColorIdentity": [
-          "B",
-          "R"
-        ],
-        "ProducedMana": null,
-        "Rarity": "rare",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "label": "Legendary Creature",
+      "name": "Norin the Wary",
+      "set": "tsp",
+      "number": "171"
     },
     {
       "id": "artifact",
-      "label": "Colorless artifact",
-      "card": {
-        "Name": "Brass Compass",
-        "ManaCost": "{2}",
-        "TypeLine": "Artifact",
-        "OracleText": "{T}: Add one mana of any color.\n{2}, {T}, Sacrifice Brass Compass: Draw a card.",
-        "FlavorText": "",
-        "Power": "",
-        "Toughness": "",
-        "Loyalty": "",
-        "Colors": null,
-        "ColorIdentity": null,
-        "ProducedMana": null,
-        "Rarity": "common",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "label": "Artifact",
+      "name": "Sensei's Divining Top",
+      "set": "2x2",
+      "number": "314"
     },
     {
       "id": "land",
       "label": "Land",
-      "card": {
-        "Name": "Mistral Shore",
-        "ManaCost": "",
-        "TypeLine": "Land",
-        "OracleText": "Mistral Shore enters tapped unless you control two or more other lands.\n{T}: Add {W} or {U}.",
-        "FlavorText": "",
-        "Power": "",
-        "Toughness": "",
-        "Loyalty": "",
-        "Colors": null,
-        "ColorIdentity": null,
-        "ProducedMana": [
-          "W",
-          "U"
-        ],
-        "Rarity": "rare",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
-    },
-    {
-      "id": "instant",
-      "label": "Instant",
-      "card": {
-        "Name": "Stormbound Reply",
-        "ManaCost": "{U}{R}",
-        "TypeLine": "Instant",
-        "OracleText": "Counter target spell unless its controller pays {3}. If they do not, Stormbound Reply deals 2 damage to any target.",
-        "FlavorText": "",
-        "Power": "",
-        "Toughness": "",
-        "Loyalty": "",
-        "Colors": [
-          "U",
-          "R"
-        ],
-        "ColorIdentity": [
-          "U",
-          "R"
-        ],
-        "ProducedMana": null,
-        "Rarity": "uncommon",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
-    },
-    {
-      "id": "long-text",
-      "label": "Long title and text",
-      "card": {
-        "Name": "The Unreasonably Long-Titled Archivist of Forgotten Spellbooks",
-        "ManaCost": "{4}{W}{W}{U}{U}",
-        "TypeLine": "Legendary Creature - Human Wizard Advisor Scribe",
-        "OracleText": "Flying, vigilance, ward {2}\nWhen The Unreasonably Long-Titled Archivist enters, look at the top seven cards of your library. You may reveal an instant or sorcery card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\nWhenever you cast an instant or sorcery spell, you may pay {1}{U}. If you do, copy that spell and you may choose new targets for the copy. Activate only once each turn.\n{3}{W}{U}, {T}: Return target card from your graveyard to your hand, then exile this creature.",
-        "FlavorText": "\"Every book is a door, and she has read every door in the world.\"",
-        "Power": "6",
-        "Toughness": "7",
-        "Loyalty": "",
-        "Colors": [
-          "W",
-          "U"
-        ],
-        "ColorIdentity": [
-          "W",
-          "U"
-        ],
-        "ProducedMana": null,
-        "Rarity": "mythic",
-        "CollectorNumber": "1",
-        "SetCode": "tst",
-        "Artist": "A. Artist",
-        "Language": "en",
-        "ReleasedAt": "2026-01-01",
-        "ArtworkURL": "",
-        "Layout": "normal",
-        "FrameEffects": null,
-        "Keywords": null,
-        "ColorIndicator": null,
-        "Faces": null,
-        "FaceIndex": 0,
-        "shapes": [
-          {
-            "role": "single",
-            "kind": "standard"
-          }
-        ]
-      }
+      "name": "Flooded Strand",
+      "set": "ktk",
+      "number": "233"
     }
   ],
   "Studio.Vocabulary": {

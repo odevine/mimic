@@ -24,9 +24,9 @@ test("a new template is drawn with a test card as soon as it is made", async ({ 
   // The problems are collapsed to their heading until they are asked for
   await editor.openSection("problems");
   await expect(editor.page.locator("#ed-problems-none")).toBeVisible();
-  await expect(editor.cardLine).toHaveText("Dawnwatch Sentinel · TST");
+  await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
   await expect(editor.preview).toBeVisible();
-  await expect(editor.page.locator("#ed-activity-title")).toHaveText("Drew Dawnwatch Sentinel");
+  await expect(editor.page.locator("#ed-activity-title")).toHaveText("Drew Mirran Spy");
   const size = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
   expect(size).toEqual([408, 555]);
 });
@@ -55,10 +55,10 @@ test("a preset or a searched card is drawn and remembered", async ({ editor, pag
   await editor.create("Cards", 100);
 
   await editor.preset("Land").click();
-  await expect(editor.cardLine).toHaveText("Mistral Shore · TST");
+  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
   await expect(editor.preset("Land")).toHaveAttribute("aria-pressed", "true");
   await editor.waitForPreview();
-  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Mistral Shore");
+  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Flooded Strand");
 
   await editor.search("llanowar elves");
   await editor.results.filter({ has: page.locator(".r-name", { hasText: "Llanowar Elves" }) }).first().click();
@@ -597,4 +597,111 @@ test("what is locked and what is snapped to is kept with the template across a r
   await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
   await expect(editor.snapToggle("oracle")).toHaveAttribute("aria-pressed", "true");
   await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "false");
+});
+
+test("changing the test card's fields changes what the template draws, and the changes are kept", async ({ editor, page }) => {
+  await editor.create("Fine tune", 100);
+  // The first preset is a creature, so its power and toughness box is drawn
+  await expect(editor.row("pt")).not.toHaveClass(/undrawn/);
+  await expect(editor.preset("Monocolored")).toHaveAttribute("aria-pressed", "true");
+  const src = await editor.preview.getAttribute("src");
+
+  await editor.openFine();
+  await editor.cardField("typeLine").fill("Land");
+  await editor.cardField("power").fill("");
+  await editor.cardField("toughness").fill("");
+  await editor.cardField("name").fill("My Test Land");
+  await expect(editor.preset("Monocolored")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#ed-activity-title")).toHaveText("Drew My Test Land");
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  // A land has no power or toughness, so the box has nothing to draw and says why
+  await expect(editor.row("pt")).toHaveClass(/undrawn/);
+  await expect(editor.row("pt")).toHaveAttribute("title", /no pt|pt to draw/);
+
+  // The card as changed is the one the template opens with next time
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await page.locator('button[data-mode="editor"]').click();
+  await editor.waitForPreview();
+  await expect(editor.cardLine).toHaveText("My Test Land · MBS");
+  await editor.openFine();
+  await expect(editor.cardField("typeLine")).toHaveValue("Land");
+  await expect(editor.row("pt")).toHaveClass(/undrawn/);
+  await expect(editor.presets.filter({ has: page.locator("xpath=self::*[@aria-pressed='true']") })).toHaveCount(0);
+
+  // Choosing a preset again starts the fields over
+  await editor.preset("Monocolored").click();
+  await expect(editor.cardField("typeLine")).toHaveValue("Creature — Human Rogue");
+  await expect(editor.row("pt")).not.toHaveClass(/undrawn/);
+});
+
+test("a searched card's artwork replaces the preset's in the art window, and an edit keeps it", async ({ editor, page }) => {
+  await editor.create("Art window", 100);
+  // A preset is a real card, so it comes with art and the window shows it
+  await expect(editor.row("Art window")).not.toHaveClass(/undrawn/);
+  const pixel = () =>
+    editor.preview.evaluate((img) => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const at = (fx, fy) => [...ctx.getImageData(Math.round(fx * c.width), Math.round(fy * c.height), 1, 1).data].slice(0, 3);
+      return { art: at(0.5, 0.35), edge: at(0.03, 0.03) };
+    });
+  const preset = await pixel();
+  expect(preset.art).not.toEqual(preset.edge);
+
+  await editor.search("llanowar elves");
+  await editor.results.filter({ has: page.locator(".r-name", { hasText: "Llanowar Elves" }) }).first().click();
+  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Llanowar Elves");
+  await expect(page.locator("#ed-activity")).toHaveAttribute("data-state", "done");
+  await expect(editor.row("Art window")).not.toHaveClass(/undrawn/);
+  // The art is the searched card's and not the preset's, which the fake draws differently
+  const found = await pixel();
+  expect(found.art).not.toEqual(found.edge);
+  expect(found.art).not.toEqual(preset.art);
+
+  // Changing a field of the card keeps the art in the window
+  await editor.openFine();
+  await editor.cardField("flavor").fill("Roots first.");
+  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Llanowar Elves");
+  await expect.poll(async () => (await pixel()).art.join(",")).toBe(found.art.join(","));
+});
+
+
+test("with the proportion kept the canvas keeps its shape, and one undo takes both sides back", async ({ editor, scratch, page }) => {
+  await editor.create("Ratio", 100);
+  const file = draftFile(scratch, "ratio", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const canvas = JSON.parse(original).canvas;
+  await editor.openCanvas();
+  // The proportion is kept to begin with
+  await expect(page.locator("#ed-canvas-levers [data-ratio='lock']")).toHaveAttribute("aria-pressed", "true");
+  const width = Math.round(canvas.width * 0.8);
+  await editor.lever("canvas-width").fill(String(width));
+  await editor.lever("canvas-width").blur();
+  const want = Math.round(width / (canvas.width / canvas.height));
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).canvas.height).toBe(want);
+  expect(JSON.parse(await readFile(file, "utf8")).canvas.width).toBe(width);
+  await expect(editor.lever("canvas-height")).toHaveValue(String(want));
+
+  await editor.undoButton.click();
+  await expect.poll(() => readFile(file, "utf8")).toBe(original);
+  await expect(editor.undoButton).toBeDisabled();
+});
+
+test("the template's undo and redo are in its section and take back a change made anywhere", async ({ editor, scratch, page }) => {
+  await editor.create("Global undo", 100);
+  const file = draftFile(scratch, "global-undo", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  await expect(page.locator(".ed-draft #ed-undo")).toBeVisible();
+  await editor.layers.filter({ hasText: "title" }).click();
+  await editor.lever("lever-fontSize").fill("99");
+  await editor.lever("lever-fontSize").blur();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(99);
+  await page.locator(".ed-draft #ed-undo").click();
+  await expect.poll(() => readFile(file, "utf8")).toBe(original);
+  await page.locator(".ed-draft #ed-redo").click();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(99);
 });

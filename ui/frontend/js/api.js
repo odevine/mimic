@@ -205,19 +205,24 @@ export const api = {
   // The editor's drafts. A draft is { id, templateId, name, updated, forkedFrom,
   // problem }. createDraft starts a blank template and forkDraft copies an
   // installed template version, each resolving to the new draft, and openDraft
-  // resolves to { draft, meta, layouts, diagnostics, valid }. testCards lists the
-  // preset cards, each { id, label, card }. renderDraft starts a job like render
-  // does, and resolves to { jobId, dpi }, so its events, image and cancel are the
-  // render ones
+  // resolves to { draft, meta, layouts, diagnostics, valid }. renderDraft starts a job
+  // like render does, and resolves to { jobId, dpi }, so its events, image and cancel
+  // are the render ones
   drafts: () => rpc("Studio", "List"),
   createDraft: (name, dpi) => rpc("Studio", "Create", { name, dpi: dpi || 0 }),
   forkDraft: (template, version, name) => rpc("Studio", "Fork", { template, version, name }),
   renameDraft: (id, name) => rpc("Studio", "Rename", { id, name }),
   deleteDraft: (id) => rpc("Studio", "Delete", id),
   openDraft: (id) => rpc("Studio", "Open", id),
+  // testCards lists the preset test cards, each { id, label, name, set, number }, real
+  // printings that are looked up when one is chosen. resolveTestCard resolves to the
+  // card a preset names, as Scryfall has it, or rejects with why it could not be found
   testCards: () => rpc("Studio", "Presets"),
-  setTestCard: (id, card, face) => rpc("Studio", "SetTestCard", { id, card, face: face || 0 }),
-  renderDraft: (id, card, face) => rpc("Studio", "Render", { id, card, face: face || 0 }),
+  resolveTestCard: (id) => rpc("Studio", "ResolvePreset", id),
+  // edits are the card form's field values, as Single sends them, laid over the card by
+  // the app, and may be null for none. setTestCard keeps the card as edited
+  setTestCard: (id, card, edits, face) => rpc("Studio", "SetTestCard", { id, card, edits: edits || null, face: face || 0 }),
+  renderDraft: (id, card, edits, face) => rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0 }),
   // describeDraft resolves to what the draft's layout draws for the card, in draw
   // order: { layout, authored, delivered, items, editable, reason, rev }, where an
   // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
@@ -225,7 +230,7 @@ export const api = {
   // saves them, each { op, layout, kind, key, dx, dy, rect, to } with its numbers in
   // the finished image's pixels, and resolves to { rev, inverse }, the edits that
   // undo them
-  describeDraft: (id, card, face) => rpc("Studio", "Describe", { id, card, face: face || 0 }),
+  describeDraft: (id, card, edits, face) => rpc("Studio", "Describe", { id, card, edits: edits || null, face: face || 0 }),
   applyDraft: (id, ops) => rpc("Studio", "Apply", { id, ops }),
   // draftSource resolves to { files: [{ name, content }] }, template.json and each
   // layout as they are on disk. checkDraftFile resolves to { writable, problems }, what

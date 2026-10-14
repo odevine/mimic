@@ -1,6 +1,6 @@
 import { test, expect } from "../../bridge-fixtures.mjs";
 import { EditorPage } from "../../pages/EditorPage.mjs";
-import { done, draftSummary, draftView } from "../../bridge/cards.mjs";
+import { done, draftSummary, draftView, describeView, standardItems } from "../../bridge/cards.mjs";
 
 const mine = draftSummary("mine", "Mine");
 
@@ -234,7 +234,11 @@ test("the layout's canvas is edited in its own section, and the details are read
   await editor.lever("canvas-width").fill("1100");
   await editor.lever("canvas-width").blur();
   await expect.poll(() => applied(bridge).length).toBe(1);
-  expect(applied(bridge)[0].ops).toEqual([{ op: "set", layout: "normal", kind: "canvas", key: "", path: ["width"], value: 1100 }]);
+  // The proportion is kept to begin with, so the height follows the width
+  expect(applied(bridge)[0].ops).toEqual([
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["width"], value: 1100 },
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["height"], value: 1540 },
+  ]);
   await expect.poll(() => bridge.calledWith("Studio.Open").length).toBeGreaterThan(opens);
 });
 
@@ -332,4 +336,114 @@ test("a lever being typed in is left alone when the files are read again", async
   await expect.poll(() => applied(bridge).length).toBe(1);
   await expect(editor.lever("lever-align")).toHaveValue("right");
   await expect(editor.lever("lever-color")).toHaveValue("#12");
+});
+
+test("the canvas has a size and a rotation of their own", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  await expect(page.locator("#ed-canvas-levers .ed-lever-title")).toHaveText(["Size", "Rotation"]);
+  await expect(page.locator("#ed-canvas-levers .ed-lever-group").first().locator("#canvas-width, #canvas-height, #canvas-dpi")).toHaveCount(3);
+  await expect(editor.lever("canvas-rotate")).toBeVisible();
+  // The rotation is not among the size's fields
+  await expect(page.locator("#ed-canvas-levers .ed-ratio #canvas-rotate")).toHaveCount(0);
+});
+
+test("a bracket joins the width and height with a padlock that is closed to begin with", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  const lock = page.locator("#ed-canvas-levers [data-ratio='lock']");
+  await expect(page.locator("#ed-canvas-levers .ed-ratio")).toHaveCount(1);
+  await expect(page.locator("#ed-canvas-levers .ed-ratio-bracket")).toBeVisible();
+  // The proportion is kept until it is let go of, and the padlock is the layer's: closed
+  // and in the full text color while it is kept
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+  await expect(lock.locator("use")).toHaveAttribute("href", "icons.svg#i-lock");
+  const full = await lock.evaluate((el) => getComputedStyle(el).color);
+
+  // The bracket runs from the middle of the width to the middle of the height, and the
+  // padlock is on it
+  const width = await editor.lever("canvas-width").boundingBox();
+  const height = await editor.lever("canvas-height").boundingBox();
+  const bracket = await page.locator("#ed-canvas-levers .ed-ratio-bracket").boundingBox();
+  const pad = await lock.boundingBox();
+  expect(Math.abs(bracket.y - (width.y + width.height / 2))).toBeLessThan(3);
+  expect(Math.abs(bracket.y + bracket.height - (height.y + height.height / 2))).toBeLessThan(3);
+  expect(Math.abs(pad.y + pad.height / 2 - (bracket.y + bracket.height / 2))).toBeLessThan(2);
+  expect(bracket.x).toBeGreaterThanOrEqual(width.x + width.width - 2);
+
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+  await expect(lock.locator("use")).toHaveAttribute("href", "icons.svg#i-lock-open");
+  // Open, it is faint, once the pointer is off it
+  await page.mouse.move(0, 0);
+  await lock.evaluate((el) => el.blur());
+  expect(await lock.evaluate((el) => getComputedStyle(el).color)).not.toBe(full);
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+});
+
+test("with the proportion kept, changing the width changes the height with it in one edit", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  await expect(editor.lever("canvas-width")).toHaveValue("1000");
+  await expect(editor.lever("canvas-height")).toHaveValue("1400");
+  await editor.lever("canvas-width").fill("500");
+  await editor.lever("canvas-width").blur();
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops).toEqual([
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["width"], value: 500 },
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["height"], value: 700 },
+  ]);
+  // The other way round, from the shape it had to begin with and not the size it has now
+  await editor.lever("canvas-height").fill("1400");
+  await editor.lever("canvas-height").blur();
+  await expect.poll(() => applied(bridge).length).toBe(2);
+  expect(applied(bridge)[1].ops.map((o) => [o.path[0], o.value])).toEqual([
+    ["width", 1000],
+    ["height", 1400],
+  ]);
+});
+
+test("with the proportion let go of, the width and height change on their own", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  await page.locator("#ed-canvas-levers [data-ratio='lock']").click();
+  await editor.lever("canvas-width").fill("500");
+  await editor.lever("canvas-width").blur();
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops.map((o) => o.path[0])).toEqual(["width"]);
+  // Closed again, the shape kept is the one the canvas has then, 500 by 1400, which is no
+  // longer 5 to 7
+  await page.locator("#ed-canvas-levers [data-ratio='lock']").click();
+  await editor.lever("canvas-height").fill("1000");
+  await editor.lever("canvas-height").blur();
+  await expect.poll(() => applied(bridge).length).toBe(2);
+  expect(applied(bridge)[1].ops.map((o) => [o.path[0], o.value])).toEqual([
+    ["width", 357],
+    ["height", 1000],
+  ]);
+  // And it stays that shape until it is let go of again
+  await editor.lever("canvas-height").fill("500");
+  await editor.lever("canvas-height").blur();
+  await expect.poll(() => applied(bridge).length).toBe(3);
+  expect(applied(bridge)[2].ops.map((o) => [o.path[0], o.value])).toEqual([
+    ["width", 179],
+    ["height", 500],
+  ]);
+});
+
+test("the resolution is never part of the proportion", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  await editor.lever("canvas-dpi").fill("600");
+  await editor.lever("canvas-dpi").blur();
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops.map((o) => o.path[0])).toEqual(["dpi"]);
+});
+
+test("the padlock of the canvas is off for a layout that cannot be edited", async ({ bridge, page }) => {
+  bridge.reply("Studio.Describe", () => describeView(standardItems, { editable: false, reason: "This layout extends another one" }));
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  await expect(page.locator("#ed-canvas-levers [data-ratio='lock']")).toBeDisabled();
 });

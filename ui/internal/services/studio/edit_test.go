@@ -8,9 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/ui/internal/apierr"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/draftedit"
 )
 
@@ -37,7 +39,7 @@ func item(t *testing.T, v DescribeView, kind, key string) ItemView {
 func TestDescribeListsWhatTheDraftDrawsForTheTestCard(t *testing.T) {
 	svc, _, _ := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	v := describeFor(t, svc, sum.ID, "white-creature")
+	v := describeFor(t, svc, sum.ID, "monocolored")
 
 	if v.Layout != "normal" || v.Authored != (SizeView{272, 370}) || v.Delivered != v.Authored || !v.Editable || v.Reason != "" {
 		t.Fatalf("view = %+v", v)
@@ -80,7 +82,7 @@ func TestDescribeSaysWhenALayoutCannotBeEdited(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(layouts, "normal.json"), []byte(`{"serves": [{"role": "single", "kind": "standard"}], "extends": ["base"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	v, err := svc.Describe(DescribeRequest{ID: sum.ID, Card: presetCard(t, "white-creature")})
+	v, err := svc.Describe(DescribeRequest{ID: sum.ID, Card: presetCard(t, "monocolored")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,9 +97,9 @@ func TestDescribeSaysWhenALayoutCannotBeEdited(t *testing.T) {
 func TestApplyMovesAnElementSavesItAndRendersFromTheNewFile(t *testing.T) {
 	svc, ws, dir := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	c := presetCard(t, "white-creature")
+	c := presetCard(t, "monocolored")
 	before := renderDraft(t, svc, ws, sum.ID, c)
-	was := describeFor(t, svc, sum.ID, "white-creature")
+	was := describeFor(t, svc, sum.ID, "monocolored")
 	title := item(t, was, "text", "title")
 
 	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpMove, Layout: "normal", Kind: draftedit.KindText, Key: "title", DX: 20, DY: 15}}})
@@ -107,7 +109,7 @@ func TestApplyMovesAnElementSavesItAndRendersFromTheNewFile(t *testing.T) {
 	if res.Rev != 1 || len(res.Inverse) != 1 {
 		t.Fatalf("result = %+v", res)
 	}
-	now := describeFor(t, svc, sum.ID, "white-creature")
+	now := describeFor(t, svc, sum.ID, "monocolored")
 	moved := item(t, now, "text", "title")
 	if moved.Delivered.X != title.Delivered.X+20 || moved.Delivered.Y != title.Delivered.Y+15 || now.Rev != 1 {
 		t.Errorf("title moved from %+v to %+v at rev %d", title.Delivered, moved.Delivered, now.Rev)
@@ -123,7 +125,7 @@ func TestApplyMovesAnElementSavesItAndRendersFromTheNewFile(t *testing.T) {
 	if _, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: res.Inverse}); err != nil {
 		t.Fatal(err)
 	}
-	if back := item(t, describeFor(t, svc, sum.ID, "white-creature"), "text", "title"); back.Delivered != title.Delivered {
+	if back := item(t, describeFor(t, svc, sum.ID, "monocolored"), "text", "title"); back.Delivered != title.Delivered {
 		t.Errorf("after undo the title is at %+v, want %+v", back.Delivered, title.Delivered)
 	}
 	if !samePixels(before, renderDraft(t, svc, ws, sum.ID, c)) {
@@ -295,7 +297,7 @@ func TestApplySetsAFieldAndTheInverseTakesItBack(t *testing.T) {
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
 	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
 	original, _ := os.ReadFile(file)
-	c := presetCard(t, "white-creature")
+	c := presetCard(t, "monocolored")
 	before := renderDraft(t, svc, ws, sum.ID, c)
 
 	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{setOp(draftedit.KindText, "title", `"#FF0000"`, "text", "color")}})
@@ -389,7 +391,7 @@ func TestLayersAreAddedDuplicatedAndDeletedAndUndone(t *testing.T) {
 		draftedit.Op{Op: draftedit.OpAdd, Layout: "normal", Kind: draftedit.KindText, Key: "note", Value: json.RawMessage(`{"draws":"oracle","text":{"fontSize":10}}`), Rect: &draftedit.Rect{X: 20, Y: 100, Width: 100, Height: 30}},
 	)
 	dup := apply(draftedit.Op{Op: draftedit.OpDuplicate, Layout: "normal", Kind: draftedit.KindText, Key: "oracle", As: "oracle2", DX: 0, DY: 15})
-	v := describeFor(t, svc, sum.ID, "white-creature")
+	v := describeFor(t, svc, sum.ID, "monocolored")
 	if !item(t, v, "layer", "again").Drawn || !item(t, v, "text", "note").Drawn || !item(t, v, "text", "oracle2").Drawn {
 		t.Errorf("the new items are not drawn: %+v", v.Items)
 	}
@@ -397,7 +399,7 @@ func TestLayersAreAddedDuplicatedAndDeletedAndUndone(t *testing.T) {
 		t.Errorf("the copy is at %v and the original at %v", c.Delivered, o.Delivered)
 	}
 	del := apply(draftedit.Op{Op: draftedit.OpDelete, Layout: "normal", Kind: draftedit.KindText, Key: "oracle"})
-	if v := describeFor(t, svc, sum.ID, "white-creature"); len(v.Items) == 0 {
+	if v := describeFor(t, svc, sum.ID, "monocolored"); len(v.Items) == 0 {
 		t.Fatal("nothing is described")
 	} else {
 		for _, it := range v.Items {
@@ -417,5 +419,118 @@ func TestLayersAreAddedDuplicatedAndDeletedAndUndone(t *testing.T) {
 	_, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpAdd, Layout: "normal", Kind: draftedit.KindLayer, Key: "ghost", To: 1, Value: json.RawMessage(`{"id":"ghost","part":"nothere"}`)}}})
 	if err == nil || !strings.Contains(err.Error(), "That is not allowed") || layout() != was {
 		t.Errorf("err = %v, layout changed = %v", err, layout() != was)
+	}
+}
+
+// editsOf is the form's values for a card, as Single sends them, before anything is
+// changed
+func editsOf(c card.Data) *cardlist.Edits {
+	return &cardlist.Edits{Name: c.Name, ManaCost: c.ManaCost, TypeLine: c.TypeLine, Oracle: c.OracleText, Flavor: c.FlavorText, Power: c.Power, Toughness: c.Toughness, Loyalty: c.Loyalty, Artist: c.Artist, SetCode: c.SetCode, Collector: c.CollectorNumber, Rarity: c.Rarity, Released: c.ReleasedAt, Language: c.Language}
+}
+
+func TestEditsToTheTestCardChangeWhatTheDraftDraws(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	creature := presetCard(t, "monocolored")
+
+	// With the form's own values the card is as it was, and with no edits it is too
+	same, err := svc.Describe(DescribeRequest{ID: sum.ID, Card: creature, Edits: editsOf(creature)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pt := item(t, same, "text", "pt"); !pt.Drawn {
+		t.Fatalf("pt = %+v, want drawn for a creature", pt)
+	}
+
+	// Turning it into a land, with no power or toughness, leaves the box for them nothing
+	// to draw
+	e := editsOf(creature)
+	e.TypeLine, e.Power, e.Toughness = "Land", "", ""
+	land, err := svc.Describe(DescribeRequest{ID: sum.ID, Card: creature, Edits: e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pt := item(t, land, "text", "pt"); pt.Drawn || pt.Why == "" {
+		t.Errorf("pt of the edited card = %+v, want undrawn with a reason", pt)
+	}
+	// The card that was sent is not changed by it
+	if creature.TypeLine == "Land" {
+		t.Error("the edits were written into the card the caller held")
+	}
+}
+
+func TestEditsAreLaidOverTheCardThatIsRendered(t *testing.T) {
+	svc, ws, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	c := presetCard(t, "monocolored")
+	plain := renderDraft(t, svc, ws, sum.ID, c)
+
+	// The same call with an edit to the name is a render of another card, which the
+	// job names by it
+	e := editsOf(c)
+	e.Name = "A Very Different Name"
+	started, err := svc.Render(RenderRequest{ID: sum.ID, Card: c, Edits: e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev := finish(t, ws, started.JobID); ev.Err != "" {
+		t.Fatalf("render failed: %s", ev.Err)
+	}
+	j, _ := ws.Jobs.Lookup(started.JobID)
+	img, name := j.Result()
+	if name != "A Very Different Name" {
+		t.Errorf("the render is named %q", name)
+	}
+	if samePixels(plain, img) {
+		t.Error("an edited name left the card as it was")
+	}
+}
+
+func TestTheTestCardIsKeptAsEdited(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	c := presetCard(t, "monocolored")
+	e := editsOf(c)
+	e.Name, e.Oracle, e.Power = "Kept Name", "A rule I wrote.", "9"
+	if err := svc.SetTestCard(TestCardRequest{ID: sum.ID, Card: &c, Edits: e}); err != nil {
+		t.Fatal(err)
+	}
+	v, err := svc.Open(sum.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := v.Meta.TestCard
+	if got == nil || got.Name != "Kept Name" || got.OracleText != "A rule I wrote." || got.Power != "9" {
+		t.Fatalf("the kept card = %+v", got)
+	}
+	// What was not edited is what the card had, including the art it came with
+	if got.TypeLine != c.TypeLine || got.ArtworkURL != c.ArtworkURL {
+		t.Errorf("the kept card lost what was not edited: %+v", got)
+	}
+
+	// With no edits the card is kept as it is
+	if err := svc.SetTestCard(TestCardRequest{ID: sum.ID, Card: &c}); err != nil {
+		t.Fatal(err)
+	}
+	v, _ = svc.Open(sum.ID)
+	if v.Meta.TestCard.Name != c.Name {
+		t.Errorf("a card with no edits was kept as %q", v.Meta.TestCard.Name)
+	}
+}
+
+func TestEditsKeepTheArtTheCardCameWith(t *testing.T) {
+	c := presetCard(t, "monocolored")
+	c.ArtworkURL = "https://cards.example/art.jpg"
+	e := editsOf(c)
+	e.Name = "Renamed"
+	got := withEdits(c, e)
+	if got.Name != "Renamed" || got.ArtworkURL != c.ArtworkURL {
+		t.Errorf("edited card = %+v", got)
+	}
+	for _, f := range got.Faces {
+		_ = f
+	}
+	if same := withEdits(c, nil); same.Name != c.Name || same.ArtworkURL != c.ArtworkURL {
+		t.Errorf("a card with no edits changed: %+v", same)
 	}
 }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SECTIONS, DEFAULTS, MIN_HEIGHT, restore, pack, nextOpen, restFrom, resizePair } from "../js/sectionlayout.js";
+import { SECTIONS, DEFAULTS, LEFT_SECTIONS, LEFT_DEFAULTS, MIN_HEIGHT, restore, pack, nextOpen, restFrom, resizePair } from "../js/sectionlayout.js";
 
 test("the column starts with the layers and selection open and the rest down to their headings", () => {
   assert.deepEqual(SECTIONS, ["layers", "selection", "about", "problems"]);
@@ -66,4 +66,16 @@ test("dragging a line grows one section and shrinks the other by as much", () =>
 test("a pair already at the minimum or less does not move", () => {
   assert.deepEqual(resizePair([MIN_HEIGHT, MIN_HEIGHT], 0, 1, 30), { hi: MIN_HEIGHT, hj: MIN_HEIGHT });
   assert.deepEqual(resizePair([50, 60], 0, 1, 30), { hi: 50, hj: 60 });
+});
+
+test("the left column has its own sections, the test card and the search, with only the test card open", () => {
+  assert.deepEqual(LEFT_SECTIONS, ["card", "search"]);
+  assert.deepEqual(LEFT_DEFAULTS.collapsed, [false, true]);
+  assert.equal(LEFT_DEFAULTS.weights.length, LEFT_SECTIONS.length);
+  assert.deepEqual(restore(undefined, LEFT_DEFAULTS), LEFT_DEFAULTS);
+  // What it kept is read as its own, and what the right column kept is not
+  const kept = pack({ collapsed: [false, false], weights: [300, 90] });
+  assert.deepEqual(kept, [0, 0, 300, 90]);
+  assert.deepEqual(restore(kept, LEFT_DEFAULTS), { collapsed: [false, false], weights: [300, 90] });
+  assert.deepEqual(restore([1, 0, 0, 1, 100, 300, 200, 150], LEFT_DEFAULTS), LEFT_DEFAULTS);
 });

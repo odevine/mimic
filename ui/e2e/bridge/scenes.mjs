@@ -149,6 +149,24 @@ export const scenes = {
       await expect(editor.undoButton).toBeEnabled();
     },
   },
+  "editor-card-fields": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.openFine();
+      // A field is changed, so the preset lets go and the form says what differs
+      await editor.cardField("typeLine").fill("Land");
+      await expect(page.locator("#ed-fine-revert")).toBeVisible();
+    },
+  },
   "editor-images": {
     mask: ["#ed-activity"],
     run: async ({ bridge, page }) => {
@@ -228,6 +246,8 @@ export const scenes = {
       await editor.layers.filter({ hasText: "title" }).click();
       await expect(editor.lever("lever-fontSize")).toHaveValue("60");
       await editor.openCanvas();
+      // The width and height are kept in proportion to begin with, so the padlock is closed
+      await expect(page.locator("#ed-canvas-levers [data-ratio='lock']")).toHaveAttribute("aria-pressed", "true");
       await page.locator("#lever-shadow-on").check();
       await new EditorPage(page).openSection("about");
       await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");

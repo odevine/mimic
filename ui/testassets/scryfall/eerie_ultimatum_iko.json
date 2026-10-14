@@ -1,0 +1,30 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0013",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0013",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Eerie Ultimatum",
+  "type_line": "Sorcery",
+  "oracle_text": "Return any number of permanent cards with different names from your graveyard to the battlefield.",
+  "colors": [
+    "W",
+    "B",
+    "G"
+  ],
+  "color_identity": [
+    "W",
+    "B",
+    "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "184",
+  "set": "iko",
+  "set_name": "Ikoria: Lair of Behemoths",
+  "released_at": "2020-04-17",
+  "artist": "Lius Lasahido",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/eerie-ultimatum-iko.jpg"
+  },
+  "mana_cost": "{W}{W}{B}{B}{G}{G}"
+}

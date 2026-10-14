@@ -17,6 +17,7 @@ import (
 	"github.com/odevine/mimic/engine/render"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/apierr"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/draftedit"
 )
 
@@ -60,9 +61,10 @@ type ItemView struct {
 
 // DescribeRequest is the card a draft is being tested with
 type DescribeRequest struct {
-	ID   string    `json:"id"`
-	Card card.Data `json:"card"`
-	Face int       `json:"face"`
+	ID    string          `json:"id"`
+	Card  card.Data       `json:"card"`
+	Edits *cardlist.Edits `json:"edits,omitempty"`
+	Face  int             `json:"face"`
 }
 
 // DescribeView is what the layout the card renders with draws, in draw order
@@ -91,6 +93,7 @@ func (s *Service) Describe(req DescribeRequest) (DescribeView, error) {
 	if err != nil || t == nil {
 		return DescribeView{}, apierr.New(apierr.BadRequest, firstProblem(ds, err))
 	}
+	req.Card = withEdits(req.Card, req.Edits)
 	r := template.RenderRequest{Card: &req.Card, Face: req.Face}
 	// Whether art draws depends on the card having some, and its pixels do not matter
 	if req.Card.Face(req.Face).ArtworkURL != "" {

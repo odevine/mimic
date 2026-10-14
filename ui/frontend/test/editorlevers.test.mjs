@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove } from "../js/editorlevers.js";
+import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove, keepRatio, sizeOps } from "../js/editorlevers.js";
 
 const vocab = {
   draws: ["title", "oracle", "pt"],
@@ -157,4 +157,35 @@ test("clearing an optional field of a credit takes the key out, and the name sta
   const credits = [{ name: "A", url: "u", note: "n" }];
   assert.deepEqual(creditEdit(credits, 0, "url", "", 0), [{ name: "A", note: "n" }]);
   assert.deepEqual(creditEdit(credits, 0, "name", "", 0), [{ name: "", url: "u", note: "n" }]);
+});
+
+test("the canvas has a size and a rotation, and only the size can be kept in proportion", () => {
+  const groups = fieldGroups("canvas", { vocab });
+  assert.deepEqual(groups.map((g) => g.title), ["Size", "Rotation"]);
+  assert.deepEqual(groups[0].fields.map((f) => f.id), ["width", "height", "dpi"]);
+  assert.deepEqual(groups[0].ratio, ["width", "height"]);
+  assert.deepEqual(groups[1].fields.map((f) => f.id), ["rotate"]);
+  assert.equal(groups[1].ratio, undefined);
+});
+
+test("keeping a ratio makes the other side follow the one changed", () => {
+  // A canvas 1000 by 1400, which is 5 to 7
+  const ratio = 1000 / 1400;
+  assert.deepEqual(keepRatio("width", 500, ratio), { width: 500, height: 700 });
+  assert.deepEqual(keepRatio("height", 700, ratio), { width: 500, height: 700 });
+  assert.deepEqual(keepRatio("width", 1001, ratio), { width: 1001, height: 1401 });
+  // The other side is whole pixels and at least one
+  assert.deepEqual(keepRatio("width", 3, ratio), { width: 3, height: 4 });
+  assert.deepEqual(keepRatio("width", 1, 100), { width: 1, height: 1 });
+  assert.deepEqual(keepRatio("height", 1, 0.001), { width: 1, height: 1 });
+});
+
+test("a change of size is the edits for the sides that differ, in the layout's canvas", () => {
+  const target = { layout: "normal", kind: "canvas", key: "" };
+  assert.deepEqual(sizeOps(target, { width: 500, height: 700 }, { width: 1000, height: 1400 }), [
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["width"], value: 500 },
+    { op: "set", layout: "normal", kind: "canvas", key: "", path: ["height"], value: 700 },
+  ]);
+  assert.deepEqual(sizeOps(target, { width: 500, height: 1400 }, { width: 1000, height: 1400 }).map((o) => o.path), [["width"]]);
+  assert.deepEqual(sizeOps(target, { width: 1000, height: 1400 }, { width: 1000, height: 1400 }), []);
 });

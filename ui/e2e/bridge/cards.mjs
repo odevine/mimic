@@ -127,6 +127,18 @@ export const standardTemplateDoc = () => ({
   credits: [{ name: "Original Artist", url: "https://example.com/art", note: "art" }, { name: "Mine too" }],
 });
 
+// The cards the presets name, as the app looks them up, by preset id
+const art = (name) => `https://cards.scryfall.io/art_crop/front/${name}.jpg`;
+const single = [{ role: "single", kind: "standard" }];
+export const presetCards = {
+  monocolored: card("Mirran Spy", { ManaCost: "{1}{U}", TypeLine: "Creature — Human Rogue", OracleText: "Flying\nWhenever you cast an artifact spell, you may untap target creature.", Power: "1", Toughness: "1", Colors: ["U"], ColorIdentity: ["U"], SetCode: "mbs", CollectorNumber: "26", Rarity: "common", ArtworkURL: art("mirran-spy"), shapes: single }),
+  "two-colors": card("Consuming Aberration", { ManaCost: "{3}{U}{B}", TypeLine: "Creature — Horror", OracleText: "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.", Power: "*", Toughness: "*", Colors: ["U", "B"], ColorIdentity: ["U", "B"], SetCode: "gtc", CollectorNumber: "152", Rarity: "rare", ArtworkURL: art("consuming-aberration"), shapes: single }),
+  "three-colors": card("Eerie Ultimatum", { ManaCost: "{W}{W}{B}{B}{G}{G}", TypeLine: "Sorcery", OracleText: "Return any number of permanent cards with different names from your graveyard to the battlefield.", Colors: ["W", "B", "G"], ColorIdentity: ["W", "B", "G"], SetCode: "iko", CollectorNumber: "184", Rarity: "rare", ArtworkURL: art("eerie-ultimatum"), shapes: single }),
+  legendary: card("Norin the Wary", { ManaCost: "{R}", TypeLine: "Legendary Creature — Human Warrior", OracleText: "When a player casts a spell or a creature attacks, exile Norin the Wary.", Power: "1", Toughness: "1", Colors: ["R"], ColorIdentity: ["R"], SetCode: "tsp", CollectorNumber: "171", Rarity: "rare", ArtworkURL: art("norin-the-wary"), shapes: single }),
+  artifact: card("Sensei's Divining Top", { ManaCost: "{1}", TypeLine: "Artifact", OracleText: "{1}: Look at the top three cards of your library, then put them back in any order.", SetCode: "2x2", CollectorNumber: "314", Rarity: "rare", ArtworkURL: art("sensei-s-divining-top"), shapes: single }),
+  land: card("Flooded Strand", { ManaCost: "", TypeLine: "Land", OracleText: "{T}, Pay 1 life, Sacrifice Flooded Strand: Search your library for a Plains or Island card.", SetCode: "ktk", CollectorNumber: "233", Rarity: "rare", ArtworkURL: art("flooded-strand"), shapes: single }),
+};
+
 // What a draft holds in images and fonts, as the app reports it. A part has a cell for
 // each material its slot reads: an image of its own, a run blended from its colors, the
 // any image's cover, or nothing, which leaves a hole

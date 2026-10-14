@@ -94,14 +94,25 @@ export class EditorPage {
     return this.page.locator("#ed-presets .chip", { hasText: label });
   }
 
+  // The search is in a section of its own that starts collapsed
+  get searchToggle() {
+    return this.page.locator("#ed-search-toggle");
+  }
+
+  async openSearch() {
+    if ((await this.searchToggle.getAttribute("aria-expanded")) !== "true") await this.searchToggle.click();
+    await expect(this.page.locator("#ed-search-body")).toBeVisible();
+  }
+
   async search(query) {
+    await this.openSearch();
     await this.searchInput.fill(query);
     await this.searchInput.press("Enter");
     await expect(this.results.first()).toBeVisible();
   }
 
   // sectionToggle is the heading of one of the right column's sections, which opens
-  // and collapses it, by its name: layers, selection, layout, about or problems
+  // and collapses it, by its name: layers, selection, about or problems
   sectionToggle(name) {
     return this.page.locator(`#ed-sec-${name}-toggle`);
   }
@@ -142,6 +153,31 @@ export class EditorPage {
   async collapseCanvas() {
     if ((await this.canvasToggle.getAttribute("aria-expanded")) === "true") await this.canvasToggle.click();
     await expect(this.canvasBody).toBeHidden();
+  }
+
+  // The fields of the test card are the Properties of the test card section, a disclosure
+  // that is open to begin with
+  get fineDetails() {
+    return this.page.locator("#ed-fine-details");
+  }
+
+  get fineSummary() {
+    return this.page.locator("#ed-fine-details > summary");
+  }
+
+  async openFine() {
+    if (!(await this.fineDetails.evaluate((el) => el.open))) await this.fineSummary.click();
+    await expect(this.page.locator("#ed-card-form")).toBeVisible();
+  }
+
+  async collapseFine() {
+    if (await this.fineDetails.evaluate((el) => el.open)) await this.fineSummary.click();
+    await expect(this.page.locator("#ed-card-form")).toBeHidden();
+  }
+
+  // cardField is the control of one field of the test card's form, such as name or typeLine
+  cardField(name) {
+    return this.page.locator(`#f-ed-${name}`);
   }
 
   // row is the row of the layers list for an item, by the name it shows. The toggles,

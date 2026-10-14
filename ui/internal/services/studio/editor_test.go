@@ -13,6 +13,7 @@ import (
 
 	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/ui/internal/apierr"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/drafts"
 	"github.com/odevine/mimic/ui/internal/jobs"
 	"github.com/odevine/mimic/ui/internal/workspace"
@@ -51,15 +52,14 @@ func finish(t *testing.T, ws *workspace.Workspace, id string) jobs.Event {
 	}
 }
 
+// presetCard is the card a preset stands for in the tests, which is made up
 func presetCard(t *testing.T, id string) card.Data {
 	t.Helper()
-	for _, p := range presets() {
-		if p.ID == id {
-			return *p.Card.Data
-		}
+	c, ok := standInCards()[id]
+	if !ok {
+		t.Fatalf("no preset %s", id)
 	}
-	t.Fatalf("no preset %s", id)
-	return card.Data{}
+	return c
 }
 
 // renderDraft renders a card through a draft and returns the image
@@ -146,7 +146,7 @@ func TestOpenRefusesADraftThatIsGone(t *testing.T) {
 func TestRenderDrawsTheTestCardThroughTheDraft(t *testing.T) {
 	svc, ws, _ := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	started, err := svc.Render(RenderRequest{ID: sum.ID, Card: presetCard(t, "white-creature")})
+	started, err := svc.Render(RenderRequest{ID: sum.ID, Card: presetCard(t, "monocolored")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestRenderDrawsTheTestCardThroughTheDraft(t *testing.T) {
 	}
 	j, _ := ws.Jobs.Lookup(started.JobID)
 	img, name := j.Result()
-	if img == nil || img.Bounds().Size() != (image.Point{X: 272, Y: 370}) || name != "Dawnwatch Sentinel" {
+	if img == nil || img.Bounds().Size() != (image.Point{X: 272, Y: 370}) || name != "Mirran Spy" {
 		t.Fatalf("image %v, name %q", img.Bounds(), name)
 	}
 }
@@ -166,7 +166,7 @@ func TestRenderDrawsTheTestCardThroughTheDraft(t *testing.T) {
 func TestRenderSeesAnEditWithoutOpeningAgain(t *testing.T) {
 	svc, ws, dir := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	c := presetCard(t, "white-creature")
+	c := presetCard(t, "monocolored")
 	before := renderDraft(t, svc, ws, sum.ID, c)
 
 	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
@@ -195,7 +195,7 @@ func TestRenderSeesAnEditWithoutOpeningAgain(t *testing.T) {
 func TestRenderReadsAChangedImageAfterOpen(t *testing.T) {
 	svc, ws, dir := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	c := presetCard(t, "white-creature")
+	c := presetCard(t, "monocolored")
 	before := renderDraft(t, svc, ws, sum.ID, c)
 
 	file := filepath.Join(dir, sum.ID, "parts", "background", "any.png")
@@ -216,7 +216,7 @@ func TestRenderReadsAChangedImageAfterOpen(t *testing.T) {
 func TestRenderRefusesWhatCannotRender(t *testing.T) {
 	svc, _, dir := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	c := presetCard(t, "white-creature")
+	c := presetCard(t, "monocolored")
 
 	if _, err := svc.Render(RenderRequest{ID: "nothing", Card: c}); apierr.KindOf(err) != apierr.NotFound {
 		t.Errorf("a missing draft gave %v", err)
@@ -239,29 +239,40 @@ func TestRenderRefusesWhatCannotRender(t *testing.T) {
 	}
 }
 
-func TestEveryPresetIsAStandardCardAndRenders(t *testing.T) {
+func TestEveryPresetHasAStandInThatIsAStandardCardAndRenders(t *testing.T) {
 	svc, ws, _ := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	seen := map[string]bool{}
+	cards := standInCards()
 	for _, p := range svc.Presets() {
-		if seen[p.ID] || p.Label == "" {
-			t.Errorf("preset %+v repeats an id or has no label", p)
+		c, ok := cards[p.ID]
+		if !ok {
+			t.Fatalf("preset %s has no stand-in", p.ID)
 		}
-		seen[p.ID] = true
-		if len(p.Card.Shapes) != 1 || p.Card.Shapes[0].String() != "standard (single)" {
-			t.Errorf("%s has shapes %v, want one standard single face", p.ID, p.Card.Shapes)
+		if c.Name != p.Name || c.SetCode != p.Set || c.CollectorNumber != p.Number {
+			t.Errorf("%s stands in with %s %s %s", p.ID, c.Name, c.SetCode, c.CollectorNumber)
 		}
-		renderDraft(t, svc, ws, sum.ID, *p.Card.Data)
+		if shapes := cardlist.Shaped(&c).Shapes; len(shapes) != 1 || shapes[0].String() != "standard (single)" {
+			t.Errorf("%s has shapes %v, want one standard single face", p.ID, shapes)
+		}
+		renderDraft(t, svc, ws, sum.ID, c)
 	}
-	if len(seen) < 8 {
-		t.Errorf("only %d presets", len(seen))
+}
+
+func TestTheStandInAnswersALookupOfAPresetWithoutANetwork(t *testing.T) {
+	svc, _, _ := newService(t)
+	svc.UseStandIn()
+	for _, p := range svc.Presets() {
+		got, err := svc.ResolvePreset(p.ID)
+		if err != nil || got.Data.Name != p.Name {
+			t.Errorf("%s resolved to %v, %v", p.ID, got, err)
+		}
 	}
 }
 
 func TestSetTestCardIsRememberedAndShownOnOpen(t *testing.T) {
 	svc, _, _ := newService(t)
 	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
-	c := presetCard(t, "two-color")
+	c := presetCard(t, "two-colors")
 	if err := svc.SetTestCard(TestCardRequest{ID: sum.ID, Card: &c, Face: 0}); err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +298,7 @@ func TestForkCopiesAnInstalledTemplate(t *testing.T) {
 	if err != nil || !v.Valid {
 		t.Fatalf("view = %+v, %v", v, err)
 	}
-	renderDraft(t, svc, ws, sum.ID, presetCard(t, "white-creature"))
+	renderDraft(t, svc, ws, sum.ID, presetCard(t, "monocolored"))
 
 	if _, err := svc.Fork(ForkRequest{Template: "no.such", Version: "1.0.0", Name: "X"}); apierr.KindOf(err) != apierr.NotFound {
 		t.Errorf("forking a template that is not installed gave %v", err)

@@ -1,0 +1,28 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0014",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0014",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Norin the Wary",
+  "type_line": "Legendary Creature — Human Warrior",
+  "oracle_text": "When a player casts a spell or a creature attacks, exile Norin the Wary. Return it to the battlefield under its owner's control at the beginning of the next end step.",
+  "colors": [
+    "R"
+  ],
+  "color_identity": [
+    "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "171",
+  "set": "tsp",
+  "set_name": "Time Spiral",
+  "released_at": "2006-10-06",
+  "artist": "Kev Walker",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/norin-the-wary-tsp.jpg"
+  },
+  "mana_cost": "{R}",
+  "power": "1",
+  "toughness": "1"
+}

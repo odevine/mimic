@@ -2,15 +2,23 @@
 // functions: which are open, how much each open one has, where a splitter goes and what
 // a drag changes. The column's own code reads and writes the elements
 
-// The sections, top to bottom
+// The sections of the right column, top to bottom
 export const SECTIONS = ["layers", "selection", "about", "problems"];
 
-// DEFAULTS is how the column starts: the layers and the selection are open, with the
-// layers given the most room, and the rest are collapsed to their headings. A weight
-// says how the height is shared among the open sections
+// DEFAULTS is how the right column starts: the layers and the selection are open, with
+// the layers given the most room, and the rest are collapsed to their headings. A
+// weight says how the height is shared among the open sections
 export const DEFAULTS = {
   collapsed: [false, false, true, true],
   weights: [6, 4, 3, 2],
+};
+
+// The left column's sections, the test card, which holds the properties of the card, and
+// the search, which starts collapsed
+export const LEFT_SECTIONS = ["card", "search"];
+export const LEFT_DEFAULTS = {
+  collapsed: [false, true],
+  weights: [6, 6],
 };
 
 // MIN_HEIGHT is the least an open section may be dragged down to, its heading and a
@@ -19,9 +27,11 @@ export const MIN_HEIGHT = 96;
 
 // restore reads the state kept by pack, which is a list of one number per section for
 // whether it is collapsed and then one for how much room it has. Anything else, or a
-// weight that is not a number above zero, is the default
-export function restore(saved, n = SECTIONS.length) {
-  const state = { collapsed: [...DEFAULTS.collapsed], weights: [...DEFAULTS.weights] };
+// weight that is not a number above zero, is the defaults, which are the right
+// column's unless others are given
+export function restore(saved, defaults = DEFAULTS) {
+  const n = defaults.collapsed.length;
+  const state = { collapsed: [...defaults.collapsed], weights: [...defaults.weights] };
   if (!Array.isArray(saved) || saved.length !== 2 * n || !saved.every(Number.isFinite)) return state;
   for (let i = 0; i < n; i++) {
     state.collapsed[i] = saved[i] === 1;

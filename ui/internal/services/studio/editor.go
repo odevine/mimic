@@ -14,6 +14,7 @@ import (
 	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/apierr"
+	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/drafts"
 	"github.com/odevine/mimic/ui/internal/jobs"
 	"github.com/odevine/mimic/ui/internal/pipeline"
@@ -40,6 +41,10 @@ type Service struct {
 	// held is the files edits wrote and removed, which an undo writes back
 	held   *stash
 	thumbs thumbCache
+	// presetCache remembers the cards the presets were looked up as, and resolve, when
+	// set, stands in for the lookup source
+	presetCache cardlist.Cache
+	resolve     func() cardlist.Resolver
 }
 
 // New returns the service over a workspace, keeping drafts in the app's drafts
@@ -233,11 +238,23 @@ func layoutViews(t *template.Template) []LayoutView {
 	return out
 }
 
-// TestCardRequest is the card a draft is tested with and which of its faces
+// TestCardRequest is the card a draft is tested with and which of its faces. Edits,
+// when given, are the field values changed from the card, laid over it as Single's
+// form lays them over the card it renders, and the card that is kept is the result
 type TestCardRequest struct {
-	ID   string     `json:"id"`
-	Card *card.Data `json:"card"`
-	Face int        `json:"face"`
+	ID    string          `json:"id"`
+	Card  *card.Data      `json:"card"`
+	Edits *cardlist.Edits `json:"edits,omitempty"`
+	Face  int             `json:"face"`
+}
+
+// withEdits is the card with the edited fields laid over it, or the card as it is when
+// there are none
+func withEdits(c card.Data, e *cardlist.Edits) card.Data {
+	if e == nil {
+		return c
+	}
+	return *cardlist.ApplyEdits(&c, *e)
 }
 
 // SetTestCard remembers the card a draft is tested with
@@ -246,6 +263,10 @@ func (s *Service) SetTestCard(req TestCardRequest) error {
 	if err != nil {
 		return err
 	}
+	if req.Card != nil {
+		edited := withEdits(*req.Card, req.Edits)
+		req.Card = &edited
+	}
 	meta.TestCard, meta.Face = req.Card, req.Face
 	return s.store.SaveMeta(req.ID, meta)
 }
@@ -253,9 +274,10 @@ func (s *Service) SetTestCard(req TestCardRequest) error {
 // RenderRequest is a render of a card through a draft. Face picks which of the
 // card's images, 0 for the front
 type RenderRequest struct {
-	ID   string    `json:"id"`
-	Card card.Data `json:"card"`
-	Face int       `json:"face"`
+	ID    string          `json:"id"`
+	Card  card.Data       `json:"card"`
+	Edits *cardlist.Edits `json:"edits,omitempty"`
+	Face  int             `json:"face"`
 }
 
 // Render draws the card through the draft as it is on disk, at the preview
@@ -271,6 +293,7 @@ func (s *Service) Render(req RenderRequest) (render.Started, error) {
 	if err != nil || t == nil {
 		return render.Started{}, apierr.New(apierr.BadRequest, firstProblem(ds, err))
 	}
+	req.Card = withEdits(req.Card, req.Edits)
 	shapes := template.Classify(&req.Card)
 	if req.Face < 0 || req.Face >= len(shapes) {
 		return render.Started{}, apierr.Newf(apierr.BadRequest, "%s has no face %d", req.Card.Name, req.Face)

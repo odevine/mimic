@@ -14,6 +14,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+.ed-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .ed-draft-row {
   display: flex;
   align-items: center;
@@ -25,33 +31,55 @@
   min-width: 0;
 }
 
-/* The template's canvas, under the template it belongs to in the left column. It
-   collapses to its heading and keeps to a share of the column when it is open */
-.ed-canvas-sec {
+/* The sections of the left column that collapse to their heading, the template's canvas
+   under the template and the fields of the test card. Each keeps to a share of the
+   column when it is open */
+.ed-fold {
   flex: none;
   border-bottom: 1px solid var(--border);
 }
 
-.ed-canvas-sec .ed-sec-title {
+.ed-fold .ed-sec-title {
   margin: 0;
   font: inherit;
 }
 
-.ed-canvas-body {
+.ed-fold-body {
   max-height: 40vh;
   overflow: auto;
   padding: 0 12px 12px;
 }
 
-.ed-canvas-body[hidden] {
+.ed-fold-body[hidden] {
   display: none;
 }
 
-.ed-card {
+.ed-fine-lede {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+/* The properties of the test card are a disclosure of the test card's own section, as
+   the printing details are of the properties */
+.ed-properties > summary {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The card's form fits the narrow column, one field to a row */
+.ed-card-form .field-grid {
+  grid-template-columns: 1fr;
+}
+
+.ed-card-form {
+  padding: 0;
+}
+
+#ed-card-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px 8px;
 }
 
 .ed-card-line {
@@ -66,9 +94,26 @@
   gap: 4px;
 }
 
+/* The search results are in a section of their own that scrolls as a whole, and the
+   left column scrolls when its sections are open together */
 #mode-editor .results {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+}
+
+#mode-editor [data-region="0"] {
+  overflow: hidden;
+}
+
+.ed-sec-body.ed-search-body {
+  padding: 0 0 8px;
+}
+
+.ed-search-body .search-form {
+  padding: 0 12px 8px;
+}
+
+.ed-search-body .panel-footer {
+  border-top: 0;
 }
 
 /* The right column: sections that each collapse to their heading and can be given
@@ -167,7 +212,7 @@
 }
 
 .ed-sec.collapsed .ed-sec-toggle .icon,
-.ed-canvas-sec.collapsed .ed-sec-toggle .icon {
+.ed-fold.collapsed .ed-sec-toggle .icon {
   transform: rotate(-90deg);
 }
 
@@ -949,4 +994,46 @@ body.resizing-rows * {
 
 .ed-font.missing .ed-font-name {
   color: var(--warn);
+}
+
+/* Two fields kept in proportion: a bracket from the middle of one to the middle of the
+   other, with the padlock on it */
+.ed-ratio {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  align-items: stretch;
+}
+
+.ed-ratio-rows {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ed-ratio-link {
+  position: relative;
+}
+
+.ed-ratio-bracket {
+  position: absolute;
+  top: calc(var(--control-h) / 2);
+  bottom: calc(var(--control-h) / 2);
+  left: 2px;
+  width: 11px;
+  border: 1.5px solid var(--border-strong);
+  border-left: 0;
+  border-radius: 0 5px 5px 0;
+}
+
+.ed-ratio-lock {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  background: var(--surface);
+  transform: translate(-50%, -50%);
+}
+
+.ed-ratio-lock:hover,
+.ed-ratio-lock:focus-visible {
+  background: var(--surface-raised);
 }

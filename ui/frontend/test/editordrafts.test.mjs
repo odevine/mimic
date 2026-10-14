@@ -59,11 +59,11 @@ test("a card is named with its set when it has one", () => {
   assert.equal(cardLine(null), "");
 });
 
-test("a draft opens with its last test card, or else the first preset", () => {
-  const presets = [{ id: "white-creature", card: { Name: "A" } }, { id: "land", card: { Name: "B" } }];
+test("a draft opens with its last test card, or else the first preset, which is looked up", () => {
+  const presets = [{ id: "monocolored", name: "Mirran Spy" }, { id: "land", name: "Flooded Strand" }];
   assert.deepEqual(startingCard({ testCard: { Name: "Bolt" }, face: 1 }, presets), { card: { Name: "Bolt" }, face: 1, preset: "" });
-  assert.deepEqual(startingCard({}, presets), { card: { Name: "A" }, face: 0, preset: "white-creature" });
-  assert.deepEqual(startingCard(null, presets), { card: { Name: "A" }, face: 0, preset: "white-creature" });
+  assert.deepEqual(startingCard({}, presets), { card: null, face: 0, preset: "monocolored" });
+  assert.deepEqual(startingCard(null, presets), { card: null, face: 0, preset: "monocolored" });
   assert.equal(startingCard({}, []), null);
 });
 

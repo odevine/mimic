@@ -1,0 +1,30 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0012",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0012",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Consuming Aberration",
+  "type_line": "Creature — Horror",
+  "oracle_text": "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.\nWhenever you cast a spell, each opponent reveals cards from the top of their library until they reveal a land card. The player puts those cards into their graveyard.",
+  "colors": [
+    "U",
+    "B"
+  ],
+  "color_identity": [
+    "U",
+    "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "152",
+  "set": "gtc",
+  "set_name": "Gatecrash",
+  "released_at": "2013-02-01",
+  "artist": "Chris Rahn",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/consuming-aberration-gtc.jpg"
+  },
+  "mana_cost": "{3}{U}{B}",
+  "power": "*",
+  "toughness": "*"
+}

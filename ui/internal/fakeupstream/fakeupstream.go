@@ -54,6 +54,7 @@ type card struct {
 	name     string
 	typeLine string
 	set      string
+	number   string
 }
 
 // New reads every .json file in dir as a Scryfall card object
@@ -73,11 +74,12 @@ func New(dir fs.FS) (*Server, error) {
 			Name     string `json:"name"`
 			TypeLine string `json:"type_line"`
 			Set      string `json:"set"`
+			Number   string `json:"collector_number"`
 		}
 		if err := json.Unmarshal(raw, &c); err != nil || c.Name == "" {
 			return nil, fmt.Errorf("fakeupstream: %s is not a card object: %v", f, err)
 		}
-		s.cards = append(s.cards, card{raw: raw, name: c.Name, typeLine: c.TypeLine, set: c.Set})
+		s.cards = append(s.cards, card{raw: raw, name: c.Name, typeLine: c.TypeLine, set: c.Set, number: c.Number})
 	}
 	return s, nil
 }
@@ -168,11 +170,11 @@ func (s *Server) scryfall(w http.ResponseWriter, r *http.Request) {
 
 // search understands a small part of Scryfall's syntax, enough for the flows
 // the tests drive: words that must appear in a name, !"an exact name", t:word
-// for the type line, set:code, and unique:prints, which changes nothing since
-// every printing is a file of its own. Any other operator is an error, so a
+// for the type line, set:code, cn:number for the collector number, and unique:prints,
+// which changes nothing since every printing is a file of its own. Any other operator is an error, so a
 // test never passes on a query the fake answered wrongly
 func (s *Server) search(q string) ([]card, error) {
-	var words, types, sets []string
+	var words, types, sets, numbers []string
 	exact := ""
 	for _, tok := range tokens(q) {
 		low := strings.ToLower(tok)
@@ -184,6 +186,8 @@ func (s *Server) search(q string) ([]card, error) {
 			types = append(types, strings.Trim(low[2:], "\""))
 		case strings.HasPrefix(low, "set:"):
 			sets = append(sets, low[4:])
+		case strings.HasPrefix(low, "cn:"):
+			numbers = append(numbers, low[3:])
 		case strings.ContainsAny(low, ":=<>") && !strings.HasPrefix(low, "\""):
 			return nil, fmt.Errorf("fakeupstream does not support the search term %q", tok)
 		default:
@@ -200,6 +204,9 @@ func (s *Server) search(q string) ([]card, error) {
 			continue
 		}
 		if len(sets) > 0 && !contains(sets, c.set) {
+			continue
+		}
+		if len(numbers) > 0 && !contains(numbers, strings.ToLower(c.number)) {
 			continue
 		}
 		out = append(out, c)

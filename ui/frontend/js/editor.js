@@ -63,12 +63,12 @@ export function cardLine(card) {
   return card.SetCode ? `${card.Name} · ${String(card.SetCode).toUpperCase()}` : card.Name;
 }
 
-// startingCard picks the card a draft opens with: the one it was last tested with,
-// else the first preset, which is a plain creature
+// startingCard picks the card a draft opens with: the one it was last tested with, else
+// the first preset, whose card is looked up and so is not here yet
 export function startingCard(meta, presets) {
   if (meta && meta.testCard) return { card: meta.testCard, face: meta.face || 0, preset: "" };
   const first = (presets || [])[0];
-  return first ? { card: first.card, face: 0, preset: first.id } : null;
+  return first ? { card: null, face: 0, preset: first.id } : null;
 }
 
 // forkedFrom says where a copy began, or "" for one that began blank

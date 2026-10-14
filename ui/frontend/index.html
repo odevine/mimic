@@ -473,7 +473,13 @@ Sideboard
         <div id="ed-workspace" class="regions" hidden>
           <div class="region fixed" data-region="0" style="width: 300px">
             <div class="ed-draft">
-              <label class="section-heading" for="ed-draft-select">Template</label>
+              <div class="ed-draft-head">
+                <label class="section-heading" for="ed-draft-select">Template</label>
+                <span class="ed-history">
+                  <button id="ed-undo" class="btn subtle icon-only" type="button" aria-label="Undo" data-tip="Undo (⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                  <button id="ed-redo" class="btn subtle icon-only ed-redo" type="button" aria-label="Redo" data-tip="Redo (⇧⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                </span>
+              </div>
               <div class="ed-draft-row">
                 <select id="ed-draft-select"></select>
                 <button id="ed-new" class="btn subtle icon-only" type="button" aria-label="New template" data-tip="New template"><svg class="icon"><use href="icons.svg#i-plus"/></svg></button>
@@ -481,25 +487,45 @@ Sideboard
                 <button id="ed-delete" class="btn subtle icon-only" type="button" aria-label="Delete this template" data-tip="Delete this template"><svg class="icon"><use href="icons.svg#i-trash"/></svg></button>
               </div>
             </div>
-            <div id="ed-canvas-sec" class="ed-canvas-sec collapsed">
+            <div id="ed-canvas-sec" class="ed-fold ed-canvas-sec collapsed">
               <h3 class="ed-sec-title"><button id="ed-canvas-toggle" class="ed-sec-toggle" type="button" aria-expanded="false" aria-controls="ed-canvas-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="section-heading">Canvas</span></button></h3>
-              <div id="ed-canvas-body" class="ed-canvas-body" role="region" tabindex="0" aria-labelledby="ed-canvas-toggle" hidden>
+              <div id="ed-canvas-body" class="ed-fold-body" role="region" tabindex="0" aria-labelledby="ed-canvas-toggle" hidden>
                 <div id="ed-canvas-levers" class="ed-levers"></div>
               </div>
             </div>
-            <div class="ed-card">
-              <h3 class="section-heading">Test card</h3>
-              <p id="ed-card-line" class="ed-card-line"></p>
-              <div id="ed-presets" class="ed-presets" role="group" aria-label="Preset cards"></div>
-              <form id="ed-search-form" class="search-form" role="search">
-                <div class="search-field">
-                  <svg class="icon"><use href="icons.svg#i-search"/></svg>
-                  <input id="ed-search-input" autocomplete="off" spellcheck="false" placeholder="Search Scryfall" aria-label="Search Scryfall for a test card">
+            <div id="ed-left-sections" class="ed-sections">
+              <section class="ed-sec" data-sec="card">
+                <div class="ed-sec-head">
+                  <h3 class="ed-sec-title"><button id="ed-card-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-card-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Test card</span></button></h3>
                 </div>
-              </form>
+                <div id="ed-card-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-card-toggle">
+                  <p id="ed-card-line" class="ed-card-line"></p>
+                  <div id="ed-presets" class="ed-presets" role="group" aria-label="Preset cards"></div>
+                  <details id="ed-fine-details" class="disclosure ed-properties" open>
+                    <summary><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg>Properties</summary>
+                    <p class="dim ed-fine-lede">Change any field to test the template against the rules it follows. A preset stops being the one in use once a field is changed.</p>
+                    <button id="ed-fine-revert" class="btn subtle" type="button" hidden data-tip="Restore every field to the card as it was chosen"><svg class="icon"><use href="icons.svg#i-revert"/></svg>Revert all</button>
+                    <form id="ed-card-form" class="editor-form ed-card-form" autocomplete="off"></form>
+                  </details>
+                </div>
+              </section>
+              <div class="ed-vsplit" role="separator" aria-orientation="horizontal"></div>
+              <section id="ed-search-sec" class="ed-sec" data-sec="search">
+                <div class="ed-sec-head">
+                  <h3 class="ed-sec-title"><button id="ed-search-toggle" class="ed-sec-toggle" type="button" aria-expanded="false" aria-controls="ed-search-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Search Scryfall</span></button></h3>
+                </div>
+                <div id="ed-search-body" class="ed-sec-body ed-search-body" role="region" tabindex="0" aria-labelledby="ed-search-toggle" hidden>
+                  <form id="ed-search-form" class="search-form" role="search">
+                    <div class="search-field">
+                      <svg class="icon"><use href="icons.svg#i-search"/></svg>
+                      <input id="ed-search-input" autocomplete="off" spellcheck="false" placeholder="Search Scryfall" aria-label="Search Scryfall for a test card">
+                    </div>
+                  </form>
+                  <ul id="ed-results" class="results" role="listbox" aria-label="Search results"></ul>
+                  <div class="panel-footer"><span id="ed-results-count">Pick a preset above, or search for a card</span></div>
+                </div>
+              </section>
             </div>
-            <ul id="ed-results" class="results" role="listbox" aria-label="Search results"></ul>
-            <div class="panel-footer"><span id="ed-results-count">Pick a preset above, or search for a card</span></div>
           </div>
 
           <div class="splitter" data-split="0" role="separator" aria-orientation="vertical" aria-label="Resize the test card column"></div>
@@ -549,8 +575,6 @@ Sideboard
                     <h3 class="ed-sec-title"><button id="ed-sec-layers-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-sec-layers-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Layers</span></button></h3>
                     <span class="ed-history">
                       <button id="ed-add" class="btn subtle icon-only" type="button" aria-label="Add a layer, text box or art window" data-tip="Add" disabled><svg class="icon"><use href="icons.svg#i-plus"/></svg></button>
-                      <button id="ed-undo" class="btn subtle icon-only" type="button" aria-label="Undo" data-tip="Undo (⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
-                      <button id="ed-redo" class="btn subtle icon-only ed-redo" type="button" aria-label="Redo" data-tip="Redo (⇧⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
                     </span>
                   </div>
                   <div id="ed-sec-layers-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-sec-layers-toggle">

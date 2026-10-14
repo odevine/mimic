@@ -531,13 +531,26 @@ Sideboard
           <div class="splitter" data-split="0" role="separator" aria-orientation="vertical" aria-label="Resize the test card column"></div>
 
           <div class="region grow preview-region" data-region="1">
-            <div id="ed-stage" class="stage fit">
-              <div class="stage-inner">
-                <div id="ed-placeholder" class="placeholder-card" aria-hidden="true"></div>
-                <div id="ed-canvas" class="ed-canvas" hidden>
-                  <img id="ed-img" class="card" alt="The test card drawn with the template" draggable="false">
-                  <div id="ed-overlay" class="ed-overlay" aria-hidden="true"></div>
+            <div class="ed-viewport">
+              <div id="ed-stage" class="stage fit">
+                <div class="stage-inner">
+                  <div id="ed-placeholder" class="placeholder-card" aria-hidden="true"></div>
+                  <div id="ed-canvas" class="ed-canvas" hidden>
+                    <img id="ed-img" class="card" alt="The test card drawn with the template" draggable="false">
+                    <div id="ed-overlay" class="ed-overlay" aria-hidden="true"></div>
+                  </div>
                 </div>
+              </div>
+              <div class="ed-camera" role="toolbar" aria-label="View of the card">
+                <div class="ed-camera-group" role="group" aria-label="What dragging does">
+                  <button id="ed-tool-select" class="btn subtle icon-only ed-tool" type="button" aria-pressed="true" aria-label="Select" data-tip="Select and move (hold Space to pan)"><svg class="icon"><use href="icons.svg#i-cursor"/></svg></button>
+                  <button id="ed-tool-pan" class="btn subtle icon-only ed-tool" type="button" aria-pressed="false" aria-label="Pan" data-tip="Pan the card around"><svg class="icon"><use href="icons.svg#i-hand"/></svg></button>
+                </div>
+                <span class="divider" aria-hidden="true"></span>
+                <button id="ed-zoom-out" class="btn subtle icon-only" type="button" aria-label="Zoom out" data-tip="Zoom out (-)"><svg class="icon"><use href="icons.svg#i-zoom-out"/></svg></button>
+                <button id="ed-zoom-label" class="btn subtle zoom-label tabular" type="button" data-tip="Cycle fit, 100% and 200%">Fit</button>
+                <button id="ed-zoom-in" class="btn subtle icon-only" type="button" aria-label="Zoom in" data-tip="Zoom in (+)"><svg class="icon"><use href="icons.svg#i-zoom-in"/></svg></button>
+                <button id="ed-zoom-fit" class="btn subtle icon-only" type="button" aria-label="Fit the card to the view" data-tip="Fit to the view (0)"><svg class="icon"><use href="icons.svg#i-fit"/></svg></button>
               </div>
             </div>
             <div id="ed-activity" class="activity" data-state="idle" role="status" aria-live="polite">

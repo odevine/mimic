@@ -360,6 +360,20 @@ Alt turns snapping off, and while a box is dragged the guide says which of its e
 is held and what lies on that line, which is outlined. The arrow keys move the
 selection one pixel, and ten with Shift.
 
+The view of the card has camera controls pinned to the bottom corner of the stage, which
+stay there when the card moves: a Select tool and a Pan tool, zoom out and in, the zoom
+as a percent, which cycles fit, 100% and 200% when it is pressed, and a button that fits
+the card back in the middle of the view. Turning the wheel over the card zooms in or out
+about the pointer, a trackpad's pinch does the same, and a sideways turn is left alone.
+`+` and `-` step the zoom, and `0`, `1` and `2` are fit, 100% and 200% as in Single, 100%
+being one of the picture's pixels for one of the screen's. Select, which dragging does to
+begin with, selects, moves and resizes. With Pan chosen, dragging moves the card about the
+view by any distance, and holding Space does the same for as long as it is held, while
+the pointer is over the view, so Space still presses a button when it is anywhere else.
+The middle button pans in either tool. A pan does not select or move anything or outline
+what is under the pointer, and what is drawn on the card, the outlines, handles and guides,
+goes with it. Fit puts the card back in the middle, and so does opening another template.
+
 Every change is saved to the layout file as it is made, with the file's order and
 layout kept and only the numbers changed, and the card is drawn again a moment
 later. Undo and Redo, in the layers heading and on `⌘Z` and `⇧⌘Z` (`Ctrl` on

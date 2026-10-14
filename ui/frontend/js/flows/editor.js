@@ -24,6 +24,7 @@ import { closePopover, openPopover } from "../components/popover.js";
 import { initSections } from "../components/sections.js";
 import { LEFT_DEFAULTS, LEFT_SECTIONS } from "../sectionlayout.js";
 import { createCardEditor, valuesOf } from "../components/cardEditor.js";
+import { createViewport } from "../components/viewport.js";
 import { initAssets } from "./editorassets.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, keepRatio, layerAt, parseField, readPath, shadowOps, sizeOps } from "../editorlevers.js";
 
@@ -66,6 +67,11 @@ const store = {
 
 const history = createHistory();
 let cardEditor = null;
+// the view of the card: zoom and pan, and what dragging on it does. A drag pans when the
+// pan tool is chosen or Space is held over the view, and selects and moves otherwise
+let viewport = null;
+const tool = { pan: signal(false), space: signal(false), over: false };
+const panning = () => tool.pan.peek() || tool.space.peek();
 let renderTimer = 0;
 let describeSeq = 0;
 
@@ -226,6 +232,7 @@ async function open(id) {
   });
   savedMarks = JSON.stringify([id, store.marks.peek()]);
   clearPreview();
+  if (viewport) viewport.reset();
   store.source.value = null;
   store.assets.value = null;
   loadSource();
@@ -855,7 +862,8 @@ function nativePoint(e) {
 
 function onPointerDown(e) {
   const view = store.layout.peek();
-  if (e.button !== 0 || !view) return;
+  // A drag that pans is the viewport's, which hears it from the stage
+  if (e.button !== 0 || !view || panning()) return;
   flushNudge();
   const overlay = $("ed-overlay");
   const handle = e.target.closest && e.target.closest(".ed-handle");
@@ -883,7 +891,7 @@ function onPointerMove(e) {
   const view = store.layout.peek();
   if (!view) return;
   if (!gesture) {
-    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e), lockedRefs(view));
+    const hit = e.buttons || panning() ? null : hitTest(view.items, nativePoint(e), lockedRefs(view));
     store.hover.value = hit ? refOf(hit) : "";
     return;
   }
@@ -1002,6 +1010,13 @@ function onKey(e) {
   if (e.key === "Escape") {
     if (gesture) cancelGesture();
     else if (store.selected.peek()) select("");
+    return;
+  }
+  // The view: plus and minus step the zoom, and 0, 1 and 2 are fit, 100% and 200%, as in Single
+  const zoomKeys = { "+": () => viewport.step(1), "=": () => viewport.step(1), "-": () => viewport.step(-1), 0: () => viewport.reset(), 1: () => viewport.setZoom(1), 2: () => viewport.setZoom(2) };
+  if (viewport && zoomKeys[e.key]) {
+    e.preventDefault();
+    zoomKeys[e.key]();
     return;
   }
   if (e.key.toLowerCase() === "l" && !e.shiftKey && store.selected.peek()) {
@@ -1858,6 +1873,54 @@ async function enter() {
 
 export const editor = { newTemplate, copyTemplate };
 
+// initView wires the camera controls and the keys that pan and zoom the card's view
+function initView() {
+  const stage = $("ed-stage");
+  viewport = createViewport({ stage, canvas: $("ed-canvas"), img: $("ed-img"), label: $("ed-zoom-label"), isPan: panning });
+  $("ed-zoom-in").addEventListener("click", () => viewport.step(1));
+  $("ed-zoom-out").addEventListener("click", () => viewport.step(-1));
+  $("ed-zoom-fit").addEventListener("click", () => viewport.reset());
+  $("ed-zoom-label").addEventListener("click", () => viewport.cycle());
+  $("ed-tool-select").addEventListener("click", () => {
+    tool.pan.value = false;
+  });
+  $("ed-tool-pan").addEventListener("click", () => {
+    tool.pan.value = true;
+  });
+  effect(() => {
+    const on = tool.pan.value;
+    $("ed-tool-select").setAttribute("aria-pressed", String(!on));
+    $("ed-tool-pan").setAttribute("aria-pressed", String(on));
+  });
+  effect(() => {
+    stage.classList.toggle("pan-mode", tool.pan.value || tool.space.value);
+    // Whatever was being hovered is not now
+    if (tool.pan.value || tool.space.value) store.hover.value = "";
+  });
+
+  // Holding Space pans for as long as it is held, while the pointer is over the view, so
+  // Space still presses a button anywhere else. It lets go on its own when the window does
+  stage.addEventListener("pointerenter", () => {
+    tool.over = true;
+  });
+  stage.addEventListener("pointerleave", () => {
+    tool.over = false;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== " " || e.repeat || !tool.over || app.mode.peek() !== "editor" || isTyping() || document.querySelector("dialog[open]")) return;
+    e.preventDefault();
+    tool.space.value = true;
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key !== " " || !tool.space.peek()) return;
+    e.preventDefault();
+    tool.space.value = false;
+  });
+  window.addEventListener("blur", () => {
+    tool.space.value = false;
+  });
+}
+
 let layoutTimer = 0;
 
 // keepLayout saves how a part of the editor is laid out with the other layout settings
@@ -1929,8 +1992,9 @@ export function initEditor() {
   overlay.addEventListener("pointercancel", cancelGesture);
   // A press on the stage around the card lets go of the selection
   $("ed-stage").addEventListener("pointerdown", (e) => {
-    if (e.button === 0 && !e.target.closest("#ed-canvas")) store.selected.value = "";
+    if (e.button === 0 && !panning() && !e.target.closest("#ed-canvas")) store.selected.value = "";
   });
+  initView();
   overlay.addEventListener("pointerleave", () => {
     if (!gesture) store.hover.value = "";
   });

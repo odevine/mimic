@@ -1037,3 +1037,68 @@ body.resizing-rows * {
 .ed-ratio-lock:focus-visible {
   background: var(--surface-raised);
 }
+
+/* The view of the card: the stage, with the camera controls pinned to its bottom corner,
+   which do not move when the card does */
+.ed-viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ed-camera {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+}
+
+.ed-camera-group {
+  display: flex;
+  gap: 2px;
+}
+
+.ed-camera .divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.ed-camera .zoom-label {
+  min-width: 48px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* The tool that is in use, which holding Space changes for as long as it is held */
+.ed-tool[aria-pressed="true"],
+.stage.pan-mode ~ .ed-camera #ed-tool-pan {
+  background: var(--accent-weak);
+  color: var(--text);
+}
+
+.stage.pan-mode ~ .ed-camera #ed-tool-select {
+  background: transparent;
+}
+
+#ed-stage.pan-mode,
+#ed-stage.pan-mode .ed-overlay {
+  cursor: grab;
+}
+
+#ed-stage.panning,
+#ed-stage.panning .ed-overlay {
+  cursor: grabbing;
+}

@@ -754,3 +754,53 @@ func TestRenderTextBoxIsBounded(t *testing.T) {
 		})
 	}
 }
+
+func TestMeasureTextBoxReportsWhereTheInkIs(t *testing.T) {
+	// Each glyph advances a full size and inks 0.4 above the baseline and nothing
+	// below it, so two glyphs at 100 cover 200 across and 40 up from the baseline
+	part := TextPart{Text: "ab", Src: inkSource{}}
+	tests := []struct {
+		name string
+		box  TextBoxSpec
+		want image.Rectangle
+	}{
+		{"set on its baseline, the text is above the box's top", TextBoxSpec{X: 50, Y: 300, Width: 1000, Height: 200, FontSize: 100, VAlign: "baseline"}, image.Rect(50, 260, 250, 300)},
+		{"centered across the box", TextBoxSpec{X: 50, Y: 300, Width: 1000, Height: 200, FontSize: 100, VAlign: "baseline", Align: "center"}, image.Rect(450, 260, 650, 300)},
+		{"against the right edge", TextBoxSpec{X: 50, Y: 300, Width: 1000, Height: 200, FontSize: 100, VAlign: "baseline", Align: "right"}, image.Rect(850, 260, 1050, 300)},
+		{"padding insets the text", TextBoxSpec{X: 50, Y: 300, Width: 1000, Height: 200, FontSize: 100, VAlign: "baseline", PaddingX: pint(20)}, image.Rect(70, 260, 270, 300)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := MeasureTextBox(tt.box, part)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("ink = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMeasureTextBoxAnchoredAtTheTopStartsAtTheBox(t *testing.T) {
+	box := TextBoxSpec{X: 10, Y: 20, Width: 1000, Height: 500, FontSize: 100, VAlign: "top", LineSpacing: 1}
+	got, err := MeasureTextBox(box, TextPart{Text: "ab", Src: inkSource{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Min.Y != box.Y || got.Min.X != box.X || got.Dx() != 200 {
+		t.Errorf("ink = %v, want it to start at the box's corner and be 200 wide", got)
+	}
+}
+
+func TestMeasureTextBoxIsEmptyWhenNothingIsDrawn(t *testing.T) {
+	box := TextBoxSpec{X: 50, Y: 300, Width: 1000, Height: 200, FontSize: 100, VAlign: "baseline"}
+	for name, parts := range map[string][]TextPart{"no parts": nil, "empty text": {{Text: "", Src: inkSource{}}}} {
+		got, err := MeasureTextBox(box, parts...)
+		if err != nil || !got.Empty() {
+			t.Errorf("%s: ink = %v, %v, want none", name, got, err)
+		}
+	}
+}
+
+func pint(v int) *int { return &v }

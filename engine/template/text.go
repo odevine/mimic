@@ -241,6 +241,38 @@ func MeasureTextSpan(box TextBoxSpec, parts ...TextPart) (TextSpan, error) {
 	return span, nil
 }
 
+// MeasureTextBox lays the parts out in box the way RenderTextBox would, then reports
+// the rectangle their ink covers in the document without drawing any of it, which is
+// empty for parts that draw nothing. It is not the box's own rectangle: a box set on
+// its baseline has the first baseline at its top, so the text sits above it, and text
+// that does not fill a box covers less of it
+func MeasureTextBox(box TextBoxSpec, parts ...TextPart) (image.Rectangle, error) {
+	inner := insetBox(box)
+	lay, err := fitLayout(inner, parts)
+	if err != nil {
+		return image.Rectangle{}, err
+	}
+	face := firstTextFace(lay)
+	if face == nil {
+		return image.Rectangle{}, nil
+	}
+	left, right := inner.X+inner.Width, inner.X
+	for _, ln := range lay.lines {
+		if ln.divider || len(ln.tokens) == 0 {
+			continue
+		}
+		start := lineStartX(inner, ln.width)
+		left, right = min(left, start.Floor()), max(right, (start+ln.width).Ceil())
+	}
+	if right <= left {
+		return image.Rectangle{}, nil
+	}
+	height, above := blockInkHeight(lay, inner, face)
+	baseline := blockStart(inner, lay, face) + face.Metrics().Ascent.Ceil()
+	top := baseline - above
+	return image.Rect(left, top, right, top+height), nil
+}
+
 // insetBox shrinks box by its padding on each axis, giving the rectangle the
 // text occupies. All layout and drawing use this inner rectangle, so the
 // horizontal padding governs the wrap width and the horizontal anchor while the

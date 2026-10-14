@@ -37,6 +37,11 @@ type Item struct {
 	// it does not
 	Drawn bool
 	Why   string
+	// Ink says the rectangles are where the item's text is drawn and not its own
+	// rectangle, which a text box set on its baseline has no use for: its top is
+	// the first baseline, and the text sits above it. Such a box can be moved by
+	// them and not resized
+	Ink bool
 	// Authored is where the item is in the layout's own canvas and Delivered is where
 	// it is in the finished image, after the layout's rotation. Both are in the
 	// canvas's own pixels, not scaled for a preview. A layer's rectangle is the
@@ -227,6 +232,7 @@ func (d *describer) symbols(geo *template.Geometry, drawSymbol bool) {
 func (d *describer) text(geo *template.Geometry) {
 	boxes := resolveBoxes(d.layout, geo, d.fc, d.req.Features)
 	fr := fonts.NewResolver(d.t.Fonts(), d.req.FontPool, d.req.FontOverrides)
+	syms := newSymbols(fr, boxes)
 	for _, b := range d.layout.Boxes {
 		it := Item{Kind: ItemText, Key: b.Key}
 		job, drawn := boxes.byKey[b.Key]
@@ -236,13 +242,20 @@ func (d *describer) text(geo *template.Geometry) {
 			d.add(it, image.Rect(base.X, base.Y, base.X+base.Width, base.Y+base.Height), b.Space == template.SpaceOutput)
 			continue
 		}
-		face, _ := d.fc.get(job.face)
-		it.Drawn = len(textParts(job.draws, job.spec, face, symbols{}, fr, d.req.Copyright)) > 0
+		box, parts, err := placeBox(d.req, d.t, d.layout, d.authored, job, boxes, d.fc, syms, fr, 1)
+		it.Drawn = err == nil && len(parts) > 0
 		if !it.Drawn {
 			it.Why = fmt.Sprintf("the card has no %s to draw", job.draws)
 		}
-		s := job.spec
-		d.add(it, image.Rect(s.X, s.Y, s.X+s.Width, s.Y+s.Height), job.space == template.SpaceOutput)
+		r := image.Rect(job.spec.X, job.spec.Y, job.spec.X+job.spec.Width, job.spec.Y+job.spec.Height)
+		// A box set on its baseline is shown where its text is. A box turned a quarter
+		// lays its text out in a rectangle of its own, so it keeps the box's
+		if it.Drawn && job.spec.VAlign == "baseline" && job.spec.Rotate == 0 {
+			if ink, err := template.MeasureTextBox(box, parts...); err == nil && !ink.Empty() {
+				r, it.Ink = ink, true
+			}
+		}
+		d.add(it, r, job.space == template.SpaceOutput)
 	}
 }
 

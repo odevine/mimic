@@ -141,13 +141,12 @@ test("a template that does not load says why and draws nothing", async ({ editor
   await expect(editor.layouts).toHaveCount(0);
 });
 
-test("the editor shows what is not built yet as locked", async ({ editor }) => {
+test("every button that finishes a template is live, with no gate on it", async ({ editor }) => {
   await editor.create("Gated", 100);
-  await expect(editor.page.locator("#ed-use")).toHaveAttribute("aria-disabled", "true");
-  await expect(editor.page.locator("#ed-export")).toHaveAttribute("aria-disabled", "true");
-  // The JSON editor is built, so it is not locked
-  await expect(editor.page.locator("#ed-json")).not.toHaveAttribute("aria-disabled", "true");
-  await expect(editor.page.locator("#ed-use")).toHaveAttribute("data-gate-reason", /#115/);
+  for (const id of ["#ed-use", "#ed-export", "#ed-folder", "#ed-json"]) {
+    await expect(editor.page.locator(id)).not.toHaveAttribute("aria-disabled", "true");
+    await expect(editor.page.locator(id)).not.toHaveAttribute("data-gate-reason", /.*/);
+  }
 });
 
 // The starter's canvas at 100 dpi is 272 pixels across, and the preview is drawn at

@@ -76,8 +76,9 @@ test("clicking the stage around the card lets go, and Escape does too", async ({
   await expect(editor.selection).toBeHidden();
   await expect(editor.selectionBox).toHaveCount(0);
 
-  // On the card the background fills it, so the corner picks it, and Escape lets go
-  await page.mouse.click(box.x + box.width - 1, box.y + box.height - 1);
+  // On the card the background fills it, so the corner picks it, and Escape lets go. The
+  // top corner is used, since the card is taller than the room the stage has below it
+  await page.mouse.click(box.x + 1, box.y + 1);
   await expect(editor.selectionName).toHaveText("background");
   await page.keyboard.press("Escape");
   await expect(editor.selection).toBeHidden();

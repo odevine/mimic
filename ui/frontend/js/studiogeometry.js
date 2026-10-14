@@ -120,7 +120,8 @@ export function snapMove(rect, dx, dy, targets, threshold) {
   const guides = [];
   if (sx) guides.push({ axis: "x", at: sx.at });
   if (sy) guides.push({ axis: "y", at: sy.at });
-  return { dx: dx + (sx ? sx.d : 0), dy: dy + (sy ? sy.d : 0), guides };
+  // A middle line can sit on a half pixel, and a move is whole pixels
+  return { dx: Math.round(dx + (sx ? sx.d : 0)), dy: Math.round(dy + (sy ? sy.d : 0)), guides };
 }
 
 // toNative converts a distance on screen to the finished image's pixels, given how

@@ -145,3 +145,12 @@ test("a small box shows its corners and no handle that would sit on its middle",
   assert.deepEqual([...visibleHandles(240, 17)].sort(), ["ne", "nw", "se", "sw"], "a box too short for the top and bottom shows corners only");
   assert.deepEqual([...visibleHandles(10, 10)].sort(), ["ne", "nw", "se", "sw"]);
 });
+
+test("a snap to a line on a half pixel still moves by whole pixels", () => {
+  // The middle of a 499 wide canvas is 249.5, and the box's middle is at 240
+  const targets = { x: [249.5], y: [] };
+  const r = { x: 230, y: 0, width: 20, height: 10 };
+  const got = snapMove(r, 0, 0, targets, 12);
+  assert.ok(Number.isInteger(got.dx) && Number.isInteger(got.dy), `moved by ${got.dx}, ${got.dy}`);
+  assert.deepEqual(got.guides, [{ axis: "x", at: 249.5 }]);
+});

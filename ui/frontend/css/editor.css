@@ -239,13 +239,12 @@
 }
 
 .ed-layer {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 5px 8px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 2px;
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
 }
 
 .ed-layer:last-child {
@@ -256,18 +255,113 @@
   background: var(--accent-weak);
 }
 
-.ed-layer[aria-selected="true"] {
+.ed-layer.selected {
   background: var(--accent-weak);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.ed-layer.dragging {
+  opacity: 0.45;
+}
+
+/* Where a dragged layer would land is a line above a row, or below the last */
+.ed-layer.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.ed-layer.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.ed-layer-grip,
+.ed-layer-space {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  flex: none;
+  color: var(--text-faint);
+}
+
+.ed-layer-grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.ed-layer-grip:active {
+  cursor: grabbing;
+}
+
+.ed-layers.dragging,
+.ed-layers.dragging * {
+  cursor: grabbing;
+}
+
+/* The row's own control for selecting it, which holds its kind and its name */
+.ed-layer-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-layer-kind {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim);
+}
+
+.ed-layer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ed-layer.undrawn .ed-layer-name {
   color: var(--text-faint);
 }
 
-.ed-layer-kind {
+/* The toggles and the menu of a row. A toggle is faint while it is off and in the
+   full text color once it is on */
+.ed-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
   color: var(--text-faint);
-  font-size: 12px;
+  cursor: pointer;
+}
+
+.ed-row-btn:hover,
+.ed-row-btn:focus-visible {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.ed-row-btn[aria-pressed="true"] {
+  color: var(--text);
+}
+
+.ed-row-btn.empty {
+  visibility: hidden;
 }
 
 .ed-readout {
@@ -287,10 +381,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ed-reorder {
-  display: flex;
-  gap: var(--gap);
-}
 
 /* The levers for the selection, the layout and the template */
 .ed-levers {
@@ -522,39 +612,11 @@
 }
 
 /* Locking an item, and the items a drag snaps to */
-.ed-marks {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 8px 0;
-}
 
-.ed-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
 
-.ed-element-actions {
-  margin-bottom: 8px;
-}
 
-.ed-layer-name {
-  flex: 1;
-  min-width: 0;
-}
 
-.ed-layer-flags {
-  display: inline-flex;
-  gap: 4px;
-  color: var(--text-dim);
-}
 
-.ed-layer-flags .icon {
-  width: 12px;
-  height: 12px;
-}
 
 .ed-box.sel.locked {
   outline-style: dotted;

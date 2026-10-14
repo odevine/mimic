@@ -25,7 +25,7 @@ export class EditorPage {
     this.handles = page.locator("#ed-overlay .ed-handle");
     this.guides = page.locator("#ed-overlay .ed-guide");
     this.layers = page.locator("#ed-layers .ed-layer");
-    this.selectedRow = page.locator('#ed-layers .ed-layer[aria-selected="true"]');
+    this.selectedRow = page.locator("#ed-layers .ed-layer.selected");
     this.selection = page.locator("#ed-selection");
     this.selectionName = page.locator("#ed-selection-name");
     this.undoButton = page.locator("#ed-undo");
@@ -39,10 +39,6 @@ export class EditorPage {
     this.jsonProblems = page.locator("#ed-json-problems li");
     this.images = page.locator("#ed-images");
     this.cells = page.locator("#ed-images .ed-cell");
-    this.lock = page.locator("#ed-lock");
-    this.snap = page.locator("#ed-snap");
-    this.duplicateButton = page.locator("#ed-duplicate");
-    this.deleteButton = page.locator("#ed-delete-item");
     this.addButton = page.locator("#ed-add");
     this.addDialog = page.locator("#ed-add-dialog");
     this.addKind = page.locator("#ed-add-kind");
@@ -102,6 +98,38 @@ export class EditorPage {
     await this.searchInput.fill(query);
     await this.searchInput.press("Enter");
     await expect(this.results.first()).toBeVisible();
+  }
+
+  // row is the row of the layers list for an item, by the name it shows. The toggles,
+  // the grip and the menu are in it
+  row(name) {
+    return this.layers.filter({ has: this.page.locator(".ed-layer-name", { hasText: new RegExp(`^${name}$`) }) });
+  }
+
+  lockToggle(name) {
+    return this.row(name).locator('[data-toggle="locked"]');
+  }
+
+  snapToggle(name) {
+    return this.row(name).locator('[data-toggle="snap"]');
+  }
+
+  grip(name) {
+    return this.row(name).locator(".ed-layer-grip");
+  }
+
+  moreButton(name) {
+    return this.row(name).locator('[data-menu="more"]');
+  }
+
+  menuItem(label) {
+    return this.page.locator('.popover [role="menuitem"]').filter({ hasText: new RegExp(`^${label}$`) });
+  }
+
+  // choose opens an item's menu and picks an entry of it
+  async choose(name, label) {
+    await this.moreButton(name).click();
+    await this.menuItem(label).click();
   }
 
   // lever is the control of a field of the selection, by its id, such as lever-fontSize for the selection, canvas-width for the layout or template-name for the template

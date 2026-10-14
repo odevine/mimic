@@ -19,6 +19,8 @@ import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, sn
 import { createHistory } from "../editorhistory.js";
 import { afterOps, isMarked, refsFor, withMark } from "../editormarks.js";
 import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
+import { kindIcon, moveTarget, reorderTarget, rowMenu } from "../editorlayers.js";
+import { closePopover, openPopover } from "../components/popover.js";
 import { initAssets } from "./editorassets.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
 
@@ -603,8 +605,12 @@ const isLocked = (view, item) => !!view && !!item && isMarked(store.marks.peek()
 
 // setMark locks or unlocks the selection, or makes it a line others snap to or not
 function setMark(which, on) {
+  setMarkOf(selectedItem(), which, on);
+}
+
+// setMarkOf does the same for any item in the list
+function setMarkOf(item, which, on) {
   const view = store.layout.peek();
-  const item = selectedItem();
   if (!view || !item) return;
   flushNudge();
   const marks = store.marks.peek();
@@ -861,15 +867,23 @@ function cancelGesture() {
   store.live.value = null;
 }
 
-function reorder(by) {
+// layersOf are the layers of the layout shown, from the bottom of the stack
+const layersOf = (view) => view.items.filter((it) => it.kind === "layer");
+
+// moveLayer puts a layer at a place in the stack, where 0 is the bottom
+function moveLayer(item, to) {
   const view = store.layout.peek();
-  const item = selectedItem();
-  if (!view || !item || item.kind !== "layer" || !view.editable) return;
-  const layers = view.items.filter((it) => it.kind === "layer");
-  const at = layers.findIndex((it) => refOf(it) === refOf(item));
-  const to = at + by;
-  if (to < 0 || to >= layers.length) return;
-  commit([{ op: "reorder", layout: view.layout, kind: "layer", key: item.key, to }], `${by > 0 ? "Raise" : "Lower"} ${nameOf(item)}`, "");
+  if (!view || !view.editable || item.kind !== "layer" || to === null) return;
+  const at = layersOf(view).findIndex((it) => refOf(it) === refOf(item));
+  commit([{ op: "reorder", layout: view.layout, kind: "layer", key: item.key, to }], `${to > at ? "Raise" : "Lower"} ${nameOf(item)}`, "");
+}
+
+// shiftLayer raises a layer a place when by is 1, and lowers it when it is -1
+function shiftLayer(item, by) {
+  const view = store.layout.peek();
+  if (!view) return;
+  const layers = layersOf(view);
+  moveLayer(item, moveTarget(layers.findIndex((it) => refOf(it) === refOf(item)), layers.length, by));
 }
 
 // the keys of the layers or the text boxes in the layout shown, which a new one must not use
@@ -877,9 +891,8 @@ function takenKeys(view, kind) {
   return view.items.filter((it) => it.kind === kind).map((it) => it.key);
 }
 
-function duplicateSelected() {
+function duplicateItem(item) {
   const view = store.layout.peek();
-  const item = selectedItem();
   if (!view || !item || !view.editable || item.kind === "symbol") return;
   const op = duplicateOp(view, item, takenKeys(view, item.kind));
   const ref = `${item.kind}:${item.kind === "art" ? Number(item.key) + 1 : op.as}`;
@@ -888,12 +901,11 @@ function duplicateSelected() {
   });
 }
 
-function deleteSelected() {
+function deleteItem(item) {
   const view = store.layout.peek();
-  const item = selectedItem();
   if (!view || !item || !view.editable || item.kind === "symbol") return;
   commit([deleteOp(view, item)], deleteLabel(item, nameOf(item)), "").then((gone) => {
-    if (gone) select("");
+    if (gone && store.selected.peek() === refOf(item)) select("");
   });
 }
 
@@ -989,7 +1001,6 @@ function drawLayers() {
   const view = store.layout.value;
   const marks = store.marks.value;
   const list = $("ed-layers");
-  // A list with nothing in it is hidden, since a listbox has to hold options
   list.hidden = !view;
   $("ed-add").disabled = !view || !view.editable;
   $("ed-layers-none").hidden = !!view;
@@ -997,64 +1008,211 @@ function drawLayers() {
     list.replaceChildren();
     return;
   }
-  list.replaceChildren(
-    ...[...view.items].reverse().map((it) =>
-      h(
-        "li",
-        {
-          class: `ed-layer${it.drawn ? "" : " undrawn"}`,
-          role: "option",
-          "aria-selected": "false",
-          tabIndex: -1,
-          title: it.why || "",
-          dataset: { ref: refOf(it) },
-          onclick: () => select(refOf(it)),
-        },
-        h("span", { class: "ed-layer-name" }, nameOf(it)),
-        layerFlags(view, marks, it),
-        h("span", { class: "ed-layer-kind" }, KIND_LABEL[it.kind] || it.kind),
-      ),
-    ),
-  );
+  const layers = layersOf(view);
+  list.replaceChildren(...[...view.items].reverse().map((it) => layerRow(view, marks, it, layers)));
   markSelected(store.selected.peek());
 }
 
-// layerFlags shows on a row what has been marked, as an icon each, named for a reader
-function layerFlags(view, marks, item) {
-  const flags = [];
-  const flag = (name, text) => flags.push(h("span", { title: text, role: "img", "aria-label": text }, icon(name)));
-  if (isMarked(marks.locked, view.layout, refOf(item))) flag("lock", "Locked on the card");
-  if (isMarked(marks.snap, view.layout, refOf(item))) flag("snap", "Others snap to it");
-  return h("span", { class: "ed-layer-flags" }, ...flags);
+// layerRow is one row of the list: a grip to drag a layer by, an icon for what the item
+// is, its name, which selects it, and the toggles for locking it and snapping to it
+// and its menu
+function layerRow(view, marks, item, layers) {
+  const ref = refOf(item);
+  const name = nameOf(item);
+  const locked = isMarked(marks.locked, view.layout, ref);
+  const snaps = isMarked(marks.snap, view.layout, ref);
+  const draggable = item.kind === "layer" && view.editable && layers.length > 1;
+  const toggle = (which, on, glyphOn, glyphOff, label, tip) =>
+    h(
+      "button",
+      { class: "ed-row-btn", type: "button", "aria-pressed": String(on), "aria-label": label, "data-tip": tip, dataset: { toggle: which }, onclick: () => setMarkOf(item, which, !on) },
+      icon(on ? glyphOn : glyphOff),
+    );
+  const at = layers.findIndex((it) => refOf(it) === ref);
+  const menu = rowMenu(item, { editable: view.editable, at, layers: layers.length });
+  const more = h(
+    "button",
+    {
+      class: `ed-row-btn${menu.length ? "" : " empty"}`,
+      type: "button",
+      "aria-label": `More for ${name}`,
+      "aria-haspopup": "menu",
+      "aria-expanded": "false",
+      "data-tip": "More",
+      disabled: !menu.length,
+      dataset: { menu: "more" },
+      onclick: (e) => openRowMenu(e.currentTarget, item),
+    },
+    icon("more"),
+  );
+  return h(
+    "li",
+    {
+      class: `ed-layer${item.drawn ? "" : " undrawn"}`,
+      title: item.why || "",
+      dataset: { ref },
+      // A press on the row away from its controls selects it too
+      onclick: (e) => {
+        if (!e.target.closest("button, .ed-layer-grip")) select(ref);
+      },
+    },
+    draggable
+      ? h("span", { class: "ed-layer-grip", "aria-hidden": "true", "data-tip": "Drag to move", onpointerdown: (e) => startRowDrag(e, item) }, icon("grip"))
+      : h("span", { class: "ed-layer-space", "aria-hidden": "true" }),
+    h(
+      "button",
+      { class: "ed-layer-select", type: "button", "aria-current": "false", onclick: () => select(ref) },
+      h("span", { class: "ed-layer-kind", role: "img", "aria-label": KIND_LABEL[item.kind] || item.kind, title: KIND_LABEL[item.kind] || item.kind }, icon(kindIcon(item.kind))),
+      h("span", { class: "ed-layer-name" }, name),
+    ),
+    toggle("locked", locked, "lock", "lock-open", `Lock ${name} on the card`, locked ? "Locked, so the card cannot pick or move it" : "Lock on the card"),
+    toggle("snap", snaps, "grid-on", "grid-off", `Snap other items to ${name}`, snaps ? "Others snap to it" : "Snap other items to it"),
+    more,
+  );
+}
+
+// openRowMenu shows what can be done to an item of the list
+function openRowMenu(anchor, item) {
+  const view = store.layout.peek();
+  if (!view) return;
+  const layers = layersOf(view);
+  const entries = rowMenu(item, { editable: view.editable, at: layers.findIndex((it) => refOf(it) === refOf(item)), layers: layers.length });
+  const act = {
+    duplicate: () => duplicateItem(item),
+    delete: () => deleteItem(item),
+    raise: () => shiftLayer(item, 1),
+    lower: () => shiftLayer(item, -1),
+  };
+  const body = h(
+    "div",
+    { class: "menu", role: "menu" },
+    ...entries.map((m) =>
+      h(
+        "button",
+        {
+          class: "menu-item",
+          type: "button",
+          role: "menuitem",
+          onclick: () => {
+            closePopover();
+            act[m.id]();
+          },
+        },
+        m.label,
+      ),
+    ),
+  );
+  openPopover(anchor, body, { align: "end" });
+}
+
+// --- dragging a layer by its grip ---
+
+let rowDrag = null;
+
+function startRowDrag(e, item) {
+  if (e.button !== 0) return;
+  const view = store.layout.peek();
+  if (!view || !view.editable) return;
+  e.preventDefault();
+  const grip = e.currentTarget;
+  const rows = [...$("ed-layers").querySelectorAll(".ed-layer")].filter((row) => itemOf(view, row.dataset.ref)?.kind === "layer");
+  const from = rows.findIndex((row) => row.dataset.ref === refOf(item));
+  if (from < 0) return;
+  rowDrag = { item, rows, from, slot: null, to: null };
+  try {
+    grip.setPointerCapture(e.pointerId);
+  } catch {
+    // The drag still follows the events the grip is sent
+  }
+  rows[from].classList.add("dragging");
+  $("ed-layers").classList.add("dragging");
+  grip.addEventListener("pointermove", moveRowDrag);
+  grip.addEventListener("pointerup", endRowDrag);
+  grip.addEventListener("pointercancel", cancelRowDrag);
+}
+
+// showDrop draws the line where the dragged layer would land
+function showDrop() {
+  const { rows, slot } = rowDrag;
+  rows.forEach((row, i) => {
+    row.classList.toggle("drop-before", slot === i && rowDrag.to !== null);
+    row.classList.toggle("drop-after", slot === rows.length && i === rows.length - 1 && rowDrag.to !== null);
+  });
+}
+
+function moveRowDrag(e) {
+  if (!rowDrag) return;
+  const centers = rowDrag.rows.map((row) => {
+    const r = row.getBoundingClientRect();
+    return r.top + r.height / 2;
+  });
+  const target = reorderTarget(centers, e.clientY, rowDrag.from);
+  rowDrag.slot = target ? target.slot : null;
+  rowDrag.to = target ? target.to : null;
+  showDrop();
+}
+
+function finishRowDrag(e) {
+  const d = rowDrag;
+  rowDrag = null;
+  const grip = e.currentTarget;
+  grip.removeEventListener("pointermove", moveRowDrag);
+  grip.removeEventListener("pointerup", endRowDrag);
+  grip.removeEventListener("pointercancel", cancelRowDrag);
+  if (grip.hasPointerCapture?.(e.pointerId)) grip.releasePointerCapture(e.pointerId);
+  $("ed-layers").classList.remove("dragging");
+  d.rows.forEach((row) => row.classList.remove("dragging", "drop-before", "drop-after"));
+  return d;
+}
+
+function endRowDrag(e) {
+  if (!rowDrag) return;
+  const d = finishRowDrag(e);
+  if (d.to !== null) moveLayer(d.item, d.to);
+}
+
+function cancelRowDrag(e) {
+  if (rowDrag) finishRowDrag(e);
 }
 
 // markSelected shows which row is selected without rebuilding the list, so a row
-// keeps the keyboard focus it has
+// keeps the keyboard focus it has. The selected row, or the first when none is, has
+// the tab stops, and the arrow keys move between rows
 function markSelected(sel) {
   const rows = [...$("ed-layers").querySelectorAll(".ed-layer")];
   rows.forEach((row, i) => {
     const on = row.dataset.ref === sel;
-    row.setAttribute("aria-selected", String(on));
-    row.tabIndex = on || (!sel && i === 0) ? 0 : -1;
+    const active = on || (!sel && i === 0);
+    row.classList.toggle("selected", on);
+    row.querySelector(".ed-layer-select").setAttribute("aria-current", String(on));
+    for (const control of row.querySelectorAll("button")) control.tabIndex = active ? 0 : -1;
   });
 }
 
 function onLayersKey(e) {
+  const selectButton = e.target.closest?.(".ed-layer-select");
+  if (!selectButton) return;
+  const rows = [...$("ed-layers").querySelectorAll(".ed-layer")];
+  const row = selectButton.closest(".ed-layer");
+  const at = rows.indexOf(row);
+  if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    // Alt with an arrow moves a layer in the stack, which is what dragging does
+    e.preventDefault();
+    e.stopPropagation();
+    const item = itemOf(store.layout.peek(), row.dataset.ref);
+    if (item && item.kind === "layer") shiftLayer(item, e.key === "ArrowUp" ? 1 : -1);
+    return;
+  }
   // An arrow with a modifier is a nudge, which the page handles wherever the focus is
   if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
-  const rows = [...$("ed-layers").querySelectorAll(".ed-layer")];
-  const at = rows.indexOf(document.activeElement);
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     e.preventDefault();
     e.stopPropagation();
     const next = rows[Math.min(rows.length - 1, Math.max(0, at + (e.key === "ArrowDown" ? 1 : -1)))];
     if (next) {
       select(next.dataset.ref);
-      next.focus();
+      next.querySelector(".ed-layer-select").focus();
     }
-  } else if ((e.key === "Enter" || e.key === " ") && at >= 0) {
-    e.preventDefault();
-    select(rows[at].dataset.ref);
   }
 }
 
@@ -1073,22 +1231,11 @@ function drawSelection() {
   const locked = isMarked(marks.locked, view.layout, refOf(item));
   const kind = item.drawn ? KIND_LABEL[item.kind] : `${KIND_LABEL[item.kind]}, not drawn: ${item.why}`;
   $("ed-selection-kind").textContent = locked ? `${kind}. Locked, so the card cannot pick or move it` : kind;
-  $("ed-lock").checked = locked;
-  $("ed-snap").checked = isMarked(marks.snap, view.layout, refOf(item));
-  // A symbol is part of the layout's frame work and is moved and resized, not copied
-  const copyable = view.editable && item.kind !== "symbol";
-  $("ed-element-actions").hidden = !copyable;
   const blank = rect.width === 0 && rect.height === 0;
   $("ed-sel-x").textContent = blank ? "" : String(rect.x);
   $("ed-sel-y").textContent = blank ? "" : String(rect.y);
   $("ed-sel-w").textContent = blank ? "" : String(rect.width);
   $("ed-sel-h").textContent = blank ? "" : String(rect.height);
-  const layers = view.items.filter((it) => it.kind === "layer");
-  const at = layers.findIndex((it) => refOf(it) === refOf(item));
-  const reorderable = item.kind === "layer" && view.editable;
-  $("ed-reorder").hidden = !reorderable;
-  $("ed-raise").disabled = !reorderable || at >= layers.length - 1;
-  $("ed-lower").disabled = !reorderable || at <= 0;
 }
 
 // --- the levers ---
@@ -1600,12 +1747,6 @@ export function initEditor() {
   $("ed-layers").addEventListener("keydown", onLayersKey);
   $("ed-undo").addEventListener("click", undo);
   $("ed-redo").addEventListener("click", redo);
-  $("ed-raise").addEventListener("click", () => reorder(1));
-  $("ed-lower").addEventListener("click", () => reorder(-1));
-  $("ed-lock").addEventListener("change", (e) => setMark("locked", e.target.checked));
-  $("ed-snap").addEventListener("change", (e) => setMark("snap", e.target.checked));
-  $("ed-duplicate").addEventListener("click", duplicateSelected);
-  $("ed-delete-item").addEventListener("click", deleteSelected);
   initAssets({ store, commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
   document.addEventListener("keydown", onKey);
   $("ed-credit-add").addEventListener("click", addCredit);

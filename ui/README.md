@@ -329,8 +329,7 @@ handles either, since its rectangle only says where the first baseline starts. E
 another item's only when that item is marked as one to snap to. Holding Option or
 Alt turns snapping off, and while a box is dragged the guide says which of its edges
 is held and what lies on that line, which is outlined. The arrow keys move the
-selection one pixel, and ten with Shift. Raise and Lower change a layer's place in
-the stack.
+selection one pixel, and ten with Shift.
 
 Every change is saved to the layout file as it is made, with the file's order and
 layout kept and only the numbers changed, and the card is drawn again a moment
@@ -377,22 +376,31 @@ a `.ttf` or `.otf` file to the template, which keeps it in its `font` folder wit
 hash and the names it carries, and Text roles choose for each role the font it
 draws with, one of the template's or one of the engine's own.
 
+Each row of the layers list has what acts on that item. A layer has a grip, three
+bars, on its left, and dragging it by the grip moves it in the stack, with a line
+showing where it will land. The same is on the keyboard as Alt with the up and down
+arrows on the row, and as Move up and Move down in its menu. An icon says what the
+item is, text, an art window, a layer or the set symbol, and the name beside it
+selects the row. A padlock locks the item, faint while it is open and in the full text
+color, and closed, once it is locked, and a grid makes it a line that a dragged item
+snaps to, crossed out and faint while it is not. The three dots at the right open a
+menu with Duplicate, which copies the item a little way down and to the right, and
+Delete, which takes it out of the layout and leaves its part and images where they
+are. A symbol is moved and resized and has no menu to copy or delete it.
+
 The plus beside the layers adds a text box that draws something the card has, an art
 window above a layer, or a layer for a part the template has or for a new part whose
-first image is chosen then. Duplicate copies the selection a little way down and to
-the right, and Delete takes it out of the layout, with its part and images left where
-they are. Each of these is a change that undo takes back, and a layer for a new part
-is undone with its part and image in one step. The app holds the files an undo
-needs in memory, up to a limit, and an undo that needs one it has let go of says so
-and leaves the draft as it is.
+first image is chosen then. Each of the changes in the list is one that undo takes
+back, and a layer for a new part is undone with its part and image in one step. The app
+holds the files an undo needs in memory, up to a limit, and an undo that needs one it
+has let go of says so and leaves the draft as it is.
 
-Lock on the card keeps the preview from picking, hovering over, moving or resizing the
-selection, and the arrow keys leave it where it is. A click where it lies reaches
-what is beneath, and `L` locks and unlocks the selection. It stays in the layers list,
-marked with a lock, and its fields and the list still change it. Snap other items to
-it makes its edges and middle lines that a dragged item snaps to, and none are marked
-to begin with. Both are kept with the draft, beside its test card, and are not part of
-the template.
+A locked item cannot be picked, hovered over, moved or resized on the preview, and the
+arrow keys leave it where it is. A click where it lies reaches what is beneath, and
+`L` locks and unlocks the selection. It stays in the list, and its fields and the
+list still change it. Items a drag snaps to are marked the same way, and none are
+marked to begin with. Both are kept with the draft, beside its test card, and are not
+part of the template.
 
 Using a draft from the other modes and exporting it are not built yet, and each
 appears locked with the issue that tracks it.

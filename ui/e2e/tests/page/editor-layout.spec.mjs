@@ -34,7 +34,9 @@ async function drag(page, from, by, { steps = 6 } = {}) {
 test("the layers are listed from the top, and the ones not drawn say why", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
   await expect(editor.layers.locator(".ed-layer-name")).toHaveText(["pt", "oracle", "type", "title", "Art window", "frame", "background"]);
-  await expect(editor.layers.locator(".ed-layer-kind")).toHaveText(["Text box", "Text box", "Text box", "Text box", "Art window", "Layer", "Layer"]);
+  expect(await editor.layers.locator(".ed-layer-kind").evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")))).toEqual(["Text box", "Text box", "Text box", "Text box", "Art window", "Layer", "Layer"]);
+  // Each kind has an icon of its own, and a layer an image's
+  expect(await editor.layers.locator(".ed-layer-kind use").evaluateAll((els) => els.map((el) => el.getAttribute("href").split("#")[1]))).toEqual(["i-text", "i-text", "i-text", "i-text", "i-select", "i-image", "i-image"]);
   await expect(editor.layers.first()).toHaveClass(/undrawn/);
   await expect(editor.layers.first()).toHaveAttribute("title", "the card has no pt to draw");
   await expect(editor.selection).toBeHidden();
@@ -333,7 +335,9 @@ test("a layout that cannot be edited can be looked at and not changed", async ({
   await page.mouse.click(p.x, p.y);
   await expect(editor.selectionName).toHaveText("title");
   await expect(editor.handles).toHaveCount(0);
-  await expect(page.locator("#ed-reorder")).toBeHidden();
+  // The row's menu and grip are not there, and nothing can be copied, deleted or dragged
+  await expect(editor.moreButton("title")).toBeDisabled();
+  await expect(editor.layers.locator(".ed-layer-grip")).toHaveCount(0);
 
   await drag(page, point(150, 100), { x: 40, y: 0 });
   await page.mouse.up();
@@ -342,36 +346,94 @@ test("a layout that cannot be edited can be looked at and not changed", async ({
   expect(applied(bridge)).toEqual([]);
 });
 
-test("layers are raised and lowered in the stack, and the ends cannot go further", async ({ bridge, page }) => {
+test("a layer is moved up or down a place from its menu, and the ends offer only one way", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
-  await editor.layers.filter({ hasText: "background" }).click();
-  await expect(page.locator("#ed-lower")).toBeDisabled();
-  await expect(page.locator("#ed-raise")).toBeEnabled();
-  await page.locator("#ed-raise").click();
+  await editor.moreButton("background").click();
+  await expect(editor.menuItem("Move down")).toHaveCount(0);
+  await expect(editor.menuItem("Move up")).toBeVisible();
+  await editor.menuItem("Move up").click();
   await expect.poll(() => applied(bridge).length).toBe(1);
   expect(applied(bridge)[0].ops).toEqual([{ op: "reorder", layout: "normal", kind: "layer", key: "background", to: 1 }]);
 
-  await editor.layers.filter({ hasText: "frame" }).click();
-  await expect(page.locator("#ed-raise")).toBeDisabled();
-  await page.locator("#ed-lower").click();
+  await editor.moreButton("frame").click();
+  await expect(editor.menuItem("Move up")).toHaveCount(0);
+  await editor.menuItem("Move down").click();
   await expect.poll(() => applied(bridge).length).toBe(2);
   expect(applied(bridge)[1].ops[0]).toMatchObject({ op: "reorder", key: "frame", to: 0 });
 
-  // Text has no place in the stack
-  await editor.layers.filter({ hasText: "oracle" }).click();
-  await expect(page.locator("#ed-reorder")).toBeHidden();
+  // Text has no place in the stack, and the menu does not offer one
+  await editor.moreButton("oracle").click();
+  await expect(editor.menuItem("Duplicate")).toBeVisible();
+  await expect(editor.menuItem("Move up")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+});
+
+test("alt and the arrow keys move a layer in the stack from the list", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  await editor.row("background").locator(".ed-layer-select").focus();
+  await page.keyboard.press("Alt+ArrowUp");
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops).toEqual([{ op: "reorder", layout: "normal", kind: "layer", key: "background", to: 1 }]);
+  // At the bottom there is nowhere lower to go, and a text box is not in the stack
+  await page.keyboard.press("Alt+ArrowDown");
+  await editor.row("title").locator(".ed-layer-select").focus();
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.waitForTimeout(300);
+  expect(applied(bridge).length).toBe(1);
+});
+
+test("dragging a layer's grip moves it to where the line shows, and only layers have one", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  await expect(editor.layers.locator(".ed-layer-grip")).toHaveCount(2);
+  await expect(editor.grip("title")).toHaveCount(0);
+  const grip = await editor.grip("background").boundingBox();
+  const frame = await editor.row("frame").boundingBox();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 4, frame.y + 3, { steps: 6 });
+  // The line is above the frame, and the row being dragged is dimmed
+  await expect(editor.row("frame")).toHaveClass(/drop-before/);
+  await expect(editor.row("background")).toHaveClass(/dragging/);
+  await page.mouse.up();
+  await expect(page.locator("#ed-layers .drop-before, #ed-layers .drop-after, #ed-layers .dragging")).toHaveCount(0);
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops).toEqual([{ op: "reorder", layout: "normal", kind: "layer", key: "background", to: 1 }]);
+
+  // Dropped below the last row, a layer goes to the bottom
+  const top = await editor.grip("frame").boundingBox();
+  const last = await editor.row("background").boundingBox();
+  await page.mouse.move(top.x + top.width / 2, top.y + top.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(top.x + 4, last.y + last.height + 20, { steps: 6 });
+  await expect(editor.row("background")).toHaveClass(/drop-after/);
+  await page.mouse.up();
+  await expect.poll(() => applied(bridge).length).toBe(2);
+  expect(applied(bridge)[1].ops[0]).toMatchObject({ op: "reorder", key: "frame", to: 0 });
+});
+
+test("a layer dropped where it already is changes nothing", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  const grip = await editor.grip("frame").boundingBox();
+  const own = await editor.row("frame").boundingBox();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 4, own.y + own.height / 2 + 2, { steps: 4 });
+  await expect(page.locator("#ed-layers .drop-before, #ed-layers .drop-after")).toHaveCount(0);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(applied(bridge)).toEqual([]);
 });
 
 test("the layer list moves the selection with the arrow keys", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
-  await editor.layers.first().focus();
+  await editor.layers.first().locator(".ed-layer-select").focus();
   await page.keyboard.press("ArrowDown");
   await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("oracle");
   await page.keyboard.press("ArrowDown");
   await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("type");
   await page.keyboard.press("ArrowUp");
   await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("oracle");
-  await expect(editor.layers.nth(1)).toBeFocused();
+  await expect(editor.layers.nth(1).locator(".ed-layer-select")).toBeFocused();
   // The arrows moved the selection and not the item
   expect(applied(bridge)).toEqual([]);
 });

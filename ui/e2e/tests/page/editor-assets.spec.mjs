@@ -139,35 +139,49 @@ test("a variant the part names itself is taken out with the image", async ({ bri
   ]);
 });
 
-test("duplicate and delete act on the selection, and a symbol has neither", async ({ bridge, page }) => {
+test("duplicate and delete are in a row's menu and act on that row", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
-  await expect(editor.duplicateButton).toBeHidden();
-  await select(editor, "title");
-  await editor.duplicateButton.click();
+  // The menu is for the row it is in, whatever is selected
+  await select(editor, "oracle");
+  await editor.choose("title", "Duplicate");
   await expect.poll(() => applied(bridge).length).toBe(1);
   expect(applied(bridge)[0].ops).toEqual([{ op: "duplicate", layout: "normal", kind: "text", key: "title", dx: 20, dy: 20, as: "title_copy" }]);
-  await select(editor, "frame");
-  await editor.deleteButton.click();
+  await editor.choose("frame", "Delete");
   await expect.poll(() => applied(bridge).length).toBe(2);
   expect(applied(bridge)[1].ops).toEqual([{ op: "delete", layout: "normal", kind: "layer", key: "frame" }]);
+  // The selected row is still selected, since another was deleted
+  await expect(editor.selectionName).toHaveText("oracle");
+});
+
+test("deleting the selected row lets go of the selection", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  await select(editor, "frame");
+  await editor.choose("frame", "Delete");
   await expect(editor.selection).toBeHidden();
+});
+
+test("the selection panel no longer has the buttons that moved into the rows", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  await select(editor, "title");
+  for (const id of ["ed-raise", "ed-lower", "ed-lock", "ed-snap", "ed-duplicate", "ed-delete-item"]) await expect(page.locator(`#${id}`)).toHaveCount(0);
 });
 
 test("a copy is selected once it is drawn", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
-  await select(editor, "title");
   bridge.reply("Studio.Describe", () => describeView([...standardItems, drawn("text", "title_copy", at(120, 100, 600, 80))]));
-  await editor.duplicateButton.click();
+  await editor.choose("title", "Duplicate");
   await expect(editor.selectionName).toHaveText("title_copy");
 });
 
-test("a symbol cannot be copied or deleted", async ({ bridge, page }) => {
+test("a symbol has no menu to copy or delete it", async ({ bridge, page }) => {
   bridge.reply("Studio.Describe", () => describeView([...standardItems, drawn("symbol", "set", at(800, 600, 100, 60))]));
   const { editor } = await ready(bridge, page, { count: 8 });
+  await expect(editor.moreButton("Set symbol")).toBeDisabled();
+  await expect(editor.grip("Set symbol")).toHaveCount(0);
   await select(editor, "Set symbol");
   await expect(editor.selection).toBeVisible();
-  await expect(editor.duplicateButton).toBeHidden();
-  await expect(editor.deleteButton).toBeHidden();
+  // It can still be locked and made a line to snap to
+  await expect(editor.lockToggle("Set symbol")).toBeEnabled();
 });
 
 test("a text box is added from the dialog, named for what it draws and placed in the middle", async ({ bridge, page }) => {
@@ -282,14 +296,44 @@ test("the add button is off for a layout that cannot be edited", async ({ bridge
   await expect(editor.addButton).toBeDisabled();
 });
 
+test("each row has a padlock that is faint when open and full when closed, and its icon changes", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  const lock = editor.lockToggle("title");
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+  await expect(lock.locator("use")).toHaveAttribute("href", "icons.svg#i-lock-open");
+  const faint = await lock.evaluate((el) => getComputedStyle(el).color);
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+  await expect(lock.locator("use")).toHaveAttribute("href", "icons.svg#i-lock");
+  const full = await lock.evaluate((el) => getComputedStyle(el).color);
+  expect(full).not.toBe(faint);
+  expect(full).toBe(await editor.row("title").locator(".ed-layer-name").evaluate((el) => getComputedStyle(el).color));
+  // Locking a row that is not selected does not select it
+  await expect(editor.selection).toBeHidden();
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+});
+
+test("each row has a grid that is off and faint until the item is a line to snap to", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page);
+  const snap = editor.snapToggle("oracle");
+  await expect(snap).toHaveAttribute("aria-pressed", "false");
+  await expect(snap.locator("use")).toHaveAttribute("href", "icons.svg#i-grid-off");
+  await snap.click();
+  await expect(snap).toHaveAttribute("aria-pressed", "true");
+  await expect(snap.locator("use")).toHaveAttribute("href", "icons.svg#i-grid-on");
+  await expect.poll(() => bridge.calledWith("Studio.SetMarks").length).toBe(1);
+  expect(bridge.calledWith("Studio.SetMarks")[0][0]).toEqual({ id: "mine", locked: [], snapTo: ["normal/text:oracle"] });
+});
+
 test("locking an item keeps the card from picking or moving it", async ({ bridge, page }) => {
   const { editor, point } = await ready(bridge, page);
   await select(editor, "title");
-  await expect(editor.lock).not.toBeChecked();
-  await editor.lock.check();
+  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "false");
+  await editor.lockToggle("title").click();
   await expect.poll(() => bridge.calledWith("Studio.SetMarks").length).toBe(1);
   expect(bridge.calledWith("Studio.SetMarks")[0][0]).toEqual({ id: "mine", locked: ["normal/text:title"], snapTo: [] });
-  await expect(editor.selectedRow.locator("[aria-label='Locked on the card']")).toHaveCount(1);
+  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#ed-selection-kind")).toContainText("Locked");
   // It keeps its outline, with no handles, and is not moved by the arrow keys
   await expect(editor.selectionBox).toHaveClass(/locked/);
@@ -307,8 +351,8 @@ test("locking an item keeps the card from picking or moving it", async ({ bridge
 
   // Its levers and the list still work, and unlocking gives it back to the card
   await select(editor, "title");
-  await expect(editor.lock).toBeChecked();
-  await editor.lock.uncheck();
+  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
+  await editor.lockToggle("title").click();
   await expect.poll(() => bridge.calledWith("Studio.SetMarks").length).toBe(2);
   expect(bridge.calledWith("Studio.SetMarks")[1][0].locked).toEqual([]);
   await page.mouse.click(p.x, p.y);
@@ -319,9 +363,9 @@ test("the L key locks and unlocks the selection", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
   await select(editor, "oracle");
   await page.keyboard.press("l");
-  await expect(editor.lock).toBeChecked();
+  await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("l");
-  await expect(editor.lock).not.toBeChecked();
+  await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "false");
   expect(bridge.calledWith("Studio.SetMarks").map(([r]) => r.locked)).toEqual([["normal/text:oracle"], []]);
 });
 
@@ -330,8 +374,9 @@ test("what was locked when the template was last open is locked again", async ({
   const p = point(150, 100);
   await page.mouse.click(p.x, p.y);
   await expect(editor.selectionName).toHaveText("frame");
-  await expect(editor.layers.filter({ hasText: "title" }).locator("[aria-label='Locked on the card']")).toHaveCount(1);
-  await expect(editor.layers.filter({ hasText: "oracle" }).locator("[aria-label='Others snap to it']")).toHaveCount(1);
+  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.snapToggle("oracle")).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "false");
   // Opening it did not write what it read
   expect(bridge.calledWith("Studio.SetMarks")).toEqual([]);
 });
@@ -353,8 +398,7 @@ test("a drag snaps to the card's lines, and to an item only once it is marked", 
   await expect.poll(() => applied(bridge).length).toBe(1);
 
   // Marked, the title is a line, and the guide names it
-  await select(editor, "title");
-  await editor.snap.check();
+  await editor.snapToggle("title").click();
   await expect.poll(() => bridge.calledWith("Studio.SetMarks").length).toBe(1);
   expect(bridge.calledWith("Studio.SetMarks")[0][0]).toEqual({ id: "mine", locked: [], snapTo: ["normal/text:title"] });
   await drag(page, point(300, 810), { x: -3, y: 0 });

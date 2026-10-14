@@ -283,7 +283,7 @@ async function flows(outDir) {
       await sleep(100);
     }
     await until("the new box to be selected", () => $("ed-selection-name").textContent === "artist_2");
-    $("ed-lock").click();
+    doc.querySelector('#ed-layers .ed-layer.selected [data-toggle="locked"]').click();
     const locked = Date.now() + 20000;
     while (!((await api.openDraft(draftId)).meta.locked || []).includes("normal/text:artist_2")) {
       if (Date.now() > locked) throw new Error("timed out waiting for the lock to be kept");

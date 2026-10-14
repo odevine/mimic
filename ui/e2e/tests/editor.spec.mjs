@@ -244,8 +244,7 @@ test("a layer is raised in the stack and the layout keeps its other keys", async
   await editor.page.locator('button[data-mode="editor"]').click();
   await editor.waitForPreview();
 
-  await editor.layers.filter({ hasText: "background" }).click();
-  await page.locator("#ed-raise").click();
+  await editor.choose("background", "Move up");
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack.map((e) => e.id)).toEqual(["mark", "background"]);
   const after = JSON.parse(await readFile(file, "utf8"));
   expect(after.textBoxes).toEqual(original.textBoxes);
@@ -534,20 +533,20 @@ test("a text box is added, copied and deleted, and undoing all of it restores th
   await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).toContain("artist_2");
   await expect(editor.selectionName).toHaveText("artist_2");
 
-  await editor.layers.filter({ hasText: "oracle" }).click();
-  await editor.duplicateButton.click();
+  await editor.choose("oracle", "Duplicate");
   await expect(editor.selectionName).toHaveText("oracle_copy");
   const boxes = JSON.parse(await readFile(file, "utf8")).textBoxes;
   expect(boxes["oracle_copy"].draws).toBe("oracle");
   expect(boxes["oracle_copy"].rect.x).toBe(boxes.oracle.rect.x + 8);
 
-  await editor.deleteButton.click();
+  await editor.choose("oracle_copy", "Delete");
   await expect(editor.selection).toBeHidden();
   await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).not.toContain("oracle_copy");
 
   for (let i = 0; i < 3; i++) await editor.undoButton.click();
   await expect(editor.undoButton).toBeDisabled();
-  expect(await readFile(file, "utf8")).toBe(original);
+  // The undos are made one after another, so the file is read until it is as it was
+  await expect.poll(() => readFile(file, "utf8")).toBe(original);
 });
 
 test("a font is brought in, given to a role and the card is still drawn", async ({ editor, scratch, page }) => {
@@ -583,18 +582,17 @@ test("a font is brought in, given to a role and the card is still drawn", async 
 
 test("what is locked and what is snapped to is kept with the template across a reload", async ({ editor, scratch, page }) => {
   await editor.create("Marks", 100);
-  await editor.layers.filter({ hasText: "title" }).click();
-  await editor.lock.check();
-  await editor.layers.filter({ hasText: "oracle" }).click();
-  await editor.snap.check();
+  await editor.lockToggle("title").click();
+  await editor.snapToggle("oracle").click();
   const meta = draftFile(scratch, "marks", ".studio.json");
   await expect.poll(async () => JSON.parse(await readFile(meta, "utf8")).locked).toEqual(["normal/text:title"]);
-  expect(JSON.parse(await readFile(meta, "utf8")).snapTo).toEqual(["normal/text:oracle"]);
+  await expect.poll(async () => JSON.parse(await readFile(meta, "utf8")).snapTo).toEqual(["normal/text:oracle"]);
 
   await page.reload();
   await page.locator("html.booted").waitFor();
   await page.locator('button[data-mode="editor"]').click();
   await editor.waitForPreview();
-  await expect(editor.layers.filter({ hasText: "title" }).locator("[aria-label='Locked on the card']")).toHaveCount(1);
-  await expect(editor.layers.filter({ hasText: "oracle" }).locator("[aria-label='Others snap to it']")).toHaveCount(1);
+  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.snapToggle("oracle")).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "false");
 });

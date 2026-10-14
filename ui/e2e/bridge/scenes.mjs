@@ -206,7 +206,7 @@ export const scenes = {
       await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
       await bridge.job("job-1", [done(1)]);
       await expect(editor.layers).toHaveCount(7);
-      await page.locator("#ed-template-details > summary").click();
+      await new EditorPage(page).openSection("about");
       await expect(editor.fonts).toHaveCount(2);
       await expect(page.locator("#ed-role-body")).toHaveValue("font:plantin-regular");
     },
@@ -227,8 +227,9 @@ export const scenes = {
       await editor.sizeCanvas(300);
       await editor.layers.filter({ hasText: "title" }).click();
       await expect(editor.lever("lever-fontSize")).toHaveValue("60");
+      await editor.openCanvas();
       await page.locator("#lever-shadow-on").check();
-      await page.locator("#ed-template-details > summary").click();
+      await new EditorPage(page).openSection("about");
       await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");
       await editor.lever("lever-color").fill("red");
       await editor.lever("lever-color").blur();

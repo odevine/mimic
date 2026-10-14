@@ -414,7 +414,7 @@ test("a drag snaps to the card's lines, and to an item only once it is marked", 
 test("the fonts of the template are listed and a role is given one", async ({ bridge, page }) => {
   bridge.assets = assetsView(standardAssets().parts, { fonts: [{ id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular" }] });
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(editor.fonts).toHaveCount(1);
   await expect(editor.fonts.first()).toContainText("Plantin Regular");
   await expect(editor.roles).toHaveCount(6);
@@ -432,7 +432,7 @@ test("the fonts of the template are listed and a role is given one", async ({ br
 
 test("a template with no fonts says so", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(editor.fonts).toHaveCount(0);
   await expect(page.locator("#ed-fonts")).toContainText("ships no fonts");
 });
@@ -441,7 +441,7 @@ test("a font is added from a file, and undo takes it away", async ({ bridge, pag
   bridge.reply("System.PickFile", "/fonts/Plantin.ttf");
   bridge.reply("Studio.ImportFont", { rev: 1, inverse: [{ op: "unset", kind: "template", path: ["fonts", "plantin-regular"] }, { op: "drop", file: "font/plantin-regular.ttf" }], valid: true, diagnostics: [], id: "plantin-regular", warnings: [] });
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   bridge.assets = assetsView(standardAssets().parts, { fonts: [{ id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular" }] });
   await editor.fontAdd.click();
   await expect.poll(() => bridge.calledWith("Studio.ImportFont").length).toBe(1);
@@ -464,7 +464,7 @@ test("removing a font frees the roles that use it, in one step", async ({ bridge
   const roles = assetsView([]).roles.map((r) => (r.role === "title" || r.role === "info" ? { ...r, font: "plantin-regular" } : r));
   bridge.assets = assetsView(standardAssets().parts, { roles, fonts: [{ id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular" }] });
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(page.locator("#ed-role-title")).toHaveValue("font:plantin-regular");
   await expect(page.locator("#ed-role-body")).toHaveValue("");
   await editor.fonts.first().getByRole("button", { name: /Remove the font Plantin Regular/ }).click();
@@ -481,7 +481,7 @@ test("a font the app refuses is said and changes nothing", async ({ bridge, page
   bridge.reply("System.PickFile", "/fonts/broken.ttf");
   bridge.fail("Studio.ImportFont", "That is not a font the engine can read");
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await editor.fontAdd.click();
   await expect(page.locator(".toast.err")).toContainText("not a font the engine can read");
   await expect(editor.undoButton).toBeDisabled();
@@ -490,7 +490,7 @@ test("a font the app refuses is said and changes nothing", async ({ bridge, page
 test("a font's license is kept with it and cleared by emptying the field", async ({ bridge, page }) => {
   bridge.assets = assetsView(standardAssets().parts, { fonts: [{ id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular", license: "OFL 1.1" }] });
   const { editor } = await ready(bridge, page);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   const license = page.getByLabel("License of the font Plantin Regular");
   await expect(license).toHaveValue("OFL 1.1");
   await license.fill("SIL OFL 1.1");

@@ -21,6 +21,7 @@ import { afterOps, isMarked, refsFor, withMark } from "../editormarks.js";
 import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
 import { kindIcon, moveTarget, reorderTarget, rowMenu } from "../editorlayers.js";
 import { closePopover, openPopover } from "../components/popover.js";
+import { initSections } from "../components/sections.js";
 import { initAssets } from "./editorassets.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
 
@@ -455,6 +456,8 @@ function drawSide() {
   const n = errors.length + warnings.length;
   $("ed-problems-none").hidden = n > 0;
   $("ed-problems-count").textContent = n ? String(n) : "";
+  // The count is seen with the section collapsed, so it says whether any are errors
+  $("ed-problems-count").dataset.level = errors.length ? "error" : warnings.length ? "warning" : "";
 }
 
 const GLYPH = { idle: "card", working: "render", done: "check", warn: "warn", error: "warn" };
@@ -1722,6 +1725,36 @@ async function enter() {
 
 export const editor = { newTemplate, copyTemplate };
 
+let layoutTimer = 0;
+
+// keepLayout saves how a part of the editor is laid out with the other layout settings
+function keepLayout(key, list) {
+  const s = app.settings.peek();
+  app.settings.value = { ...s, splits: { ...(s.splits || {}), [key]: list } };
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => api.saveSettings(app.settings.peek()).catch(() => {}), 400);
+}
+
+// initCanvasSection makes the canvas section of the left column open and collapse, which
+// is kept. It starts collapsed
+function initCanvasSection() {
+  const box = $("ed-canvas-sec");
+  const toggle = $("ed-canvas-toggle");
+  const body = $("ed-canvas-body");
+  const saved = (app.settings.peek().splits || {}).editorCanvas;
+  const show = (open) => {
+    box.classList.toggle("collapsed", !open);
+    toggle.setAttribute("aria-expanded", String(open));
+    body.hidden = !open;
+  };
+  show(Array.isArray(saved) && saved[0] === 0);
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    show(open);
+    keepLayout("editorCanvas", [open ? 0 : 1]);
+  });
+}
+
 export function initEditor() {
   $("ed-empty-new").addEventListener("click", newTemplate);
   $("ed-new").addEventListener("click", newTemplate);
@@ -1730,6 +1763,17 @@ export function initEditor() {
   });
   $("ed-rename").addEventListener("click", rename);
   $("ed-delete").addEventListener("click", remove);
+  const sections = initSections($("ed-sections"), (app.settings.peek().splits || {}).editorSections, (list) => keepLayout("editorSections", list));
+  initCanvasSection();
+  // A template that does not load has its problems shown, however the column was left
+  let seen = "";
+  effect(() => {
+    const view = store.view.value;
+    const key = view ? `${view.draft.id}:${view.valid}` : "";
+    if (key === seen) return;
+    seen = key;
+    if (view && !view.valid) sections.open("problems");
+  });
   $("ed-draft-select").addEventListener("change", (e) => open(e.target.value));
 
   const overlay = $("ed-overlay");

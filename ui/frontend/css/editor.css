@@ -25,6 +25,28 @@
   min-width: 0;
 }
 
+/* The template's canvas, under the template it belongs to in the left column. It
+   collapses to its heading and keeps to a share of the column when it is open */
+.ed-canvas-sec {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.ed-canvas-sec .ed-sec-title {
+  margin: 0;
+  font: inherit;
+}
+
+.ed-canvas-body {
+  max-height: 40vh;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+
+.ed-canvas-body[hidden] {
+  display: none;
+}
+
 .ed-card {
   display: flex;
   flex-direction: column;
@@ -49,14 +71,200 @@
   min-height: 0;
 }
 
+/* The right column: sections that each collapse to their heading and can be given
+   the height their reader likes, and the buttons that stay at the bottom */
 .ed-side {
-  overflow: auto;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.ed-section + .ed-section {
-  margin-top: 16px;
-  padding-top: 16px;
+.ed-sections {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ed-sec {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  flex-basis: 0;
+  min-height: 0;
   border-top: 1px solid var(--border);
+}
+
+.ed-sec:first-child {
+  border-top: 0;
+}
+
+/* An open section takes a share of the room and never less than its heading and a
+   little of what it holds, and a collapsed one is only its heading */
+.ed-sec:not(.collapsed) {
+  min-height: 96px;
+}
+
+.ed-sec.collapsed {
+  flex-basis: auto;
+}
+
+/* The collapsed sections at the bottom rest against the buttons beneath them */
+.ed-sec.rest {
+  margin-top: auto;
+}
+
+.ed-sec-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding-right: 8px;
+}
+
+.ed-sec-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+}
+
+.ed-sec-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-sec-toggle:hover,
+.ed-sec-toggle:focus-visible {
+  background: var(--surface-raised);
+}
+
+/* The arrow points down while the section is open and right once it is collapsed, and
+   is large enough to be seen as a control */
+.ed-sec-toggle .icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-dim);
+  stroke-width: 2;
+  transition: transform var(--t-hover);
+}
+
+.ed-sec-toggle:hover .icon {
+  color: var(--text);
+}
+
+.ed-sec.collapsed .ed-sec-toggle .icon,
+.ed-canvas-sec.collapsed .ed-sec-toggle .icon {
+  transform: rotate(-90deg);
+}
+
+.ed-sec-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+
+.ed-problems-count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ed-problems-count:empty {
+  display: none;
+}
+
+.ed-problems-count[data-level="error"] {
+  background: var(--err-weak);
+  color: var(--err);
+}
+
+.ed-problems-count[data-level="warning"] {
+  background: var(--warn-weak);
+  color: var(--warn);
+}
+
+/* The line between two open sections, dragged to change how the height is shared */
+.ed-vsplit {
+  position: relative;
+  flex: none;
+  height: 1px;
+  margin-top: -1px;
+  background: var(--border);
+  cursor: row-resize;
+  z-index: 3;
+}
+
+.ed-vsplit[hidden] {
+  display: none;
+}
+
+.ed-vsplit::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+  z-index: 2;
+}
+
+.ed-vsplit::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+  transition: background-color var(--t-hover);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ed-vsplit:hover,
+.ed-vsplit.dragging {
+  background: var(--accent);
+}
+
+.ed-vsplit:hover::before,
+.ed-vsplit.dragging::before,
+.ed-vsplit:focus-visible::before {
+  background: var(--accent);
+}
+
+body.resizing-rows,
+body.resizing-rows * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+.ed-footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .ed-about-name {
@@ -101,11 +309,6 @@
   background: var(--warn-weak);
 }
 
-.ed-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap);
-}
 
 .tm-actions {
   display: flex;
@@ -210,12 +413,6 @@
   cursor: move;
 }
 
-.ed-heading-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
 
 .ed-history {
   display: flex;
@@ -229,10 +426,8 @@
 .ed-layers {
   display: flex;
   flex-direction: column;
-  max-height: 260px;
   margin: 0;
   padding: 0;
-  overflow: auto;
   list-style: none;
   border: 1px solid var(--border);
   border-radius: var(--r-control);
@@ -444,29 +639,10 @@
   font-size: 12px;
 }
 
-.ed-details > summary {
-  cursor: pointer;
-  list-style: none;
-}
 
-.ed-details > summary::-webkit-details-marker {
-  display: none;
-}
 
-.ed-details > summary::before {
-  content: "\25B8";
-  display: inline-block;
-  width: 14px;
-  color: var(--text-faint);
-}
 
-.ed-details[open] > summary::before {
-  content: "\25BE";
-}
 
-.ed-details > summary h3 {
-  display: inline;
-}
 
 .ed-subheading {
   margin: 12px 0 6px;

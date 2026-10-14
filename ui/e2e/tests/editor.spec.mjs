@@ -21,6 +21,8 @@ test("a new template is drawn with a test card as soon as it is made", async ({ 
   await expect(editor.aboutId).toHaveText("user.test-frame");
   await expect(editor.layouts).toHaveText(["normal · 408 × 555 px · 150 dpi"]);
   await expect(editor.problems).toHaveCount(0);
+  // The problems are collapsed to their heading until they are asked for
+  await editor.openSection("problems");
   await expect(editor.page.locator("#ed-problems-none")).toBeVisible();
   await expect(editor.cardLine).toHaveText("Dawnwatch Sentinel · TST");
   await expect(editor.preview).toBeVisible();
@@ -341,7 +343,7 @@ test("the shadow, a layer's blend and the canvas are edited from their levers", 
   await editor.lever("lever-mode").selectOption("multiply");
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack[0].mode).toBe("multiply");
 
-  await page.locator("#ed-layout-details > summary").click();
+  await editor.openCanvas();
   await editor.lever("canvas-dpi").fill("90");
   await editor.lever("canvas-dpi").blur();
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).canvas.dpi).toBe(90);
@@ -350,7 +352,7 @@ test("the shadow, a layer's blend and the canvas are edited from their levers", 
 
 test("the template's name is changed from its details and the picker follows", async ({ editor, scratch, page }) => {
   await editor.create("Named", 100);
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await editor.lever("template-name").fill("Better name");
   await editor.lever("template-name").blur();
   const file = path.join(scratch.home, "mimic", "drafts", "named", "template.json");
@@ -370,7 +372,7 @@ test("a copy keeps the credits and license of the original out of reach of the l
   await editor.dialogName.fill("Kept");
   await editor.dialogConfirm.click();
   await editor.waitForPreview();
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   const credits = page.locator("#ed-credits .ed-credit");
   // The copy names the original in a credit that cannot be removed
   await expect(credits.first()).toContainText("Kept from the template this was copied from");
@@ -553,7 +555,7 @@ test("a font is brought in, given to a role and the card is still drawn", async 
   await editor.create("Fonts", 100);
   const dir = draftFile(scratch, "fonts");
   await scratch.offer("Plantin.ttf", { path: path.resolve(import.meta.dirname, "../../../engine/fonts/embedded/m15/plantin-body.ttf") });
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await editor.fontAdd.click();
   await expect(editor.fonts).toHaveCount(1);
   const added = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));

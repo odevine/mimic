@@ -113,7 +113,7 @@ export function fieldGroups(kind, ctx) {
     case "canvas":
       return [
         {
-          title: "Canvas",
+          title: "Size and turn",
           fields: [
             int("width", "Width", ["width"], { min: 1, required: true }),
             int("height", "Height", ["height"], { min: 1, required: true }),

@@ -481,6 +481,12 @@ Sideboard
                 <button id="ed-delete" class="btn subtle icon-only" type="button" aria-label="Delete this template" data-tip="Delete this template"><svg class="icon"><use href="icons.svg#i-trash"/></svg></button>
               </div>
             </div>
+            <div id="ed-canvas-sec" class="ed-canvas-sec collapsed">
+              <h3 class="ed-sec-title"><button id="ed-canvas-toggle" class="ed-sec-toggle" type="button" aria-expanded="false" aria-controls="ed-canvas-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="section-heading">Canvas</span></button></h3>
+              <div id="ed-canvas-body" class="ed-canvas-body" role="region" tabindex="0" aria-labelledby="ed-canvas-toggle" hidden>
+                <div id="ed-canvas-levers" class="ed-levers"></div>
+              </div>
+            </div>
             <div class="ed-card">
               <h3 class="section-heading">Test card</h3>
               <p id="ed-card-line" class="ed-card-line"></p>
@@ -536,75 +542,86 @@ Sideboard
           <div class="splitter" data-split="1" role="separator" aria-orientation="vertical" aria-label="Resize the details column"></div>
 
           <div class="region fixed" data-region="2" style="width: 320px">
-            <div class="ed-side panel-body">
-              <section class="ed-section" aria-labelledby="ed-layers-heading">
-                <div class="ed-heading-row">
-                  <h3 id="ed-layers-heading" class="section-heading">Layers</h3>
-                  <span class="ed-history">
-                    <button id="ed-add" class="btn subtle icon-only" type="button" aria-label="Add a layer, text box or art window" data-tip="Add" disabled><svg class="icon"><use href="icons.svg#i-plus"/></svg></button>
-                    <button id="ed-undo" class="btn subtle icon-only" type="button" aria-label="Undo" data-tip="Undo (⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
-                    <button id="ed-redo" class="btn subtle icon-only ed-redo" type="button" aria-label="Redo" data-tip="Redo (⇧⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
-                  </span>
-                </div>
-                <p id="ed-layers-none" class="dim">Nothing is drawn yet.</p>
-                <ul id="ed-layers" class="ed-layers" aria-label="Layers" hidden></ul>
-              </section>
-              <section class="ed-section" aria-labelledby="ed-selection-heading">
-                <h3 id="ed-selection-heading" class="section-heading">Selection</h3>
-                <p id="ed-selection-none" class="dim">Click the card, or a layer in the list.</p>
-                <div id="ed-selection" hidden>
-                  <p id="ed-selection-name" class="ed-about-name"></p>
-                  <p id="ed-selection-kind" class="dim"></p>
-                  <dl class="ed-readout">
-                    <dt>X</dt><dd id="ed-sel-x"></dd>
-                    <dt>Y</dt><dd id="ed-sel-y"></dd>
-                    <dt>Width</dt><dd id="ed-sel-w"></dd>
-                    <dt>Height</dt><dd id="ed-sel-h"></dd>
-                  </dl>
-                  <div id="ed-images" class="ed-images" hidden></div>
-                  <div id="ed-levers" class="ed-levers"></div>
-                </div>
-                <p id="ed-edit-note" class="dim" hidden></p>
-              </section>
-              <section class="ed-section" aria-labelledby="ed-layout-heading">
-                <details id="ed-layout-details" class="ed-details">
-                  <summary><h3 id="ed-layout-heading" class="section-heading">Layout</h3></summary>
-                  <div id="ed-canvas-levers" class="ed-levers"></div>
-                </details>
-              </section>
-              <section class="ed-section" aria-labelledby="ed-about-heading">
-                <h3 id="ed-about-heading" class="section-heading">About</h3>
-                <p id="ed-about-name" class="ed-about-name"></p>
-                <p id="ed-about-id" class="ed-about-id mono"></p>
-                <p id="ed-about-fork" class="dim" hidden></p>
-                <ul id="ed-layouts" class="ed-layouts" aria-label="Layouts"></ul>
-                <details id="ed-template-details" class="ed-details">
-                  <summary>Template details</summary>
-                  <div id="ed-template-levers" class="ed-levers"></div>
-                  <div class="ed-credits-block">
-                    <h4 class="ed-subheading">Credits</h4>
-                    <div id="ed-credits" class="ed-credits"></div>
-                    <button id="ed-credit-add" class="btn subtle" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add a credit</button>
+            <div class="ed-side">
+              <div id="ed-sections" class="ed-sections">
+                <section class="ed-sec" data-sec="layers">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title"><button id="ed-sec-layers-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-sec-layers-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Layers</span></button></h3>
+                    <span class="ed-history">
+                      <button id="ed-add" class="btn subtle icon-only" type="button" aria-label="Add a layer, text box or art window" data-tip="Add" disabled><svg class="icon"><use href="icons.svg#i-plus"/></svg></button>
+                      <button id="ed-undo" class="btn subtle icon-only" type="button" aria-label="Undo" data-tip="Undo (⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                      <button id="ed-redo" class="btn subtle icon-only ed-redo" type="button" aria-label="Redo" data-tip="Redo (⇧⌘Z)" disabled><svg class="icon"><use href="icons.svg#i-revert"/></svg></button>
+                    </span>
                   </div>
-                  <div class="ed-credits-block">
-                    <h4 class="ed-subheading">Fonts</h4>
-                    <div id="ed-fonts" class="ed-fonts"></div>
-                    <button id="ed-font-add" class="btn subtle" type="button" data-feature="editor.fonts"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add a font</button>
-                    <h4 class="ed-subheading">Text roles</h4>
-                    <div id="ed-roles" class="ed-levers"></div>
+                  <div id="ed-sec-layers-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-sec-layers-toggle">
+                    <p id="ed-layers-none" class="dim">Nothing is drawn yet.</p>
+                    <ul id="ed-layers" class="ed-layers" aria-label="Layers" hidden></ul>
                   </div>
-                </details>
-              </section>
-              <section class="ed-section" aria-labelledby="ed-problems-heading">
-                <h3 id="ed-problems-heading" class="section-heading">Problems <span id="ed-problems-count" class="faint"></span></h3>
-                <p id="ed-problems-none" class="dim">None found.</p>
-                <ul id="ed-problems" class="ed-problems"></ul>
-              </section>
-              <section class="ed-section ed-actions" aria-label="Use the template">
+                </section>
+                <div class="ed-vsplit" role="separator" aria-orientation="horizontal"></div>
+                <section class="ed-sec" data-sec="selection">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title"><button id="ed-sec-selection-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-sec-selection-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Selection</span></button></h3>
+                  </div>
+                  <div id="ed-sec-selection-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-sec-selection-toggle">
+                    <p id="ed-selection-none" class="dim">Click the card, or a layer in the list.</p>
+                    <div id="ed-selection" hidden>
+                      <p id="ed-selection-name" class="ed-about-name"></p>
+                      <p id="ed-selection-kind" class="dim"></p>
+                      <dl class="ed-readout">
+                        <dt>X</dt><dd id="ed-sel-x"></dd>
+                        <dt>Y</dt><dd id="ed-sel-y"></dd>
+                        <dt>Width</dt><dd id="ed-sel-w"></dd>
+                        <dt>Height</dt><dd id="ed-sel-h"></dd>
+                      </dl>
+                      <div id="ed-images" class="ed-images" hidden></div>
+                      <div id="ed-levers" class="ed-levers"></div>
+                    </div>
+                    <p id="ed-edit-note" class="dim" hidden></p>
+                  </div>
+                </section>
+                <div class="ed-vsplit" role="separator" aria-orientation="horizontal"></div>
+                <section class="ed-sec" data-sec="about">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title"><button id="ed-sec-about-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-sec-about-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">About</span></button></h3>
+                  </div>
+                  <div id="ed-sec-about-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-sec-about-toggle">
+                    <p id="ed-about-name" class="ed-about-name"></p>
+                    <p id="ed-about-id" class="ed-about-id mono"></p>
+                    <p id="ed-about-fork" class="dim" hidden></p>
+                    <ul id="ed-layouts" class="ed-layouts" aria-label="Layouts"></ul>
+                    <h4 class="ed-subheading">Template details</h4>
+                    <div id="ed-template-levers" class="ed-levers"></div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Credits</h4>
+                      <div id="ed-credits" class="ed-credits"></div>
+                      <button id="ed-credit-add" class="btn subtle" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add a credit</button>
+                    </div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Fonts</h4>
+                      <div id="ed-fonts" class="ed-fonts"></div>
+                      <button id="ed-font-add" class="btn subtle" type="button" data-feature="editor.fonts"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add a font</button>
+                      <h4 class="ed-subheading">Text roles</h4>
+                      <div id="ed-roles" class="ed-levers"></div>
+                    </div>
+                  </div>
+                </section>
+                <div class="ed-vsplit" role="separator" aria-orientation="horizontal"></div>
+                <section class="ed-sec" data-sec="problems">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title"><button id="ed-sec-problems-toggle" class="ed-sec-toggle" type="button" aria-expanded="true" aria-controls="ed-sec-problems-body"><svg class="icon" aria-hidden="true"><use href="icons.svg#i-chevron-down"/></svg><span class="ed-sec-name section-heading">Problems</span> <span id="ed-problems-count" class="ed-problems-count"></span></button></h3>
+                  </div>
+                  <div id="ed-sec-problems-body" class="ed-sec-body" role="region" tabindex="0" aria-labelledby="ed-sec-problems-toggle">
+                    <p id="ed-problems-none" class="dim">None found.</p>
+                    <ul id="ed-problems" class="ed-problems"></ul>
+                  </div>
+                </section>
+              </div>
+              <div class="ed-footer" role="group" aria-label="Use the template">
                 <button id="ed-use" class="btn" type="button" data-feature="editor.use">Use in Mimic</button>
                 <button id="ed-export" class="btn" type="button" data-feature="editor.export">Export…</button>
                 <button id="ed-json" class="btn" type="button" aria-expanded="false" aria-controls="ed-json-pane">Edit JSON…</button>
-              </section>
+              </div>
             </div>
           </div>
         </div>

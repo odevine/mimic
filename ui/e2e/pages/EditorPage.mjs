@@ -100,6 +100,50 @@ export class EditorPage {
     await expect(this.results.first()).toBeVisible();
   }
 
+  // sectionToggle is the heading of one of the right column's sections, which opens
+  // and collapses it, by its name: layers, selection, layout, about or problems
+  sectionToggle(name) {
+    return this.page.locator(`#ed-sec-${name}-toggle`);
+  }
+
+  sectionBody(name) {
+    return this.page.locator(`#ed-sec-${name}-body`);
+  }
+
+  // openSection shows a section that is collapsed, and leaves one that is open
+  async openSection(name) {
+    const toggle = this.sectionToggle(name);
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await expect(this.sectionBody(name)).toBeVisible();
+  }
+
+  // collapseSection folds an open section down to its heading
+  async collapseSection(name) {
+    const toggle = this.sectionToggle(name);
+    if ((await toggle.getAttribute("aria-expanded")) === "true") await toggle.click();
+    await expect(this.sectionBody(name)).toBeHidden();
+  }
+
+  // The canvas section is in the left column, under the template, and opens and
+  // collapses the same way
+  get canvasToggle() {
+    return this.page.locator("#ed-canvas-toggle");
+  }
+
+  get canvasBody() {
+    return this.page.locator("#ed-canvas-body");
+  }
+
+  async openCanvas() {
+    if ((await this.canvasToggle.getAttribute("aria-expanded")) !== "true") await this.canvasToggle.click();
+    await expect(this.canvasBody).toBeVisible();
+  }
+
+  async collapseCanvas() {
+    if ((await this.canvasToggle.getAttribute("aria-expanded")) === "true") await this.canvasToggle.click();
+    await expect(this.canvasBody).toBeHidden();
+  }
+
   // row is the row of the layers list for an item, by the name it shows. The toggles,
   // the grip and the menu are in it
   row(name) {

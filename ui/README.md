@@ -311,11 +311,23 @@ starts from that template instead. The copy keeps the original's license and
 credits and adds a credit that names the original and its version, and it is
 independent of the original from then on.
 
-The left column picks the draft and the card it is drawn with, from a set of
-preset cards that differ in colors, types and amount of text, or from a Scryfall
-search. The card is kept with the draft. The right column lists the draft's
-layers, the selection, the layouts and every problem found in its files, with the
-path to each. A draft that does not load shows its problems and draws nothing.
+The left column picks the draft, has the template's canvas under it, and picks the card
+the draft is drawn with, from a set of preset cards that differ in colors, types and
+amount of text, or from a Scryfall search. The card is kept with the draft. The right column has four sections, Layers,
+Selection, About and Problems, and the buttons that use or export the draft and
+open its JSON stay at the bottom of the column whatever the sections do. A section's
+heading is a button that collapses it down to the heading and opens it again. A
+collapsed section at the bottom of the column rests against the buttons, and the
+open sections share the room that is left. The line between two open sections is
+dragged, or moved with the up and down arrows, to give one more of it and the other
+less, and the column remembers which sections are collapsed and how much room each
+has, as it does the widths of the three columns. Layers and Selection start open,
+with the most room for the layers, and About and Problems start collapsed.
+Problems shows how many there are in its heading, red when any is an error, and opens
+by itself for a draft that does not load. About holds the template's name, id and
+layouts, its details, credits, fonts and text roles, and every problem found in the
+files is listed in Problems with the path to it. A draft that does not load shows its
+problems and draws nothing.
 
 Clicking the card selects what is drawn on top at that point, the item the preview
 outlines on hover, and clicking the empty space around the card lets go of the
@@ -345,8 +357,10 @@ its place and size, what it draws and when, its font role, size, color, alignmen
 spacing, padding, tracking and shadow. A layer has its position, opacity, blend mode
 and the conditions it draws under, and the slot its part reads. An art window has
 its place, the layer it sits above and its turn, and a symbol its place, alignment
-and scale. Layout holds the canvas size, resolution and turn, and Template details
-holds the name, description, author, license and credits. A number, a color or a
+and scale. Canvas, under the template in the left column, holds the canvas size, resolution and
+turn, which belong to the whole template, and it starts collapsed and opens with its own
+arrow like the sections of the right column. About holds the template's
+name, description, author, license and credits. A number, a color or a
 condition is checked as it is typed and its mistake shown under the field, a change
 is made a moment after typing stops, and an empty optional field takes its setting
 out so the box goes back to its default. The app checks every change against what
@@ -371,7 +385,7 @@ that nothing draws is outlined as a hole a card of that material would fall into
 Images are checked as they come in. A file that is not a PNG, or is far larger than a
 frame is, is refused with the reason, and one that is larger than the canvas, is a
 different size than the part's others or has no transparent pixels where a frame
-layer is usually cut out is taken with a warning. Under Template details, Fonts adds
+layer is usually cut out is taken with a warning. Under About, Fonts adds
 a `.ttf` or `.otf` file to the template, which keeps it in its `font` folder with its
 hash and the names it carries, and Text roles choose for each role the font it
 draws with, one of the template's or one of the engine's own.

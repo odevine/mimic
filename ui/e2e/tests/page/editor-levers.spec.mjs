@@ -227,7 +227,7 @@ test("an art window's levers include which layer it sits above", async ({ bridge
 
 test("the layout's canvas is edited in its own section, and the details are read again", async ({ bridge, page }) => {
   const editor = await ready(bridge, page);
-  await page.locator("#ed-layout-details > summary").click();
+  await editor.openCanvas();
   await expect(editor.lever("canvas-width")).toHaveValue("1000");
   await expect(editor.lever("canvas-dpi")).toHaveValue("800");
   const opens = bridge.calledWith("Studio.Open").length;
@@ -240,7 +240,7 @@ test("the layout's canvas is edited in its own section, and the details are read
 
 test("the template's name and details are edited, and a forked license is kept", async ({ bridge, page }) => {
   const editor = await ready(bridge, page, { template: (t) => ((t.license = "CC BY 4.0"), (t.author = { name: "Me" })) });
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(editor.lever("template-name")).toHaveValue("Mine");
   await expect(editor.lever("template-authorName")).toHaveValue("Me");
   await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");
@@ -256,14 +256,14 @@ test("the template's name and details are edited, and a forked license is kept",
 
 test("the license of a copy cannot be changed", async ({ bridge, page }) => {
   const editor = await ready(bridge, page, { meta: { forkedFrom: "mimic.m15 0.1.0", lockedCredits: 1, licenseLocked: true }, template: (t) => (t.license = "CC BY 4.0") });
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(editor.lever("template-license")).toHaveAttribute("readonly", "");
   await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");
 });
 
 test("credits are added, edited and removed, except the ones kept from a copied template", async ({ bridge, page }) => {
   const editor = await ready(bridge, page, { meta: { forkedFrom: "mimic.m15 0.1.0", lockedCredits: 1, licenseLocked: false } });
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   const credits = page.locator("#ed-credits .ed-credit");
   await expect(credits).toHaveCount(2);
   // The first came with the template that was copied
@@ -308,7 +308,7 @@ test("a layout that cannot be edited shows its levers and refuses them", async (
   await expect(editor.lever("lever-align")).toBeDisabled();
   await expect(editor.lever("canvas-width")).toBeDisabled();
   // The template's own fields are in template.json and stay open
-  await page.locator("#ed-template-details > summary").click();
+  await editor.openSection("about");
   await expect(editor.lever("template-name")).toBeEnabled();
 });
 

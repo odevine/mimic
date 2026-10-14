@@ -325,8 +325,10 @@ a dimmer type what the test card does not draw, with the reason on hover. Draggi
 moves the selection, and the handles on a text box, an art window or a symbol
 resize it. A layer moves but has no handles, since its image is drawn at its own
 size. A text box set on its baseline is outlined where its text is, and has no
-handles either, since its rectangle only says where the first baseline starts. Edges and middles snap to the card's and to the other items' within a few
-pixels, and holding Option or Alt turns that off. The arrow keys move the
+handles either, since its rectangle only says where the first baseline starts. Edges and middles snap to the card's own lines within a few pixels, and to
+another item's only when that item is marked as one to snap to. Holding Option or
+Alt turns snapping off, and while a box is dragged the guide says which of its edges
+is held and what lies on that line, which is outlined. The arrow keys move the
 selection one pixel, and ten with Shift. Raise and Lower change a layer's place in
 the stack.
 
@@ -361,8 +363,39 @@ with its layout kept, and text that would not is left unsaved until it is fixed.
 A template that does not load can be fixed here. A change made with a lever or on the
 preview shows in the open file, unless text typed there is waiting to be saved.
 
-Adding images and fonts and exporting a draft are not built yet, and each appears
-locked with the issue that tracks it.
+A layer shows the images of its part as a grid with a cell for each material its slot
+reads, a color, a pair of colors, gold, a land and so on. A cell with an image shows it
+small and its size, and Replace writes the chosen PNG over it, so the layer keeps its
+place and condition. A material with no image of its own says what draws it instead,
+the images of its colors blended for a pair or the part's `any` image, and a material
+that nothing draws is outlined as a hole a card of that material would fall into.
+Images are checked as they come in. A file that is not a PNG, or is far larger than a
+frame is, is refused with the reason, and one that is larger than the canvas, is a
+different size than the part's others or has no transparent pixels where a frame
+layer is usually cut out is taken with a warning. Under Template details, Fonts adds
+a `.ttf` or `.otf` file to the template, which keeps it in its `font` folder with its
+hash and the names it carries, and Text roles choose for each role the font it
+draws with, one of the template's or one of the engine's own.
+
+The plus beside the layers adds a text box that draws something the card has, an art
+window above a layer, or a layer for a part the template has or for a new part whose
+first image is chosen then. Duplicate copies the selection a little way down and to
+the right, and Delete takes it out of the layout, with its part and images left where
+they are. Each of these is a change that undo takes back, and a layer for a new part
+is undone with its part and image in one step. The app holds the files an undo
+needs in memory, up to a limit, and an undo that needs one it has let go of says so
+and leaves the draft as it is.
+
+Lock on the card keeps the preview from picking, hovering over, moving or resizing the
+selection, and the arrow keys leave it where it is. A click where it lies reaches
+what is beneath, and `L` locks and unlocks the selection. It stays in the layers list,
+marked with a lock, and its fields and the list still change it. Snap other items to
+it makes its edges and middle lines that a dragged item snaps to, and none are marked
+to begin with. Both are kept with the draft, beside its test card, and are not part of
+the template.
+
+Using a draft from the other modes and exporting it are not built yet, and each
+appears locked with the issue that tracks it.
 
 ## Features that are not built yet
 

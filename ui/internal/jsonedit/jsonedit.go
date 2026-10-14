@@ -181,6 +181,12 @@ func (n *Node) String() (string, bool) {
 // NewInt is a node that holds a whole number
 func NewInt(v int) *Node { return &Node{raw: []byte(fmt.Sprint(v))} }
 
+// NewString is a JSON string
+func NewString(v string) *Node {
+	raw, _ := json.Marshal(v)
+	return &Node{raw: raw}
+}
+
 // NewObject is an object with no keys
 func NewObject() *Node { return &Node{kind: Object, fields: map[string]*Node{}} }
 
@@ -195,6 +201,41 @@ func (n *Node) Set(name string, v *Node) error {
 	}
 	n.fields[name] = v
 	return nil
+}
+
+// SetBefore puts a new key into an object just before another key, or last when that
+// key is not there. A key already in the object keeps its place
+func (n *Node) SetBefore(name string, v *Node, before string) error {
+	if n == nil || n.kind != Object {
+		return errors.New("jsonedit: not an object")
+	}
+	if _, ok := n.fields[name]; ok {
+		n.fields[name] = v
+		return nil
+	}
+	n.fields[name] = v
+	for i, k := range n.keys {
+		if k == before {
+			n.keys = append(n.keys[:i], append([]string{name}, n.keys[i:]...)...)
+			return nil
+		}
+	}
+	n.keys = append(n.keys, name)
+	return nil
+}
+
+// KeyAfter is the key that follows another in an object, or empty when it is the
+// last or not there
+func (n *Node) KeyAfter(name string) string {
+	if n == nil || n.kind != Object {
+		return ""
+	}
+	for i, k := range n.keys {
+		if k == name && i+1 < len(n.keys) {
+			return n.keys[i+1]
+		}
+	}
+	return ""
 }
 
 // Delete takes a key out of an object and reports whether it was there
@@ -270,6 +311,29 @@ func (n *Node) MoveItem(from, to int) error {
 	n.items = append(n.items[:to], append([]*Node{it}, n.items[to:]...)...)
 	return nil
 }
+
+// InsertItem puts a value at a place in an array, where the place after the last item
+// appends
+func (n *Node) InsertItem(at int, v *Node) error {
+	if n == nil || n.kind != Array || at < 0 || at > len(n.items) {
+		return errors.New("jsonedit: no such place in the array")
+	}
+	n.items = append(n.items[:at], append([]*Node{v}, n.items[at:]...)...)
+	return nil
+}
+
+// RemoveItem takes an item out of an array and returns it
+func (n *Node) RemoveItem(at int) (*Node, error) {
+	if n == nil || n.kind != Array || at < 0 || at >= len(n.items) {
+		return nil, errors.New("jsonedit: no such place in the array")
+	}
+	it := n.items[at]
+	n.items = append(n.items[:at], n.items[at+1:]...)
+	return it, nil
+}
+
+// NewArray is an empty array
+func NewArray() *Node { return &Node{kind: Array} }
 
 // Compact writes the value on one line with no spaces, which is how a value is sent
 // to be put back

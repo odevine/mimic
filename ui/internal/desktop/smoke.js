@@ -266,6 +266,36 @@ async function flows(outDir) {
     $("ed-undo").click();
     await until("the lever's change to be undone", () => Number($("lever-fontSize").value) === was);
     notes.push("a lever edits the file and the JSON editor shows it");
+
+    // A text box is added from the dialog, which is saved, locking it is kept with the
+    // draft, and undo takes the box away
+    const boxKeys = async () => {
+      const src = await api.draftSource(draftId);
+      return Object.keys(JSON.parse(src.files.find((f) => f.name === "layouts/normal.json").content).textBoxes);
+    };
+    $("ed-add").click();
+    await until("the add dialog", () => $("ed-add-dialog").open);
+    $("ed-add-confirm").click();
+    await until("the add dialog to close", () => !$("ed-add-dialog").open);
+    const added = Date.now() + 20000;
+    while (!(await boxKeys()).includes("artist_2")) {
+      if (Date.now() > added) throw new Error("timed out waiting for the new text box to be saved");
+      await sleep(100);
+    }
+    await until("the new box to be selected", () => $("ed-selection-name").textContent === "artist_2");
+    $("ed-lock").click();
+    const locked = Date.now() + 20000;
+    while (!((await api.openDraft(draftId)).meta.locked || []).includes("normal/text:artist_2")) {
+      if (Date.now() > locked) throw new Error("timed out waiting for the lock to be kept");
+      await sleep(100);
+    }
+    $("ed-undo").click();
+    const gone = Date.now() + 20000;
+    while ((await boxKeys()).includes("artist_2")) {
+      if (Date.now() > gone) throw new Error("timed out waiting for the new text box to be undone");
+      await sleep(100);
+    }
+    notes.push("a text box is added, locked and undone");
   }
 
   return notes;

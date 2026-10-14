@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -292,3 +293,62 @@ func TestAnEmptyStoreListsNothing(t *testing.T) {
 }
 
 func jsonOf(v any) ([]byte, error) { return json.Marshal(v) }
+
+func TestMetaKeepsWhatIsLockedAndWhatSnaps(t *testing.T) {
+	s := newStore(t)
+	sum, _ := s.Create("Marks", 100)
+	want := Meta{Locked: []string{"normal/layer:background"}, SnapTo: []string{"normal/text:title", "normal/art:0"}}
+	if err := s.SaveMeta(sum.ID, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Meta(sum.ID)
+	if err != nil || !reflect.DeepEqual(got.Locked, want.Locked) || !reflect.DeepEqual(got.SnapTo, want.SnapTo) {
+		t.Fatalf("meta = %+v, %v", got, err)
+	}
+	valid(t, s, sum.ID)
+}
+
+func TestPutFileMakesTheFoldersAndRemoveFileTidiesThem(t *testing.T) {
+	s := newStore(t)
+	sum, _ := s.Create("Files", 100)
+	if err := s.PutFile(sum.ID, "parts/glow/any.png", []byte("one")); err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) string {
+		raw, err := os.ReadFile(filepath.Join(s.dir, sum.ID, filepath.FromSlash(name)))
+		if err != nil {
+			return ""
+		}
+		return string(raw)
+	}
+	if read("parts/glow/any.png") != "one" {
+		t.Fatal("the file was not written")
+	}
+	if err := s.PutFile(sum.ID, "parts/glow/any.png", []byte("two")); err != nil || read("parts/glow/any.png") != "two" {
+		t.Fatalf("the file was not replaced: %v", err)
+	}
+	if err := s.RemoveFile(sum.ID, "parts/glow/any.png"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, sum.ID, "parts", "glow")); !os.IsNotExist(err) {
+		t.Errorf("the empty folder was left: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, sum.ID, "parts", "background")); err != nil {
+		t.Errorf("a folder that still holds a file went too: %v", err)
+	}
+	if err := s.RemoveFile(sum.ID, "parts/glow/any.png"); err == nil {
+		t.Error("removed a file that is not there")
+	}
+	for _, name := range []string{"../x.png", "/x.png", "", "."} {
+		if err := s.PutFile(sum.ID, name, nil); err == nil {
+			t.Errorf("put %q was allowed", name)
+		}
+		if err := s.RemoveFile(sum.ID, name); err == nil {
+			t.Errorf("remove %q was allowed", name)
+		}
+	}
+	if err := s.PutFile("nope", "a.png", nil); err == nil {
+		t.Error("put into a draft that is not there")
+	}
+	valid(t, s, sum.ID)
+}

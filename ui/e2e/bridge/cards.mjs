@@ -127,6 +127,46 @@ export const standardTemplateDoc = () => ({
   credits: [{ name: "Original Artist", url: "https://example.com/art", note: "art" }, { name: "Mine too" }],
 });
 
+// What a draft holds in images and fonts, as the app reports it. A part has a cell for
+// each material its slot reads: an image of its own, a run blended from its colors, the
+// any image's cover, or nothing, which leaves a hole
+const LETTERS = "wubrg";
+export const slotKeys = (slot) => {
+  if (!slot) return ["any"];
+  const keys = ["any", ...LETTERS];
+  for (let i = 0; i < LETTERS.length; i++) for (let j = i + 1; j < LETTERS.length; j++) keys.push(LETTERS[i] + LETTERS[j]);
+  return [...keys, "gold", "artifact", "colorless", "land", "vehicle"];
+};
+export const partView = (name, slot, images = [], extra = {}) => {
+  const has = (k) => images.includes(k);
+  const materials = slotKeys(slot).map((key) => {
+    if (has(key)) return { key, state: "image", file: `parts/${name}/${key}.png`, width: 1000, height: 1400, bytes: 120000 };
+    if (key.length === 2 && [...key].every((c) => LETTERS.includes(c) && has(c))) return { key, state: "blended", from: [...key] };
+    if (has("any") && key !== "any") return { key, state: "any" };
+    return { key, state: "missing" };
+  });
+  return { name, ...(slot ? { slot } : {}), dir: `parts/${name}`, materials, ...extra };
+};
+const ROLES = [
+  ["title", "Card name, type line and power/toughness", "mimic-m15-title"],
+  ["body", "Rules text", "mimic-m15-body"],
+  ["body-italic", "Flavor text", "mimic-m15-body-italic"],
+  ["mana", "Mana and other card symbols", "mimic-m15-mana"],
+  ["small-caps", "Artist credit", "mimic-m15-small-caps"],
+  ["info", "Collector number and set code", "mimic-m15-info"],
+];
+export const assetsView = (parts, extra = {}) => ({
+  parts,
+  fonts: [],
+  roles: ROLES.map(([role, label, def]) => ({ role, label, standard: true, default: def })),
+  builtins: ROLES.map(([, , id]) => ({ id })),
+  slots: ["", "background", "pinlines", "twins", "ptBox", "crown", "indicator", "transform_icon", "fuse", "fuse_pinlines"].map((name) => ({ name, materials: slotKeys(name) })),
+  ...extra,
+});
+export const standardAssets = () => assetsView([partView("background", "", ["any"]), partView("frame", "background", [...LETTERS])]);
+// A one pixel image to stand for a thumbnail
+export const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 // source is a draft's files the bridge sends, kept as objects so a test can change them
 export class Source {
   constructor(layout = standardLayout(), template = standardTemplateDoc()) {

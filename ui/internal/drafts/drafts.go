@@ -73,6 +73,11 @@ type Meta struct {
 	// of its images
 	TestCard *card.Data `json:"testCard,omitempty"`
 	Face     int        `json:"face,omitempty"`
+	// Locked names the elements the editor will not select or move on the preview,
+	// and SnapTo the ones a dragged element snaps to. Each is "layout/kind:key". They
+	// are the author's aids and are not part of the template
+	Locked []string `json:"locked,omitempty"`
+	SnapTo []string `json:"snapTo,omitempty"`
 }
 
 // Slug turns a name into the folder name a draft with that name would take
@@ -384,6 +389,52 @@ func (s *Store) WriteFile(id, name string, data []byte) error {
 		return apierr.Newf(apierr.NotFound, "The template has no file %s", name)
 	}
 	return writeAtomic(file, data)
+}
+
+// PutFile writes a file of the draft, making the folders it is in, in one step. It is
+// how an image or font that was not there arrives
+func (s *Store) PutFile(id, name string, data []byte) error {
+	p, err := s.path(id)
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(name) || name == "." {
+		return apierr.Newf(apierr.BadRequest, "%q is not a file in the template", name)
+	}
+	if _, err := os.Stat(p); err != nil {
+		return apierr.New(apierr.NotFound, "That draft no longer exists")
+	}
+	file := filepath.Join(p, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return err
+	}
+	return writeAtomic(file, data)
+}
+
+// RemoveFile deletes a file of the draft, and the folders it leaves empty
+func (s *Store) RemoveFile(id, name string) error {
+	p, err := s.path(id)
+	if err != nil {
+		return err
+	}
+	if !fs.ValidPath(name) || name == "." {
+		return apierr.Newf(apierr.BadRequest, "%q is not a file in the template", name)
+	}
+	file := filepath.Join(p, filepath.FromSlash(name))
+	if st, err := os.Stat(file); err != nil || !st.Mode().IsRegular() {
+		return apierr.Newf(apierr.NotFound, "The template has no file %s", name)
+	}
+	if err := os.Remove(file); err != nil {
+		return err
+	}
+	// A folder that held only this file goes too, up to the draft's own folder, and
+	// stops at the first one that still holds something
+	for dir := filepath.Dir(file); dir != p; dir = filepath.Dir(dir) {
+		if err := os.Remove(dir); err != nil {
+			break
+		}
+	}
+	return nil
 }
 
 // Meta reads what the editor remembers about a draft. A draft with nothing

@@ -520,3 +520,195 @@
   background: var(--accent-weak);
   color: var(--text);
 }
+
+/* Locking an item, and the items a drag snaps to */
+.ed-marks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.ed-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ed-element-actions {
+  margin-bottom: 8px;
+}
+
+.ed-layer-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.ed-layer-flags {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--text-dim);
+}
+
+.ed-layer-flags .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ed-box.sel.locked {
+  outline-style: dotted;
+}
+
+/* The images of a part, a cell for each material */
+.ed-images {
+  margin: 12px 0;
+}
+
+.ed-images-note {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.ed-problem {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.ed-grid-group h5 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.ed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 6px;
+}
+
+.ed-cell {
+  position: relative;
+  display: flex;
+}
+
+.ed-cell-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-cell-main:hover {
+  background: var(--accent-weak);
+}
+
+.ed-cell[data-state="missing"] .ed-cell-main {
+  border-style: dashed;
+  border-color: var(--warn);
+}
+
+.ed-cell[data-state="blended"] .ed-cell-main,
+.ed-cell[data-state="any"] .ed-cell-main,
+.ed-cell[data-state="extra"] .ed-cell-main {
+  border-style: dashed;
+}
+
+.ed-cell-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-radius: 3px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 10px 10px;
+  overflow: hidden;
+}
+
+.ed-cell-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.ed-cell[data-state="missing"] .ed-cell-thumb,
+.ed-cell[data-state="blended"] .ed-cell-thumb,
+.ed-cell[data-state="any"] .ed-cell-thumb {
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 18px;
+}
+
+.ed-cell[data-state="missing"] .ed-cell-thumb {
+  color: var(--warn);
+}
+
+.ed-cell-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ed-cell-note {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.ed-cell-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 2px;
+  line-height: 0;
+}
+
+.ed-cell-remove .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* The fonts the template ships */
+.ed-fonts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.ed-font {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.ed-font-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ed-font-license {
+  width: 100%;
+  font-size: 12px;
+}
+
+.ed-font-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ed-font.missing .ed-font-name {
+  color: var(--warn);
+}

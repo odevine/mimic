@@ -6,8 +6,7 @@
   },
   "Settings.Capabilities": {
     "editor.assets": {
-      "state": "planned",
-      "reason": "Adding and replacing images is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.coverage": {
       "state": "planned",
@@ -18,8 +17,7 @@
       "reason": "Exporting a draft as a bundle is planned. Tracked in #115"
     },
     "editor.fonts": {
-      "state": "planned",
-      "reason": "Adding fonts to a template is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.json": {
       "state": "live"

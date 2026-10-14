@@ -41,18 +41,23 @@ Settings.Resolution() -> settings.Resolutions !
 Settings.Resources(string) -> settings.ResourcesView
 Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
 Studio.Apply(studio.ApplyRequest) -> studio.ApplyResult !
+Studio.Assets(string) -> studio.AssetsView !
 Studio.CheckFile(studio.CheckRequest) -> studio.CheckResult !
 Studio.Create(studio.CreateRequest) -> drafts.Summary !
 Studio.Delete(string) !
 Studio.Describe(studio.DescribeRequest) -> studio.DescribeView !
 Studio.Fork(studio.ForkRequest) -> drafts.Summary !
+Studio.ImportFont(studio.FontRequest) -> studio.ImportResult !
+Studio.ImportImage(studio.ImageRequest) -> studio.ImportResult !
 Studio.List() -> []drafts.Summary !
 Studio.Open(string) -> studio.OpenView !
 Studio.Presets() -> []studio.Preset
 Studio.Rename(studio.RenameRequest) -> drafts.Summary !
 Studio.Render(studio.RenderRequest) -> render.Started !
+Studio.SetMarks(studio.MarksRequest) !
 Studio.SetTestCard(studio.TestCardRequest) !
 Studio.Source(string) -> studio.SourceView !
+Studio.Thumbs(studio.ThumbRequest) -> map[string]string !
 Studio.Vocabulary() -> studio.VocabView
 System.Confirm(desktop.ConfirmRequest) -> bool
 System.OpenURL(string) !
@@ -358,6 +363,9 @@ draftedit.Op struct {
 	value custom json.RawMessage (omitempty)
 	file string (omitempty)
 	content string (omitempty)
+	before string (omitempty)
+	as string (omitempty)
+	stash string (omitempty)
 }
 
 draftedit.Rect struct {
@@ -373,6 +381,8 @@ drafts.Meta struct {
 	licenseLocked bool (omitempty)
 	testCard card.Data (omitempty)
 	face int (omitempty)
+	locked []string (omitempty)
+	snapTo []string (omitempty)
 }
 
 drafts.Summary struct {
@@ -614,6 +624,18 @@ studio.ApplyResult struct {
 	diagnostics []studio.DiagnosticView
 }
 
+studio.AssetsView struct {
+	parts []studio.PartView
+	fonts []studio.FontView
+	roles []studio.RoleView
+	builtins []studio.BuiltinView
+	slots []studio.SlotView
+}
+
+studio.BuiltinView struct {
+	id string
+}
+
 studio.CheckRequest struct {
 	id string
 	file string
@@ -657,10 +679,43 @@ studio.FileView struct {
 	content string
 }
 
+studio.FontRequest struct {
+	id string
+	path string
+	assign []string
+}
+
+studio.FontView struct {
+	id string
+	file string
+	family string (omitempty)
+	style string (omitempty)
+	source string (omitempty)
+	license string (omitempty)
+	missing bool (omitempty)
+}
+
 studio.ForkRequest struct {
 	template string
 	version string
 	name string
+}
+
+studio.ImageRequest struct {
+	id string
+	part string
+	material string
+	slot string
+	path string
+}
+
+studio.ImportResult struct {
+	rev int
+	inverse []draftedit.Op
+	valid bool
+	diagnostics []studio.DiagnosticView
+	id string
+	warnings []string
 }
 
 studio.ItemView struct {
@@ -685,12 +740,36 @@ studio.LayoutView struct {
 	serves []frame.Shape
 }
 
+studio.MarksRequest struct {
+	id string
+	locked []string
+	snapTo []string
+}
+
+studio.MaterialView struct {
+	key string
+	state string
+	file string (omitempty)
+	width int (omitempty)
+	height int (omitempty)
+	bytes int64 (omitempty)
+	from []string (omitempty)
+}
+
 studio.OpenView struct {
 	draft drafts.Summary
 	meta drafts.Meta
 	layouts []studio.LayoutView
 	diagnostics []studio.DiagnosticView
 	valid bool
+}
+
+studio.PartView struct {
+	name string
+	slot string (omitempty)
+	dir string
+	materials []studio.MaterialView
+	problems []string (omitempty)
 }
 
 studio.Preset struct {
@@ -725,9 +804,23 @@ studio.RenderRequest struct {
 	face int
 }
 
+studio.RoleView struct {
+	role string
+	label string
+	standard bool
+	font string (omitempty)
+	builtin string (omitempty)
+	default string (omitempty)
+}
+
 studio.SizeView struct {
 	width int
 	height int
+}
+
+studio.SlotView struct {
+	name string
+	materials []string
 }
 
 studio.SourceView struct {
@@ -738,6 +831,12 @@ studio.TestCardRequest struct {
 	id string
 	card card.Data
 	face int
+}
+
+studio.ThumbRequest struct {
+	id string
+	files []string
+	edge int
 }
 
 studio.VocabView struct {

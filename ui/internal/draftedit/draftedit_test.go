@@ -521,7 +521,8 @@ func TestChangesAreRefusedWithTheReason(t *testing.T) {
 	}{
 		{"no path", Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Value: raw(`1`)}, "1 to 4 keys"},
 		{"a path too deep", set(KindText, "title", `1`, "a", "b", "c", "d", "e"), "1 to 4 keys"},
-		{"a field with a dash", set(KindText, "title", `1`, "font-size"), "not the name of a field"},
+		{"a field with a space", set(KindText, "title", `1`, "font size"), "not the name of a field"},
+		{"a field that starts with a dash", set(KindText, "title", `1`, "-size"), "not the name of a field"},
 		{"a field that leaves the element", set(KindText, "title", `1`, ".."), "not the name of a field"},
 		{"a value that is not JSON", set(KindText, "title", `{`, "text", "fontSize"), "not JSON"},
 		{"a missing value", Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Path: []string{"x"}}, "not JSON"},

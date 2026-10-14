@@ -7,9 +7,9 @@ const mine = draftSummary("mine", "Mine");
 // The editor on one template with its test card drawn and its layout described, and
 // the preview the size of a real one: 400 pixels across for a card 1000 pixels across,
 // so a pixel on screen is two and a half of the finished image's
-async function ready(bridge, page, { describe } = {}) {
+async function ready(bridge, page, { describe, meta } = {}) {
   bridge.reply("Studio.List", [mine]);
-  bridge.reply("Studio.Open", draftView(mine));
+  bridge.reply("Studio.Open", draftView(mine, meta ? { meta } : {}));
   if (describe) bridge.reply("Studio.Describe", describe);
   await bridge.boot();
   const editor = new EditorPage(page);
@@ -152,7 +152,8 @@ test("an edge near a line snaps to it, and the guide shows while it is held", as
 });
 
 test("the items a snap lines up with are outlined while it is held", async ({ bridge, page }) => {
-  const { editor, point } = await ready(bridge, page);
+  // The title and the type line are marked as lines to snap to, and nothing else is
+  const { editor, point } = await ready(bridge, page, { meta: { snapTo: ["normal/text:title", "normal/text:type"] } });
   // The oracle box's left edge is at 100, as the title's and the type's are, and a pixel on screen is two and a half
   await drag(page, point(500, 1000), { x: -3, y: 0 });
   await expect(editor.guides.first()).toContainText("left to title left, type left");

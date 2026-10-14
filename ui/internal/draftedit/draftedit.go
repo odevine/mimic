@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/odevine/mimic/engine/template"
@@ -43,6 +44,14 @@ const (
 	OpUnset = "unset"
 	// OpReplace writes a whole file
 	OpReplace = "replace"
+	// OpAdd puts a new layer, text box or art window in a layout, OpDelete takes one
+	// out and OpDuplicate copies one
+	OpAdd       = "add"
+	OpDelete    = "delete"
+	OpDuplicate = "duplicate"
+	// OpPut writes an image or font file the blobs hold, and OpDrop removes one
+	OpPut  = "put"
+	OpDrop = "drop"
 )
 
 // Rect is a position and size in the finished image
@@ -83,6 +92,23 @@ type Op struct {
 	// is a batch of its own
 	File    string `json:"file,omitempty"`
 	Content string `json:"content,omitempty"`
+	// Before is the text box an add puts the new one in front of, which keeps the
+	// file's order when a deletion is undone. Empty puts it last
+	Before string `json:"before,omitempty"`
+	// As is the key a duplicate gives the copy of a layer or text box. A copy of an
+	// art window is the next one in the list
+	As string `json:"as,omitempty"`
+	// Stash names the bytes a put writes, which the caller holds as Blobs
+	Stash string `json:"stash,omitempty"`
+}
+
+// Blobs holds file contents by a name, so an operation can carry a whole image or
+// font without the bytes crossing the bridge
+type Blobs interface {
+	// Get returns what was stored under a name
+	Get(name string) ([]byte, bool)
+	// Put stores bytes and returns the name they are held under
+	Put(data []byte) string
 }
 
 // ErrExtends is the refusal for a layout that builds on another, whose numbers are
@@ -91,8 +117,10 @@ var ErrExtends = errors.New("this layout extends another one, so its positions a
 
 // Result is what a batch of operations changed
 type Result struct {
-	// Files are the files that changed, by their path in the draft
-	Files map[string][]byte
+	// Files are the files that changed, by their path in the draft, and Remove the
+	// files that are gone
+	Files  map[string][]byte
+	Remove []string
 	// Inverse undoes the batch when applied in order
 	Inverse []Op
 }
@@ -102,8 +130,12 @@ var layoutName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 // Apply carries out the operations in order against the draft's files and returns
 // the files they change. Nothing is written, so a batch with a bad operation
 // changes nothing
-func Apply(fsys fs.FS, ops []Op) (*Result, error) {
-	w := &work{fsys: fsys, layouts: map[string]*layout{}}
+func Apply(fsys fs.FS, ops []Op) (*Result, error) { return ApplyWith(fsys, ops, nil) }
+
+// ApplyWith is Apply for operations that read or write file contents, which are
+// held in blobs
+func ApplyWith(fsys fs.FS, ops []Op, blobs Blobs) (*Result, error) {
+	w := &work{fsys: fsys, layouts: map[string]*layout{}, blobs: blobs}
 	res := &Result{Files: map[string][]byte{}}
 	for _, op := range ops {
 		if op.Op == OpReplace && len(ops) > 1 {
@@ -117,6 +149,9 @@ func Apply(fsys fs.FS, ops []Op) (*Result, error) {
 			return nil, fmt.Errorf("%s: %w", describe(op, i), err)
 		}
 		inverse = append(inverse, inv)
+	}
+	if op, ok := w.nameMinEngine(); ok {
+		inverse = append(inverse, op)
 	}
 	for i, j := 0, len(inverse)-1; i < j; i, j = i+1, j-1 {
 		inverse[i], inverse[j] = inverse[j], inverse[i]
@@ -133,7 +168,40 @@ func Apply(fsys fs.FS, ops []Op) (*Result, error) {
 	for name, data := range w.replaced {
 		res.Files[name] = data
 	}
+	for name, data := range w.files {
+		if data == nil {
+			res.Remove = append(res.Remove, name)
+		} else {
+			res.Files[name] = data
+		}
+	}
+	sort.Strings(res.Remove)
 	return res, nil
+}
+
+// MinEngineForFonts is the first engine release that reads the fonts and roles a
+// template defines. A template that defines either has to name an engine release,
+// and an edit that gives it its first font or role names this one
+const MinEngineForFonts = "0.19.0"
+
+// nameMinEngine names the engine release a template needs when an edit has just given
+// it fonts or roles and it names none, and returns the operation that takes it away
+func (w *work) nameMinEngine() (Op, bool) {
+	if !w.sourceChanged || w.source == nil {
+		return Op{}, false
+	}
+	defines := func(key string) bool {
+		n := w.source.Field(key)
+		return n != nil && n.Kind() == jsonedit.Object && len(n.Keys()) > 0
+	}
+	if !defines("fonts") && !defines("roles") {
+		return Op{}, false
+	}
+	if _, named := w.source.Field("minEngine").String(); named {
+		return Op{}, false
+	}
+	_ = w.source.Set("minEngine", jsonedit.NewString(MinEngineForFonts))
+	return Op{Op: OpUnset, Kind: KindTemplate, Path: []string{"minEngine"}}, true
 }
 
 // Editable reports whether a layout's numbers can be changed here, which they cannot
@@ -145,6 +213,9 @@ func Editable(fsys fs.FS, layoutName string) error {
 }
 
 func describe(op Op, i int) string {
+	if op.File != "" && op.Key == "" {
+		return fmt.Sprintf("%s of %s", op.Op, op.File)
+	}
 	if op.Key == "" {
 		return fmt.Sprintf("operation %d (%s)", i+1, op.Op)
 	}
@@ -161,6 +232,9 @@ type work struct {
 	sourceChanged bool
 	// replaced is the files a replace wrote
 	replaced map[string][]byte
+	blobs    Blobs
+	// files is the images and fonts a batch has put, or dropped when nil
+	files map[string][]byte
 }
 
 type layout struct {
@@ -232,6 +306,10 @@ func (w *work) apply(op Op) (Op, error) {
 		return w.replace(op)
 	case OpSet, OpUnset:
 		return w.change(op)
+	case OpPut:
+		return w.put(op)
+	case OpDrop:
+		return w.drop(op)
 	}
 	l, err := w.layout(op.Layout)
 	if err != nil {
@@ -244,6 +322,12 @@ func (w *work) apply(op Op) (Op, error) {
 		return w.resize(l, op)
 	case OpReorder:
 		return w.reorder(l, op)
+	case OpAdd:
+		return w.add(l, op)
+	case OpDelete:
+		return w.delete(l, op)
+	case OpDuplicate:
+		return w.duplicate(l, op)
 	}
 	return Op{}, fmt.Errorf("%q is not an operation", op.Op)
 }
@@ -442,7 +526,8 @@ func (w *work) reorder(l *layout, op Op) (Op, error) {
 	return Op{Op: OpReorder, Layout: op.Layout, Kind: op.Kind, Key: op.Key, To: from}, nil
 }
 
-var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// fieldName is a key a path can name. A hyphen is allowed since a role is named with them
+var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 // maxPath is how deep a field can be, which is deeper than any the manifest has
 const maxPath = 4
@@ -522,6 +607,13 @@ func (w *work) change(op Op) (Op, error) {
 		}
 	} else {
 		old = node.DeletePath(op.Path)
+		// A list of fonts, roles or variants that has nothing left in it is taken out
+		// too, so the file is as it was before the first one was added
+		if emptied := op.Path[0]; len(op.Path) > 1 && (emptied == "fonts" || emptied == "roles" || emptied == "variants") {
+			if list := node.Field(emptied); list != nil && list.Kind() == jsonedit.Object && len(list.Keys()) == 0 {
+				node.Delete(emptied)
+			}
+		}
 	}
 	changed()
 	if old == nil {

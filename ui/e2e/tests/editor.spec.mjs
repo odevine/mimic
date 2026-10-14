@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect } from "../fixtures.mjs";
+import { solidPng } from "../png.mjs";
 
 // Drafts are the app's own files, so these tests read and change them where the
 // scratch folder keeps them
@@ -426,4 +427,174 @@ test("a template that does not load can be fixed in the JSON editor", async ({ e
   await expect.poll(async () => await readFile(file, "utf8")).toBe(good);
   await expect(editor.problems).toHaveCount(0);
   await editor.waitForPreview();
+});
+
+// previewPixel is a pixel of the card as the page shows it
+const previewPixel = (editor, x, y) =>
+  editor.preview.evaluate(
+    (img, [px, py]) => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      return [...ctx.getImageData(px, py, 1, 1).data];
+    },
+    [x, y],
+  );
+
+test("an image brought in replaces the layer's and the card is drawn with it, and undo and redo bring each back", async ({ editor, scratch, page }) => {
+  await editor.create("Images", 100);
+  const file = draftFile(scratch, "images", "parts", "background", "any.png");
+  const original = await readFile(file);
+  await editor.layers.filter({ hasText: "background" }).click();
+  await expect(editor.images.locator("h4")).toHaveText("Images of background");
+  await expect(editor.cells).toHaveCount(1);
+  await expect(editor.images.locator(".ed-cell-thumb img")).toHaveCount(1);
+
+  const red = solidPng(272, 370, [200, 20, 20, 255]);
+  await scratch.offer("red.png", red);
+  const src = await editor.preview.getAttribute("src");
+  await editor.cells.first().locator(".ed-cell-main").click();
+  await expect.poll(async () => (await readFile(file)).equals(red)).toBe(true);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  await editor.waitForPreview();
+  const [r, g] = await previewPixel(editor, 2, 2);
+  expect(r).toBeGreaterThan(150);
+  expect(g).toBeLessThan(60);
+
+  const drawnRed = await editor.preview.getAttribute("src");
+  await editor.undoButton.click();
+  await expect.poll(async () => (await readFile(file)).equals(original)).toBe(true);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(drawnRed);
+  await editor.waitForPreview();
+  const [r2, g2] = await previewPixel(editor, 2, 2);
+  expect(r2).toBeGreaterThan(200);
+  expect(g2).toBeGreaterThan(150);
+  const drawnOriginal = await editor.preview.getAttribute("src");
+  await editor.redoButton.click();
+  await expect.poll(async () => (await readFile(file)).equals(red)).toBe(true);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(drawnOriginal);
+});
+
+test("an image that is not a PNG is refused with the reason and the template is left alone", async ({ editor, scratch, page }) => {
+  await editor.create("Refuse image", 100);
+  const file = draftFile(scratch, "refuse-image", "parts", "background", "any.png");
+  const original = await readFile(file);
+  await editor.layers.filter({ hasText: "background" }).click();
+  await scratch.offer("fake.png", "this is not an image");
+  await editor.cells.first().locator(".ed-cell-main").click();
+  await expect(page.locator("#toasts")).toContainText("not a PNG");
+  expect((await readFile(file)).equals(original)).toBe(true);
+  await expect(editor.undoButton).toBeDisabled();
+});
+
+test("a layer for a new part makes the part and its folder, and one undo takes both away", async ({ editor, scratch, page }) => {
+  await editor.create("New layer", 100);
+  const dir = draftFile(scratch, "new-layer");
+  const template = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
+  const layout = await readFile(path.join(dir, "layouts", "normal.json"), "utf8");
+  await scratch.offer("glow.png", solidPng(272, 370, [10, 200, 10, 90]));
+
+  await editor.addButton.click();
+  await editor.addKind.selectOption("layer");
+  await editor.addPart.selectOption({ label: "A new part from a PNG image" });
+  await editor.addPartName.fill("glow");
+  await editor.addConfirm.click();
+  await expect(editor.addDialog).toBeHidden();
+  await expect(editor.layers.filter({ hasText: "glow" })).toHaveCount(1);
+  await expect(editor.selectionName).toHaveText("glow");
+  await expect(editor.images.locator("h4")).toHaveText("Images of glow");
+
+  const after = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
+  expect(after.parts.glow).toEqual({ dir: "parts/glow" });
+  expect((await readFile(path.join(dir, "parts", "glow", "any.png"))).length).toBeGreaterThan(0);
+  const stack = JSON.parse(await readFile(path.join(dir, "layouts", "normal.json"), "utf8")).stack;
+  expect(stack.map((e) => e.id || e.part)).toEqual(["background", "glow"]);
+  await editor.waitForPreview();
+  await expect(editor.problems).toHaveCount(0);
+
+  await editor.undoButton.click();
+  await expect(editor.layers.filter({ hasText: "glow" })).toHaveCount(0);
+  expect(await readFile(path.join(dir, "layouts", "normal.json"), "utf8")).toBe(layout);
+  expect(JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).parts).toEqual(template.parts);
+  await expect.poll(async () => readFile(path.join(dir, "parts", "glow", "any.png")).then(() => true, () => false)).toBe(false);
+  await expect(editor.undoButton).toBeDisabled();
+});
+
+test("a text box is added, copied and deleted, and undoing all of it restores the layout as it was", async ({ editor, scratch, page }) => {
+  await editor.create("Boxes", 100);
+  const file = draftFile(scratch, "boxes", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+
+  await editor.addButton.click();
+  await editor.addDraws.selectOption("artist");
+  await editor.addConfirm.click();
+  await expect(editor.addDialog).toBeHidden();
+  await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).toContain("artist_2");
+  await expect(editor.selectionName).toHaveText("artist_2");
+
+  await editor.layers.filter({ hasText: "oracle" }).click();
+  await editor.duplicateButton.click();
+  await expect(editor.selectionName).toHaveText("oracle_copy");
+  const boxes = JSON.parse(await readFile(file, "utf8")).textBoxes;
+  expect(boxes["oracle_copy"].draws).toBe("oracle");
+  expect(boxes["oracle_copy"].rect.x).toBe(boxes.oracle.rect.x + 8);
+
+  await editor.deleteButton.click();
+  await expect(editor.selection).toBeHidden();
+  await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).not.toContain("oracle_copy");
+
+  for (let i = 0; i < 3; i++) await editor.undoButton.click();
+  await expect(editor.undoButton).toBeDisabled();
+  expect(await readFile(file, "utf8")).toBe(original);
+});
+
+test("a font is brought in, given to a role and the card is still drawn", async ({ editor, scratch, page }) => {
+  await editor.create("Fonts", 100);
+  const dir = draftFile(scratch, "fonts");
+  await scratch.offer("Plantin.ttf", { path: path.resolve(import.meta.dirname, "../../../engine/fonts/embedded/m15/plantin-body.ttf") });
+  await page.locator("#ed-template-details > summary").click();
+  await editor.fontAdd.click();
+  await expect(editor.fonts).toHaveCount(1);
+  const added = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
+  const [id, entry] = Object.entries(added.fonts)[0];
+  expect(entry.file).toBe(`font/${id}.ttf`);
+  expect(entry.sha256).toHaveLength(64);
+  expect((await readFile(path.join(dir, entry.file))).length).toBeGreaterThan(1000);
+
+  await page.getByLabel(/License of the font/).fill("SIL OFL 1.1");
+  await page.getByLabel(/License of the font/).blur();
+  await expect.poll(async () => JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).fonts[id].license).toBe("SIL OFL 1.1");
+
+  await page.locator("#ed-role-body").selectOption(`font:${id}`);
+  await expect.poll(async () => JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).roles?.body?.font).toBe(id);
+  await editor.waitForPreview();
+  await expect(editor.problems).toHaveCount(0);
+
+  // Removing the font frees the role first, so the template still loads
+  await editor.fonts.first().getByRole("button", { name: /Remove the font/ }).click();
+  await expect(editor.fonts).toHaveCount(0);
+  const gone = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
+  expect(gone.fonts ?? {}).toEqual({});
+  expect(gone.roles?.body).toBeUndefined();
+  await expect(editor.problems).toHaveCount(0);
+});
+
+test("what is locked and what is snapped to is kept with the template across a reload", async ({ editor, scratch, page }) => {
+  await editor.create("Marks", 100);
+  await editor.layers.filter({ hasText: "title" }).click();
+  await editor.lock.check();
+  await editor.layers.filter({ hasText: "oracle" }).click();
+  await editor.snap.check();
+  const meta = draftFile(scratch, "marks", ".studio.json");
+  await expect.poll(async () => JSON.parse(await readFile(meta, "utf8")).locked).toEqual(["normal/text:title"]);
+  expect(JSON.parse(await readFile(meta, "utf8")).snapTo).toEqual(["normal/text:oracle"]);
+
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await page.locator('button[data-mode="editor"]').click();
+  await editor.waitForPreview();
+  await expect(editor.layers.filter({ hasText: "title" }).locator("[aria-label='Locked on the card']")).toHaveCount(1);
+  await expect(editor.layers.filter({ hasText: "oracle" }).locator("[aria-label='Others snap to it']")).toHaveCount(1);
 });

@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { $, h, isTyping } from "../dom.js";
+import { $, h, icon, isTyping } from "../dom.js";
 import { app, signal, effect, batch } from "../state.js";
 import { toast } from "../components/toast.js";
 import {
@@ -17,6 +17,9 @@ import {
 } from "../editor.js";
 import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
 import { createHistory } from "../editorhistory.js";
+import { afterOps, isMarked, refsFor, withMark } from "../editormarks.js";
+import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
+import { initAssets } from "./editorassets.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
@@ -47,6 +50,10 @@ const store = {
   // one parsed, or null for one that is not JSON, and the names the fields take
   source: signal(null),
   vocab: signal(null),
+  // the draft's images and fonts, from the app, or null until read
+  assets: signal(null),
+  // which items are locked and which ones a drag snaps to, as "layout/kind:key"
+  marks: signal({ locked: [], snap: [] }),
 };
 
 const history = createHistory();
@@ -203,10 +210,14 @@ async function open(id) {
     store.card.value = start ? start.card : null;
     store.face.value = start ? start.face : 0;
     store.preset.value = start ? start.preset : "";
+    store.marks.value = { locked: view.meta.locked || [], snap: view.meta.snapTo || [] };
   });
+  savedMarks = JSON.stringify([id, store.marks.peek()]);
   clearPreview();
   store.source.value = null;
+  store.assets.value = null;
   loadSource();
+  loadAssets();
   if (!view.valid) {
     finish("error", "This template does not load", "The problems are listed on the right");
     return;
@@ -550,9 +561,55 @@ async function loadSource() {
   }
 }
 
+async function loadAssets() {
+  const id = store.current.peek();
+  if (!id) return;
+  try {
+    const assets = await api.draftAssets(id);
+    if (id === store.current.peek()) store.assets.value = assets;
+  } catch {
+    if (id === store.current.peek()) store.assets.value = null;
+  }
+}
+
+// changesAssets says whether edits can change what the draft holds in images, fonts and
+// parts, so they are read again
+const changesAssets = (ops) =>
+  ops.some((op) => ["put", "drop", "add", "delete", "duplicate", "replace"].includes(op.op) || op.kind === "template" || op.kind === "part");
+
 function select(ref) {
   flushNudge();
   store.selected.value = ref || "";
+}
+
+// --- locking and snapping ---
+
+let savedMarks = "";
+
+// saveMarks keeps the marks with the draft, when they are not what it has already
+function saveMarks() {
+  const id = store.current.peek();
+  const marks = store.marks.peek();
+  const text = JSON.stringify([id, marks]);
+  if (!id || text === savedMarks) return;
+  savedMarks = text;
+  api.setDraftMarks(id, marks.locked, marks.snap).catch((err) => toast(err.message, "err", 6000));
+}
+
+// lockedRefs are the items of the layout shown that cannot be picked on the card
+const lockedRefs = (view) => refsFor(store.marks.peek().locked, view.layout);
+
+const isLocked = (view, item) => !!view && !!item && isMarked(store.marks.peek().locked, view.layout, refOf(item));
+
+// setMark locks or unlocks the selection, or makes it a line others snap to or not
+function setMark(which, on) {
+  const view = store.layout.peek();
+  const item = selectedItem();
+  if (!view || !item) return;
+  flushNudge();
+  const marks = store.marks.peek();
+  store.marks.value = { ...marks, [which]: withMark(marks[which], view.layout, refOf(item), on) };
+  saveMarks();
 }
 
 // --- edits ---
@@ -570,21 +627,39 @@ function syncHistory() {
   store.canRedo.value = history.canRedo;
 }
 
+// settle takes up the draft after edits were made, however they were made: what the
+// app says of it, what it draws, and what it holds
+async function settle(id, res, ops) {
+  const marks = afterOps(store.marks.peek(), ops);
+  if (JSON.stringify(marks) !== JSON.stringify(store.marks.peek())) {
+    store.marks.value = marks;
+    saveMarks();
+  }
+  await adopt(id, res, ops);
+  const reads = [loadLayout(), loadSource()];
+  if (changesAssets(ops)) reads.push(loadAssets());
+  await Promise.all(reads);
+  scheduleRender();
+}
+
 // commit makes edits to the draft, one batch after another, and remembers how to take
-// them back. merge marks an edit that joins the one before it when they are close
-function commit(ops, label, merge) {
+// them back. merge marks an edit that joins the one before it when they are close.
+// folded is what an earlier change that belongs to this one undoes, so the two are one
+// step of undo. It resolves to whether the edits were made
+function commit(ops, label, merge, folded) {
   const id = store.current.peek();
   const run = async () => {
     try {
       const res = await api.applyDraft(id, ops);
-      history.record({ ops, inverse: res.inverse, label, merge });
+      if (folded) history.record({ ops: [], inverse: [...res.inverse, ...folded], label });
+      else history.record({ ops, inverse: res.inverse, label, merge });
       syncHistory();
-      await adopt(id, res, ops);
-      await Promise.all([loadLayout(), loadSource()]);
-      scheduleRender();
+      await settle(id, res, ops);
+      return true;
     } catch (err) {
       toast(err.message, "err", 6000);
       await loadLayout();
+      return false;
     } finally {
       store.live.value = null;
     }
@@ -593,16 +668,29 @@ function commit(ops, label, merge) {
   return chain;
 }
 
-// replay makes the edits of an undo or a redo. One the app refuses leaves the history
-// where it was
-function replay(ops, undoing) {
+// recordApplied remembers a change the app made on its own, such as an image brought
+// in, which it describes by the edits that undo it. The edits that make it again are
+// known once it has been undone
+function recordApplied(res, label, ops = [{ op: "put" }]) {
   const id = store.current.peek();
+  history.record({ ops: [], inverse: res.inverse, label });
+  syncHistory();
+  const run = () => settle(id, res, ops);
+  chain = chain.then(run, run);
+  return chain;
+}
+
+// replay makes the edits of an undo or a redo, and keeps what the app says undoes
+// them. One the app refuses leaves the history where it was
+function replay(entry, undoing) {
+  const id = store.current.peek();
+  const ops = undoing ? entry.inverse : entry.ops;
   const run = async () => {
     try {
       const res = await api.applyDraft(id, ops);
-      await adopt(id, res, ops);
-      await Promise.all([loadLayout(), loadSource()]);
-      scheduleRender();
+      if (undoing) entry.ops = res.inverse;
+      else entry.inverse = res.inverse;
+      await settle(id, res, ops);
     } catch (err) {
       toast(err.message, "err", 6000);
       if (undoing) history.redo();
@@ -620,7 +708,7 @@ function undo() {
   if (!entry) return;
   syncHistory();
   app.status.value = `Undid: ${entry.label}`;
-  replay(entry.inverse, true);
+  replay(entry, true);
 }
 
 function redo() {
@@ -629,7 +717,7 @@ function redo() {
   if (!entry) return;
   syncHistory();
   app.status.value = `Redid: ${entry.label}`;
-  replay(entry.ops, false);
+  replay(entry, false);
 }
 
 // --- nudging ---
@@ -641,7 +729,7 @@ let nudge = null;
 function nudgeSelected(dx, dy) {
   const item = selectedItem();
   const view = store.layout.peek();
-  if (!item || !view || !view.editable) return;
+  if (!item || !view || !view.editable || isLocked(view, item)) return;
   if (nudge && nudge.ref !== refOf(item)) flushNudge();
   nudge = nudge || { ref: refOf(item), item, dx: 0, dy: 0, timer: 0 };
   nudge.dx += dx;
@@ -691,11 +779,11 @@ function onPointerDown(e) {
   const overlay = $("ed-overlay");
   const handle = e.target.closest && e.target.closest(".ed-handle");
   const current = selectedItem();
-  if (handle && current && view.editable) {
+  if (handle && current && view.editable && !isLocked(view, current)) {
     gesture = { kind: "resize", handle: handle.dataset.handle, item: current, start: { x: e.clientX, y: e.clientY }, rect0: current.delivered, moved: false };
   } else {
     const p = nativePoint(e);
-    const hit = hitTest(view.items, p);
+    const hit = hitTest(view.items, p, lockedRefs(view));
     store.selected.value = hit ? refOf(hit) : "";
     if (!hit) return;
     gesture = { kind: view.editable ? "move" : "click", item: hit, start: { x: e.clientX, y: e.clientY }, rect0: hit.delivered, moved: false, p };
@@ -714,7 +802,7 @@ function onPointerMove(e) {
   const view = store.layout.peek();
   if (!view) return;
   if (!gesture) {
-    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e));
+    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e), lockedRefs(view));
     store.hover.value = hit ? refOf(hit) : "";
     return;
   }
@@ -735,7 +823,7 @@ function onPointerMove(e) {
   }
   let guides = [];
   if (!e.altKey) {
-    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item), nameOf), SNAP_PX * per);
+    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item), nameOf, refsFor(store.marks.peek().snap, view.layout)), SNAP_PX * per);
     ({ dx, dy, guides } = snapped);
   }
   store.live.value = { rect: moveRect(g.rect0, dx, dy), guides, dx, dy };
@@ -784,6 +872,31 @@ function reorder(by) {
   commit([{ op: "reorder", layout: view.layout, kind: "layer", key: item.key, to }], `${by > 0 ? "Raise" : "Lower"} ${nameOf(item)}`, "");
 }
 
+// the keys of the layers or the text boxes in the layout shown, which a new one must not use
+function takenKeys(view, kind) {
+  return view.items.filter((it) => it.kind === kind).map((it) => it.key);
+}
+
+function duplicateSelected() {
+  const view = store.layout.peek();
+  const item = selectedItem();
+  if (!view || !item || !view.editable || item.kind === "symbol") return;
+  const op = duplicateOp(view, item, takenKeys(view, item.kind));
+  const ref = `${item.kind}:${item.kind === "art" ? Number(item.key) + 1 : op.as}`;
+  commit([op], `Duplicate ${nameOf(item)}`, "").then((made) => {
+    if (made) select(ref);
+  });
+}
+
+function deleteSelected() {
+  const view = store.layout.peek();
+  const item = selectedItem();
+  if (!view || !item || !view.editable || item.kind === "symbol") return;
+  commit([deleteOp(view, item)], deleteLabel(item, nameOf(item)), "").then((gone) => {
+    if (gone) select("");
+  });
+}
+
 function onKey(e) {
   if (app.mode.peek() !== "editor" || e.defaultPrevented || isTyping() || document.querySelector("dialog[open]")) return;
   const mod = e.metaKey || e.ctrlKey;
@@ -804,6 +917,12 @@ function onKey(e) {
     else if (store.selected.peek()) select("");
     return;
   }
+  if (e.key.toLowerCase() === "l" && !e.shiftKey && store.selected.peek()) {
+    e.preventDefault();
+    const view = store.layout.peek();
+    setMark("locked", !isLocked(view, selectedItem()));
+    return;
+  }
   const n = nudgeFor(e.key, e.shiftKey);
   if (n && store.selected.peek()) {
     e.preventDefault();
@@ -818,6 +937,7 @@ function drawOverlay() {
   const sel = store.selected.value;
   const hover = store.hover.value;
   const live = store.live.value;
+  store.marks.value;
   const overlay = $("ed-overlay");
   if (!view) {
     overlay.replaceChildren();
@@ -837,11 +957,12 @@ function drawOverlay() {
     if (rect.width > 0 && rect.height > 0) {
       let handles = [];
       // A layer has no size to change, and neither does a text box shown by its ink
-      if (view.editable && item.kind !== "layer" && !item.ink) {
+      const locked = isLocked(view, item);
+      if (view.editable && item.kind !== "layer" && !item.ink && !locked) {
         const per = overlayBox().width / canvas.width;
         handles = visibleHandles(rect.width * per, rect.height * per).map((name) => h("div", { class: "ed-handle", dataset: { handle: name } }));
       }
-      out.push(box(rect, `sel${item.drawn ? "" : " idle"}`, ...handles));
+      out.push(box(rect, `sel${item.drawn ? "" : " idle"}${locked ? " locked" : ""}`, ...handles));
     }
   }
   if (live) {
@@ -866,9 +987,11 @@ function drawOverlay() {
 
 function drawLayers() {
   const view = store.layout.value;
+  const marks = store.marks.value;
   const list = $("ed-layers");
   // A list with nothing in it is hidden, since a listbox has to hold options
   list.hidden = !view;
+  $("ed-add").disabled = !view || !view.editable;
   $("ed-layers-none").hidden = !!view;
   if (!view) {
     list.replaceChildren();
@@ -888,11 +1011,21 @@ function drawLayers() {
           onclick: () => select(refOf(it)),
         },
         h("span", { class: "ed-layer-name" }, nameOf(it)),
+        layerFlags(view, marks, it),
         h("span", { class: "ed-layer-kind" }, KIND_LABEL[it.kind] || it.kind),
       ),
     ),
   );
   markSelected(store.selected.peek());
+}
+
+// layerFlags shows on a row what has been marked, as an icon each, named for a reader
+function layerFlags(view, marks, item) {
+  const flags = [];
+  const flag = (name, text) => flags.push(h("span", { title: text, role: "img", "aria-label": text }, icon(name)));
+  if (isMarked(marks.locked, view.layout, refOf(item))) flag("lock", "Locked on the card");
+  if (isMarked(marks.snap, view.layout, refOf(item))) flag("snap", "Others snap to it");
+  return h("span", { class: "ed-layer-flags" }, ...flags);
 }
 
 // markSelected shows which row is selected without rebuilding the list, so a row
@@ -929,6 +1062,7 @@ function drawSelection() {
   const view = store.layout.value;
   const item = itemOf(view, store.selected.value);
   const live = store.live.value;
+  const marks = store.marks.value;
   $("ed-selection-none").hidden = !!item;
   $("ed-selection").hidden = !item;
   $("ed-edit-note").hidden = !(view && !view.editable);
@@ -936,7 +1070,14 @@ function drawSelection() {
   if (!item) return;
   const rect = live ? live.rect : item.delivered;
   $("ed-selection-name").textContent = nameOf(item);
-  $("ed-selection-kind").textContent = item.drawn ? KIND_LABEL[item.kind] : `${KIND_LABEL[item.kind]}, not drawn: ${item.why}`;
+  const locked = isMarked(marks.locked, view.layout, refOf(item));
+  const kind = item.drawn ? KIND_LABEL[item.kind] : `${KIND_LABEL[item.kind]}, not drawn: ${item.why}`;
+  $("ed-selection-kind").textContent = locked ? `${kind}. Locked, so the card cannot pick or move it` : kind;
+  $("ed-lock").checked = locked;
+  $("ed-snap").checked = isMarked(marks.snap, view.layout, refOf(item));
+  // A symbol is part of the layout's frame work and is moved and resized, not copied
+  const copyable = view.editable && item.kind !== "symbol";
+  $("ed-element-actions").hidden = !copyable;
   const blank = rect.width === 0 && rect.height === 0;
   $("ed-sel-x").textContent = blank ? "" : String(rect.x);
   $("ed-sel-y").textContent = blank ? "" : String(rect.y);
@@ -1461,6 +1602,11 @@ export function initEditor() {
   $("ed-redo").addEventListener("click", redo);
   $("ed-raise").addEventListener("click", () => reorder(1));
   $("ed-lower").addEventListener("click", () => reorder(-1));
+  $("ed-lock").addEventListener("change", (e) => setMark("locked", e.target.checked));
+  $("ed-snap").addEventListener("change", (e) => setMark("snap", e.target.checked));
+  $("ed-duplicate").addEventListener("click", duplicateSelected);
+  $("ed-delete-item").addEventListener("click", deleteSelected);
+  initAssets({ store, commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
   document.addEventListener("keydown", onKey);
   $("ed-credit-add").addEventListener("click", addCredit);
   $("ed-json").addEventListener("click", () => toggleJson(!json.open));

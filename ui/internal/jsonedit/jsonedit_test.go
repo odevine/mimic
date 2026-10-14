@@ -222,3 +222,69 @@ func TestCompactWritesOneLineAndRoundTrips(t *testing.T) {
 		t.Error("a compact copy does not read back to the same document")
 	}
 }
+
+func TestInsertAndRemoveItems(t *testing.T) {
+	n, _ := Parse([]byte(`["a","c"]`))
+	b, _ := Parse([]byte(`"b"`))
+	if err := n.InsertItem(1, b); err != nil {
+		t.Fatal(err)
+	}
+	end, _ := Parse([]byte(`"d"`))
+	if err := n.InsertItem(3, end); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(n.Compact()); got != `["a","b","c","d"]` {
+		t.Errorf("after inserts: %s", got)
+	}
+	gone, err := n.RemoveItem(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := gone.String(); s != "b" {
+		t.Errorf("removed %v", gone)
+	}
+	if got := string(n.Compact()); got != `["a","c","d"]` {
+		t.Errorf("after remove: %s", got)
+	}
+	if n.InsertItem(5, b) == nil || n.InsertItem(-1, b) == nil {
+		t.Error("inserted outside the array")
+	}
+	if _, err := n.RemoveItem(3); err == nil {
+		t.Error("removed past the end")
+	}
+	obj, _ := Parse([]byte(`{}`))
+	if obj.InsertItem(0, b) == nil {
+		t.Error("inserted into an object")
+	}
+	if got := string(NewArray().Compact()); got != "[]" {
+		t.Errorf("new array = %s", got)
+	}
+}
+
+func TestSetBeforePlacesAKeyAndKeyAfterFindsItsNeighbour(t *testing.T) {
+	n, _ := Parse([]byte(`{"a":1,"b":2,"c":3}`))
+	if err := n.SetBefore("x", NewInt(9), "b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.SetBefore("y", NewInt(9), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.SetBefore("z", NewInt(9), "gone"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(n.Keys(), ","); got != "a,x,b,c,y,z" {
+		t.Errorf("keys = %s", got)
+	}
+	// A key that is there keeps its place and takes the new value
+	_ = n.SetBefore("b", NewInt(5), "a")
+	if v, _ := n.Field("b").Int(); v != 5 || strings.Join(n.Keys(), ",") != "a,x,b,c,y,z" {
+		t.Errorf("b = %d, keys = %v", v, n.Keys())
+	}
+	if n.KeyAfter("a") != "x" || n.KeyAfter("z") != "" || n.KeyAfter("nope") != "" {
+		t.Error("KeyAfter is wrong")
+	}
+	arr, _ := Parse([]byte(`[1]`))
+	if arr.SetBefore("a", NewInt(1), "") == nil || arr.KeyAfter("a") != "" {
+		t.Error("an array took a key")
+	}
+}

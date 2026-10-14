@@ -37,6 +37,9 @@ type Service struct {
 	// edits from reading the same files and each writing over the other
 	revs   map[string]int
 	editMu sync.Mutex
+	// held is the files edits wrote and removed, which an undo writes back
+	held   *stash
+	thumbs thumbCache
 }
 
 // New returns the service over a workspace, keeping drafts in the app's drafts
@@ -47,7 +50,7 @@ func New(ws *workspace.Workspace) *Service {
 
 // NewWith returns the service over a workspace and the store of its drafts
 func NewWith(ws *workspace.Workspace, store *drafts.Store) *Service {
-	return &Service{ws: ws, store: store, open: map[string]*author.Draft{}, revs: map[string]int{}}
+	return &Service{ws: ws, store: store, open: map[string]*author.Draft{}, revs: map[string]int{}, held: newStash(stashBytes)}
 }
 
 // Shutdown releases the images every open draft holds

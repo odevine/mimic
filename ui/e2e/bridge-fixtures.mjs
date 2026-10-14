@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { Bridge, loadReplies } from "./bridge.mjs";
-import { Source, describeView, installedFonts, installedTemplate } from "./bridge/cards.mjs";
+import { PIXEL, Source, describeView, installedFonts, installedTemplate, standardAssets } from "./bridge/cards.mjs";
 
 // A page test gets a bridge on a fresh page. It sets replies, then boots the
 // page, and fails if the page made a call no reply covers. The app is answered as
@@ -23,6 +23,11 @@ export const test = base.extend({
     bridge.source = new Source();
     bridge.reply("Studio.Source", () => bridge.source.files());
     bridge.reply("Studio.CheckFile", () => ({ writable: true, problems: [] }));
+    // Its images and fonts are those the standard layers draw from, and a thumbnail is a pixel
+    bridge.assets = standardAssets();
+    bridge.reply("Studio.Assets", () => bridge.assets);
+    bridge.reply("Studio.Thumbs", (req) => Object.fromEntries(req.files.map((f) => [f, PIXEL])));
+    bridge.reply("Studio.SetMarks", null);
     const external = [];
     await page.route((url) => !["app.test", "127.0.0.1", "localhost"].includes(url.hostname), (route) => {
       external.push(route.request().url());

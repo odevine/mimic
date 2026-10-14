@@ -366,3 +366,56 @@ func TestApplyOfAWholeFileFixesADraftThatDoesNotLoadAndUndoBreaksItAgain(t *test
 		t.Error("undo did not write the old text")
 	}
 }
+
+func TestLayersAreAddedDuplicatedAndDeletedAndUndone(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	layout := func() string { return string(readDraft(t, dir, sum.ID, "layouts/normal.json")) }
+	was := layout()
+	apply := func(ops ...draftedit.Op) ApplyResult {
+		t.Helper()
+		res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: ops})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Valid {
+			t.Fatalf("the draft stopped loading: %+v", res.Diagnostics)
+		}
+		return res
+	}
+
+	add := apply(
+		draftedit.Op{Op: draftedit.OpAdd, Layout: "normal", Kind: draftedit.KindLayer, Key: "again", To: 1, Value: json.RawMessage(`{"id":"again","part":"background","opacity":0.5}`)},
+		draftedit.Op{Op: draftedit.OpAdd, Layout: "normal", Kind: draftedit.KindText, Key: "note", Value: json.RawMessage(`{"draws":"oracle","text":{"fontSize":10}}`), Rect: &draftedit.Rect{X: 20, Y: 100, Width: 100, Height: 30}},
+	)
+	dup := apply(draftedit.Op{Op: draftedit.OpDuplicate, Layout: "normal", Kind: draftedit.KindText, Key: "oracle", As: "oracle2", DX: 0, DY: 15})
+	v := describeFor(t, svc, sum.ID, "white-creature")
+	if !item(t, v, "layer", "again").Drawn || !item(t, v, "text", "note").Drawn || !item(t, v, "text", "oracle2").Drawn {
+		t.Errorf("the new items are not drawn: %+v", v.Items)
+	}
+	if o, c := item(t, v, "text", "oracle"), item(t, v, "text", "oracle2"); c.Delivered.Y != o.Delivered.Y+15 {
+		t.Errorf("the copy is at %v and the original at %v", c.Delivered, o.Delivered)
+	}
+	del := apply(draftedit.Op{Op: draftedit.OpDelete, Layout: "normal", Kind: draftedit.KindText, Key: "oracle"})
+	if v := describeFor(t, svc, sum.ID, "white-creature"); len(v.Items) == 0 {
+		t.Fatal("nothing is described")
+	} else {
+		for _, it := range v.Items {
+			if it.Kind == "text" && it.Key == "oracle" {
+				t.Error("the deleted box is still described")
+			}
+		}
+	}
+	for _, inverse := range [][]draftedit.Op{del.Inverse, dup.Inverse, add.Inverse} {
+		apply(inverse...)
+	}
+	if layout() != was {
+		t.Errorf("undoing everything did not restore the layout:\n%s", layout())
+	}
+
+	// A layer of a part the template does not have would stop it loading, so it is refused
+	_, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpAdd, Layout: "normal", Kind: draftedit.KindLayer, Key: "ghost", To: 1, Value: json.RawMessage(`{"id":"ghost","part":"nothere"}`)}}})
+	if err == nil || !strings.Contains(err.Error(), "That is not allowed") || layout() != was {
+		t.Errorf("err = %v, layout changed = %v", err, layout() != was)
+	}
+}

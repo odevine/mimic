@@ -664,6 +664,7 @@ details.disclosure > .field-grid {
 }
 
 .toast.err .icon { color: var(--err); }
+.toast.warn .icon { color: var(--warn); }
 .toast.ok .icon { color: var(--ok); }
 
 @keyframes toast-in {

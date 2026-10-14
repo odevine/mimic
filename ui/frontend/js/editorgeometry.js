@@ -29,9 +29,10 @@ export function selectable(items) {
 }
 
 // hitTest picks the item under a point. The topmost wins, which is the last drawn,
-// and it is the same one the preview outlines on hover
-export function hitTest(items, p) {
-  const under = selectable(items).filter((it) => contains(it.delivered, p));
+// and it is the same one the preview outlines on hover. The refs in locked are not
+// there to be hit, so the point reaches what is beneath them
+export function hitTest(items, p, locked) {
+  const under = selectable(items).filter((it) => contains(it.delivered, p) && !(locked && locked.has(refOf(it))));
   return under.length ? under[under.length - 1] : null;
 }
 
@@ -72,10 +73,11 @@ const edges = (r) => ({ x: [r.x, r.x + r.width / 2, r.x + r.width], y: [r.y, r.y
 const EDGE_NAMES = { x: ["left", "center", "right"], y: ["top", "middle", "bottom"] };
 
 // snapTargets are the lines a moving item can snap to: the canvas's edges and middle
-// and the edges and middle of every other item. nameOf says what an item is called,
+// and the edges and middle of the items whose refs are in snap, which are the ones
+// the author marked and none by default. nameOf says what an item is called,
 // and the result's names say what lies on each line, as { x: Map, y: Map } of a
 // line to the edges on it, each { text, rect } with no rect for the canvas
-export function snapTargets(items, canvas, except, nameOf = (it) => it.key) {
+export function snapTargets(items, canvas, except, nameOf = (it) => it.key, snap = new Set()) {
   const whole = { x: 0, y: 0, width: canvas.width, height: canvas.height };
   const names = { x: new Map(), y: new Map() };
   const add = (owner, rect) => {
@@ -90,8 +92,7 @@ export function snapTargets(items, canvas, except, nameOf = (it) => it.key) {
   };
   add("canvas", whole);
   for (const it of selectable(items)) {
-    // A frame layer that fills the canvas has the canvas's own lines
-    if (refOf(it) !== except) add(nameOf(it), it.delivered);
+    if (refOf(it) !== except && snap.has(refOf(it))) add(nameOf(it), it.delivered);
   }
   const sorted = (m) => [...m.keys()].sort((a, b) => a - b);
   return { x: sorted(names.x), y: sorted(names.y), names };

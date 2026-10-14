@@ -9,7 +9,7 @@ import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
 import { noTemplate } from "../bridge-fixtures.mjs";
-import { card, done, draftSummary, draftView, result } from "./cards.mjs";
+import { assetsView, card, done, draftSummary, draftView, partView, result, standardAssets } from "./cards.mjs";
 
 const ELF = {
   ManaCost: "{G}",
@@ -147,6 +147,68 @@ export const scenes = {
       // The first edit is made, so undo is there and the stand-in for the card is hidden
       await page.keyboard.press("ArrowRight");
       await expect(editor.undoButton).toBeEnabled();
+    },
+  },
+  "editor-images": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine, { meta: { locked: ["normal/text:title"], snapTo: ["normal/text:oracle"] } }));
+      bridge.assets = assetsView([partView("background", "", ["any"]), partView("frame", "background", [..."wubrg"], { problems: ["The images are not one size: 1000x1400 for w, u, b, r; 1002x1400 for g"] })]);
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "frame" }).click();
+      await expect(editor.images.locator('.ed-cell[data-material="w"] img')).toHaveCount(1);
+    },
+  },
+  "editor-add": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.addButton.click();
+      await editor.addKind.selectOption("layer");
+      await editor.addPart.selectOption({ label: "A new part from a PNG image" });
+      await editor.addPartName.fill("glow");
+      await expect(editor.addSlot).toBeVisible();
+    },
+  },
+  "editor-fonts": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      const base = standardAssets();
+      bridge.assets = assetsView(base.parts, {
+        fonts: [
+          { id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular" },
+          { id: "lost", file: "font/lost.otf", family: "Lost Face", style: "Bold", missing: true },
+        ],
+        roles: base.roles.map((r) => (r.role === "body" ? { ...r, font: "plantin-regular" } : r)),
+      });
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await page.locator("#ed-template-details > summary").click();
+      await expect(editor.fonts).toHaveCount(2);
+      await expect(page.locator("#ed-role-body")).toHaveValue("font:plantin-regular");
     },
   },
   "editor-levers": {

@@ -109,6 +109,7 @@ export function watchJob(jobId, onStep) {
 const TEXT_LISTS = [{ name: "Card lists", pattern: "*.txt;*.csv;*.dek;*.mtga" }];
 const IMAGES = [{ name: "Images", pattern: "*.png;*.jpg;*.jpeg" }];
 const FONTS = [{ name: "Fonts", pattern: "*.ttf;*.otf" }];
+const PNGS = [{ name: "PNG images", pattern: "*.png" }];
 
 const SYSTEM = "System";
 
@@ -236,6 +237,28 @@ export const api = {
   draftSource: (id) => rpc("Studio", "Source", id),
   checkDraftFile: (id, file, content) => rpc("Studio", "CheckFile", { id, file, content }),
   draftVocabulary: () => rpc("Studio", "Vocabulary"),
+  // draftAssets resolves to the draft's images and fonts as { parts, fonts, roles,
+  // builtins, slots }. A part is { name, slot, dir, materials, problems } with a
+  // material { key, state, file, width, height, bytes, from }, and its state is
+  // image, blended, any, missing or extra. draftThumbs resolves to a data URL for each
+  // image path it was given. importDraftImage and importDraftFont ask for a file and
+  // resolve to null when the user cancelled, and otherwise to { rev, inverse, valid,
+  // diagnostics, id, warnings } like an apply does. The image goes in as the
+  // material of the part, which is made with the slot when it is new. The font goes
+  // in with the roles named, and its id is the result's id
+  draftAssets: (id) => rpc("Studio", "Assets", id),
+  draftThumbs: (id, files, edge) => rpc("Studio", "Thumbs", { id, files, edge: edge || 0 }),
+  importDraftImage: async (id, part, material, slot) => {
+    const path = await pickFile({ title: "Choose a PNG image", filters: PNGS });
+    return path ? rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }) : null;
+  },
+  importDraftFont: async (id, assign) => {
+    const path = await pickFile({ title: "Choose a font", filters: FONTS });
+    return path ? rpc("Studio", "ImportFont", { id, path, assign: assign || [] }) : null;
+  },
+  // setDraftMarks keeps which elements are locked and which ones a drag snaps to,
+  // each named "layout/kind:key"
+  setDraftMarks: (id, locked, snapTo) => rpc("Studio", "SetMarks", { id, locked, snapTo }),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

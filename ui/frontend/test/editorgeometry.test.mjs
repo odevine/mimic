@@ -38,6 +38,15 @@ test("the topmost item under a point is picked", () => {
   assert.equal(refOf(hitTest(items, { x: 65, y: 125 })), "layer:frame");
 });
 
+test("a locked item is not there to be hit, so the point reaches what is beneath it", () => {
+  const p = { x: 25, y: 14 };
+  assert.equal(refOf(hitTest(items, p)), "text:title");
+  assert.equal(refOf(hitTest(items, p, new Set(["text:title"]))), "layer:frame");
+  assert.equal(refOf(hitTest(items, p, new Set(["text:title", "layer:frame"]))), "layer:background");
+  assert.equal(hitTest(items, p, new Set(["text:title", "layer:frame", "layer:background"])), null);
+  assert.equal(refOf(hitTest(items, p, new Set(["art:0"]))), "text:title", "a lock elsewhere changes nothing");
+});
+
 test("the same point always picks the same item, whatever is selected", () => {
   const p = { x: 25, y: 14 };
   for (let i = 0; i < 3; i++) assert.equal(refOf(hitTest(items, p)), "text:title");
@@ -66,17 +75,23 @@ test("moving a rectangle keeps its size", () => {
   assert.deepEqual(moveRect({ x: 1, y: 2, width: 3, height: 4 }, 10, -5), { x: 11, y: -3, width: 3, height: 4 });
 });
 
-test("the lines to snap to are the canvas's and every other item's", () => {
+test("the lines to snap to are the canvas's, and the marked items' as well", () => {
   const canvas = { width: 100, height: 140 };
-  const t = snapTargets(items, canvas, "text:title");
-  // The canvas's edges and middle
+  const plain = snapTargets(items, canvas, "text:title");
+  // With nothing marked there are only the canvas's edges and middle
+  assert.deepEqual(plain.x, [0, 50, 100]);
+  assert.deepEqual(plain.y, [0, 70, 140]);
+
+  const marked = new Set(["text:title", "art:0"]);
+  const t = snapTargets(items, canvas, "text:title", undefined, marked);
   for (const v of [0, 50, 100]) assert.ok(t.x.includes(v), `x ${v}`);
   for (const v of [0, 70, 140]) assert.ok(t.y.includes(v), `y ${v}`);
-  // The art's middle, which is 50 across and 45 down, and the title's own right edge,
-  // which is a line only while another item moves
+  // The art's middle is 50 across and 45 down, and the title's own lines are not
+  // there while the title moves
   assert.ok(t.y.includes(45));
   assert.ok(!t.x.includes(20), "the title's left edge counts for itself");
-  assert.ok(snapTargets(items, canvas, "art:0").x.includes(20), "the title's left edge counts for another item");
+  assert.ok(snapTargets(items, canvas, "art:0", undefined, marked).x.includes(20), "the title's left edge counts for another item once it is marked");
+  assert.ok(!snapTargets(items, canvas, "art:0", undefined, new Set(["layer:frame"])).x.includes(20), "an item that is not marked is not a line");
   assert.deepEqual(t.x, [...t.x].sort((a, b) => a - b));
   assert.equal(new Set(t.x).size, t.x.length, "no line twice");
 });
@@ -143,7 +158,7 @@ test("a guide names the edge held and what else lies on the line", () => {
     { kind: "text", key: "title", drawn: true, delivered: { x: 20, y: 10, width: 60, height: 10 } },
     { kind: "text", key: "type", drawn: true, delivered: { x: 20, y: 40, width: 30, height: 10 } },
   ];
-  const t = snapTargets(items, canvas, "text:other", (it) => it.key);
+  const t = snapTargets(items, canvas, "text:other", (it) => it.key, new Set(["text:title", "text:type"]));
   // The moving box's left edge would be at 21, one off the line the title and the type share
   const g = snapMove({ x: 21, y: 70, width: 10, height: 10 }, 0, 0, t, 3).guides[0];
   assert.deepEqual(g, { axis: "x", at: 20, edge: "left", to: "title left, type left", boxes: [items[0].delivered, items[1].delivered] });
@@ -152,6 +167,6 @@ test("a guide names the edge held and what else lies on the line", () => {
   assert.equal(c.to, "canvas left");
   assert.ok(c.boxes.every((r) => r.x === 0), "the canvas has no box of its own to outline");
   const crowded = [...items, { kind: "text", key: "a", drawn: true, delivered: { x: 20, y: 60, width: 5, height: 5 } }];
-  const m = snapMove({ x: 21, y: 90, width: 10, height: 5 }, 0, 0, snapTargets(crowded, canvas, "", (it) => it.key), 3).guides[0];
+  const m = snapMove({ x: 21, y: 90, width: 10, height: 5 }, 0, 0, snapTargets(crowded, canvas, "", (it) => it.key, new Set(["text:title", "text:type", "text:a"])), 3).guides[0];
   assert.equal(m.to, "title left, type left, 1 more");
 });

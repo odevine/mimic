@@ -144,6 +144,11 @@ type studioAPI interface {
 	Source(id string) (studio.SourceView, error)
 	CheckFile(req studio.CheckRequest) (studio.CheckResult, error)
 	Vocabulary() studio.VocabView
+	Assets(id string) (studio.AssetsView, error)
+	Thumbs(req studio.ThumbRequest) (map[string]string, error)
+	ImportImage(req studio.ImageRequest) (studio.ImportResult, error)
+	ImportFont(req studio.FontRequest) (studio.ImportResult, error)
+	SetMarks(req studio.MarksRequest) error
 }
 
 // Studio is the bound template editor service

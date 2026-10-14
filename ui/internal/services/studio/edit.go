@@ -168,7 +168,7 @@ func (s *Service) Apply(req ApplyRequest) (ApplyResult, error) {
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	res, err := draftedit.Apply(fsys, req.Ops)
+	res, err := draftedit.ApplyWith(fsys, req.Ops, s.held)
 	if err != nil {
 		if errors.Is(err, draftedit.ErrExtends) {
 			return ApplyResult{}, apierr.New(apierr.BadRequest, editReason(err))
@@ -177,20 +177,45 @@ func (s *Service) Apply(req ApplyRequest) (ApplyResult, error) {
 	}
 	wholeFile := req.Ops[0].Op == draftedit.OpReplace
 	before, _ := inspect(fsys)
-	after, ds := inspect(overlayFS{base: fsys, over: res.Files})
+	after, ds := inspect(overlayFS{base: fsys, over: res.Files, gone: res.Remove})
 	if before && !after && !wholeFile {
 		return ApplyResult{}, apierr.Newf(apierr.BadRequest, "That is not allowed: %s", firstProblem(ds, nil))
 	}
-	for name, data := range res.Files {
-		if err := s.store.WriteFile(req.ID, name, data); err != nil {
-			return ApplyResult{}, err
-		}
+	if err := s.save(req.ID, res); err != nil {
+		return ApplyResult{}, err
 	}
 	s.mu.Lock()
 	s.revs[req.ID]++
 	rev := s.revs[req.ID]
 	s.mu.Unlock()
 	return ApplyResult{Rev: rev, Inverse: res.Inverse, Valid: after, Diagnostics: diagnosticViews(ds)}, nil
+}
+
+// save writes what a batch changed and removes what it took away, and has the draft
+// read the images that changed again
+func (s *Service) save(id string, res *draftedit.Result) error {
+	for name, data := range res.Files {
+		if err := s.store.PutFile(id, name, data); err != nil {
+			return err
+		}
+	}
+	for _, name := range res.Remove {
+		if err := s.store.RemoveFile(id, name); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	d := s.open[id]
+	s.mu.Unlock()
+	if d != nil {
+		for name := range res.Files {
+			d.Forget(name)
+		}
+		for _, name := range res.Remove {
+			d.Forget(name)
+		}
+	}
+	return nil
 }
 
 // inspect reports whether a folder is a template that loads, and what is found in it.

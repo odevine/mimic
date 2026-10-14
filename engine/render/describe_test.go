@@ -1,6 +1,7 @@
 package render
 
 import (
+	"context"
 	"image"
 	"image/color"
 	"strings"
@@ -212,5 +213,81 @@ func TestDescribeRefusesWhatRenderRefuses(t *testing.T) {
 	}
 	if _, err := Describe(nil, template.RenderRequest{Card: creature(card.White)}); err == nil {
 		t.Error("no template was described")
+	}
+}
+
+// inkBounds is the smallest rectangle in area that holds a pixel unlike the flat
+// color the frame is
+func inkBounds(img image.Image, area image.Rectangle, flat color.Color) image.Rectangle {
+	fr, fg, fb, _ := flat.RGBA()
+	var out image.Rectangle
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			if r != fr || g != fg || b != fb {
+				out = out.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	return out
+}
+
+// A box set on its baseline is shown where its text is drawn, which the box's own
+// rectangle does not say, and the rectangle stays the box for the others
+func TestDescribeShowsABaselineBoxWhereItsTextIs(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		title := l.TextBoxes["title"]
+		title.Rect = manifest.Rect{X: 48, Y: 120, Width: 520, Height: 52}
+		title.Text.VAlign = "baseline"
+		l.TextBoxes["title"] = title
+		rules := box(48, 300, 520, 200, 28)
+		rules.Draws = "oracle"
+		l.TextBoxes["oracle"] = rules
+		m.Layouts["test"] = l
+	})
+	c := creature(card.White)
+	c.Name = "Gopher Guard"
+	c.OracleText = "Vigilance"
+	req := template.RenderRequest{Card: c}
+	got := items(t, describe(t, tm, req))
+
+	title := got["text:title"]
+	if !title.Drawn || !title.Ink {
+		t.Fatalf("title = %+v, want drawn and measured by its ink", title)
+	}
+	// The box's top is the baseline, so the text sits mostly above it, with only the
+	// descender of a letter like the p below
+	if title.Authored.Min.Y >= 100 || title.Authored.Max.Y < 120 || title.Authored.Max.Y > 140 {
+		t.Errorf("title ink %v does not sit on the baseline at 120", title.Authored)
+	}
+	if oracle := got["text:oracle"]; oracle.Ink || oracle.Authored != image.Rect(48, 300, 568, 500) {
+		t.Errorf("oracle = %+v, want the box's own rectangle", oracle)
+	}
+
+	// What it says matches what is drawn, to a pixel or two for the antialiasing
+	buf, err := Render(context.Background(), tm, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drawn := inkBounds(buf.ToImage(8), image.Rect(40, 60, 580, 200), color.NRGBA{0xF0, 0xF0, 0xE0, 0xFF})
+	near := func(a, b int) bool { return a-b <= 2 && b-a <= 2 }
+	if !near(title.Authored.Min.X, drawn.Min.X) || !near(title.Authored.Max.X, drawn.Max.X) || !near(title.Authored.Min.Y, drawn.Min.Y) || !near(title.Authored.Max.Y, drawn.Max.Y) {
+		t.Errorf("Describe says the title is at %v, and its ink is at %v", title.Authored, drawn)
+	}
+}
+
+func TestDescribeKeepsAnUndrawnTextBoxItsOwnRectangle(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		pt := l.TextBoxes["pt"]
+		pt.Text.VAlign = "baseline"
+		l.TextBoxes["pt"] = pt
+		m.Layouts["test"] = l
+	})
+	land := &card.Data{Name: "Test Land", TypeLine: "Land", Layout: "normal"}
+	it := items(t, describe(t, tm, template.RenderRequest{Card: land}))["text:pt"]
+	if it.Drawn || it.Ink || it.Authored != image.Rect(560, 960, 680, 1010) {
+		t.Errorf("pt = %+v, want the box's rectangle", it)
 	}
 }

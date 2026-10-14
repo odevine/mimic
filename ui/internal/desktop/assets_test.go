@@ -60,7 +60,7 @@ func TestAssetHandlerServesImagesAndFrontend(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "card.jpg"), []byte("jpeg bytes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := assetHandler(fakeImages{dir}, fstest.MapFS{"index.html": {Data: []byte("<title>Mimic</title>")}}, false)
+	h := assetHandler(fakeImages{dir}, fstest.MapFS{"index.html": {Data: []byte("<title>mimic</title>")}}, false)
 
 	if rec := serve(h, "GET", "/img/render/7"); rec.Code != 200 || rec.Header().Get("Content-Type") != "image/png" || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("render: %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"))
@@ -80,7 +80,7 @@ func TestAssetHandlerServesImagesAndFrontend(t *testing.T) {
 	if rec := serve(h, "GET", "/img/cardback"); rec.Code != 404 {
 		t.Errorf("no cardback: %d, want 404", rec.Code)
 	}
-	if rec := serve(h, "GET", "/"); rec.Code != 200 || rec.Body.String() != "<title>Mimic</title>" {
+	if rec := serve(h, "GET", "/"); rec.Code != 200 || rec.Body.String() != "<title>mimic</title>" {
 		t.Errorf("frontend: %d %q", rec.Code, rec.Body)
 	}
 	for _, path := range []string{"/smoke.html", "/smoke.js"} {
@@ -105,9 +105,9 @@ func TestAssetHandlerSymbolRevalidates(t *testing.T) {
 }
 
 func TestAssetHandlerServesTheLaunchCheckOnlyWhenAsked(t *testing.T) {
-	h := assetHandler(fakeImages{}, fstest.MapFS{"index.html": {Data: []byte("<title>Mimic</title>")}}, true)
+	h := assetHandler(fakeImages{}, fstest.MapFS{"index.html": {Data: []byte("<title>mimic</title>")}}, true)
 	rec := serve(h, "GET", "/smoke.html")
-	if rec.Code != 200 || rec.Body.String() != `<title>Mimic</title><script type="module" src="/smoke.js"></script>` {
+	if rec.Code != 200 || rec.Body.String() != `<title>mimic</title><script type="module" src="/smoke.js"></script>` {
 		t.Errorf("launch check page: %d %q", rec.Code, rec.Body)
 	}
 	rec = serve(h, "GET", "/smoke.js")

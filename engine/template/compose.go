@@ -290,6 +290,22 @@ func TurnRect(r image.Rectangle, cx2, cy2, degrees int) image.Rectangle {
 	return r
 }
 
+// RotateRect returns r, a rectangle in a w by h canvas, where it lands after the
+// canvas is turned clockwise by degrees, a multiple of 90, the way Rotate moves
+// pixels. A quarter turn swaps the canvas's width and height. Turning the result
+// by 360 less the same degrees, in the turned canvas, gives r back
+func RotateRect(r image.Rectangle, w, h, degrees int) image.Rectangle {
+	switch ((degrees/90)%4 + 4) % 4 {
+	case 1:
+		return image.Rect(h-r.Max.Y, r.Min.X, h-r.Min.Y, r.Max.X)
+	case 2:
+		return image.Rect(w-r.Max.X, h-r.Max.Y, w-r.Min.X, h-r.Min.Y)
+	case 3:
+		return image.Rect(r.Min.Y, w-r.Max.X, r.Max.Y, w-r.Min.X)
+	}
+	return r
+}
+
 // HalfOfArt is the i-th of n equal vertical strips of an art image, counted from
 // the left. A split card's art crop holds both halves side by side, and each
 // half's art window takes its own strip

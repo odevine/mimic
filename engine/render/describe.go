@@ -1,0 +1,256 @@
+package render
+
+import (
+	"fmt"
+	"image"
+	"sort"
+	"strconv"
+
+	"github.com/odevine/mimic/engine/fonts"
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/template"
+)
+
+// ItemKind is what a described item is
+type ItemKind string
+
+const (
+	ItemLayer  ItemKind = "layer"
+	ItemArt    ItemKind = "art"
+	ItemSymbol ItemKind = "symbol"
+	ItemText   ItemKind = "text"
+)
+
+// Item is one thing a layout draws, or would draw for another card
+type Item struct {
+	Kind ItemKind
+	// Key names the item within its layout: a stack entry's id, an art window's
+	// index, a symbol's name, or a text box's key
+	Key string
+	// Part is the art set a layer draws from, and After is the stack entry an art
+	// window sits directly above
+	Part  string
+	After string
+	// Images are the paths of the images a layer draws, one unless it blends a pair
+	Images []string
+	// Drawn says whether the item draws for this card. Why says what stops it when
+	// it does not
+	Drawn bool
+	Why   string
+	// Authored is where the item is in the layout's own canvas and Delivered is where
+	// it is in the finished image, after the layout's rotation. Both are in the
+	// canvas's own pixels, not scaled for a preview. A layer's rectangle is the
+	// visible pixels of its image. A layer that does not draw has neither
+	Authored  image.Rectangle
+	Delivered image.Rectangle
+}
+
+// Description is what a template's layout does for one card
+type Description struct {
+	Layout string
+	// Authored and Delivered are the sizes of the layout's canvas and of the
+	// finished image
+	Authored  image.Point
+	Delivered image.Point
+	// Items lists the stack in draw order with each art window right after the entry
+	// it sits above, then the symbols, then the text boxes by key
+	Items []Item
+}
+
+// Describe reports what the template's layout for the card draws, where, and why
+// anything does not, the way Render would decide each, without drawing. The card's
+// face, art, set symbol and features are read from req as Render reads them. An
+// editor uses it to say which layers a card shows and to find them on the image
+func Describe(t *template.Template, req template.RenderRequest) (*Description, error) {
+	if t == nil {
+		return nil, fmt.Errorf("render: no template")
+	}
+	if req.Card == nil {
+		return nil, fmt.Errorf("render: request has no card")
+	}
+	req.Features = t.ResolveFeatures(req.Features)
+	shapes := template.Classify(req.Card)
+	if req.Face < 0 || req.Face >= len(shapes) {
+		return nil, fmt.Errorf("render: face %d out of range, %q renders %d", req.Face, req.Card.Name, len(shapes))
+	}
+	layout, ok := t.Layout(shapes[req.Face])
+	if !ok {
+		return nil, &template.UnsupportedError{Template: t.ID(), Shape: shapes[req.Face]}
+	}
+	// Geometry at the native resolution is the layout's own numbers
+	geo := layout.Geometry(layout.NativeDPI())
+	authored := image.Pt(layout.Canvas.Width, layout.Canvas.Height)
+	d := &describer{t: t, req: req, layout: layout, authored: authored}
+	d.out = Description{Layout: layout.Name, Authored: authored, Delivered: image.Pt(layout.DeliveredWidth(), layout.DeliveredHeight())}
+
+	f := frame.DeriveFace(req.FaceCard(), req.FaceSide())
+	_, drawSymbol := setSymbolSpec(req, layout, geo, f)
+	f.SetSymbol = drawSymbol
+	d.fc = newFaces(req, shapes, req.FaceCard(), f)
+
+	for _, e := range layout.Stack {
+		d.layer(e)
+		d.art(geo, e.ID)
+	}
+	d.symbols(geo, drawSymbol)
+	d.text(geo)
+	return &d.out, nil
+}
+
+type describer struct {
+	t        *template.Template
+	req      template.RenderRequest
+	layout   *template.Layout
+	authored image.Point
+	fc       *faces
+	out      Description
+}
+
+// add places an item's rectangles, given in the canvas it was laid out in
+func (d *describer) add(it Item, r image.Rectangle, output bool) {
+	if !r.Empty() {
+		w, h := d.authored.X, d.authored.Y
+		deg := d.layout.Canvas.Rotate
+		switch {
+		case output:
+			it.Delivered = r
+			it.Authored = template.RotateRect(r, d.out.Delivered.X, d.out.Delivered.Y, 360-deg)
+		default:
+			it.Authored = r
+			it.Delivered = template.RotateRect(r, w, h, deg)
+		}
+	}
+	d.out.Items = append(d.out.Items, it)
+}
+
+func (d *describer) layer(e *template.Entry) {
+	it := Item{Kind: ItemLayer, Key: e.ID, Part: e.Part.Name}
+	_, k := d.fc.get(e.Face)
+	switch {
+	case !e.Condition.Met(k, d.req.Features):
+		it.Why = fmt.Sprintf("its condition %q does not hold for this card", e.Condition.String())
+		d.add(it, image.Rectangle{}, false)
+		return
+	case entryOpacity(e, d.req) <= 0:
+		it.Why = "its opacity is 0"
+		d.add(it, image.Rectangle{}, false)
+		return
+	}
+	material := k.Material(e.Part.Slot)
+	variants := e.Part.Variants
+	var bounds image.Rectangle
+	if _, whole := variants[material.Key()]; !whole {
+		if paths := template.BlendedPaths(variants, material); paths != nil {
+			it.Images = paths
+			at := e.Origin()
+			for _, p := range paths {
+				img, err := template.LoadImage(d.t.Assets(), p)
+				if err != nil {
+					it.Why = fmt.Sprintf("the image %s cannot be read: %v", p, err)
+					d.add(it, image.Rectangle{}, false)
+					return
+				}
+				bounds = bounds.Union(template.OpaqueBounds(img).Add(at))
+			}
+			d.finishLayer(it, bounds)
+			return
+		}
+	}
+	path, ok := variants[material.Key()]
+	if !ok {
+		if path, ok = variants["any"]; !ok {
+			it.Why = fmt.Sprintf("its part has no image for %q and no \"any\" image", material.Key())
+			d.add(it, image.Rectangle{}, false)
+			return
+		}
+	}
+	it.Images = []string{path}
+	r, visible := template.EntryBounds(d.t.Assets(), e, k, d.req.Features, 1, d.authored.X, d.authored.Y)
+	if !visible {
+		it.Why = "its image has no visible pixel"
+		d.add(it, image.Rectangle{}, false)
+		return
+	}
+	d.finishLayer(it, r)
+}
+
+func (d *describer) finishLayer(it Item, r image.Rectangle) {
+	if r.Empty() {
+		it.Why = "its image has no visible pixel"
+		d.add(it, image.Rectangle{}, false)
+		return
+	}
+	it.Drawn = true
+	d.add(it, r, false)
+}
+
+// entryOpacity is the opacity a layer draws at for the request
+func entryOpacity(e *template.Entry, req template.RenderRequest) float64 {
+	if e.OpacityFeature != "" {
+		v, _ := req.Features[e.OpacityFeature].(float64)
+		return v
+	}
+	return e.Opacity
+}
+
+func (d *describer) art(geo *template.Geometry, after string) {
+	for i, slot := range geo.Art {
+		if slot.After != after {
+			continue
+		}
+		it := Item{Kind: ItemArt, Key: strconv.Itoa(i), After: after, Drawn: d.req.Art != nil}
+		if !it.Drawn {
+			it.Why = "no art was given"
+		}
+		d.add(it, image.Rect(slot.X, slot.Y, slot.X+slot.Width, slot.Y+slot.Height), false)
+	}
+}
+
+func (d *describer) symbols(geo *template.Geometry, drawSymbol bool) {
+	for _, name := range sortedKeys(d.layout.Symbols) {
+		spec := geo.Symbols[name]
+		it := Item{Kind: ItemSymbol, Key: name}
+		f := d.fc.self.keys
+		switch {
+		case name != template.SymbolSet:
+			it.Drawn = d.layout.Symbols[name].Condition.Met(f, d.req.Features)
+		default:
+			it.Drawn = drawSymbol
+			if !it.Drawn {
+				it.Why = "the card has no set symbol"
+			}
+		}
+		d.add(it, image.Rect(spec.X, spec.Y, spec.X+spec.Width, spec.Y+spec.Height), false)
+	}
+}
+
+func (d *describer) text(geo *template.Geometry) {
+	boxes := resolveBoxes(d.layout, geo, d.fc, d.req.Features)
+	fr := fonts.NewResolver(d.t.Fonts(), d.req.FontPool, d.req.FontOverrides)
+	for _, b := range d.layout.Boxes {
+		it := Item{Kind: ItemText, Key: b.Key}
+		job, drawn := boxes.byKey[b.Key]
+		if !drawn {
+			it.Why = fmt.Sprintf("its condition %q does not hold for this card", b.Condition.String())
+			base := geo.Boxes[b.Key].Base
+			d.add(it, image.Rect(base.X, base.Y, base.X+base.Width, base.Y+base.Height), b.Space == template.SpaceOutput)
+			continue
+		}
+		face, _ := d.fc.get(job.face)
+		it.Drawn = len(textParts(job.draws, job.spec, face, symbols{}, fr, d.req.Copyright)) > 0
+		if !it.Drawn {
+			it.Why = fmt.Sprintf("the card has no %s to draw", job.draws)
+		}
+		s := job.spec
+		d.add(it, image.Rect(s.X, s.Y, s.X+s.Width, s.Y+s.Height), job.space == template.SpaceOutput)
+	}
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

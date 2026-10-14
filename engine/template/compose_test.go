@@ -6,6 +6,8 @@ import (
 	"image/color"
 	"image/png"
 	"testing"
+
+	"github.com/odevine/impasto/raster"
 )
 
 func TestTurnRect(t *testing.T) {
@@ -51,5 +53,35 @@ func TestDividerKeepsItsPlaceWhenItsPartIsCut(t *testing.T) {
 	}
 	if layer.Origin.X != 110 {
 		t.Errorf("divider starts at x %d, want 110", layer.Origin.X)
+	}
+}
+
+// RotateRect lands a rectangle where Rotate puts its pixels, and turning back by
+// the rest of the circle returns it
+func TestRotateRectFollowsRotate(t *testing.T) {
+	const w, h = 7, 5
+	r := image.Rect(1, 2, 4, 5)
+	for _, deg := range []int{0, 90, 180, 270} {
+		buf := raster.MustNewBuffer(w, h)
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
+				buf.Pix[(y*w+x)*4+3] = 255
+			}
+		}
+		out := Rotate(buf, deg)
+		got := image.Rectangle{Min: image.Pt(out.Width, out.Height)}
+		for y := 0; y < out.Height; y++ {
+			for x := 0; x < out.Width; x++ {
+				if out.Pix[(y*out.Width+x)*4+3] != 0 {
+					got = got.Union(image.Rect(x, y, x+1, y+1))
+				}
+			}
+		}
+		if want := RotateRect(r, w, h, deg); got != want {
+			t.Errorf("rotate %d: pixels at %v, RotateRect says %v", deg, got, want)
+		}
+		if back := RotateRect(RotateRect(r, w, h, deg), out.Width, out.Height, 360-deg); back != r {
+			t.Errorf("rotate %d and back: %v, want %v", deg, back, r)
+		}
 	}
 }

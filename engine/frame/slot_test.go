@@ -68,3 +68,15 @@ func TestMaterialReadsEverySlot(t *testing.T) {
 		}
 	}
 }
+
+func TestSlotNamesParseBack(t *testing.T) {
+	names := SlotNames()
+	if len(names) != int(SlotFusePinlines) {
+		t.Fatalf("%d names: %v", len(names), names)
+	}
+	for _, n := range names {
+		if s, err := ParseSlot(n); err != nil || s.String() != n || s == SlotNone {
+			t.Errorf("%q parses to %v, %v", n, s, err)
+		}
+	}
+}

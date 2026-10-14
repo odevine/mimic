@@ -40,6 +40,10 @@ func (s Slot) String() string {
 	return fmt.Sprintf("Slot(%d)", s)
 }
 
+// SlotNames lists the names a manifest gives its slots, in the engine's order,
+// without the empty name of a part that has none
+func SlotNames() []string { return append([]string(nil), slotNames[1:]...) }
+
 // ParseSlot reads the name a manifest gives a slot. The empty name is SlotNone,
 // and a name the engine does not have is an error
 func ParseSlot(name string) (Slot, error) {

@@ -79,6 +79,16 @@ var features = []feature{
 	{key: "settings.density", state: gatePlanned, reason: "A denser layout is planned. Tracked in #82"},
 	{key: "settings.restoreSession", state: gatePlanned, reason: "Restoring the last session is planned. Tracked in #82"},
 
+	{key: "flow.editor", state: gateLive},
+	{key: "editor.move", state: gatePlanned, reason: "Selecting and dragging layers on the preview is planned. Tracked in #115"},
+	{key: "editor.levers", state: gatePlanned, reason: "Editing a layer's settings is planned. Tracked in #115"},
+	{key: "editor.json", state: gatePlanned, reason: "Editing the template's JSON is planned. Tracked in #115"},
+	{key: "editor.assets", state: gatePlanned, reason: "Adding and replacing images is planned. Tracked in #115"},
+	{key: "editor.fonts", state: gatePlanned, reason: "Adding fonts to a template is planned. Tracked in #115"},
+	{key: "editor.use", state: gatePlanned, reason: "Rendering with a draft from the other modes is planned. Tracked in #115"},
+	{key: "editor.export", state: gatePlanned, reason: "Exporting a draft as a bundle is planned. Tracked in #115"},
+	{key: "editor.coverage", state: gatePlanned, reason: "Rendering a set of cards at once to check a frame is planned. Tracked in #115"},
+
 	{key: "output.mpc", state: gateLive},
 	{key: "output.pdf", state: gatePlanned, reason: "Print sheets are planned. Tracked in #85"},
 }

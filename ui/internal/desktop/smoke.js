@@ -204,6 +204,28 @@ async function flows(outDir) {
     notes.push("Single shows a rendered preview");
   }
 
+  // The editor makes a template from its dialog and draws a test card with it,
+  // through the same image route
+  {
+    doc.querySelector('button[data-mode="editor"]').click();
+    await until("the editor", () => shown($("ed-empty")) || shown($("ed-workspace")));
+    (shown($("ed-empty-new")) ? $("ed-empty-new") : $("ed-new")).click();
+    await until("the new template dialog", () => $("draft-dialog").open);
+    type($("draft-name"), "Smoke frame");
+    type($("draft-dpi"), "100");
+    $("draft-confirm").click();
+    await until("the dialog to close", () => !$("draft-dialog").open);
+    await until(
+      () => `the test card (the strip reads "${$("ed-activity-title").textContent}", "${$("ed-activity-step").textContent}")`,
+      () => {
+        const img = $("ed-img");
+        return $("ed-activity").dataset.state === "done" && img.complete && img.naturalWidth > 0;
+      },
+      30000,
+    );
+    notes.push("the editor draws a test card with a new template");
+  }
+
   return notes;
 }
 

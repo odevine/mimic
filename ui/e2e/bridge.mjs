@@ -62,6 +62,10 @@ export class Bridge {
     // Each render starts a job of its own, numbered from one
     let jobs = 0;
     this.reply("Render.Start", () => ({ jobId: `job-${++jobs}`, dpi: 274 }));
+    // A draft's render is a job like any other, and remembering its test card says nothing
+    this.reply("Studio.Render", () => ({ jobId: `job-${++jobs}`, dpi: 150 }));
+    this.reply("Studio.SetTestCard", () => null);
+    this.reply("Render.Cancel", () => null);
     this.reply("jobs.Service.Backlog", (id, seq) => {
       const events = this.#jobEvents.get(id) || [];
       return { events: events.filter((e) => e.seq > seq), finished: events.some((e) => e.done) };

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/batch.css">
+  <link rel="stylesheet" href="css/editor.css">
   <script>
     // Apply the remembered theme before first paint so a light-theme user never
     // sees a dark flash. The app copy in prefs is authoritative and app.js
@@ -95,6 +96,9 @@
       <button class="rail-item" type="button" data-mode="run" data-feature-indicator="flow.run">
         <svg class="icon"><use href="icons.svg#i-play"/></svg><span class="rail-label">Run</span>
         <span id="rail-run-dot" class="rail-dot active" hidden></span>
+      </button>
+      <button class="rail-item" type="button" data-mode="editor" data-tip="Editor (⌘6)">
+        <svg class="icon"><use href="icons.svg#i-sliders"/></svg><span class="rail-label">Editor</span>
       </button>
     </nav>
 
@@ -392,6 +396,9 @@ Sideboard
         <div id="tm-library" class="tm-page" data-tab-panel="library">
           <div class="tm-column">
             <p class="tm-lede dim">Every template in the catalog, and any installed from a local folder. Download a version to install it, and select one to make it the active template for standard cards.</p>
+            <div class="tm-actions">
+              <button id="tm-new-template" class="btn" type="button" data-tip="Start a template of your own in the editor"><svg class="icon"><use href="icons.svg#i-plus"/></svg>New template</button>
+            </div>
             <div id="tm-library-list" class="template-library"><p class="dim tm-empty">Loading catalog…</p></div>
             <div id="tm-library-foot" class="tp-foot" hidden></div>
           </div>
@@ -447,6 +454,91 @@ Sideboard
                 <button id="rule-add" class="btn" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add rule</button>
                 <span id="rules-status" class="dim tabular" role="status"></span>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Editor: build a template and see a test card drawn with it -->
+      <section id="mode-editor" class="mode" data-mode-panel="editor" aria-label="Editor" hidden>
+        <div id="ed-empty" class="empty">
+          <svg class="icon icon-lg"><use href="icons.svg#i-sliders"/></svg>
+          <p class="lede">Build a template of your own. Start from a blank card or from a copy of one you have installed, and see a test card drawn with it as you go.</p>
+          <div class="ed-empty-actions">
+            <button id="ed-empty-new" class="btn primary" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>New template</button>
+            <button id="ed-empty-copy" class="btn" type="button">Copy an installed template</button>
+          </div>
+        </div>
+
+        <div id="ed-workspace" class="regions" hidden>
+          <div class="region fixed" data-region="0" style="width: 300px">
+            <div class="ed-draft">
+              <label class="section-heading" for="ed-draft-select">Template</label>
+              <div class="ed-draft-row">
+                <select id="ed-draft-select"></select>
+                <button id="ed-new" class="btn subtle icon-only" type="button" aria-label="New template" data-tip="New template"><svg class="icon"><use href="icons.svg#i-plus"/></svg></button>
+                <button id="ed-rename" class="btn subtle" type="button">Rename</button>
+                <button id="ed-delete" class="btn subtle icon-only" type="button" aria-label="Delete this template" data-tip="Delete this template"><svg class="icon"><use href="icons.svg#i-trash"/></svg></button>
+              </div>
+            </div>
+            <div class="ed-card">
+              <h3 class="section-heading">Test card</h3>
+              <p id="ed-card-line" class="ed-card-line"></p>
+              <div id="ed-presets" class="ed-presets" role="group" aria-label="Preset cards"></div>
+              <form id="ed-search-form" class="search-form" role="search">
+                <div class="search-field">
+                  <svg class="icon"><use href="icons.svg#i-search"/></svg>
+                  <input id="ed-search-input" autocomplete="off" spellcheck="false" placeholder="Search Scryfall" aria-label="Search Scryfall for a test card">
+                </div>
+              </form>
+            </div>
+            <ul id="ed-results" class="results" role="listbox" aria-label="Search results"></ul>
+            <div class="panel-footer"><span id="ed-results-count">Pick a preset above, or search for a card</span></div>
+          </div>
+
+          <div class="splitter" data-split="0" role="separator" aria-orientation="vertical" aria-label="Resize the test card column"></div>
+
+          <div class="region grow preview-region" data-region="1">
+            <div id="ed-stage" class="stage fit">
+              <div class="stage-inner">
+                <div id="ed-placeholder" class="placeholder-card" aria-hidden="true"></div>
+                <img id="ed-img" class="card" alt="The test card drawn with the template" hidden draggable="false">
+              </div>
+            </div>
+            <div id="ed-activity" class="activity" data-state="idle" role="status" aria-live="polite">
+              <div class="activity-line">
+                <span class="activity-icon"><svg class="icon"><use id="ed-activity-glyph" href="icons.svg#i-card"/></svg></span>
+                <div class="activity-text">
+                  <span id="ed-activity-title" class="activity-title"></span>
+                  <span id="ed-activity-step" class="activity-step"></span>
+                </div>
+                <span id="ed-activity-meta" class="activity-meta tabular"></span>
+              </div>
+              <div class="activity-bar" aria-hidden="true"><div id="ed-activity-fill" class="fill"></div></div>
+            </div>
+          </div>
+
+          <div class="splitter" data-split="1" role="separator" aria-orientation="vertical" aria-label="Resize the details column"></div>
+
+          <div class="region fixed" data-region="2" style="width: 320px">
+            <div class="ed-side panel-body">
+              <section class="ed-section" aria-labelledby="ed-about-heading">
+                <h3 id="ed-about-heading" class="section-heading">About</h3>
+                <p id="ed-about-name" class="ed-about-name"></p>
+                <p id="ed-about-id" class="ed-about-id mono"></p>
+                <p id="ed-about-fork" class="dim" hidden></p>
+                <ul id="ed-layouts" class="ed-layouts" aria-label="Layouts"></ul>
+              </section>
+              <section class="ed-section" aria-labelledby="ed-problems-heading">
+                <h3 id="ed-problems-heading" class="section-heading">Problems <span id="ed-problems-count" class="faint"></span></h3>
+                <p id="ed-problems-none" class="dim">None found.</p>
+                <ul id="ed-problems" class="ed-problems"></ul>
+              </section>
+              <section class="ed-section ed-actions" aria-label="Use the template">
+                <button id="ed-use" class="btn" type="button" data-feature="editor.use">Use in Mimic</button>
+                <button id="ed-export" class="btn" type="button" data-feature="editor.export">Export…</button>
+                <button id="ed-json" class="btn" type="button" data-feature="editor.json">Edit JSON…</button>
+              </section>
             </div>
           </div>
         </div>
@@ -737,6 +829,30 @@ Sideboard
     </div>
   </dialog>
 
+  <dialog id="draft-dialog" class="dialog" aria-labelledby="draft-dialog-title" style="width:min(480px, calc(100vw - 32px))">
+    <div class="dialog-head">
+      <h2 id="draft-dialog-title"></h2>
+      <button class="btn subtle icon-only" type="button" data-close aria-label="Close"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
+    </div>
+    <div class="dialog-body">
+      <p id="draft-dialog-lede" class="dim"></p>
+      <div class="setting">
+        <label for="draft-name">Name</label>
+        <input id="draft-name" autocomplete="off" spellcheck="false" maxlength="80">
+      </div>
+      <div id="draft-dpi-row" class="setting">
+        <label for="draft-dpi">Resolution</label>
+        <span class="inline"><input id="draft-dpi" inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="draft-dpi-size"><span class="dim">dpi</span></span>
+        <p id="draft-dpi-size" class="desc"></p>
+      </div>
+      <p id="draft-error" class="rules-error" role="alert" hidden></p>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button id="draft-confirm" class="btn primary" type="button"></button>
+    </div>
+  </dialog>
+
   <dialog id="shortcuts-dialog" class="dialog" aria-labelledby="shortcuts-title" style="width:min(460px, calc(100vw - 32px))">
     <div class="dialog-head">
       <h2 id="shortcuts-title">Keyboard shortcuts</h2>
@@ -744,7 +860,7 @@ Sideboard
     </div>
     <div class="dialog-body">
       <dl class="shortcut-list">
-        <dt><kbd class="mod">⌘</kbd><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Switch mode</dd>
+        <dt><kbd class="mod">⌘</kbd><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Switch mode</dd>
         <dt><kbd>/</kbd></dt><dd>Focus search</dd>
         <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Move through results</dd>
         <dt><kbd>↵</kbd></dt><dd>Open the focused result, or render from a single-line field</dd>

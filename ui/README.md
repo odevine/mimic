@@ -51,7 +51,8 @@ A build made with `-tags dev` turns on the webview's developer tools.
 
 The page is one shell with a mode rail down the left: Single, From a List, and
 From Your Art make cards, Templates holds everything about the frames cards
-render with, and Run keeps the record of a batch. The active template's name
+render with, Run keeps the record of a batch, and Editor is where a template of
+your own is built. The active template's name
 sits in the top bar and opens Templates, and settings and a keyboard reference
 sit beside it.
 
@@ -246,7 +247,7 @@ second time brings the first window forward instead of opening another.
 
 The menu bar follows each platform. File holds Save Card, Open List and Choose
 Output Folder, View switches modes, and Help links to this repository and shows
-the versions in About. On macOS the menu owns `⌘S` and `⌘1` to `⌘5`. On Windows
+the versions in About. On macOS the menu owns `⌘S` and `⌘1` to `⌘6`. On Windows
 and Linux the page handles those keys and the menu shows their text.
 
 When a run finishes while the window is not in front, the app posts a system
@@ -294,6 +295,31 @@ Rules and presets live in `prefs.json`.
 
 Overrides for a single template's layers and text boxes need engine support and
 are tracked in the issue named on the Template tab.
+
+## The editor
+
+The Editor builds a template from the files an author keeps, a folder with
+`template.json`, a file for each layout and the images and fonts they use. Each
+template there is a draft under `drafts` in the user config folder, and the app
+renders it as it is on disk, so changing a draft cannot change an installed
+template.
+
+New template, in Editor or in the Templates library, starts from a plain card
+with the standard text boxes at a resolution of 72 to 1200 dpi, 800 by default,
+and draws it at once. Edit a copy, beside each installed version in the library,
+starts from that template instead. The copy keeps the original's license and
+credits and adds a credit that names the original and its version, and it is
+independent of the original from then on.
+
+The left column picks the draft and the card it is drawn with, from a set of
+preset cards that differ in colors, types and amount of text, or from a Scryfall
+search. The card is kept with the draft. The right column lists the draft's
+layouts and every problem found in its files, with the path to each. A draft
+that does not load shows its problems and draws nothing.
+
+Selecting and moving layers on the preview, editing a layer's settings, the
+JSON editor, adding images and fonts, and exporting a draft are not built yet,
+and each appears locked with the issue that tracks it.
 
 ## Features that are not built yet
 

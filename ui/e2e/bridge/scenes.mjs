@@ -3,12 +3,13 @@
 // its state, with nothing in it that changes from one run to the next except
 // what its mask names
 import { expect } from "@playwright/test";
+import { EditorPage } from "../pages/EditorPage.mjs";
 import { ListPage } from "../pages/ListPage.mjs";
 import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
 import { noTemplate } from "../bridge-fixtures.mjs";
-import { card, done, result } from "./cards.mjs";
+import { card, done, draftSummary, draftView, result } from "./cards.mjs";
 
 const ELF = {
   ManaCost: "{G}",
@@ -100,6 +101,61 @@ export const scenes = {
       await expect.poll(() => bridge.calledWith("Render.Start").length).toBe(1);
       await bridge.job("job-1", [done(1)]);
       await expect(single.activity).toHaveAttribute("data-state", "done");
+    },
+  },
+  "editor-empty": {
+    run: async ({ bridge, page }) => {
+      await bridge.boot();
+      await new EditorPage(page).show();
+      await expect(page.locator("#ed-empty")).toBeVisible();
+    },
+  },
+  "editor-draft": {
+    mask: ["#ed-stage", "#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame", { forkedFrom: "mimic.m15 1.0.0" });
+      bridge.reply("Studio.List", [mine, draftSummary("older", "Older frame", { updated: "2026-10-01T09:00:00Z" })]);
+      bridge.reply(
+        "Studio.Open",
+        draftView(mine, { diagnostics: [{ severity: "warning", path: "template.json", message: "the template has no description" }] }),
+      );
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.activity).toHaveAttribute("data-state", "done");
+      await expect(editor.problems).toHaveCount(1);
+    },
+  },
+  "editor-problems": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const broken = draftSummary("broken", "Broken frame");
+      bridge.reply("Studio.List", [broken]);
+      bridge.reply(
+        "Studio.Open",
+        draftView(broken, {
+          valid: false,
+          layouts: [],
+          diagnostics: [
+            { severity: "error", path: "layouts/normal.json", message: "unexpected end of JSON input" },
+            { severity: "error", path: "layouts.normal.art[0].after", message: "names no stack entry, \"background\"" },
+          ],
+        }),
+      );
+      await bridge.boot();
+      await new EditorPage(page).show();
+      await expect(page.locator("#ed-problems li")).toHaveCount(2);
+    },
+  },
+  "editor-new-dialog": {
+    run: async ({ bridge, page }) => {
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await editor.openNewDialog();
+      await editor.dialogName.fill("My frame");
     },
   },
   "list-review": {

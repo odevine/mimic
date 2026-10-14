@@ -21,6 +21,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/studio"
 	"github.com/odevine/mimic/ui/internal/services/templates"
 	"github.com/odevine/mimic/ui/internal/testbuild"
 	"github.com/odevine/mimic/ui/internal/workspace"
@@ -80,6 +81,7 @@ func launch() error {
 			Settings:  settings.New(ws),
 			Data:      data.New(ws, desktop.OpenPath),
 			Overrides: overrides.New(ws),
+			Studio:    studio.New(ws),
 		},
 		Frontend:        staticFS(),
 		Smoke:           *smoke,

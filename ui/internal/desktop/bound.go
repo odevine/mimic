@@ -7,6 +7,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
+	"github.com/odevine/mimic/ui/internal/drafts"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/rules"
@@ -17,6 +18,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/studio"
 	"github.com/odevine/mimic/ui/internal/services/templates"
 )
 
@@ -124,5 +126,23 @@ type dataAPI interface {
 // Data is the bound card data and fonts service
 type Data struct {
 	dataAPI
+	lifecycle
+}
+
+type studioAPI interface {
+	List() ([]drafts.Summary, error)
+	Create(req studio.CreateRequest) (drafts.Summary, error)
+	Fork(req studio.ForkRequest) (drafts.Summary, error)
+	Rename(req studio.RenameRequest) (drafts.Summary, error)
+	Delete(id string) error
+	Open(id string) (studio.OpenView, error)
+	Presets() []studio.Preset
+	SetTestCard(req studio.TestCardRequest) error
+	Render(req studio.RenderRequest) (render.Started, error)
+}
+
+// Studio is the bound template editor service
+type Studio struct {
+	studioAPI
 	lifecycle
 }

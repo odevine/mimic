@@ -63,3 +63,14 @@ export const installedTemplate = {
   shapes: [{ role: "single", kind: "standard" }],
   faces: { "single/standard": "mimic.m15" },
 };
+
+// A template the editor holds, and what the editor is told when it opens one
+export const draftSummary = (id, name, extra = {}) => ({ id, templateId: `user.${id}`, name, updated: "2026-10-12T09:00:00Z", ...extra });
+export const draftView = (draft, extra = {}) => ({
+  draft,
+  meta: {},
+  layouts: [{ name: "normal", width: 2176, height: 2960, dpi: 800, serves: [{ role: "single", kind: "standard" }] }],
+  diagnostics: [],
+  valid: true,
+  ...extra,
+});

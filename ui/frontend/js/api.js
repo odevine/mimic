@@ -201,6 +201,23 @@ export const api = {
   faceTemplates: () => rpc("Templates", "Faces"),
   setFaceTemplate: (key, name, version) => rpc("Templates", "SetFace", { key, name, version }),
 
+  // The editor's drafts. A draft is { id, templateId, name, updated, forkedFrom,
+  // problem }. createDraft starts a blank template and forkDraft copies an
+  // installed template version, each resolving to the new draft, and openDraft
+  // resolves to { draft, meta, layouts, diagnostics, valid }. testCards lists the
+  // preset cards, each { id, label, card }. renderDraft starts a job like render
+  // does, and resolves to { jobId, dpi }, so its events, image and cancel are the
+  // render ones
+  drafts: () => rpc("Studio", "List"),
+  createDraft: (name, dpi) => rpc("Studio", "Create", { name, dpi: dpi || 0 }),
+  forkDraft: (template, version, name) => rpc("Studio", "Fork", { template, version, name }),
+  renameDraft: (id, name) => rpc("Studio", "Rename", { id, name }),
+  deleteDraft: (id) => rpc("Studio", "Delete", id),
+  openDraft: (id) => rpc("Studio", "Open", id),
+  testCards: () => rpc("Studio", "Presets"),
+  setTestCard: (id, card, face) => rpc("Studio", "SetTestCard", { id, card, face: face || 0 }),
+  renderDraft: (id, card, face) => rpc("Studio", "Render", { id, card, face: face || 0 }),
+
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream
   resolve: (text, format) => rpc("List", "Resolve", { text, format }),

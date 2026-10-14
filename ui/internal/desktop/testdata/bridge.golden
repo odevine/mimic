@@ -40,6 +40,15 @@ Settings.Put(prefs.Settings) -> prefs.Settings
 Settings.Resolution() -> settings.Resolutions !
 Settings.Resources(string) -> settings.ResourcesView
 Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
+Studio.Create(studio.CreateRequest) -> drafts.Summary !
+Studio.Delete(string) !
+Studio.Fork(studio.ForkRequest) -> drafts.Summary !
+Studio.List() -> []drafts.Summary !
+Studio.Open(string) -> studio.OpenView !
+Studio.Presets() -> []studio.Preset
+Studio.Rename(studio.RenameRequest) -> drafts.Summary !
+Studio.Render(studio.RenderRequest) -> render.Started !
+Studio.SetTestCard(studio.TestCardRequest) !
 System.Confirm(desktop.ConfirmRequest) -> bool
 System.OpenURL(string) !
 System.PickFile(desktop.PickRequest) -> string !
@@ -331,6 +340,21 @@ desktop.VersionInfo struct {
 	testBuild bool (omitempty)
 }
 
+drafts.Meta struct {
+	forkedFrom string (omitempty)
+	testCard card.Data (omitempty)
+	face int (omitempty)
+}
+
+drafts.Summary struct {
+	id string
+	templateId string
+	name string
+	updated time
+	forkedFrom string (omitempty)
+	problem string (omitempty)
+}
+
 float64 = float64
 
 frame.Kind = string
@@ -548,6 +572,63 @@ settings.ResourcesView struct {
 }
 
 string = string
+
+studio.CreateRequest struct {
+	name string
+	dpi int
+}
+
+studio.DiagnosticView struct {
+	severity string
+	path string (omitempty)
+	message string
+}
+
+studio.ForkRequest struct {
+	template string
+	version string
+	name string
+}
+
+studio.LayoutView struct {
+	name string
+	width int
+	height int
+	dpi int
+	rotate int (omitempty)
+	serves []frame.Shape
+}
+
+studio.OpenView struct {
+	draft drafts.Summary
+	meta drafts.Meta
+	layouts []studio.LayoutView
+	diagnostics []studio.DiagnosticView
+	valid bool
+}
+
+studio.Preset struct {
+	id string
+	label string
+	card cardlist.ShapedCard
+}
+
+studio.RenameRequest struct {
+	id string
+	name string
+}
+
+studio.RenderRequest struct {
+	id string
+	card card.Data
+	face int
+}
+
+studio.TestCardRequest struct {
+	id string
+	card card.Data
+	face int
+}
 
 template.Resolution struct {
 	dpi int

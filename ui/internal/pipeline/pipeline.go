@@ -244,6 +244,11 @@ func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image
 	if err != nil {
 		return nil, err
 	}
+	return p.renderWith(ctx, at, d, face, art, dpi, progress)
+}
+
+// renderWith composites the card through at and reports the encoding step
+func (p *Pipeline) renderWith(ctx context.Context, at *Template, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (*raster.Buffer, error) {
 	pool, overrides := p.chosenFonts()
 	req := template.RenderRequest{
 		Card:          d,

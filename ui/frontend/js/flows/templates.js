@@ -4,6 +4,7 @@ import { app, effect } from "../state.js";
 import { toast } from "../components/toast.js";
 import { loadActiveTemplate } from "../components/templatePicker.js";
 import { describeShape, layoutChips } from "../supports.js";
+import { editor } from "./editor.js";
 
 // The Templates mode keeps everything about templates in one place. Library
 // lists the catalog and installs or activates a version, Defaults picks which
@@ -56,6 +57,22 @@ function versionRow(t, v) {
     );
   } else {
     row.append(h("span", { class: "tp-reason" }, icon("lock", "icon gate-glyph"), v.reason || "unavailable"));
+  }
+  // An installed version can be copied into the editor and changed there
+  if (v.cached && v.selectable) {
+    row.append(
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn subtle",
+          style: "min-height:0;height:24px",
+          title: "Make a copy of this template that you can change in the editor",
+          onclick: () => editor.copyTemplate(t.name, v.version, t.title || t.name),
+        },
+        "Edit a copy",
+      ),
+    );
   }
   return row;
 }

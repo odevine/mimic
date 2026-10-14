@@ -40,7 +40,7 @@ test("the layers are listed from the top, and the ones not drawn say why", async
   await expect(editor.selection).toBeHidden();
 });
 
-test("clicking the card selects what is on top there, and again reaches what is beneath", async ({ bridge, page }) => {
+test("clicking the card selects what is on top there, and clicking it again keeps it", async ({ bridge, page }) => {
   const { editor, point } = await ready(bridge, page);
   const p = point(150, 100);
 
@@ -53,9 +53,7 @@ test("clicking the card selects what is on top there, and again reaches what is 
   await expect(editor.selectionBox).toHaveCount(1);
 
   await page.mouse.click(p.x, p.y);
-  await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("frame");
-  await page.mouse.click(p.x, p.y);
-  await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("background");
+  await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("title");
   await page.mouse.click(p.x, p.y);
   await expect(editor.selectedRow.locator(".ed-layer-name")).toHaveText("title");
 
@@ -63,19 +61,37 @@ test("clicking the card selects what is on top there, and again reaches what is 
   expect(applied(bridge)).toEqual([]);
 });
 
-test("clicking off everything lets go, and a row of the list selects too", async ({ bridge, page }) => {
+test("clicking the stage around the card lets go, and Escape does too", async ({ bridge, page }) => {
   const { editor, box } = await ready(bridge, page);
   await editor.layers.filter({ hasText: "oracle" }).click();
   await expect(editor.selectionName).toHaveText("oracle");
   await expect(editor.selectionBox).toHaveCount(1);
 
-  // Past the card's edge there is nothing to pick
+  // Off the card there is nothing to pick, and the selection is let go
+  const stage = await page.locator("#ed-stage").boundingBox();
+  expect(box.x - stage.x, "there is stage to the left of the card").toBeGreaterThan(60);
+  await page.mouse.click(box.x - 30, box.y + box.height / 2);
+  await expect(editor.selection).toBeHidden();
+  await expect(editor.selectionBox).toHaveCount(0);
+
+  // On the card the background fills it, so the corner picks it, and Escape lets go
   await page.mouse.click(box.x + box.width - 1, box.y + box.height - 1);
-  // The background fills the card, so the corner picks it. Escape lets go
   await expect(editor.selectionName).toHaveText("background");
   await page.keyboard.press("Escape");
   await expect(editor.selection).toBeHidden();
   await expect(editor.selectionBox).toHaveCount(0);
+});
+
+test("a click selects the item the preview outlined on hover", async ({ bridge, page }) => {
+  const { editor, point } = await ready(bridge, page);
+  // Select the frame, then hover where the title lies over it
+  await editor.layers.filter({ hasText: "frame" }).click();
+  const p = point(150, 100);
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator("#ed-overlay .ed-box.hover")).toHaveCount(1);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(editor.selectionName).toHaveText("title");
 });
 
 test("an item that is not drawn can be read in the list but not picked on the card", async ({ bridge, page }) => {
@@ -127,11 +143,22 @@ test("an edge near a line snaps to it, and the guide shows while it is held", as
   await drag(page, p, { x: -39, y: 0 });
   await expect(editor.guides).toHaveCount(1);
   await expect(editor.guides.first()).toHaveClass(/\bx\b/);
+  await expect(editor.guides.first()).toContainText("left to ");
   await expect(page.locator("#ed-sel-x")).toHaveText("0");
   await page.mouse.up();
   await expect(editor.guides).toHaveCount(0);
   await expect.poll(() => applied(bridge).length).toBe(1);
   expect(applied(bridge)[0].ops[0]).toMatchObject({ op: "move", key: "title", dx: -100, dy: 0 });
+});
+
+test("the items a snap lines up with are outlined while it is held", async ({ bridge, page }) => {
+  const { editor, point } = await ready(bridge, page);
+  // The oracle box's left edge is at 100, as the title's and the type's are, and a pixel on screen is two and a half
+  await drag(page, point(500, 1000), { x: -3, y: 0 });
+  await expect(editor.guides.first()).toContainText("left to title left, type left");
+  await expect(page.locator("#ed-overlay .ed-box.snap")).toHaveCount(2);
+  await page.mouse.up();
+  await expect(page.locator("#ed-overlay .ed-box.snap")).toHaveCount(0);
 });
 
 test("holding option while dragging turns snapping off", async ({ bridge, page }) => {
@@ -152,10 +179,10 @@ test("a press that barely moves is a click and saves nothing", async ({ bridge, 
   const p = point(150, 100);
   await page.mouse.click(p.x, p.y);
   await expect(editor.selectionName).toHaveText("title");
-  // A second press on the selected item that does not move reaches beneath it
+  // A second press on the selected item that does not move keeps it
   await drag(page, p, { x: 1, y: 1 }, { steps: 1 });
   await page.mouse.up();
-  await expect(editor.selectionName).toHaveText("frame");
+  await expect(editor.selectionName).toHaveText("title");
   expect(applied(bridge)).toEqual([]);
 });
 

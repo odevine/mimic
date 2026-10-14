@@ -317,8 +317,10 @@ search. The card is kept with the draft. The right column lists the draft's
 layers, the selection, the layouts and every problem found in its files, with the
 path to each. A draft that does not load shows its problems and draws nothing.
 
-Clicking the card selects what is drawn on top at that point, and clicking the same
-place again selects what lies beneath it. The layers list selects too, and shows in
+Clicking the card selects what is drawn on top at that point, the item the preview
+outlines on hover, and clicking the empty space around the card lets go of the
+selection. The layers list selects too, which is how to reach a layer beneath
+another, and shows in
 a dimmer type what the test card does not draw, with the reason on hover. Dragging
 moves the selection, and the handles on a text box, an art window or a symbol
 resize it. A layer moves but has no handles, since its image is drawn at its own

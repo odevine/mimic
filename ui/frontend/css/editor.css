@@ -137,6 +137,11 @@
   outline: 1px solid var(--accent);
 }
 
+.ed-box.snap {
+  outline: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
 .ed-box.sel {
   outline: 2px solid var(--accent);
 }
@@ -182,6 +187,19 @@
   left: 0;
   right: 0;
   height: 1px;
+}
+
+.ed-guide-label {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--warn);
+  color: var(--bg, #000);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .ed-overlay.moving {

@@ -15,7 +15,7 @@ import {
   problems,
   startingCard,
 } from "../editor.js";
-import { asPercent, hitTest, moveRect, nudgeFor, pickAt, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
+import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
 import { createHistory } from "../editorhistory.js";
 import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
 
@@ -695,11 +695,10 @@ function onPointerDown(e) {
     gesture = { kind: "resize", handle: handle.dataset.handle, item: current, start: { x: e.clientX, y: e.clientY }, rect0: current.delivered, moved: false };
   } else {
     const p = nativePoint(e);
-    const was = store.selected.peek();
-    const hit = pickAt(view.items, p, was);
+    const hit = hitTest(view.items, p);
     store.selected.value = hit ? refOf(hit) : "";
     if (!hit) return;
-    gesture = { kind: view.editable ? "move" : "click", item: hit, start: { x: e.clientX, y: e.clientY }, rect0: hit.delivered, moved: false, p, wasSelected: refOf(hit) === was };
+    gesture = { kind: view.editable ? "move" : "click", item: hit, start: { x: e.clientX, y: e.clientY }, rect0: hit.delivered, moved: false, p };
   }
   try {
     // Capture keeps the drag going when the pointer leaves the card. A press with no
@@ -715,7 +714,7 @@ function onPointerMove(e) {
   const view = store.layout.peek();
   if (!view) return;
   if (!gesture) {
-    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e), null);
+    const hit = e.buttons ? null : hitTest(view.items, nativePoint(e));
     store.hover.value = hit ? refOf(hit) : "";
     return;
   }
@@ -736,7 +735,7 @@ function onPointerMove(e) {
   }
   let guides = [];
   if (!e.altKey) {
-    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item)), SNAP_PX * per);
+    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item), nameOf), SNAP_PX * per);
     ({ dx, dy, guides } = snapped);
   }
   store.live.value = { rect: moveRect(g.rect0, dx, dy), guides, dx, dy };
@@ -753,14 +752,7 @@ function onPointerUp(e) {
   const view = store.layout.peek();
   endGesture();
   if ($("ed-overlay").hasPointerCapture?.(e.pointerId)) $("ed-overlay").releasePointerCapture(e.pointerId);
-  if (!g.moved) {
-    // A click on what is selected already reaches what lies beneath it
-    if (g.wasSelected) {
-      const hit = hitTest(view.items, g.p, refOf(g.item));
-      store.selected.value = hit ? refOf(hit) : "";
-    }
-    return;
-  }
+  if (!g.moved) return;
   const live = store.live.peek();
   if (!live || g.kind === "click") {
     store.live.value = null;
@@ -853,9 +845,19 @@ function drawOverlay() {
     }
   }
   if (live) {
+    // The items a guide lines the dragged one up with are outlined too
+    const seen = new Set();
+    for (const g of live.guides) {
+      for (const r of g.boxes || []) {
+        const key = `${r.x},${r.y},${r.width},${r.height}`;
+        if (!seen.has(key)) out.push(box(r, "snap"));
+        seen.add(key);
+      }
+    }
     for (const g of live.guides) {
       const at = g.axis === "x" ? (g.at / canvas.width) * 100 : (g.at / canvas.height) * 100;
-      out.push(h("div", { class: `ed-guide ${g.axis}`, style: g.axis === "x" ? `left:${at}%` : `top:${at}%` }));
+      const label = g.to ? `${g.edge} to ${g.to}` : g.edge;
+      out.push(h("div", { class: `ed-guide ${g.axis}`, style: g.axis === "x" ? `left:${at}%` : `top:${at}%` }, h("span", { class: "ed-guide-label" }, label)));
     }
   }
   overlay.replaceChildren(...out);
@@ -1447,6 +1449,10 @@ export function initEditor() {
   overlay.addEventListener("pointermove", onPointerMove);
   overlay.addEventListener("pointerup", onPointerUp);
   overlay.addEventListener("pointercancel", cancelGesture);
+  // A press on the stage around the card lets go of the selection
+  $("ed-stage").addEventListener("pointerdown", (e) => {
+    if (e.button === 0 && !e.target.closest("#ed-canvas")) store.selected.value = "";
+  });
   overlay.addEventListener("pointerleave", () => {
     if (!gesture) store.hover.value = "";
   });

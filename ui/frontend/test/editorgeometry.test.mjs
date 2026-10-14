@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { HANDLES, visibleHandles, refOf, contains, selectable, hitTest, pickAt, resizeRect, moveRect, snapTargets, snapMove, toNative, asPercent, nudgeFor } from "../js/editorgeometry.js";
+import { HANDLES, visibleHandles, refOf, contains, selectable, hitTest, resizeRect, moveRect, snapTargets, snapMove, toNative, asPercent, nudgeFor } from "../js/editorgeometry.js";
 
 const item = (kind, key, x, y, width, height, drawn = true) => ({ kind, key, drawn, delivered: { x, y, width, height } });
 
@@ -29,36 +29,18 @@ test("only what is drawn and has room can be picked", () => {
 });
 
 test("the topmost item under a point is picked", () => {
-  assert.equal(refOf(hitTest(items, { x: 25, y: 14 }, null)), "text:title");
-  assert.equal(refOf(hitTest(items, { x: 25, y: 40 }, null)), "art:0");
-  assert.equal(refOf(hitTest(items, { x: 12, y: 100 }, null)), "layer:frame");
-  assert.equal(refOf(hitTest(items, { x: 2, y: 2 }, null)), "layer:background");
-  assert.equal(hitTest(items, { x: 200, y: 2 }, null), null);
+  assert.equal(refOf(hitTest(items, { x: 25, y: 14 })), "text:title");
+  assert.equal(refOf(hitTest(items, { x: 25, y: 40 })), "art:0");
+  assert.equal(refOf(hitTest(items, { x: 12, y: 100 })), "layer:frame");
+  assert.equal(refOf(hitTest(items, { x: 2, y: 2 })), "layer:background");
+  assert.equal(hitTest(items, { x: 200, y: 2 }), null);
   // An item that is not drawn is not there to hit, whatever its rectangle says
-  assert.equal(refOf(hitTest(items, { x: 65, y: 125 }, null)), "layer:frame");
+  assert.equal(refOf(hitTest(items, { x: 65, y: 125 })), "layer:frame");
 });
 
-test("asking again inside the selected item reaches the one beneath, and wraps", () => {
+test("the same point always picks the same item, whatever is selected", () => {
   const p = { x: 25, y: 14 };
-  const order = [];
-  let selected = null;
-  for (let i = 0; i < 5; i++) {
-    selected = refOf(hitTest(items, p, selected));
-    order.push(selected);
-  }
-  // The art starts below the point, so it is not among the items there
-  assert.deepEqual(order, ["text:title", "layer:frame", "layer:background", "text:title", "layer:frame"]);
-});
-
-test("a point outside the selected item picks the topmost there", () => {
-  assert.equal(refOf(hitTest(items, { x: 2, y: 2 }, "text:title")), "layer:background");
-});
-
-test("a first press keeps the selected item when it is under the point, and otherwise picks the topmost", () => {
-  assert.equal(refOf(pickAt(items, { x: 25, y: 14 }, "layer:frame")), "layer:frame");
-  assert.equal(refOf(pickAt(items, { x: 25, y: 14 }, "art:0")), "text:title", "an item that is not under the point is not kept");
-  assert.equal(refOf(pickAt(items, { x: 25, y: 14 }, "layer:gone")), "text:title");
-  assert.equal(pickAt(items, { x: 500, y: 14 }, null), null);
+  for (let i = 0; i < 3; i++) assert.equal(refOf(hitTest(items, p)), "text:title");
 });
 
 test("each handle moves the sides it holds", () => {
@@ -103,9 +85,9 @@ test("an edge or the middle within the threshold lands on a line, one axis at a 
   const targets = { x: [0, 50, 100], y: [0, 70, 140] };
   const r = { x: 20, y: 30, width: 30, height: 10 };
   // The right edge would be at 52 and snaps to 50, and the top at 31 is too far from 0
-  assert.deepEqual(snapMove(r, 2, 1, targets, 3), { dx: 0, dy: 1, guides: [{ axis: "x", at: 50 }] });
+  assert.deepEqual(snapMove(r, 2, 1, targets, 3), { dx: 0, dy: 1, guides: [{ axis: "x", at: 50, edge: "right", to: "", boxes: [] }] });
   // The middle would be at 68 and snaps to 70, and the x edges at 60 and 70 snap to nothing
-  assert.deepEqual(snapMove({ x: 20, y: 60, width: 10, height: 10 }, 40, 3, targets, 3), { dx: 40, dy: 5, guides: [{ axis: "y", at: 70 }] });
+  assert.deepEqual(snapMove({ x: 20, y: 60, width: 10, height: 10 }, 40, 3, targets, 3), { dx: 40, dy: 5, guides: [{ axis: "y", at: 70, edge: "middle", to: "", boxes: [] }] });
   // Out of reach on both axes
   assert.deepEqual(snapMove(r, 11, 0, targets, 3).guides, []);
   assert.equal(snapMove(r, 2, 0, targets, 0).dx, 2, "a threshold of nothing snaps to nothing");
@@ -152,5 +134,24 @@ test("a snap to a line on a half pixel still moves by whole pixels", () => {
   const r = { x: 230, y: 0, width: 20, height: 10 };
   const got = snapMove(r, 0, 0, targets, 12);
   assert.ok(Number.isInteger(got.dx) && Number.isInteger(got.dy), `moved by ${got.dx}, ${got.dy}`);
-  assert.deepEqual(got.guides, [{ axis: "x", at: 249.5 }]);
+  assert.equal(got.guides[0].at, 249.5);
+});
+
+test("a guide names the edge held and what else lies on the line", () => {
+  const canvas = { width: 200, height: 100 };
+  const items = [
+    { kind: "text", key: "title", drawn: true, delivered: { x: 20, y: 10, width: 60, height: 10 } },
+    { kind: "text", key: "type", drawn: true, delivered: { x: 20, y: 40, width: 30, height: 10 } },
+  ];
+  const t = snapTargets(items, canvas, "text:other", (it) => it.key);
+  // The moving box's left edge would be at 21, one off the line the title and the type share
+  const g = snapMove({ x: 21, y: 70, width: 10, height: 10 }, 0, 0, t, 3).guides[0];
+  assert.deepEqual(g, { axis: "x", at: 20, edge: "left", to: "title left, type left", boxes: [items[0].delivered, items[1].delivered] });
+  // The canvas takes part, and a crowded line is cut short
+  const c = snapMove({ x: 0, y: 70, width: 10, height: 10 }, 1, 0, t, 3).guides[0];
+  assert.equal(c.to, "canvas left");
+  assert.ok(c.boxes.every((r) => r.x === 0), "the canvas has no box of its own to outline");
+  const crowded = [...items, { kind: "text", key: "a", drawn: true, delivered: { x: 20, y: 60, width: 5, height: 5 } }];
+  const m = snapMove({ x: 21, y: 90, width: 10, height: 5 }, 0, 0, snapTargets(crowded, canvas, "", (it) => it.key), 3).guides[0];
+  assert.equal(m.to, "title left, type left, 1 more");
 });

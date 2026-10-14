@@ -28,24 +28,11 @@ export function selectable(items) {
   return (items || []).filter((it) => it.drawn && it.delivered.width > 0 && it.delivered.height > 0);
 }
 
-// hitTest picks the item under a point. The topmost wins, which is the last drawn.
-// Asked again at a point inside the item already selected, it picks the next one
-// beneath it, so a layer under a text box can be reached, and from the lowest it
-// goes back to the top
-export function hitTest(items, p, selected) {
+// hitTest picks the item under a point. The topmost wins, which is the last drawn,
+// and it is the same one the preview outlines on hover
+export function hitTest(items, p) {
   const under = selectable(items).filter((it) => contains(it.delivered, p));
-  if (!under.length) return null;
-  const at = under.findIndex((it) => refOf(it) === selected);
-  if (at < 0) return under[under.length - 1];
-  return under[at === 0 ? under.length - 1 : at - 1];
-}
-
-// pickAt is hitTest without the cycling, for the first press on an item
-export function pickAt(items, p, selected) {
-  const under = selectable(items).filter((it) => contains(it.delivered, p));
-  if (!under.length) return null;
-  const current = under.find((it) => refOf(it) === selected);
-  return current || under[under.length - 1];
+  return under.length ? under[under.length - 1] : null;
 }
 
 // resizeRect moves the sides a handle holds by (dx, dy), and keeps the rectangle at
@@ -82,44 +69,67 @@ export function moveRect(rect, dx, dy) {
 
 const edges = (r) => ({ x: [r.x, r.x + r.width / 2, r.x + r.width], y: [r.y, r.y + r.height / 2, r.y + r.height] });
 
+const EDGE_NAMES = { x: ["left", "center", "right"], y: ["top", "middle", "bottom"] };
+
 // snapTargets are the lines a moving item can snap to: the canvas's edges and middle
-// and the edges and middle of every other item
-export function snapTargets(items, canvas, except) {
+// and the edges and middle of every other item. nameOf says what an item is called,
+// and the result's names say what lies on each line, as { x: Map, y: Map } of a
+// line to the edges on it, each { text, rect } with no rect for the canvas
+export function snapTargets(items, canvas, except, nameOf = (it) => it.key) {
   const whole = { x: 0, y: 0, width: canvas.width, height: canvas.height };
-  const xs = new Set(edges(whole).x);
-  const ys = new Set(edges(whole).y);
+  const names = { x: new Map(), y: new Map() };
+  const add = (owner, rect) => {
+    const e = edges(rect);
+    for (const axis of ["x", "y"]) {
+      e[axis].forEach((v, i) => {
+        const on = names[axis].get(v) || [];
+        on.push({ text: `${owner} ${EDGE_NAMES[axis][i]}`, rect: owner === "canvas" ? null : rect });
+        names[axis].set(v, on);
+      });
+    }
+  };
+  add("canvas", whole);
   for (const it of selectable(items)) {
-    if (refOf(it) === except) continue;
     // A frame layer that fills the canvas has the canvas's own lines
-    const e = edges(it.delivered);
-    e.x.forEach((v) => xs.add(v));
-    e.y.forEach((v) => ys.add(v));
+    if (refOf(it) !== except) add(nameOf(it), it.delivered);
   }
-  return { x: [...xs].sort((a, b) => a - b), y: [...ys].sort((a, b) => a - b) };
+  const sorted = (m) => [...m.keys()].sort((a, b) => a - b);
+  return { x: sorted(names.x), y: sorted(names.y), names };
 }
 
 function nearest(values, lines, threshold) {
   let best = null;
-  for (const v of values) {
+  values.forEach((v, edge) => {
     for (const line of lines) {
       const d = line - v;
-      if (Math.abs(d) <= threshold && (best === null || Math.abs(d) < Math.abs(best.d))) best = { d, at: line };
+      if (Math.abs(d) <= threshold && (best === null || Math.abs(d) < Math.abs(best.d))) best = { d, at: line, edge };
     }
-  }
+  });
   return best;
+}
+
+// A guide says which edge of the moving rectangle is on the line and what else is on it
+function guideFor(axis, hit, targets) {
+  const on = targets.names ? targets.names[axis].get(hit.at) || [] : [];
+  const texts = on.map((o) => o.text);
+  const shown = texts.length > 2 ? [...texts.slice(0, 2), `${texts.length - 2} more`] : texts;
+  const boxes = [];
+  for (const o of on) if (o.rect && !boxes.includes(o.rect)) boxes.push(o.rect);
+  return { axis, at: hit.at, edge: EDGE_NAMES[axis][hit.edge], to: shown.join(", "), boxes };
 }
 
 // snapMove adjusts a move so that an edge or the middle of the rectangle lands on a
 // line within threshold pixels, one axis at a time. It returns the move to make and
-// the guides to draw
+// the guides to draw, each naming the edge held, what it lines up with and the
+// rectangles of the items on the line
 export function snapMove(rect, dx, dy, targets, threshold) {
   const moved = moveRect(rect, dx, dy);
   const e = edges(moved);
   const sx = nearest(e.x, targets.x, threshold);
   const sy = nearest(e.y, targets.y, threshold);
   const guides = [];
-  if (sx) guides.push({ axis: "x", at: sx.at });
-  if (sy) guides.push({ axis: "y", at: sy.at });
+  if (sx) guides.push(guideFor("x", sx, targets));
+  if (sy) guides.push(guideFor("y", sy, targets));
   // A middle line can sit on a half pixel, and a move is whole pixels
   return { dx: Math.round(dx + (sx ? sx.d : 0)), dy: Math.round(dy + (sy ? sy.d : 0)), guides };
 }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { HANDLES, visibleHandles, refOf, contains, selectable, hitTest, pickAt, resizeRect, moveRect, snapTargets, snapMove, toNative, asPercent, nudgeFor } from "../js/studiogeometry.js";
+import { HANDLES, visibleHandles, refOf, contains, selectable, hitTest, pickAt, resizeRect, moveRect, snapTargets, snapMove, toNative, asPercent, nudgeFor } from "../js/editorgeometry.js";
 
 const item = (kind, key, x, y, width, height, drawn = true) => ({ kind, key, drawn, delivered: { x, y, width, height } });
 

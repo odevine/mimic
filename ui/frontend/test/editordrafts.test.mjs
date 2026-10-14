@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseDpi, forkName, checkName, draftLabel, layoutLine, problems, cardLine, startingCard, forkedFrom, DPI_DEFAULT } from "../js/studio.js";
+import { parseDpi, forkName, checkName, draftLabel, layoutLine, problems, cardLine, startingCard, forkedFrom, DPI_DEFAULT } from "../js/editor.js";
 
 test("an empty resolution is the default and a number in range is itself", () => {
   assert.deepEqual(parseDpi(""), { dpi: DPI_DEFAULT, error: "" });
@@ -73,7 +73,7 @@ test("a copy says where it began", () => {
 });
 
 test("a canvas is the size of a card with its bleed at the resolution", async () => {
-  const { canvasSize } = await import("../js/studio.js");
+  const { canvasSize } = await import("../js/editor.js");
   assert.deepEqual(canvasSize(800), { width: 2176, height: 2960 });
   assert.deepEqual(canvasSize(72), { width: 196, height: 266 });
 });

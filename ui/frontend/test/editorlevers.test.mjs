@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove } from "../js/studiolevers.js";
+import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove } from "../js/editorlevers.js";
 
 const vocab = {
   draws: ["title", "oracle", "pt"],

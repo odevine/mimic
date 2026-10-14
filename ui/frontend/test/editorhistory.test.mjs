@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createHistory } from "../js/studiohistory.js";
+import { createHistory } from "../js/editorhistory.js";
 
 const target = { layout: "normal", kind: "text", key: "title" };
 const move = (dx, dy, extra = {}) => ({ op: "move", ...target, dx, dy, ...extra });

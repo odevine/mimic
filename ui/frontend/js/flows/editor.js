@@ -14,10 +14,10 @@ import {
   parseDpi,
   problems,
   startingCard,
-} from "../studio.js";
-import { asPercent, hitTest, moveRect, nudgeFor, pickAt, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../studiogeometry.js";
-import { createHistory } from "../studiohistory.js";
-import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../studiolevers.js";
+} from "../editor.js";
+import { asPercent, hitTest, moveRect, nudgeFor, pickAt, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
+import { createHistory } from "../editorhistory.js";
+import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../editorlevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
 // template on disk that the app renders as it is, so everything shown here is read

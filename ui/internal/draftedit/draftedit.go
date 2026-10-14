@@ -7,6 +7,7 @@
 package draftedit
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -25,6 +26,11 @@ const (
 	KindText   = "text"
 	KindArt    = "art"
 	KindSymbol = "symbol"
+	// KindCanvas is a layout's canvas, KindPart a part of the template, and
+	// KindTemplate the template's own fields
+	KindCanvas   = "canvas"
+	KindPart     = "part"
+	KindTemplate = "template"
 )
 
 // The operations
@@ -32,6 +38,11 @@ const (
 	OpMove    = "move"
 	OpResize  = "resize"
 	OpReorder = "reorder"
+	// OpSet puts a value at a path inside an element, and OpUnset takes it out
+	OpSet   = "set"
+	OpUnset = "unset"
+	// OpReplace writes a whole file
+	OpReplace = "replace"
 )
 
 // Rect is a position and size in the finished image
@@ -63,6 +74,15 @@ type Op struct {
 	// To is the place in the stack a reorder moves an entry to, where 0 is the
 	// bottom
 	To int `json:"to,omitempty"`
+	// Path names a field inside the element by its keys, such as ["text",
+	// "fontSize"], for a set or an unset, and Value is what a set puts there as JSON.
+	// A set of an element's numbers is in the layout's own canvas, unlike a move
+	Path  []string        `json:"path,omitempty"`
+	Value json.RawMessage `json:"value,omitempty"`
+	// File and Content are the file a replace writes and what it holds. A replace
+	// is a batch of its own
+	File    string `json:"file,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
 // ErrExtends is the refusal for a layout that builds on another, whose numbers are
@@ -85,6 +105,11 @@ var layoutName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 func Apply(fsys fs.FS, ops []Op) (*Result, error) {
 	w := &work{fsys: fsys, layouts: map[string]*layout{}}
 	res := &Result{Files: map[string][]byte{}}
+	for _, op := range ops {
+		if op.Op == OpReplace && len(ops) > 1 {
+			return nil, errors.New("a whole file is replaced on its own, not with other changes")
+		}
+	}
 	var inverse []Op
 	for i, op := range ops {
 		inv, err := w.apply(op)
@@ -101,6 +126,12 @@ func Apply(fsys fs.FS, ops []Op) (*Result, error) {
 		if l.changed {
 			res.Files[l.path] = l.root.Marshal()
 		}
+	}
+	if w.sourceChanged {
+		res.Files[sourceFile] = w.source.Marshal()
+	}
+	for name, data := range w.replaced {
+		res.Files[name] = data
 	}
 	return res, nil
 }
@@ -120,10 +151,16 @@ func describe(op Op, i int) string {
 	return fmt.Sprintf("%s of %s %q", op.Op, op.Kind, op.Key)
 }
 
+const sourceFile = "template.json"
+
 type work struct {
 	fsys    fs.FS
 	layouts map[string]*layout
-	source  *jsonedit.Node
+	// source is template.json, read when an edit needs it
+	source        *jsonedit.Node
+	sourceChanged bool
+	// replaced is the files a replace wrote
+	replaced map[string][]byte
 }
 
 type layout struct {
@@ -190,6 +227,12 @@ func authoredDelta(dx, dy, rotate int) (int, int) {
 }
 
 func (w *work) apply(op Op) (Op, error) {
+	switch op.Op {
+	case OpReplace:
+		return w.replace(op)
+	case OpSet, OpUnset:
+		return w.change(op)
+	}
 	l, err := w.layout(op.Layout)
 	if err != nil {
 		return Op{}, err
@@ -276,16 +319,11 @@ func stackEntry(l *layout, key string) (*jsonedit.Node, int, error) {
 // partOrigin is where a part's images sit in the canvas, which is where an entry
 // that places nothing itself draws them
 func (w *work) partOrigin(part string) (image.Point, error) {
-	if w.source == nil {
-		raw, err := fs.ReadFile(w.fsys, "template.json")
-		if err != nil {
-			return image.Point{}, errors.New("the draft has no template.json")
-		}
-		if w.source, err = jsonedit.Parse(raw); err != nil {
-			return image.Point{}, fmt.Errorf("template.json is not valid JSON: %w", err)
-		}
+	src, err := w.sourceNode()
+	if err != nil {
+		return image.Point{}, err
 	}
-	o := w.source.Path("parts", part, "origin")
+	o := src.Path("parts", part, "origin")
 	if o == nil {
 		return image.Point{}, nil
 	}
@@ -295,6 +333,25 @@ func (w *work) partOrigin(part string) (image.Point, error) {
 		return image.Point{}, fmt.Errorf("the origin of part %q is not whole numbers", part)
 	}
 	return image.Pt(x, y), nil
+}
+
+// sourceNode is template.json as a tree, read the first time an edit needs it
+func (w *work) sourceNode() (*jsonedit.Node, error) {
+	if w.source == nil {
+		raw, err := fs.ReadFile(w.fsys, sourceFile)
+		if err != nil {
+			return nil, errors.New("the draft has no template.json")
+		}
+		src, err := jsonedit.Parse(raw)
+		if err != nil {
+			return nil, fmt.Errorf("template.json is not valid JSON: %w", err)
+		}
+		if src.Kind() != jsonedit.Object {
+			return nil, errors.New("template.json is not an object")
+		}
+		w.source = src
+	}
+	return w.source, nil
 }
 
 func (w *work) move(l *layout, op Op) (Op, error) {
@@ -383,4 +440,120 @@ func (w *work) reorder(l *layout, op Op) (Op, error) {
 	}
 	l.changed = true
 	return Op{Op: OpReorder, Layout: op.Layout, Kind: op.Kind, Key: op.Key, To: from}, nil
+}
+
+var fieldName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// maxPath is how deep a field can be, which is deeper than any the manifest has
+const maxPath = 4
+
+// element is the node an element's fields are in, and what marks it changed
+func (w *work) element(op Op) (*jsonedit.Node, func(), error) {
+	switch op.Kind {
+	case KindTemplate:
+		src, err := w.sourceNode()
+		return src, func() { w.sourceChanged = true }, err
+	case KindPart:
+		src, err := w.sourceNode()
+		if err != nil {
+			return nil, nil, err
+		}
+		part := src.Path("parts", op.Key)
+		if part == nil || part.Kind() != jsonedit.Object {
+			return nil, nil, fmt.Errorf("the template has no part %q", op.Key)
+		}
+		return part, func() { w.sourceChanged = true }, nil
+	}
+	l, err := w.layout(op.Layout)
+	if err != nil {
+		return nil, nil, err
+	}
+	changed := func() { l.changed = true }
+	var node *jsonedit.Node
+	switch op.Kind {
+	case KindCanvas:
+		node = l.root.Field("canvas")
+	case KindLayer:
+		node, _, err = stackEntry(l, op.Key)
+		if err != nil {
+			return nil, nil, err
+		}
+	case KindText:
+		node = l.root.Path("textBoxes", op.Key)
+	case KindArt:
+		if i, err := strconv.Atoi(op.Key); err == nil {
+			node = l.root.Field("art").Item(i)
+		}
+	case KindSymbol:
+		node = l.root.Path("symbols", op.Key)
+	default:
+		return nil, nil, fmt.Errorf("%q is not something that can be changed", op.Kind)
+	}
+	if node == nil || node.Kind() != jsonedit.Object {
+		return nil, nil, fmt.Errorf("the layout has no %s %q", op.Kind, op.Key)
+	}
+	return node, changed, nil
+}
+
+// change sets or unsets a field of an element, and returns the operation that puts it
+// back
+func (w *work) change(op Op) (Op, error) {
+	if len(op.Path) == 0 || len(op.Path) > maxPath {
+		return Op{}, fmt.Errorf("a field is named by 1 to %d keys", maxPath)
+	}
+	for _, name := range op.Path {
+		if !fieldName.MatchString(name) {
+			return Op{}, fmt.Errorf("%q is not the name of a field", name)
+		}
+	}
+	node, changed, err := w.element(op)
+	if err != nil {
+		return Op{}, err
+	}
+	back := Op{Layout: op.Layout, Kind: op.Kind, Key: op.Key, Path: op.Path}
+	var old *jsonedit.Node
+	if op.Op == OpSet {
+		v, err := jsonedit.Parse(op.Value)
+		if err != nil {
+			return Op{}, fmt.Errorf("the value is not JSON: %w", err)
+		}
+		if old, err = node.SetPath(op.Path, v); err != nil {
+			return Op{}, err
+		}
+	} else {
+		old = node.DeletePath(op.Path)
+	}
+	changed()
+	if old == nil {
+		back.Op = OpUnset
+	} else {
+		back.Op, back.Value = OpSet, json.RawMessage(old.Compact())
+	}
+	return back, nil
+}
+
+var layoutFile = regexp.MustCompile(`^layouts/[A-Za-z0-9][A-Za-z0-9_-]*\.json$`)
+
+// replace writes a whole file, as the JSON editor does. The file has to be one of the
+// draft's, and what it is to hold has to be a JSON object, but it is kept as written
+func (w *work) replace(op Op) (Op, error) {
+	if op.File != sourceFile && !layoutFile.MatchString(op.File) {
+		return Op{}, fmt.Errorf("%q is not a file of the template that can be written", op.File)
+	}
+	was, err := fs.ReadFile(w.fsys, op.File)
+	if err != nil {
+		return Op{}, fmt.Errorf("the draft has no file %s", op.File)
+	}
+	n, err := jsonedit.Parse([]byte(op.Content))
+	if err != nil {
+		return Op{}, fmt.Errorf("%s is not valid JSON: %w", op.File, err)
+	}
+	if n.Kind() != jsonedit.Object {
+		return Op{}, fmt.Errorf("%s is not a JSON object", op.File)
+	}
+	if w.replaced == nil {
+		w.replaced = map[string][]byte{}
+	}
+	w.replaced[op.File] = []byte(op.Content)
+	return Op{Op: OpReplace, File: op.File, Content: string(was)}, nil
 }

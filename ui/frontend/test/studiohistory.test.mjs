@@ -124,3 +124,44 @@ test("clearing empties both ways", () => {
   assert.equal(h.canUndo || h.canRedo, false);
   assert.equal(h.nextUndo + h.nextRedo, "");
 });
+
+test("a field set again in a run keeps the latest value and the first undo", () => {
+  const c = clock();
+  const h = createHistory({ now: c.now });
+  const set = (value, extra = {}) => ({ op: "set", ...target, path: ["text", "fontSize"], value, ...extra });
+  h.record({ ops: [set(20)], inverse: [set(12)], label: "Change size", merge: "lever" });
+  c.tick(100);
+  h.record({ ops: [set(21)], inverse: [set(20)], label: "Change size", merge: "lever" });
+  c.tick(100);
+  h.record({ ops: [set(22)], inverse: [set(21)], label: "Change size", merge: "lever" });
+  const e = h.undo();
+  assert.equal(e.ops[0].value, 22);
+  assert.equal(e.inverse[0].value, 12);
+  assert.equal(h.undo(), null);
+});
+
+test("different fields, or a set and an unset of other fields, stay separate", () => {
+  const c = clock();
+  const h = createHistory({ now: c.now });
+  const set = (path, value) => ({ op: "set", ...target, path, value });
+  h.record({ ops: [set(["text", "fontSize"], 20)], inverse: [set(["text", "fontSize"], 12)], label: "a", merge: "lever" });
+  h.record({ ops: [set(["text", "color"], "#000000")], inverse: [{ op: "unset", ...target, path: ["text", "color"] }], label: "b", merge: "lever" });
+  assert.ok(h.undo() && h.undo() && !h.undo());
+});
+
+test("a file written again in a run is one entry that goes back to the first text", () => {
+  const c = clock();
+  const h = createHistory({ now: c.now });
+  const write = (content) => ({ op: "replace", file: "layouts/normal.json", content });
+  h.record({ ops: [write("{\"a\":1}")], inverse: [write("{}")], label: "Edit", merge: "json" });
+  c.tick(200);
+  h.record({ ops: [write("{\"a\":12}")], inverse: [write("{\"a\":1}")], label: "Edit", merge: "json" });
+  const e = h.undo();
+  assert.equal(e.ops[0].content, '{"a":12}');
+  assert.equal(e.inverse[0].content, "{}");
+  assert.equal(h.undo(), null);
+  // Another file is another entry
+  h.record({ ops: [write("1")], inverse: [write("0")], label: "Edit", merge: "json" });
+  h.record({ ops: [{ ...write("2"), file: "template.json" }], inverse: [{ ...write("0"), file: "template.json" }], label: "Edit", merge: "json" });
+  assert.ok(h.undo() && h.undo() && !h.undo());
+});

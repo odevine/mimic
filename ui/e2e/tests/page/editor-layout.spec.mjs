@@ -238,7 +238,7 @@ test("each edit is followed by a fresh description and a new render", async ({ b
   const before = bridge.calledWith("Studio.Describe").length;
   bridge.reply("Studio.Apply", (req) => {
     moved = req.ops[0].dx;
-    return { rev: 1, inverse: [{ ...req.ops[0], dx: -req.ops[0].dx }] };
+    return { rev: 1, inverse: [{ ...req.ops[0], dx: -req.ops[0].dx }], valid: true, diagnostics: [] };
   });
   await page.keyboard.down("Alt");
   await drag(page, p, { x: 40, y: 0 });

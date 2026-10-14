@@ -9,12 +9,18 @@ const MERGE_MS = 800;
 const sameTarget = (a, b) => a.layout === b.layout && a.kind === b.kind && a.key === b.key;
 
 // merged is two entries as one, or null when they are not the same kind of change to
-// the same thing. Moves add up, and for a resize the latest size stands with the
-// first undo
+// the same thing. Moves add up, and for a resize, a field or a file the latest value
+// stands with the first undo
 function merged(prev, next) {
   if (prev.ops.length !== 1 || next.ops.length !== 1 || prev.inverse.length !== 1 || next.inverse.length !== 1) return null;
   const [a] = prev.ops;
   const [b] = next.ops;
+  // A whole file written again is the file as it is now, with the first undo
+  if (a.op === "replace" && b.op === "replace" && a.file === b.file) return { ...next, ops: [b], inverse: prev.inverse };
+  const field = (op) => op.op === "set" || op.op === "unset";
+  if (field(a) && field(b) && sameTarget(a, b) && JSON.stringify(a.path) === JSON.stringify(b.path)) {
+    return { ...next, ops: [b], inverse: prev.inverse };
+  }
   if (a.op !== b.op || !sameTarget(a, b)) return null;
   if (a.op === "move") {
     const op = { ...a, dx: (a.dx || 0) + (b.dx || 0), dy: (a.dy || 0) + (b.dy || 0) };

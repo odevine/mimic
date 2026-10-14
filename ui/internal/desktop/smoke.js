@@ -237,6 +237,35 @@ async function flows(outDir) {
     doc.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
     await until("the move to be undone", () => readX() === x && $("ed-undo").disabled);
     notes.push("an edit in the editor is saved, shown and undone");
+
+    // A lever changes a field in the file, and the JSON editor shows the file with it
+    const size = $("lever-fontSize");
+    const was = Number(size.value);
+    type(size, String(was + 3));
+    const draftId = $("ed-about-id").textContent.replace(/^user\./, "");
+    const sizeInFile = async () => {
+      const src = await api.draftSource(draftId);
+      const layout = JSON.parse(src.files.find((f) => f.name === "layouts/normal.json").content);
+      return layout.textBoxes.title.text.fontSize;
+    };
+    const end = Date.now() + 20000;
+    while ((await sizeInFile()) !== was + 3) {
+      if (Date.now() > end) throw new Error("timed out waiting for the lever's change to be saved");
+      await sleep(100);
+    }
+    $("ed-json").click();
+    await until("the JSON editor", () => {
+      if (!shown($("ed-json-pane"))) return false;
+      try {
+        return !!JSON.parse($("ed-json-text").value).contract;
+      } catch {
+        return false;
+      }
+    });
+    $("ed-json-close").click();
+    $("ed-undo").click();
+    await until("the lever's change to be undone", () => Number($("lever-fontSize").value) === was);
+    notes.push("a lever edits the file and the JSON editor shows it");
   }
 
   return notes;

@@ -155,3 +155,70 @@ func TestSetOnANonObjectFails(t *testing.T) {
 		t.Error("set on nil worked")
 	}
 }
+
+func TestDeleteTakesAKeyOutAndKeepsTheRestInOrder(t *testing.T) {
+	n, _ := Parse([]byte(`{"a":1,"b":2,"c":3}`))
+	if !n.Delete("b") || n.Delete("b") || n.Delete("zz") {
+		t.Error("Delete did not report whether the key was there")
+	}
+	if got := strings.Join(n.Keys(), ","); got != "a,c" {
+		t.Errorf("keys = %s", got)
+	}
+	arr, _ := Parse([]byte(`[1]`))
+	if arr.Delete("a") {
+		t.Error("deleted a key of an array")
+	}
+}
+
+func TestSetPathMakesTheObjectsOnTheWayAndReturnsWhatWasThere(t *testing.T) {
+	n, _ := Parse([]byte(`{"text":{"fontSize":12},"name":"x"}`))
+	old, err := n.SetPath([]string{"text", "shadow", "distance"}, NewInt(3))
+	if err != nil || old != nil {
+		t.Fatalf("old = %v, err = %v", old, err)
+	}
+	if got := string(n.Path("text").Compact()); got != `{"fontSize":12,"shadow":{"distance":3}}` {
+		t.Errorf("text = %s", got)
+	}
+	old, err = n.SetPath([]string{"text", "fontSize"}, NewInt(20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := old.Int(); v != 12 {
+		t.Errorf("old fontSize = %d", v)
+	}
+	if _, err := n.SetPath([]string{"name", "x"}, NewInt(1)); err == nil {
+		t.Error("put a key inside a string")
+	}
+	if _, err := n.SetPath(nil, NewInt(1)); err == nil {
+		t.Error("set with no path")
+	}
+}
+
+func TestDeletePathReturnsTheValueAndLeavesNoKey(t *testing.T) {
+	n, _ := Parse([]byte(`{"text":{"fontSize":12,"color":"#fff"}}`))
+	old := n.DeletePath([]string{"text", "color"})
+	if s, _ := old.String(); s != "#fff" {
+		t.Errorf("old = %v", old)
+	}
+	if got := string(n.Compact()); got != `{"text":{"fontSize":12}}` {
+		t.Errorf("document = %s", got)
+	}
+	if n.DeletePath([]string{"text", "color"}) != nil || n.DeletePath([]string{"nope", "x"}) != nil || n.DeletePath(nil) != nil {
+		t.Error("deleting what is not there returned a value")
+	}
+}
+
+func TestCompactWritesOneLineAndRoundTrips(t *testing.T) {
+	n, _ := Parse([]byte(sample))
+	c := n.Compact()
+	if bytes.ContainsAny(c, "\n ") && !strings.Contains(string(c), `"text":"a`) {
+		t.Errorf("not compact: %s", c)
+	}
+	back, err := Parse(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(back.Marshal(), n.Marshal()) {
+		t.Error("a compact copy does not read back to the same document")
+	}
+}

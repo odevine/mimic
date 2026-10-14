@@ -149,6 +149,53 @@ export const scenes = {
       await expect(editor.undoButton).toBeEnabled();
     },
   },
+  "editor-levers": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine, { meta: { forkedFrom: "mimic.m15 1.0.0", lockedCredits: 1, licenseLocked: true } }));
+      bridge.source.template.license = "CC BY 4.0";
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "title" }).click();
+      await expect(editor.lever("lever-fontSize")).toHaveValue("60");
+      await page.locator("#lever-shadow-on").check();
+      await page.locator("#ed-template-details > summary").click();
+      await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");
+      await editor.lever("lever-color").fill("red");
+      await editor.lever("lever-color").blur();
+      await expect(editor.leverError("lever-color")).toBeVisible();
+    },
+  },
+  "editor-json": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      bridge.reply("Studio.CheckFile", () => ({
+        writable: false,
+        problems: [
+          { severity: "error", line: 12, column: 5, message: "invalid character '}' looking for beginning of object key string" },
+          { severity: "warning", path: "template.json", message: "the template has no description" },
+        ],
+      }));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.jsonButton.click();
+      await editor.jsonTabs.nth(1).click();
+      await expect(editor.jsonProblems).toHaveCount(2);
+    },
+  },
   "editor-problems": {
     mask: ["#ed-activity"],
     run: async ({ bridge, page }) => {

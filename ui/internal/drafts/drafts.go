@@ -64,6 +64,11 @@ type Summary struct {
 // not part of the template itself
 type Meta struct {
 	ForkedFrom string `json:"forkedFrom,omitempty"`
+	// LockedCredits is how many of the draft's first credits came from the template
+	// it was copied from, with the one that names it, and LicenseLocked says the
+	// license did too. The editor keeps them, since they travel with the art
+	LockedCredits int  `json:"lockedCredits,omitempty"`
+	LicenseLocked bool `json:"licenseLocked,omitempty"`
 	// TestCard is the card the draft renders while it is edited, and Face is which
 	// of its images
 	TestCard *card.Data `json:"testCard,omitempty"`
@@ -278,7 +283,7 @@ func (s *Store) Fork(p template.AssetProvider, header template.BundleHeader, nam
 		return Summary{}, err
 	}
 	files[sourceFile] = append(out, '\n')
-	return s.write(slug, files, Meta{ForkedFrom: was})
+	return s.write(slug, files, Meta{ForkedFrom: was, LockedCredits: len(src.Credits), LicenseLocked: src.License != ""})
 }
 
 // write puts the files in a folder of their own, in one step so a draft is never
@@ -307,7 +312,7 @@ func (s *Store) write(slug string, files map[string][]byte, meta Meta) (Summary,
 			return fail(err)
 		}
 	}
-	if meta != (Meta{}) {
+	if meta.ForkedFrom != "" || meta.TestCard != nil || meta.Face != 0 {
 		if err := writeMeta(staging, meta); err != nil {
 			return fail(err)
 		}

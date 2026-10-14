@@ -17,6 +17,7 @@ import {
 } from "../studio.js";
 import { asPercent, hitTest, moveRect, nudgeFor, pickAt, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../studiogeometry.js";
 import { createHistory } from "../studiohistory.js";
+import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, layerAt, parseField, readPath, shadowOps } from "../studiolevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
 // template on disk that the app renders as it is, so everything shown here is read
@@ -42,6 +43,10 @@ const store = {
   live: signal(null),
   canUndo: signal(false),
   canRedo: signal(false),
+  // the template's files as the app has them: { files, docs }, where docs holds each
+  // one parsed, or null for one that is not JSON, and the names the fields take
+  source: signal(null),
+  vocab: signal(null),
 };
 
 const history = createHistory();
@@ -154,6 +159,15 @@ async function loadDrafts() {
   }
 }
 
+async function loadVocab() {
+  if (store.vocab.peek()) return;
+  try {
+    store.vocab.value = await api.draftVocabulary();
+  } catch (err) {
+    toast(`Could not load the names a field can take: ${err.message}`, "err", 6000);
+  }
+}
+
 async function loadPresets() {
   if (store.presets.peek().length) return;
   try {
@@ -191,6 +205,8 @@ async function open(id) {
     store.preset.value = start ? start.preset : "";
   });
   clearPreview();
+  store.source.value = null;
+  loadSource();
   if (!view.valid) {
     finish("error", "This template does not load", "The problems are listed on the right");
     return;
@@ -483,6 +499,57 @@ async function loadLayout() {
   }
 }
 
+// adopt takes up what the app says of the draft after an edit: whether it loads and
+// what is found in it. An edit to the canvas or the template's own fields changes what
+// the details show, which are read again
+async function adopt(id, res, ops) {
+  if (id !== store.current.peek()) return;
+  const view = store.view.peek();
+  if (view) store.view.value = { ...view, valid: res.valid, diagnostics: res.diagnostics || [] };
+  if (!res.valid) {
+    abandonRender();
+    clearPreview();
+    finish("error", "This template does not load", "The problems are listed on the right");
+  }
+  if (ops.some((op) => op.kind === "canvas" || op.kind === "template" || op.op === "replace")) await refreshView();
+}
+
+// refreshView reads the draft's details again, and the list it is in
+async function refreshView() {
+  const id = store.current.peek();
+  if (!id) return;
+  try {
+    const [view] = await Promise.all([api.openDraft(id), loadDrafts()]);
+    if (id !== store.current.peek()) return;
+    // The card and what is open stay as they are, and the layouts, the name and the
+    // problems are what changed
+    const was = store.view.peek();
+    store.view.value = { ...view, meta: was ? was.meta : view.meta, valid: was ? was.valid : view.valid, diagnostics: was ? was.diagnostics : view.diagnostics };
+  } catch {
+    // The details are a convenience
+  }
+}
+
+async function loadSource() {
+  const id = store.current.peek();
+  if (!id) return;
+  try {
+    const src = await api.draftSource(id);
+    if (id !== store.current.peek()) return;
+    const docs = {};
+    for (const f of src.files) {
+      try {
+        docs[f.name] = JSON.parse(f.content);
+      } catch {
+        docs[f.name] = null;
+      }
+    }
+    store.source.value = { files: src.files, docs };
+  } catch {
+    store.source.value = null;
+  }
+}
+
 function select(ref) {
   flushNudge();
   store.selected.value = ref || "";
@@ -512,7 +579,8 @@ function commit(ops, label, merge) {
       const res = await api.applyDraft(id, ops);
       history.record({ ops, inverse: res.inverse, label, merge });
       syncHistory();
-      await loadLayout();
+      await adopt(id, res, ops);
+      await Promise.all([loadLayout(), loadSource()]);
       scheduleRender();
     } catch (err) {
       toast(err.message, "err", 6000);
@@ -531,8 +599,9 @@ function replay(ops, undoing) {
   const id = store.current.peek();
   const run = async () => {
     try {
-      await api.applyDraft(id, ops);
-      await loadLayout();
+      const res = await api.applyDraft(id, ops);
+      await adopt(id, res, ops);
+      await Promise.all([loadLayout(), loadSource()]);
       scheduleRender();
     } catch (err) {
       toast(err.message, "err", 6000);
@@ -879,10 +948,482 @@ function drawSelection() {
   $("ed-lower").disabled = !reorderable || at <= 0;
 }
 
+// --- the levers ---
+
+// How long typing in a field waits before the change is made
+const LEVER_DELAY_MS = 400;
+
+const layoutFileOf = (view) => `layouts/${view.layout}.json`;
+
+// entryOf finds a layer in a layout's stack by its id, or its part's name
+function entryOf(layoutDoc, key) {
+  return ((layoutDoc && layoutDoc.stack) || []).find((e) => (e.id || e.part) === key) || null;
+}
+
+// nodeOf is the part of the files an item's fields are in, with what else its fields
+// need to be read and written
+function nodeOf(item, view, src) {
+  const layoutDoc = src.docs[layoutFileOf(view)];
+  const template = src.docs["template.json"];
+  if (!layoutDoc) return null;
+  switch (item.kind) {
+    case "text":
+      return { node: (layoutDoc.textBoxes || {})[item.key], layoutDoc, template };
+    case "art":
+      return { node: (layoutDoc.art || [])[Number(item.key)], layoutDoc, template };
+    case "symbol":
+      return { node: (layoutDoc.symbols || {})[item.key], layoutDoc, template };
+    case "layer": {
+      const entry = entryOf(layoutDoc, item.key);
+      const part = entry && template && template.parts ? template.parts[entry.part] : null;
+      return { node: entry, layoutDoc, template, part: entry ? entry.part : "", partNode: part };
+    }
+  }
+  return null;
+}
+
+// A form is built once for what it edits, and its fields are filled from the files
+// each time they change, except one the person is typing in
+let leverForms = [];
+
+function field(label, id, control, extra) {
+  return h("div", { class: "ed-lever" }, h("label", { for: id }, label), control, extra);
+}
+
+// control makes the input for a field
+function controlFor(f, id) {
+  if (f.type === "choice") {
+    const sel = h("select", { id });
+    if (!f.required) sel.append(new Option(f.empty ? `Default (${f.empty})` : "Default", ""));
+    for (const o of f.options) sel.append(new Option(o.label, o.value));
+    return sel;
+  }
+  return h("input", { id, type: "text", autocomplete: "off", spellcheck: "false", inputMode: f.type === "int" ? "numeric" : f.type === "number" ? "decimal" : "text" });
+}
+
+// buildForm draws the fields of some groups and returns what keeps them in step with
+// the files. spec says where a field's value is, what an edit of it is made of and
+// whether the form can be changed
+function buildForm(container, scope, groups, spec) {
+  const form = { controls: [], spec, groups: [] };
+  const nodes = groups.map((g) => {
+    const box = h("div", { class: "ed-lever-group" });
+    const title = h("div", { class: "ed-lever-title" }, g.title);
+    const rows = h("div", { class: "ed-lever-group" });
+    const entry = { group: g, rows };
+    if (g.shadow) {
+      const toggle = h("input", { id: `${scope}-shadow-on`, type: "checkbox" });
+      toggle.addEventListener("change", () => {
+        const ops = shadowOps(spec.target, toggle.checked);
+        // A checkbox does not always take the focus when it is clicked, so it is marked
+        // as waiting for its change to be saved, and the files' old state is not put
+        // back over it in the meantime
+        toggle.dataset.pending = "1";
+        commit(ops, `${toggle.checked ? "Add" : "Remove"} the shadow of ${spec.target.key}`, "").finally(() => {
+          delete toggle.dataset.pending;
+          fill(form);
+        });
+      });
+      entry.toggle = toggle;
+      box.append(h("label", { class: "ed-shadow-toggle", for: toggle.id }, toggle, g.title));
+    } else {
+      box.append(title);
+    }
+    for (const f of g.fields) {
+      const id = `${scope}-${f.id}`;
+      const c = controlFor(f, id);
+      const err = h("p", { class: "ed-lever-error", role: "alert", hidden: true });
+      const ctl = { f, c, err, timer: 0 };
+      form.controls.push(ctl);
+      if (f.type === "choice") c.addEventListener("change", () => apply(form, ctl));
+      else {
+        c.addEventListener("input", () => {
+          clearTimeout(ctl.timer);
+          ctl.timer = setTimeout(() => apply(form, ctl), LEVER_DELAY_MS);
+        });
+        c.addEventListener("change", () => {
+          clearTimeout(ctl.timer);
+          apply(form, ctl);
+        });
+      }
+      rows.append(field(f.label, id, c, err));
+    }
+    box.append(rows);
+    form.groups.push(entry);
+    return box;
+  });
+  container.replaceChildren(...nodes);
+  return form;
+}
+
+// valueIn is what the files hold for a field
+function valueIn(form, f) {
+  const at = form.spec.at(f);
+  if (!at) return undefined;
+  if (f.at) return layerAt(form.spec.entry(), form.spec.origin())[f.path[1]];
+  return readPath(at, f.path);
+}
+
+// fill shows the files' values in the fields, leaving the one in use alone
+function fill(form) {
+  for (const entry of form.groups) {
+    if (entry.toggle) {
+      const on = !!readPath(form.spec.at(entry.group.fields[0]), ["text", "shadow"]);
+      if (!entry.toggle.dataset.pending) entry.toggle.checked = on;
+      entry.rows.hidden = !(entry.toggle.dataset.pending ? entry.toggle.checked : on);
+    }
+  }
+  for (const ctl of form.controls) {
+    if (document.activeElement === ctl.c) continue;
+    ctl.c.value = displayValue(ctl.f, valueIn(form, ctl.f));
+    ctl.c.disabled = !!form.spec.disabled || (ctl.f.lockable && form.spec.lock === ctl.f.id);
+    ctl.c.readOnly = !!(ctl.f.lockable && form.spec.lockLicense);
+    ctl.c.removeAttribute("aria-invalid");
+    ctl.err.hidden = true;
+  }
+}
+
+// apply makes the change a field's text asks for, or says why it cannot be
+function apply(form, ctl) {
+  const { f, c, err } = ctl;
+  const parsed = parseField(f, c.value);
+  if (!parsed.ok) {
+    c.setAttribute("aria-invalid", "true");
+    err.textContent = parsed.error;
+    err.hidden = false;
+    return;
+  }
+  c.removeAttribute("aria-invalid");
+  err.hidden = true;
+  const now = valueIn(form, f);
+  if (parsed.unset ? now === undefined : now === parsed.value) return;
+  const ops = editOps(form.spec.target, f, parsed, { at: layerAt(form.spec.entry(), form.spec.origin()), part: form.spec.part });
+  commit(ops, editLabel(form.spec.target, f), `lever:${form.spec.target.kind}:${form.spec.target.key}:${f.id}`);
+}
+
+let itemForm = null;
+let itemFormKey = "";
+let canvasForm = null;
+let canvasFormKey = "";
+let templateForm = null;
+let templateFormKey = "";
+
+function ctxFor(view, src) {
+  const vocab = store.vocab.peek() || {};
+  const layoutDoc = src.docs[layoutFileOf(view)] || {};
+  const template = src.docs["template.json"] || {};
+  return { vocab, templateRoles: Object.keys(template.roles || {}), stackIds: (layoutDoc.stack || []).map((e) => e.id || e.part) };
+}
+
+function drawLevers() {
+  const view = store.layout.value;
+  const src = store.source.value;
+  const sel = store.selected.value;
+  const vocab = store.vocab.value;
+  const meta = (store.view.value || {}).meta || {};
+  const item = view ? itemOf(view, sel) : null;
+  const ready = view && src && vocab && src.docs[layoutFileOf(view)];
+
+  // the selection's levers
+  const box = $("ed-levers");
+  const key = ready && item ? `${view.layout}|${sel}|${view.editable}` : "";
+  if (!key) {
+    if (itemFormKey) box.replaceChildren();
+    itemForm = null;
+    itemFormKey = "";
+  } else {
+    if (key !== itemFormKey) {
+      const ctx = ctxFor(view, src);
+      const found = nodeOf(item, view, src);
+      itemForm = found
+        ? buildForm(box, "lever", fieldGroups(item.kind, ctx), {
+            target: { layout: view.layout, kind: item.kind, key: item.key },
+            disabled: !view.editable,
+            part: found.part,
+            at: (f) => (f.on === "part" ? nodeOf(item, view, store.source.peek()).partNode : nodeOf(item, view, store.source.peek()).node),
+            entry: () => nodeOf(item, view, store.source.peek()).node,
+            origin: () => {
+              const f2 = nodeOf(item, view, store.source.peek());
+              return f2 && f2.partNode ? f2.partNode.origin : null;
+            },
+          })
+        : null;
+      if (!found) box.replaceChildren();
+      itemFormKey = key;
+    }
+    if (itemForm) fill(itemForm);
+  }
+
+  // the layout's canvas
+  const ckey = ready ? `${view.layout}|${view.editable}` : "";
+  if (!ckey) {
+    canvasForm = null;
+    canvasFormKey = "";
+    $("ed-canvas-levers").replaceChildren();
+  } else {
+    if (ckey !== canvasFormKey) {
+      canvasForm = buildForm($("ed-canvas-levers"), "canvas", fieldGroups("canvas", ctxFor(view, src)), {
+        target: { layout: view.layout, kind: "canvas", key: "" },
+        disabled: !view.editable,
+        at: () => (store.source.peek().docs[layoutFileOf(view)] || {}).canvas,
+        entry: () => null,
+        origin: () => null,
+      });
+      canvasFormKey = ckey;
+    }
+    fill(canvasForm);
+  }
+
+  // the template's own fields
+  const tkey = src && src.docs["template.json"] ? `${store.current.value}|${meta.licenseLocked}` : "";
+  if (!tkey) {
+    templateForm = null;
+    templateFormKey = "";
+    $("ed-template-levers").replaceChildren();
+  } else {
+    if (tkey !== templateFormKey) {
+      templateForm = buildForm($("ed-template-levers"), "template", fieldGroups("template", { vocab: vocab || {} }), {
+        target: { layout: "", kind: "template", key: "" },
+        lockLicense: !!meta.licenseLocked,
+        at: () => store.source.peek().docs["template.json"],
+        entry: () => null,
+        origin: () => null,
+      });
+      templateFormKey = tkey;
+    }
+    fill(templateForm);
+  }
+  drawCredits();
+}
+
+// --- credits ---
+
+function drawCredits() {
+  const src = store.source.value;
+  const meta = (store.view.value || {}).meta || {};
+  const list = $("ed-credits");
+  const template = src && src.docs["template.json"];
+  if (!template) {
+    list.replaceChildren();
+    return;
+  }
+  // A credit being typed in is left as it is
+  if (list.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  const credits = template.credits || [];
+  const locked = meta.lockedCredits || 0;
+  list.replaceChildren(
+    ...credits.map((c, i) => {
+      const kept = i < locked;
+      const input = (key, label, value) => {
+        const el = h("input", { type: "text", "aria-label": `Credit ${i + 1} ${label}`, value: value || "", readOnly: kept, autocomplete: "off", spellcheck: "false" });
+        if (!kept) {
+          let timer = 0;
+          const send = () => {
+            clearTimeout(timer);
+            const now = store.source.peek().docs["template.json"].credits;
+            const next = creditEdit(now, i, key, el.value.trim(), locked);
+            // The same text again, as when leaving a field that has already been saved, is
+            // not a change
+            if (next && JSON.stringify(next) !== JSON.stringify(now)) commit([{ op: "set", layout: "", kind: "template", key: "", path: ["credits"], value: next }], `Change credit ${i + 1}`, `credit:${i}:${key}`);
+          };
+          el.addEventListener("input", () => {
+            clearTimeout(timer);
+            timer = setTimeout(send, LEVER_DELAY_MS);
+          });
+          el.addEventListener("change", send);
+        }
+        return el;
+      };
+      const remove = kept
+        ? null
+        : h(
+            "button",
+            {
+              type: "button",
+              class: "btn subtle icon-only",
+              "aria-label": `Remove credit ${i + 1}`,
+              onclick: () => {
+                const next = creditRemove(store.source.peek().docs["template.json"].credits, i, locked);
+                if (next) commit([{ op: next.length ? "set" : "unset", layout: "", kind: "template", key: "", path: ["credits"], ...(next.length ? { value: next } : {}) }], `Remove credit ${i + 1}`, "");
+              },
+            },
+            h("span", { "aria-hidden": "true" }, "×"),
+          );
+      return h(
+        "div",
+        { class: "ed-credit" },
+        h("div", { class: "ed-credit-head" }, input("name", "name", c.name), remove),
+        input("url", "link", c.url),
+        input("note", "note", c.note),
+        kept ? h("span", { class: "ed-credit-kept" }, "Kept from the template this was copied from") : null,
+      );
+    }),
+  );
+}
+
+function addCredit() {
+  const src = store.source.peek();
+  const template = src && src.docs["template.json"];
+  if (!template) return;
+  commit([{ op: "set", layout: "", kind: "template", key: "", path: ["credits"], value: creditAdd(template.credits) }], "Add a credit", "");
+}
+
+// --- the JSON editor ---
+
+const json = { open: false, file: "", dirty: false, timer: 0, seq: 0 };
+
+const fileLabel = (name) => (name === "template.json" ? name : name.replace(/^layouts\//, "").replace(/\.json$/, ""));
+
+function setJsonStatus(text) {
+  $("ed-json-status").textContent = text;
+}
+
+function updateGutter() {
+  const ta = $("ed-json-text");
+  const lines = ta.value.split("\n").length;
+  const gutter = $("ed-json-gutter");
+  if (gutter.dataset.lines !== String(lines)) {
+    gutter.dataset.lines = String(lines);
+    gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join("\n");
+  }
+  gutter.scrollTop = ta.scrollTop;
+}
+
+function drawJsonTabs() {
+  const src = store.source.value;
+  const tabs = $("ed-json-tabs");
+  if (!src) {
+    tabs.replaceChildren();
+    return;
+  }
+  tabs.replaceChildren(
+    ...src.files.map((f) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: "chip",
+          role: "tab",
+          "aria-selected": String(f.name === json.file),
+          title: f.name,
+          onclick: () => showJsonFile(f.name),
+        },
+        fileLabel(f.name),
+      ),
+    ),
+  );
+}
+
+// showJsonFile puts a file's text in the editor and says what is wrong with it now
+async function showJsonFile(name) {
+  const src = store.source.peek();
+  const file = src && src.files.find((f) => f.name === name);
+  if (!file) return;
+  json.file = name;
+  json.dirty = false;
+  const ta = $("ed-json-text");
+  ta.value = file.content;
+  ta.scrollTop = 0;
+  updateGutter();
+  drawJsonTabs();
+  setJsonStatus("");
+  checkJson(file.content, false);
+}
+
+// syncJson brings the editor's text up to the files after an edit made elsewhere, unless
+// the person has typed something that is not saved
+function syncJson() {
+  const src = store.source.value;
+  if (!json.open || !src) return;
+  drawJsonTabs();
+  const file = src.files.find((f) => f.name === json.file);
+  if (!file) {
+    if (src.files.length) showJsonFile(src.files[0].name);
+    return;
+  }
+  const ta = $("ed-json-text");
+  if (!json.dirty && ta.value !== file.content) {
+    ta.value = file.content;
+    updateGutter();
+  }
+}
+
+function drawJsonProblems(problems) {
+  const ta = $("ed-json-text");
+  $("ed-json-problems").replaceChildren(
+    ...problems.map((p) => {
+      const where = p.line ? `Line ${p.line}, column ${p.column}` : p.path;
+      const li = h("li", { class: p.severity === "warning" ? "warning" : "error" }, where ? `${where}: ${p.message}` : p.message);
+      if (p.line) {
+        li.dataset.line = String(p.line);
+        li.addEventListener("click", () => {
+          const at = ta.value.split("\n").slice(0, p.line - 1).reduce((n, l) => n + l.length + 1, 0) + (p.column - 1);
+          ta.focus();
+          ta.setSelectionRange(at, at);
+        });
+      }
+      return li;
+    }),
+  );
+}
+
+// checkJson asks the app what the text would do, shows the problems, and when the text
+// can be saved, saves it
+async function checkJson(text, save) {
+  const id = store.current.peek();
+  const file = json.file;
+  if (!id || !file) return;
+  const seq = ++json.seq;
+  let res;
+  try {
+    res = await api.checkDraftFile(id, file, text);
+  } catch (err) {
+    setJsonStatus(err.message);
+    return;
+  }
+  if (seq !== json.seq) return;
+  drawJsonProblems(res.problems);
+  const errors = res.problems.some((p) => p.severity !== "warning");
+  if (!save) {
+    setJsonStatus(errors ? "Has problems" : "");
+    return;
+  }
+  if (!res.writable) {
+    setJsonStatus("Not saved, fix the problems first");
+    return;
+  }
+  setJsonStatus("Saving…");
+  await commit([{ op: "replace", file, content: text }], `Edit ${fileLabel(file)}`, `json:${file}`);
+  if (seq === json.seq && $("ed-json-text").value === text) {
+    json.dirty = false;
+    setJsonStatus(errors ? "Saved, with problems" : "Saved");
+  }
+}
+
+function onJsonInput() {
+  const ta = $("ed-json-text");
+  json.dirty = true;
+  updateGutter();
+  setJsonStatus("Checking…");
+  clearTimeout(json.timer);
+  const text = ta.value;
+  json.timer = setTimeout(() => checkJson(text, true), 450);
+}
+
+function toggleJson(open) {
+  json.open = open;
+  $("ed-json-pane").hidden = !open;
+  $("ed-json").setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  const src = store.source.peek();
+  if (src && src.files.length) showJsonFile(json.file && src.files.some((f) => f.name === json.file) ? json.file : src.files[0].name);
+  else loadSource().then(() => syncJson());
+}
+
 // enter reads what the mode shows each time it is opened, so a draft made or
 // changed elsewhere is never stale, and opens the newest draft when none is open
 async function enter() {
-  await Promise.all([loadDrafts(), loadPresets()]);
+  await Promise.all([loadDrafts(), loadPresets(), loadVocab()]);
   const list = store.drafts.peek() || [];
   const current = store.current.peek();
   if (current && list.some((d) => d.id === current)) return;
@@ -915,6 +1456,13 @@ export function initEditor() {
   $("ed-raise").addEventListener("click", () => reorder(1));
   $("ed-lower").addEventListener("click", () => reorder(-1));
   document.addEventListener("keydown", onKey);
+  $("ed-credit-add").addEventListener("click", addCredit);
+  $("ed-json").addEventListener("click", () => toggleJson(!json.open));
+  $("ed-json-close").addEventListener("click", () => toggleJson(false));
+  $("ed-json-text").addEventListener("input", onJsonInput);
+  $("ed-json-text").addEventListener("scroll", () => {
+    $("ed-json-gutter").scrollTop = $("ed-json-text").scrollTop;
+  });
 
   $("ed-search-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -957,6 +1505,8 @@ export function initEditor() {
   effect(drawLayers);
   effect(() => markSelected(store.selected.value));
   effect(drawSelection);
+  effect(drawLevers);
+  effect(syncJson);
   effect(() => {
     $("ed-undo").disabled = !store.canUndo.value;
     $("ed-redo").disabled = !store.canRedo.value;

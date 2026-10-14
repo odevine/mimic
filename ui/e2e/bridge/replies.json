@@ -22,12 +22,10 @@
       "reason": "Adding fonts to a template is planned. Tracked in #115"
     },
     "editor.json": {
-      "state": "planned",
-      "reason": "Editing the template's JSON is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.levers": {
-      "state": "planned",
-      "reason": "Editing a layer's settings is planned. Tracked in #115"
+      "state": "live"
     },
     "editor.move": {
       "state": "live"
@@ -689,5 +687,74 @@
         ]
       }
     }
-  ]
+  ],
+  "Studio.Vocabulary": {
+    "draws": [
+      "artist",
+      "collector",
+      "copyright",
+      "flipside_pt",
+      "fuse",
+      "mana",
+      "oracle",
+      "pt",
+      "set",
+      "title",
+      "type"
+    ],
+    "conditions": [
+      "back",
+      "color_indicator",
+      "companion",
+      "creature",
+      "front",
+      "fuse",
+      "icon_left",
+      "icon_right",
+      "land",
+      "legendary",
+      "nonland",
+      "nonlegendary",
+      "nonnyx",
+      "nyx",
+      "set_symbol"
+    ],
+    "fontRoles": [
+      "title",
+      "body",
+      "body-italic",
+      "mana",
+      "small-caps",
+      "info"
+    ],
+    "blendModes": [
+      "normal",
+      "multiply",
+      "screen",
+      "overlay",
+      "softlight",
+      "hardlight",
+      "colordodge",
+      "colorburn",
+      "darken",
+      "lighten",
+      "difference",
+      "exclusion",
+      "hue",
+      "saturation",
+      "color",
+      "luminosity"
+    ],
+    "slots": [
+      "background",
+      "pinlines",
+      "twins",
+      "ptBox",
+      "crown",
+      "indicator",
+      "transform_icon",
+      "fuse",
+      "fuse_pinlines"
+    ]
+  }
 }

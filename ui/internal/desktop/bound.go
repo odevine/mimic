@@ -141,6 +141,9 @@ type studioAPI interface {
 	Render(req studio.RenderRequest) (render.Started, error)
 	Describe(req studio.DescribeRequest) (studio.DescribeView, error)
 	Apply(req studio.ApplyRequest) (studio.ApplyResult, error)
+	Source(id string) (studio.SourceView, error)
+	CheckFile(req studio.CheckRequest) (studio.CheckResult, error)
+	Vocabulary() studio.VocabView
 }
 
 // Studio is the bound template editor service

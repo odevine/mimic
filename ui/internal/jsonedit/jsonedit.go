@@ -197,6 +197,68 @@ func (n *Node) Set(name string, v *Node) error {
 	return nil
 }
 
+// Delete takes a key out of an object and reports whether it was there
+func (n *Node) Delete(name string) bool {
+	if n == nil || n.kind != Object {
+		return false
+	}
+	if _, ok := n.fields[name]; !ok {
+		return false
+	}
+	delete(n.fields, name)
+	for i, k := range n.keys {
+		if k == name {
+			n.keys = append(n.keys[:i], n.keys[i+1:]...)
+			break
+		}
+	}
+	return true
+}
+
+// SetPath puts a value at a path of keys below an object, making an object for each
+// key that is missing on the way, and returns the value that was there, or nil when
+// there was none. A key on the way that holds something other than an object is an
+// error
+func (n *Node) SetPath(path []string, v *Node) (*Node, error) {
+	if len(path) == 0 {
+		return nil, errors.New("jsonedit: no path")
+	}
+	at := n
+	for _, name := range path[:len(path)-1] {
+		next := at.Field(name)
+		switch {
+		case at == nil || at.kind != Object:
+			return nil, errors.New("jsonedit: not an object")
+		case next == nil:
+			next = NewObject()
+			_ = at.Set(name, next)
+		case next.kind != Object:
+			return nil, fmt.Errorf("jsonedit: %q holds no object to put a value in", name)
+		}
+		at = next
+	}
+	last := path[len(path)-1]
+	old := at.Field(last)
+	if err := at.Set(last, v); err != nil {
+		return nil, err
+	}
+	return old, nil
+}
+
+// DeletePath takes out the value at a path of keys and returns it, or nil when there
+// was none
+func (n *Node) DeletePath(path []string) *Node {
+	if len(path) == 0 {
+		return nil
+	}
+	parent := n.Path(path[:len(path)-1]...)
+	old := parent.Field(path[len(path)-1])
+	if old != nil {
+		parent.Delete(path[len(path)-1])
+	}
+	return old
+}
+
 // MoveItem takes the item at index from out of an array and puts it back so that
 // it is at index to
 func (n *Node) MoveItem(from, to int) error {
@@ -207,6 +269,42 @@ func (n *Node) MoveItem(from, to int) error {
 	n.items = append(n.items[:from], n.items[from+1:]...)
 	n.items = append(n.items[:to], append([]*Node{it}, n.items[to:]...)...)
 	return nil
+}
+
+// Compact writes the value on one line with no spaces, which is how a value is sent
+// to be put back
+func (n *Node) Compact() []byte {
+	var b bytes.Buffer
+	n.compact(&b)
+	return b.Bytes()
+}
+
+func (n *Node) compact(b *bytes.Buffer) {
+	switch n.kind {
+	case Scalar:
+		b.Write(n.raw)
+	case Object:
+		b.WriteByte('{')
+		for i, k := range n.keys {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			key, _ := json.Marshal(k)
+			b.Write(key)
+			b.WriteByte(':')
+			n.fields[k].compact(b)
+		}
+		b.WriteByte('}')
+	case Array:
+		b.WriteByte('[')
+		for i, it := range n.items {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			it.compact(b)
+		}
+		b.WriteByte(']')
+	}
 }
 
 // Marshal writes the document with two spaces of indent, the layout the app writes

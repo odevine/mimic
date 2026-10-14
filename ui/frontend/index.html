@@ -519,6 +519,18 @@ Sideboard
               </div>
               <div class="activity-bar" aria-hidden="true"><div id="ed-activity-fill" class="fill"></div></div>
             </div>
+            <div id="ed-json-pane" class="ed-json" hidden>
+              <div class="ed-json-head">
+                <div id="ed-json-tabs" class="ed-json-tabs" role="tablist" aria-label="Files of the template"></div>
+                <span id="ed-json-status" class="ed-json-status dim" role="status"></span>
+                <button id="ed-json-close" class="btn subtle icon-only" type="button" aria-label="Close the JSON editor" data-tip="Close"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
+              </div>
+              <div class="ed-json-body">
+                <div id="ed-json-gutter" class="ed-json-gutter" aria-hidden="true"></div>
+                <textarea id="ed-json-text" class="ed-json-text mono" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="The file's JSON"></textarea>
+              </div>
+              <ul id="ed-json-problems" class="ed-json-problems" aria-label="Problems in this file"></ul>
+            </div>
           </div>
 
           <div class="splitter" data-split="1" role="separator" aria-orientation="vertical" aria-label="Resize the details column"></div>
@@ -552,8 +564,15 @@ Sideboard
                     <button id="ed-raise" class="btn" type="button">Raise</button>
                     <button id="ed-lower" class="btn" type="button">Lower</button>
                   </div>
+                  <div id="ed-levers" class="ed-levers"></div>
                 </div>
                 <p id="ed-edit-note" class="dim" hidden></p>
+              </section>
+              <section class="ed-section" aria-labelledby="ed-layout-heading">
+                <details id="ed-layout-details" class="ed-details">
+                  <summary><h3 id="ed-layout-heading" class="section-heading">Layout</h3></summary>
+                  <div id="ed-canvas-levers" class="ed-levers"></div>
+                </details>
               </section>
               <section class="ed-section" aria-labelledby="ed-about-heading">
                 <h3 id="ed-about-heading" class="section-heading">About</h3>
@@ -561,6 +580,15 @@ Sideboard
                 <p id="ed-about-id" class="ed-about-id mono"></p>
                 <p id="ed-about-fork" class="dim" hidden></p>
                 <ul id="ed-layouts" class="ed-layouts" aria-label="Layouts"></ul>
+                <details id="ed-template-details" class="ed-details">
+                  <summary>Template details</summary>
+                  <div id="ed-template-levers" class="ed-levers"></div>
+                  <div class="ed-credits-block">
+                    <h4 class="ed-subheading">Credits</h4>
+                    <div id="ed-credits" class="ed-credits"></div>
+                    <button id="ed-credit-add" class="btn subtle" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add a credit</button>
+                  </div>
+                </details>
               </section>
               <section class="ed-section" aria-labelledby="ed-problems-heading">
                 <h3 id="ed-problems-heading" class="section-heading">Problems <span id="ed-problems-count" class="faint"></span></h3>
@@ -570,7 +598,7 @@ Sideboard
               <section class="ed-section ed-actions" aria-label="Use the template">
                 <button id="ed-use" class="btn" type="button" data-feature="editor.use">Use in Mimic</button>
                 <button id="ed-export" class="btn" type="button" data-feature="editor.export">Export…</button>
-                <button id="ed-json" class="btn" type="button" data-feature="editor.json">Edit JSON…</button>
+                <button id="ed-json" class="btn" type="button" aria-expanded="false" aria-controls="ed-json-pane">Edit JSON…</button>
               </section>
             </div>
           </div>

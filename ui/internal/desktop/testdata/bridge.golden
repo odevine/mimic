@@ -41,6 +41,7 @@ Settings.Resolution() -> settings.Resolutions !
 Settings.Resources(string) -> settings.ResourcesView
 Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
 Studio.Apply(studio.ApplyRequest) -> studio.ApplyResult !
+Studio.CheckFile(studio.CheckRequest) -> studio.CheckResult !
 Studio.Create(studio.CreateRequest) -> drafts.Summary !
 Studio.Delete(string) !
 Studio.Describe(studio.DescribeRequest) -> studio.DescribeView !
@@ -51,6 +52,8 @@ Studio.Presets() -> []studio.Preset
 Studio.Rename(studio.RenameRequest) -> drafts.Summary !
 Studio.Render(studio.RenderRequest) -> render.Started !
 Studio.SetTestCard(studio.TestCardRequest) !
+Studio.Source(string) -> studio.SourceView !
+Studio.Vocabulary() -> studio.VocabView
 System.Confirm(desktop.ConfirmRequest) -> bool
 System.OpenURL(string) !
 System.PickFile(desktop.PickRequest) -> string !
@@ -351,6 +354,10 @@ draftedit.Op struct {
 	dy int (omitempty)
 	rect draftedit.Rect (omitempty)
 	to int (omitempty)
+	path []string (omitempty)
+	value custom json.RawMessage (omitempty)
+	file string (omitempty)
+	content string (omitempty)
 }
 
 draftedit.Rect struct {
@@ -362,6 +369,8 @@ draftedit.Rect struct {
 
 drafts.Meta struct {
 	forkedFrom string (omitempty)
+	lockedCredits int (omitempty)
+	licenseLocked bool (omitempty)
 	testCard card.Data (omitempty)
 	face int (omitempty)
 }
@@ -601,6 +610,19 @@ studio.ApplyRequest struct {
 studio.ApplyResult struct {
 	rev int
 	inverse []draftedit.Op
+	valid bool
+	diagnostics []studio.DiagnosticView
+}
+
+studio.CheckRequest struct {
+	id string
+	file string
+	content string
+}
+
+studio.CheckResult struct {
+	writable bool
+	problems []studio.Problem
 }
 
 studio.CreateRequest struct {
@@ -628,6 +650,11 @@ studio.DiagnosticView struct {
 	severity string
 	path string (omitempty)
 	message string
+}
+
+studio.FileView struct {
+	name string
+	content string
 }
 
 studio.ForkRequest struct {
@@ -672,6 +699,14 @@ studio.Preset struct {
 	card cardlist.ShapedCard
 }
 
+studio.Problem struct {
+	severity string
+	line int (omitempty)
+	column int (omitempty)
+	path string (omitempty)
+	message string
+}
+
 studio.RectView struct {
 	x int
 	y int
@@ -695,10 +730,22 @@ studio.SizeView struct {
 	height int
 }
 
+studio.SourceView struct {
+	files []studio.FileView
+}
+
 studio.TestCardRequest struct {
 	id string
 	card card.Data
 	face int
+}
+
+studio.VocabView struct {
+	draws []string
+	conditions []string
+	fontRoles []string
+	blendModes []string
+	slots []string
 }
 
 template.Resolution struct {

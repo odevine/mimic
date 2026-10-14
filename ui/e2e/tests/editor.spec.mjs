@@ -142,7 +142,8 @@ test("the editor shows what is not built yet as locked", async ({ editor }) => {
   await editor.create("Gated", 100);
   await expect(editor.page.locator("#ed-use")).toHaveAttribute("aria-disabled", "true");
   await expect(editor.page.locator("#ed-export")).toHaveAttribute("aria-disabled", "true");
-  await expect(editor.page.locator("#ed-json")).toHaveAttribute("aria-disabled", "true");
+  // The JSON editor is built, so it is not locked
+  await expect(editor.page.locator("#ed-json")).not.toHaveAttribute("aria-disabled", "true");
   await expect(editor.page.locator("#ed-use")).toHaveAttribute("data-gate-reason", /#115/);
 });
 
@@ -268,4 +269,161 @@ test("a layout that builds on another can be looked at and not changed", async (
   await page.waitForTimeout(500);
   await expect(editor.undoButton).toBeDisabled();
   expect(JSON.parse(await readFile(path.join(dir, "normal.json"), "utf8")).extends).toEqual(["base"]);
+});
+
+async function selectTitle(editor) {
+  await expect(editor.layers.first()).toBeVisible();
+  await editor.layers.filter({ hasText: "title" }).click();
+  await expect(editor.selectionName).toHaveText("title");
+}
+
+test("a lever changes one field of the file, the card is drawn with it, and undo restores the file", async ({ editor, scratch, page }) => {
+  await editor.create("Levers", 100);
+  const file = draftFile(scratch, "levers", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const src = await editor.preview.getAttribute("src");
+  await selectTitle(editor);
+
+  const was = JSON.parse(original).textBoxes.title.text.fontSize;
+  await editor.lever("lever-fontSize").fill(String(was + 4));
+  await editor.lever("lever-fontSize").blur();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(was + 4);
+
+  // Only that number changed, and the file kept its order and layout
+  const after = await readFile(file, "utf8");
+  const edited = JSON.parse(original);
+  edited.textBoxes.title.text.fontSize = was + 4;
+  expect(JSON.parse(after)).toEqual(edited);
+  expect(Object.keys(JSON.parse(after).textBoxes)).toEqual(Object.keys(JSON.parse(original).textBoxes));
+  expect(after.split("\n").length).toBe(original.split("\n").length);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  await editor.waitForPreview();
+
+  await editor.undoButton.click();
+  await expect(editor.lever("lever-fontSize")).toHaveValue(String(was));
+  expect(await readFile(file, "utf8")).toBe(original);
+});
+
+test("a setting the engine does not accept is refused with its reason and the file is left alone", async ({ editor, scratch, page }) => {
+  await editor.create("Refuse", 100);
+  const file = draftFile(scratch, "refuse", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  await selectTitle(editor);
+
+  await editor.lever("lever-condition").fill("made_up");
+  await editor.lever("lever-condition").blur();
+  await expect(page.locator("#toasts")).toContainText("not allowed");
+  await expect(page.locator("#toasts")).toContainText("made_up");
+  await expect(editor.lever("lever-condition")).toHaveValue("");
+  expect(await readFile(file, "utf8")).toBe(original);
+  await expect(editor.undoButton).toBeDisabled();
+
+  // A condition the engine knows is let through
+  await editor.lever("lever-condition").fill("creature");
+  await editor.lever("lever-condition").blur();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.condition).toBe("creature");
+});
+
+test("the shadow, a layer's blend and the canvas are edited from their levers", async ({ editor, scratch, page }) => {
+  await editor.create("More", 100);
+  const file = draftFile(scratch, "more", "layouts", "normal.json");
+  await expect(editor.layers.first()).toBeVisible();
+
+  await editor.layers.filter({ hasText: "mana" }).first().click();
+  const hadShadow = !!JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow;
+  expect(hadShadow).toBe(true);
+  await page.locator("#lever-shadow-on").uncheck();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow).toBeUndefined();
+  await page.locator("#lever-shadow-on").check();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow).toEqual({ distance: 0.08, angle: 25 });
+
+  await editor.layers.filter({ hasText: "background" }).click();
+  await editor.lever("lever-mode").selectOption("multiply");
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack[0].mode).toBe("multiply");
+
+  await page.locator("#ed-layout-details > summary").click();
+  await editor.lever("canvas-dpi").fill("90");
+  await editor.lever("canvas-dpi").blur();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).canvas.dpi).toBe(90);
+  await expect(editor.layouts.first()).toContainText("90 dpi");
+});
+
+test("the template's name is changed from its details and the picker follows", async ({ editor, scratch, page }) => {
+  await editor.create("Named", 100);
+  await page.locator("#ed-template-details > summary").click();
+  await editor.lever("template-name").fill("Better name");
+  await editor.lever("template-name").blur();
+  const file = path.join(scratch.home, "mimic", "drafts", "named", "template.json");
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).name).toBe("Better name");
+  await expect(editor.aboutName).toHaveText("Better name");
+  await expect(editor.picker.locator("option:checked")).toHaveText("Better name");
+
+  await page.locator("#ed-credit-add").click();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).credits).toEqual([{ name: "New credit" }]);
+  await page.locator("#ed-credits .ed-credit input").first().fill("Someone");
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).credits).toEqual([{ name: "Someone" }]);
+});
+
+test("a copy keeps the credits and license of the original out of reach of the levers", async ({ editor, templates, page }) => {
+  await templates.show();
+  await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();
+  await editor.dialogName.fill("Kept");
+  await editor.dialogConfirm.click();
+  await editor.waitForPreview();
+  await page.locator("#ed-template-details > summary").click();
+  const credits = page.locator("#ed-credits .ed-credit");
+  // The copy names the original in a credit that cannot be removed
+  await expect(credits.first()).toContainText("Kept from the template this was copied from");
+  await expect(credits.first().getByRole("button")).toHaveCount(0);
+  await expect(credits.first().locator("input").nth(2)).toHaveValue(/Forked from mimic\.m15/);
+});
+
+test("the JSON editor saves a change to a layout and shows a mistake with its line", async ({ editor, scratch, page }) => {
+  await editor.create("Json", 100);
+  const file = draftFile(scratch, "json", "layouts", "normal.json");
+  await expect(editor.layers.first()).toBeVisible();
+  await editor.jsonButton.click();
+  await editor.jsonTabs.filter({ hasText: "normal" }).click();
+  const text = await editor.jsonText.inputValue();
+  expect(text).toBe(await readFile(file, "utf8"));
+
+  // A change that is valid is saved as typed
+  const edited = text.replace(/"dpi": \d+/, '"dpi": 95');
+  await editor.jsonText.fill(edited);
+  await expect.poll(async () => await readFile(file, "utf8")).toBe(edited);
+  await expect(editor.jsonStatus).toHaveText("Saved");
+  await expect(editor.layouts.first()).toContainText("95 dpi");
+
+  // A mistake in the JSON is shown with the line, and the file is left as it was
+  const broken = edited.replace('"serves": [', '"serves": ,[');
+  await editor.jsonText.fill(broken);
+  await expect(editor.jsonProblems.first()).toContainText(/^Line \d+, column \d+:/);
+  await expect(editor.jsonStatus).toHaveText("Not saved, fix the problems first");
+  expect(await readFile(file, "utf8")).toBe(edited);
+
+  // Valid JSON that is not a layout that loads is not saved over one that does
+  const wrong = edited.replace('"align": "left"', '"align": "diagonal"');
+  await editor.jsonText.fill(wrong);
+  await expect(editor.jsonProblems.first()).toContainText("align");
+  await expect(editor.jsonStatus).toHaveText("Not saved, fix the problems first");
+  expect(await readFile(file, "utf8")).toBe(edited);
+});
+
+test("a template that does not load can be fixed in the JSON editor", async ({ editor, scratch, page }) => {
+  await editor.create("Fixme", 100);
+  const file = draftFile(scratch, "fixme", "layouts", "normal.json");
+  const good = await readFile(file, "utf8");
+  await writeFile(file, good.replace('"align": "left"', '"align": "diagonal"'));
+  await page.reload();
+  await page.locator("html.booted").waitFor();
+  await page.locator('button[data-mode="editor"]').click();
+  await expect(editor.problems.first()).toContainText("align");
+  await expect(editor.activity).toHaveAttribute("data-state", "error");
+
+  await editor.jsonButton.click();
+  await editor.jsonTabs.filter({ hasText: "normal" }).click();
+  await editor.jsonText.fill(good);
+  await expect.poll(async () => await readFile(file, "utf8")).toBe(good);
+  await expect(editor.problems).toHaveCount(0);
+  await editor.waitForPreview();
 });

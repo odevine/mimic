@@ -30,6 +30,13 @@ export class EditorPage {
     this.selectionName = page.locator("#ed-selection-name");
     this.undoButton = page.locator("#ed-undo");
     this.redoButton = page.locator("#ed-redo");
+    this.levers = page.locator("#ed-levers");
+    this.jsonButton = page.locator("#ed-json");
+    this.jsonPane = page.locator("#ed-json-pane");
+    this.jsonText = page.locator("#ed-json-text");
+    this.jsonTabs = page.locator("#ed-json-tabs [role=tab]");
+    this.jsonStatus = page.locator("#ed-json-status");
+    this.jsonProblems = page.locator("#ed-json-problems li");
     this.dialog = page.locator("#draft-dialog");
     this.dialogName = page.locator("#draft-name");
     this.dialogDpi = page.locator("#draft-dpi");
@@ -76,6 +83,15 @@ export class EditorPage {
     await this.searchInput.fill(query);
     await this.searchInput.press("Enter");
     await expect(this.results.first()).toBeVisible();
+  }
+
+  // lever is the control of a field of the selection, by its id, such as lever-fontSize for the selection, canvas-width for the layout or template-name for the template
+  lever(id) {
+    return this.page.locator(`#${id}`);
+  }
+
+  leverError(id) {
+    return this.page.locator(`#${id}`).locator("xpath=following-sibling::p[contains(@class,'ed-lever-error')]");
   }
 
   // sizeCanvas gives the card image the size of a real preview, since a page test

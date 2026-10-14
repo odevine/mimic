@@ -18,4 +18,5 @@ export const CALLS = [
   ["Run.MPCInfo"],
   ["Studio.List"],
   ["Studio.Presets"],
+  ["Studio.Vocabulary"],
 ];

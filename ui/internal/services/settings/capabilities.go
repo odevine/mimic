@@ -81,8 +81,8 @@ var features = []feature{
 
 	{key: "flow.editor", state: gateLive},
 	{key: "editor.move", state: gateLive},
-	{key: "editor.levers", state: gatePlanned, reason: "Editing a layer's settings is planned. Tracked in #115"},
-	{key: "editor.json", state: gatePlanned, reason: "Editing the template's JSON is planned. Tracked in #115"},
+	{key: "editor.levers", state: gateLive},
+	{key: "editor.json", state: gateLive},
 	{key: "editor.assets", state: gatePlanned, reason: "Adding and replacing images is planned. Tracked in #115"},
 	{key: "editor.fonts", state: gatePlanned, reason: "Adding fonts to a template is planned. Tracked in #115"},
 	{key: "editor.use", state: gatePlanned, reason: "Rendering with a draft from the other modes is planned. Tracked in #115"},

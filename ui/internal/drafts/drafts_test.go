@@ -148,6 +148,10 @@ func TestForkKeepsTheOriginalsCreditsAndLicense(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	meta, _ := s.Meta(sum.ID)
+	if meta.LockedCredits != 1 || !meta.LicenseLocked {
+		t.Errorf("meta = %+v, want the credit of the original and the license locked", meta)
+	}
 	fsys, _ := s.FS(sum.ID)
 	tm, _, err := author.NewDraft(fsys, 64<<20).Open(author.Options{})
 	if err != nil {

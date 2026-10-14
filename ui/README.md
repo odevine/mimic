@@ -337,9 +337,30 @@ into the layout's own when the layout turns the card. A layout that builds on
 another with `extends` or `patch` can be looked at and not changed here, since its
 numbers are not all in its own file.
 
-Editing a layer's settings, the JSON editor, adding images and fonts, and
-exporting a draft are not built yet, and each appears locked with the issue that
-tracks it.
+Below the selection, its settings are fields in the right column. A text box has
+its place and size, what it draws and when, its font role, size, color, alignment,
+spacing, padding, tracking and shadow. A layer has its position, opacity, blend mode
+and the conditions it draws under, and the slot its part reads. An art window has
+its place, the layer it sits above and its turn, and a symbol its place, alignment
+and scale. Layout holds the canvas size, resolution and turn, and Template details
+holds the name, description, author, license and credits. A number, a color or a
+condition is checked as it is typed and its mistake shown under the field, a change
+is made a moment after typing stops, and an empty optional field takes its setting
+out so the box goes back to its default. The app checks every change against what
+the engine accepts, and one it refuses, such as a condition it does not know, says
+why and leaves the file alone. A copy keeps its original's license and the credits
+it came with, and the fields do not change them.
+
+Edit JSON opens the template's files under the preview, one tab for `template.json`
+and one for each layout. The text is checked as it is typed, each mistake in the JSON
+is shown with its line and column, and a mistake in what it means is shown with the
+path to it. Text that is JSON and would leave the template loading is saved as typed,
+with its layout kept, and text that would not is left unsaved until it is fixed.
+A template that does not load can be fixed here. A change made with a lever or on the
+preview shows in the open file, unless text typed there is waiting to be saved.
+
+Adding images and fonts and exporting a draft are not built yet, and each appears
+locked with the issue that tracks it.
 
 ## Features that are not built yet
 

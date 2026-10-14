@@ -1,11 +1,15 @@
 package studio
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/odevine/mimic/engine/frame"
+	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/draftedit"
 )
@@ -172,5 +176,193 @@ func TestApplyAllowsAnEditToADraftThatAlreadyDoesNotLoad(t *testing.T) {
 	_, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpMove, Layout: "normal", Kind: draftedit.KindText, Key: "title", DX: 1}}})
 	if err != nil {
 		t.Fatalf("an edit to a draft that did not load was refused: %v", err)
+	}
+}
+
+func setOp(kind, key, value string, path ...string) draftedit.Op {
+	return draftedit.Op{Op: draftedit.OpSet, Layout: "normal", Kind: kind, Key: key, Path: path, Value: json.RawMessage(value)}
+}
+
+func TestVocabularyNamesOnlyWhatTheEngineAccepts(t *testing.T) {
+	svc, _, _ := newService(t)
+	v := svc.Vocabulary()
+	for _, m := range v.BlendModes {
+		if _, err := manifest.ParseMode(m); err != nil {
+			t.Errorf("blend mode %q: %v", m, err)
+		}
+	}
+	if len(v.BlendModes) != 16 {
+		t.Errorf("%d blend modes, want the engine's 16", len(v.BlendModes))
+	}
+	for _, c := range v.Conditions {
+		if _, err := frame.Compile(c); err != nil {
+			t.Errorf("condition %q: %v", c, err)
+		}
+	}
+	for _, s := range v.Slots {
+		if _, err := frame.ParseSlot(s); err != nil {
+			t.Errorf("slot %q: %v", s, err)
+		}
+	}
+	for _, want := range []string{"title", "oracle", "pt", "mana"} {
+		if !slices.Contains(v.Draws, want) {
+			t.Errorf("draws lacks %q", want)
+		}
+	}
+	if got := strings.Join(v.FontRoles, ","); got != "title,body,body-italic,mana,small-caps,info" {
+		t.Errorf("font roles = %s", got)
+	}
+}
+
+func TestSourceHoldsTheFilesAsTheyAre(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	src, err := svc.Source(sum.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range src.Files {
+		names = append(names, f.Name)
+		raw, _ := os.ReadFile(filepath.Join(dir, sum.ID, filepath.FromSlash(f.Name)))
+		if f.Content != string(raw) {
+			t.Errorf("%s differs from the file", f.Name)
+		}
+	}
+	if strings.Join(names, ",") != "template.json,layouts/normal.json" {
+		t.Errorf("files = %v", names)
+	}
+	if _, err := svc.Source("gone"); apierr.KindOf(err) != apierr.NotFound {
+		t.Errorf("a draft that is gone gave %v", err)
+	}
+}
+
+func TestCheckFileSaysWhereTheJSONIsWrong(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	res, err := svc.CheckFile(CheckRequest{ID: sum.ID, File: "layouts/normal.json", Content: "{\n  \"serves\": [\n    ,\n  ]\n}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Writable || len(res.Problems) != 1 || res.Problems[0].Line != 3 || res.Problems[0].Column < 1 {
+		t.Fatalf("result = %+v, want one problem on line 3", res)
+	}
+}
+
+func TestCheckFileSaysWhatTheTextWouldDo(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	src, _ := svc.Source(sum.ID)
+	same := src.Files[1].Content
+
+	// What is there already is fine and can be saved
+	res, err := svc.CheckFile(CheckRequest{ID: sum.ID, File: "layouts/normal.json", Content: same})
+	if err != nil || !res.Writable {
+		t.Fatalf("unchanged text: %+v, %v", res, err)
+	}
+	for _, p := range res.Problems {
+		if p.Severity == "error" {
+			t.Errorf("an error in the file as it is: %+v", p)
+		}
+	}
+
+	// Valid JSON that is not a layout that loads is reported with where, and is not
+	// to be saved over a draft that loads
+	bad := strings.Replace(same, `"align": "left"`, `"align": "diagonal"`, 1)
+	res, _ = svc.CheckFile(CheckRequest{ID: sum.ID, File: "layouts/normal.json", Content: bad})
+	if res.Writable || len(res.Problems) == 0 || !strings.Contains(res.Problems[0].Path, "align") || res.Problems[0].Severity != "error" {
+		t.Fatalf("a layout that does not load: %+v", res)
+	}
+
+	// A draft that does not load already can be written to, to fix it
+	if err := os.WriteFile(filepath.Join(dir, sum.ID, "layouts", "normal.json"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = svc.CheckFile(CheckRequest{ID: sum.ID, File: "layouts/normal.json", Content: bad})
+	if !res.Writable || len(res.Problems) == 0 {
+		t.Errorf("a draft that did not load: %+v, want it writable with its problems", res)
+	}
+
+	// A file that is not one of the draft's
+	res, _ = svc.CheckFile(CheckRequest{ID: sum.ID, File: "../outside.json", Content: "{}"})
+	if res.Writable || len(res.Problems) != 1 {
+		t.Errorf("a file outside the draft: %+v", res)
+	}
+}
+
+func TestApplySetsAFieldAndTheInverseTakesItBack(t *testing.T) {
+	svc, ws, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
+	original, _ := os.ReadFile(file)
+	c := presetCard(t, "white-creature")
+	before := renderDraft(t, svc, ws, sum.ID, c)
+
+	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{setOp(draftedit.KindText, "title", `"#FF0000"`, "text", "color")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid || res.Rev != 1 {
+		t.Fatalf("result = %+v", res)
+	}
+	if samePixels(before, renderDraft(t, svc, ws, sum.ID, c)) {
+		t.Error("the colour did not change the render")
+	}
+	if _, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: res.Inverse}); err != nil {
+		t.Fatal(err)
+	}
+	if now, _ := os.ReadFile(file); string(now) != string(original) {
+		t.Error("undoing did not restore the file")
+	}
+}
+
+func TestApplyRefusesAValueTheEngineDoesNotAcceptAndSaysWhich(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
+	original, _ := os.ReadFile(file)
+	for name, op := range map[string]draftedit.Op{
+		"an alignment that is not one":  setOp(draftedit.KindText, "title", `"diagonal"`, "text", "align"),
+		"a condition that is not known": setOp(draftedit.KindText, "title", `"made_up"`, "condition"),
+		"a size of nothing":             setOp(draftedit.KindText, "title", `0`, "rect", "width"),
+		"a color that is not one":       setOp(draftedit.KindText, "title", `"red"`, "text", "color"),
+	} {
+		_, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{op}})
+		if err == nil || !strings.Contains(err.Error(), "not allowed") {
+			t.Errorf("%s: error = %v, want the reason", name, err)
+		}
+	}
+	if now, _ := os.ReadFile(file); string(now) != string(original) {
+		t.Error("a refused change altered the layout")
+	}
+}
+
+func TestApplyOfAWholeFileFixesADraftThatDoesNotLoadAndUndoBreaksItAgain(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
+	good, _ := os.ReadFile(file)
+	broken := strings.Replace(string(good), `"align": "left"`, `"align": "diagonal"`, 1)
+	if err := os.WriteFile(file, []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpReplace, File: "layouts/normal.json", Content: string(good)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid || len(res.Inverse) != 1 {
+		t.Fatalf("result = %+v", res)
+	}
+	// Undo goes back to the draft that did not load, which a whole file is let do
+	back, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: res.Inverse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.Valid || len(back.Diagnostics) == 0 || back.Diagnostics[0].Severity != "error" {
+		t.Errorf("result = %+v, want the problems of the draft that does not load", back)
+	}
+	if now, _ := os.ReadFile(file); string(now) != broken {
+		t.Error("undo did not write the old text")
 	}
 }

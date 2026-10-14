@@ -99,3 +99,46 @@ export const describeView = (items = standardItems, extra = {}) => ({
   rev: 0,
   ...extra,
 });
+
+// The files behind standardItems, as a draft keeps them. A test changes the objects and
+// the bridge writes them out as the app would send them
+export const standardLayout = () => ({
+  serves: [{ role: "single", kind: "standard" }],
+  canvas: { width: 1000, height: 1400, dpi: 800 },
+  stack: [
+    { id: "background", part: "background" },
+    { id: "frame", part: "frame", condition: "nonland" },
+  ],
+  textBoxes: {
+    title: { rect: { x: 100, y: 80, width: 600, height: 80 }, text: { fontSize: 60, font: "title", color: "#000000", align: "left", vAlign: "top" } },
+    type: { draws: "type", rect: { x: 100, y: 820, width: 800, height: 60 }, text: { fontSize: 40, font: "title", align: "left", vAlign: "baseline" } },
+    oracle: { rect: { x: 100, y: 900, width: 800, height: 300 }, text: { fontSize: 36, lineSpacing: 1, paddingX: 20, vAlign: "center" } },
+    pt: { rect: { x: 780, y: 1250, width: 120, height: 80 }, text: { fontSize: 50, align: "center" } },
+  },
+  art: [{ x: 80, y: 200, width: 840, height: 600, after: "frame" }],
+  symbols: { set: { x: 800, y: 600, width: 100, height: 60, align: "right" } },
+});
+export const standardTemplateDoc = () => ({
+  contract: "1.1",
+  id: "user.mine",
+  version: "0.1.0",
+  name: "Mine",
+  parts: { background: {}, frame: { slot: "background", origin: { x: 10, y: 20 } } },
+  credits: [{ name: "Original Artist", url: "https://example.com/art", note: "art" }, { name: "Mine too" }],
+});
+
+// source is a draft's files the bridge sends, kept as objects so a test can change them
+export class Source {
+  constructor(layout = standardLayout(), template = standardTemplateDoc()) {
+    this.layout = layout;
+    this.template = template;
+    this.extra = {};
+  }
+  files() {
+    const out = [
+      { name: "template.json", content: JSON.stringify(this.template, null, 2) + "\n" },
+      { name: "layouts/normal.json", content: JSON.stringify(this.layout, null, 2) + "\n" },
+    ];
+    return { files: out.map((f) => ({ ...f, content: this.extra[f.name] ?? f.content })) };
+  }
+}

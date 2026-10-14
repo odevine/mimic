@@ -226,6 +226,16 @@ export const api = {
   // undo them
   describeDraft: (id, card, face) => rpc("Studio", "Describe", { id, card, face: face || 0 }),
   applyDraft: (id, ops) => rpc("Studio", "Apply", { id, ops }),
+  // draftSource resolves to { files: [{ name, content }] }, template.json and each
+  // layout as they are on disk. checkDraftFile resolves to { writable, problems }, what
+  // the text would do as a file without saving it, each problem { severity, line,
+  // column, path, message }. draftVocabulary resolves to the names a field can take:
+  // { draws, conditions, fontRoles, blendModes, slots }. An edit of a field is an op
+  // set or unset with a kind, a key and a path of keys, and a whole file is an op
+  // replace with a file and its content
+  draftSource: (id) => rpc("Studio", "Source", id),
+  checkDraftFile: (id, file, content) => rpc("Studio", "CheckFile", { id, file, content }),
+  draftVocabulary: () => rpc("Studio", "Vocabulary"),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

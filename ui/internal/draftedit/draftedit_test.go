@@ -1,6 +1,7 @@
 package draftedit
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -378,5 +379,228 @@ func TestAuthoredDeltaIsTheInverseOfTheTurn(t *testing.T) {
 				t.Errorf("rotate %d: a delivered move of %v is %v in the layout, which shows as %v", rotate, d, image.Pt(ax, ay), got)
 			}
 		}
+	}
+}
+
+func raw(s string) json.RawMessage { return json.RawMessage(s) }
+
+func set(kind, key string, value string, path ...string) Op {
+	return Op{Op: OpSet, Layout: "normal", Kind: kind, Key: key, Path: path, Value: raw(value)}
+}
+
+func unset(kind, key string, path ...string) Op {
+	return Op{Op: OpUnset, Layout: "normal", Kind: kind, Key: key, Path: path}
+}
+
+func TestSetChangesOneFieldAndLeavesTheFileAsItWas(t *testing.T) {
+	res := apply(t, draft(0), set(KindText, "title", `9`, "text", "fontSize"))
+	got := string(res.Files["layouts/normal.json"])
+	want := strings.Replace(layoutJSON(0), `"fontSize": 4`, `"fontSize": 9`, 1)
+	if got != want {
+		t.Fatalf("the file changed more than the field:\n%s", got)
+	}
+	if len(res.Files) != 1 {
+		t.Errorf("files = %v", res.Files)
+	}
+}
+
+func TestSetMakesTheObjectsOnTheWayAndTheInverseTakesThemBack(t *testing.T) {
+	fsys := draft(0)
+	original := string(fsys["layouts/normal.json"].Data)
+	res := apply(t, fsys, set(KindText, "title", `{"distance":0.1,"angle":25}`, "text", "shadow"), set(KindText, "title", `"#112233"`, "text", "color"))
+	n := layoutAfter(t, res)
+	if got := string(n.Path("textBoxes", "title", "text", "shadow").Compact()); got != `{"distance":0.1,"angle":25}` {
+		t.Errorf("shadow = %s", got)
+	}
+	if s, _ := n.Path("textBoxes", "title", "text", "color").String(); s != "#112233" {
+		t.Errorf("color = %q", s)
+	}
+	// Both were new, so undoing them removes them and the file reads as it did
+	if len(res.Inverse) != 2 || res.Inverse[0].Op != OpUnset || res.Inverse[1].Op != OpUnset {
+		t.Fatalf("inverse = %+v", res.Inverse)
+	}
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: res.Files["layouts/normal.json"]}
+	if back := apply(t, fsys, res.Inverse...); string(back.Files["layouts/normal.json"]) != original {
+		t.Errorf("undoing did not restore the file:\n%s", back.Files["layouts/normal.json"])
+	}
+}
+
+func TestSetOfAnExistingFieldHasAnInverseThatPutsTheOldValueBack(t *testing.T) {
+	fsys := draft(0)
+	original := string(fsys["layouts/normal.json"].Data)
+	res := apply(t, fsys, set(KindText, "title", `12`, "text", "fontSize"))
+	if len(res.Inverse) != 1 || res.Inverse[0].Op != OpSet || string(res.Inverse[0].Value) != "4" {
+		t.Fatalf("inverse = %+v", res.Inverse)
+	}
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: res.Files["layouts/normal.json"]}
+	if back := apply(t, fsys, res.Inverse...); string(back.Files["layouts/normal.json"]) != original {
+		t.Error("undoing did not restore the file")
+	}
+}
+
+func TestUnsetRemovesAFieldAndItsInverseSetsItAgain(t *testing.T) {
+	fsys := draft(0)
+	original := string(fsys["layouts/normal.json"].Data)
+	res := apply(t, fsys, unset(KindText, "legal", "space"))
+	if n := layoutAfter(t, res); n.Path("textBoxes", "legal", "space") != nil {
+		t.Error("the field is still there")
+	}
+	if len(res.Inverse) != 1 || res.Inverse[0].Op != OpSet || string(res.Inverse[0].Value) != `"output"` {
+		t.Fatalf("inverse = %+v", res.Inverse)
+	}
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: res.Files["layouts/normal.json"]}
+	if back := apply(t, fsys, res.Inverse...); string(back.Files["layouts/normal.json"]) != original {
+		t.Errorf("undoing did not restore the file:\n%s", back.Files["layouts/normal.json"])
+	}
+	// Unsetting what is not there changes nothing and is its own inverse
+	none := apply(t, draft(0), unset(KindText, "title", "text", "tracking"))
+	if len(none.Inverse) != 1 || none.Inverse[0].Op != OpUnset {
+		t.Errorf("inverse = %+v", none.Inverse)
+	}
+}
+
+func TestSetReachesEveryKindOfElement(t *testing.T) {
+	res := apply(t, draft(0),
+		set(KindCanvas, "", `120`, "width"),
+		set(KindLayer, "crown", `0.5`, "opacity"),
+		set(KindArt, "0", `90`, "rotate"),
+		set(KindSymbol, "set", `"left"`, "align"),
+		set(KindText, "title", `"center"`, "text", "align"),
+	)
+	n := layoutAfter(t, res)
+	if v, _ := n.Path("canvas", "width").Int(); v != 120 {
+		t.Errorf("canvas width = %d", v)
+	}
+	if got := string(n.Path("stack").Item(1).Field("opacity").Compact()); got != "0.5" {
+		t.Errorf("opacity = %s", got)
+	}
+	if v, _ := n.Path("art").Item(0).Field("rotate").Int(); v != 90 {
+		t.Errorf("rotate = %d", v)
+	}
+	if s, _ := n.Path("symbols", "set", "align").String(); s != "left" {
+		t.Errorf("align = %q", s)
+	}
+	if s, _ := n.Path("textBoxes", "title", "text", "align").String(); s != "center" {
+		t.Errorf("text align = %q", s)
+	}
+}
+
+func TestSetReachesTheTemplateAndItsParts(t *testing.T) {
+	fsys := draft(0)
+	res := apply(t, fsys,
+		Op{Op: OpSet, Kind: KindTemplate, Path: []string{"name"}, Value: raw(`"Renamed"`)},
+		Op{Op: OpSet, Kind: KindTemplate, Path: []string{"author", "name"}, Value: raw(`"Me"`)},
+		Op{Op: OpSet, Kind: KindPart, Key: "bg", Path: []string{"slot"}, Value: raw(`"background"`)},
+	)
+	if _, ok := res.Files["layouts/normal.json"]; ok {
+		t.Error("a layout was rewritten for a change to the template")
+	}
+	n, err := jsonedit.Parse(res.Files["template.json"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := n.Field("name").String(); s != "Renamed" {
+		t.Errorf("name = %q", s)
+	}
+	if s, _ := n.Path("author", "name").String(); s != "Me" {
+		t.Errorf("author = %q", s)
+	}
+	if s, _ := n.Path("parts", "bg", "slot").String(); s != "background" {
+		t.Errorf("slot = %q", s)
+	}
+	if got := strings.Join(n.Keys(), ","); got != "contract,id,version,name,parts,author" {
+		t.Errorf("keys = %s, want the new one last", got)
+	}
+}
+
+func TestChangesAreRefusedWithTheReason(t *testing.T) {
+	tests := []struct {
+		name string
+		op   Op
+		want string
+	}{
+		{"no path", Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Value: raw(`1`)}, "1 to 4 keys"},
+		{"a path too deep", set(KindText, "title", `1`, "a", "b", "c", "d", "e"), "1 to 4 keys"},
+		{"a field with a dash", set(KindText, "title", `1`, "font-size"), "not the name of a field"},
+		{"a field that leaves the element", set(KindText, "title", `1`, ".."), "not the name of a field"},
+		{"a value that is not JSON", set(KindText, "title", `{`, "text", "fontSize"), "not JSON"},
+		{"a missing value", Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Path: []string{"x"}}, "not JSON"},
+		{"a text box that is gone", set(KindText, "gone", `1`, "x"), "no text"},
+		{"a layer that is gone", set(KindLayer, "gone", `1`, "opacity"), "no entry"},
+		{"a part that is gone", Op{Op: OpSet, Kind: KindPart, Key: "gone", Path: []string{"slot"}, Value: raw(`"x"`)}, "no part"},
+		{"an art window that is gone", set(KindArt, "7", `1`, "x"), "no art"},
+		{"a kind that does not exist", set("mana", "x", `1`, "x"), "can be changed"},
+		{"a key that holds no object", set(KindText, "title", `1`, "text", "fontSize", "deep"), "no object"},
+		{"a layout that is gone", Op{Op: OpSet, Layout: "nope", Kind: KindCanvas, Path: []string{"width"}, Value: raw(`1`)}, `no layout "nope"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Apply(draft(0), []Op{tt.op})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want one that mentions %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestReplaceWritesAFileAsGivenAndTheInverseWritesTheOldOne(t *testing.T) {
+	fsys := draft(0)
+	original := string(fsys["layouts/normal.json"].Data)
+	text := `{"serves": [], "canvas": {"width": 10, "height": 10}}` + "\n"
+	res := apply(t, fsys, Op{Op: OpReplace, File: "layouts/normal.json", Content: text})
+	if string(res.Files["layouts/normal.json"]) != text {
+		t.Errorf("the file was not kept as written: %q", res.Files["layouts/normal.json"])
+	}
+	if len(res.Inverse) != 1 || res.Inverse[0].Op != OpReplace || res.Inverse[0].Content != original {
+		t.Fatalf("inverse = %+v", res.Inverse)
+	}
+	tpl := apply(t, fsys, Op{Op: OpReplace, File: "template.json", Content: `{"name": "x"}`})
+	if string(tpl.Files["template.json"]) != `{"name": "x"}` {
+		t.Error("template.json was not written")
+	}
+}
+
+func TestReplaceIsRefusedForWhatIsNotAJSONObjectOrNotTheDraftsFile(t *testing.T) {
+	tests := []struct {
+		name string
+		op   Op
+		want string
+	}{
+		{"not JSON", Op{Op: OpReplace, File: "layouts/normal.json", Content: `{"a":`}, "not valid JSON"},
+		{"not an object", Op{Op: OpReplace, File: "layouts/normal.json", Content: `[]`}, "not a JSON object"},
+		{"a file that leaves the layouts folder", Op{Op: OpReplace, File: "layouts/../template.json", Content: `{}`}, "can be written"},
+		{"a file that is not a layout", Op{Op: OpReplace, File: "parts/bg/w.png", Content: `{}`}, "can be written"},
+		{"a layout the draft lacks", Op{Op: OpReplace, File: "layouts/new.json", Content: `{}`}, "no file"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Apply(draft(0), []Op{tt.op})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want one that mentions %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestReplaceCannotBeCombinedWithOtherChanges(t *testing.T) {
+	_, err := Apply(draft(0), []Op{
+		{Op: OpMove, Layout: "normal", Kind: KindText, Key: "title", DX: 1},
+		{Op: OpReplace, File: "template.json", Content: `{}`},
+	})
+	if err == nil || !strings.Contains(err.Error(), "on its own") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestSetOnALayoutThatExtendsAnotherIsRefused(t *testing.T) {
+	fsys := draft(0)
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: []byte(`{"serves": [], "canvas": {"width": 10, "height": 10}, "extends": ["base"]}`)}
+	_, err := Apply(fsys, []Op{set(KindCanvas, "", `5`, "width")})
+	if !errors.Is(err, ErrExtends) {
+		t.Errorf("error = %v, want ErrExtends", err)
+	}
+	// The template's own fields are in template.json, so they can still be changed
+	if _, err := Apply(fsys, []Op{{Op: OpSet, Kind: KindTemplate, Path: []string{"name"}, Value: raw(`"x"`)}}); err != nil {
+		t.Errorf("a change to the template was refused: %v", err)
 	}
 }

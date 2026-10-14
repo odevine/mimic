@@ -322,7 +322,8 @@ place again selects what lies beneath it. The layers list selects too, and shows
 a dimmer type what the test card does not draw, with the reason on hover. Dragging
 moves the selection, and the handles on a text box, an art window or a symbol
 resize it. A layer moves but has no handles, since its image is drawn at its own
-size. Edges and middles snap to the card's and to the other items' within a few
+size. A text box set on its baseline is outlined where its text is, and has no
+handles either, since its rectangle only says where the first baseline starts. Edges and middles snap to the card's and to the other items' within a few
 pixels, and holding Option or Alt turns that off. The arrow keys move the
 selection one pixel, and ten with Shift. Raise and Lower change a layer's place in
 the stack.

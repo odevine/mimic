@@ -382,3 +382,20 @@ test("opening another template clears the selection and the undo history", async
   await expect(editor.undoButton).toBeDisabled();
   await expect(editor.selection).toBeHidden();
 });
+
+test("a text box shown by where its text is can be moved and has no handles to resize", async ({ bridge, page }) => {
+  const { editor, point } = await ready(bridge, page);
+  const p = point(280, 810);
+  await page.mouse.click(p.x, p.y);
+  await expect(editor.selectionName).toHaveText("type");
+  await expect(page.locator("#ed-sel-y")).toHaveText("790");
+  await expect(editor.selectionBox).toHaveCount(1);
+  await expect(editor.handles).toHaveCount(0);
+
+  await page.keyboard.down("Alt");
+  await drag(page, p, { x: 0, y: 12 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops[0]).toEqual({ op: "move", layout: "normal", kind: "text", key: "type", dx: 0, dy: 30 });
+});

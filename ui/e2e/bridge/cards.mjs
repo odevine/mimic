@@ -85,7 +85,8 @@ export const standardItems = [
   drawn("layer", "frame", at(50, 50, 900, 1300), { part: "frame" }),
   drawn("art", "0", at(80, 200, 840, 600), { after: "frame" }),
   drawn("text", "title", at(100, 80, 600, 80)),
-  drawn("text", "type", at(100, 820, 800, 60)),
+  // A text box set on its baseline is described by where its text is
+  drawn("text", "type", at(100, 790, 360, 40), { ink: true }),
   drawn("text", "oracle", at(100, 900, 800, 300)),
   { kind: "text", key: "pt", drawn: false, why: "the card has no pt to draw", authored: at(780, 1250, 120, 80), delivered: at(780, 1250, 120, 80) },
 ];

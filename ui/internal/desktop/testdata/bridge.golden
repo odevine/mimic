@@ -644,6 +644,7 @@ studio.ItemView struct {
 	images []string (omitempty)
 	drawn bool
 	why string (omitempty)
+	ink bool (omitempty)
 	authored studio.RectView
 	delivered studio.RectView
 }

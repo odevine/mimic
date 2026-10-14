@@ -775,7 +775,8 @@ function drawOverlay() {
     const rect = live ? live.rect : item.delivered;
     if (rect.width > 0 && rect.height > 0) {
       let handles = [];
-      if (view.editable && item.kind !== "layer") {
+      // A layer has no size to change, and neither does a text box shown by its ink
+      if (view.editable && item.kind !== "layer" && !item.ink) {
         const per = overlayBox().width / canvas.width;
         handles = visibleHandles(rect.width * per, rect.height * per).map((name) => h("div", { class: "ed-handle", dataset: { handle: name } }));
       }

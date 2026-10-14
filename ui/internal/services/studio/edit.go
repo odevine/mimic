@@ -36,13 +36,17 @@ type SizeView struct {
 // Delivered in the finished image, which differ when the layout turns the card. A
 // layer that does not draw has no place
 type ItemView struct {
-	Kind      string   `json:"kind"`
-	Key       string   `json:"key"`
-	Part      string   `json:"part,omitempty"`
-	After     string   `json:"after,omitempty"`
-	Images    []string `json:"images,omitempty"`
-	Drawn     bool     `json:"drawn"`
-	Why       string   `json:"why,omitempty"`
+	Kind   string   `json:"kind"`
+	Key    string   `json:"key"`
+	Part   string   `json:"part,omitempty"`
+	After  string   `json:"after,omitempty"`
+	Images []string `json:"images,omitempty"`
+	Drawn  bool     `json:"drawn"`
+	Why    string   `json:"why,omitempty"`
+	// Ink says the places are where the item's text is drawn and not the box's own
+	// rectangle, which a text box set on its baseline has no use for. Such an item
+	// can be moved and not resized
+	Ink       bool     `json:"ink,omitempty"`
 	Authored  RectView `json:"authored"`
 	Delivered RectView `json:"delivered"`
 }
@@ -99,7 +103,7 @@ func (s *Service) Describe(req DescribeRequest) (DescribeView, error) {
 	for i, it := range desc.Items {
 		view.Items[i] = ItemView{
 			Kind: string(it.Kind), Key: it.Key, Part: it.Part, After: it.After, Images: it.Images,
-			Drawn: it.Drawn, Why: it.Why, Authored: rectView(it.Authored), Delivered: rectView(it.Delivered),
+			Drawn: it.Drawn, Why: it.Why, Ink: it.Ink, Authored: rectView(it.Authored), Delivered: rectView(it.Delivered),
 		}
 	}
 	if fsys, err := s.store.FS(req.ID); err == nil {

@@ -41,8 +41,13 @@ func TestDescribeListsWhatTheDraftDrawsForTheTestCard(t *testing.T) {
 	if bg := item(t, v, "layer", "background"); !bg.Drawn || bg.Delivered != (RectView{0, 0, 272, 370}) {
 		t.Errorf("background = %+v", bg)
 	}
-	if title := item(t, v, "text", "title"); !title.Drawn || title.Delivered.Width == 0 || title.Authored != title.Delivered {
+	// The title is set on its baseline, so it is shown where its text is, above the
+	// box's top, and the oracle text fills its box
+	if title := item(t, v, "text", "title"); !title.Drawn || !title.Ink || title.Delivered.Width == 0 || title.Authored != title.Delivered {
 		t.Errorf("title = %+v", title)
+	}
+	if oracle := item(t, v, "text", "oracle"); !oracle.Drawn || oracle.Ink {
+		t.Errorf("oracle = %+v", oracle)
 	}
 	if pt := item(t, v, "text", "pt"); !pt.Drawn {
 		t.Errorf("pt = %+v, want drawn for a creature", pt)

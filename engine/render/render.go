@@ -150,13 +150,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	// once for the card rather than once per box. The artist credit draws from
 	// that same font but in its own box color, so it takes a renderer beside it
 	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
-	var syms symbols
-	if ms := mana.NewSymbols(fr.Font(fonts.Mana)); ms != nil {
-		syms.mana = ms
-		if box, ok := boxes.byDraws("artist"); ok {
-			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.spec.Color)}
-		}
-	}
+	syms := newSymbols(fr, boxes)
 
 	if drawSymbol {
 		node, err := symbolNode(req.SetSymbol, symSpec)
@@ -340,15 +334,16 @@ func resolveBoxes(layout *template.Layout, geo *template.Geometry, fc *faces, fe
 	return out
 }
 
-// drawBox lays one text box out and returns the nodes it draws, the text and a
-// flavor divider when the box carries one. docW and docH are the canvas the box
-// is laid out in, which is the delivered one for a box in the output space
-func drawBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, fr *fonts.Resolver, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
+// placeBox is a text box as it will be laid out for the card, with the text it holds.
+// A box moves to another's row when a layer is drawn, narrows to clear another box
+// and keeps out of a layer, which are things only the card decides. It returns no
+// parts for a box with nothing to draw
+func placeBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, fr *fonts.Resolver, scale template.Scale) (template.TextBoxSpec, []template.TextPart, error) {
 	box := job.spec
 	d, _ := fc.get(job.face)
 	parts := textParts(job.draws, box, d, syms, fr, req.Copyright)
 	if len(parts) == 0 {
-		return nil, nil
+		return box, nil, nil
 	}
 	bounds := func(id string) (image.Rectangle, bool) {
 		e, ok := layout.Entry(id)
@@ -373,7 +368,7 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 			if otherParts := textParts(other.draws, other.spec, od, syms, fr, req.Copyright); len(otherParts) > 0 {
 				span, err := template.MeasureTextSpan(other.spec, otherParts...)
 				if err != nil {
-					return nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
+					return box, nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
 				}
 				box = template.ClearOf(box, span)
 			}
@@ -383,6 +378,20 @@ func drawBox(req template.RenderRequest, t *template.Template, layout *template.
 		if r, ok := bounds(box.AvoidLayer); ok {
 			box.Avoid = r
 		}
+	}
+	return box, parts, nil
+}
+
+// drawBox lays one text box out and returns the nodes it draws, the text and a
+// flavor divider when the box carries one. docW and docH are the canvas the box
+// is laid out in, which is the delivered one for a box in the output space
+func drawBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, fr *fonts.Resolver, scale template.Scale, docW, docH int) ([]canvas.Node, error) {
+	box, parts, err := placeBox(req, t, layout, authored, job, boxes, fc, syms, fr, scale)
+	if err != nil {
+		return nil, err
+	}
+	if len(parts) == 0 {
+		return nil, nil
 	}
 	// A turned box lays its text out in the rect turned a quarter about its middle,
 	// and the finished text is turned back about that same middle
@@ -546,6 +555,18 @@ var basicFontReplacer = strings.NewReplacer("—", "-", "–", "-")
 // its own glyphs
 func normalizeForBasicFont(s string) string {
 	return basicFontReplacer.Replace(s)
+}
+
+// newSymbols makes the renderers a card's boxes draw their symbols through
+func newSymbols(fr *fonts.Resolver, boxes boxSet) symbols {
+	var syms symbols
+	if ms := mana.NewSymbols(fr.Font(fonts.Mana)); ms != nil {
+		syms.mana = ms
+		if box, ok := boxes.byDraws("artist"); ok {
+			syms.artist = mana.ArtistNib{Sym: ms, Ink: template.ParseHexColor(box.spec.Color)}
+		}
+	}
+	return syms
 }
 
 // symbols are the renderers a card's boxes draw braced codes through: the pips

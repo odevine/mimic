@@ -55,6 +55,24 @@ type RenderRequest struct {
 	// costs a fraction of the work while laying out identically. Zero renders at
 	// the template's own resolution
 	DPI int
+	// Hide names items of the layout to leave out of the drawing, each as the kind, a
+	// colon and the item's key, the way a description names them: "layer:frame" for a stack
+	// entry's id, "art:0" for an art window's index, "symbol:set" for a symbol's name and
+	// "text:title" for a text box's key. A hidden item is only not drawn. The rest of the
+	// card is laid out as it would be with the item there, so text still steps around a
+	// layer that is hidden and a box still gives way to one, and a description reports the
+	// item as it would draw. A name that matches nothing hides nothing
+	Hide []string
+}
+
+// Hides reports whether the request leaves an item out of the drawing
+func (r RenderRequest) Hides(kind, key string) bool {
+	for _, h := range r.Hide {
+		if len(h) == len(kind)+1+len(key) && h[:len(kind)] == kind && h[len(kind)] == ':' && h[len(kind)+1:] == key {
+			return true
+		}
+	}
+	return false
 }
 
 // Report forwards a progress update when a callback is set, so a render's call

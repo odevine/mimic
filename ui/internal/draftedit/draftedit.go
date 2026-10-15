@@ -36,8 +36,11 @@ const (
 
 // The operations
 const (
-	OpMove    = "move"
-	OpResize  = "resize"
+	OpMove   = "move"
+	OpResize = "resize"
+	// OpStretch moves one side of a text box, which is how a box set on its baseline is
+	// made longer or shorter without saying how tall it is
+	OpStretch = "stretch"
 	OpReorder = "reorder"
 	// OpSet puts a value at a path inside an element, and OpUnset takes it out
 	OpSet   = "set"
@@ -80,6 +83,9 @@ type Op struct {
 	DY int `json:"dy,omitempty"`
 	// Rect is where a resize puts the element, in the finished image's pixels
 	Rect *Rect `json:"rect,omitempty"`
+	// Edge is the side of a text box a stretch moves, "n", "e", "s" or "w" in the finished
+	// image, by DX for the sides that face left and right and DY for the others
+	Edge string `json:"edge,omitempty"`
 	// To is the place in the stack a reorder moves an entry to, where 0 is the
 	// bottom
 	To int `json:"to,omitempty"`
@@ -320,6 +326,8 @@ func (w *work) apply(op Op) (Op, error) {
 		return w.move(l, op)
 	case OpResize:
 		return w.resize(l, op)
+	case OpStretch:
+		return w.stretch(l, op)
 	case OpReorder:
 		return w.reorder(l, op)
 	case OpAdd:
@@ -504,6 +512,50 @@ func (w *work) resize(l *layout, op Op) (Op, error) {
 	if !t.output {
 		next = template.RotateRect(next, l.delivered.X, l.delivered.Y, 360-l.rotate)
 		was = template.RotateRect(old, l.authored.X, l.authored.Y, l.rotate)
+	}
+	writeRect(t.node, next)
+	l.changed = true
+	back := fromImage(was)
+	return Op{Op: OpResize, Layout: op.Layout, Kind: op.Kind, Key: op.Key, Rect: &back}, nil
+}
+
+// stretch moves one side of a text box by a distance in the finished image, so a layout
+// that turns the card moves the side of the box that faces that way. Its inverse is the
+// resize that puts the whole box back
+func (w *work) stretch(l *layout, op Op) (Op, error) {
+	if op.Kind != KindText {
+		return Op{}, errors.New("only a text box can have a side moved")
+	}
+	t, err := w.find(l, op)
+	if err != nil {
+		return Op{}, err
+	}
+	old, err := readRect(t.node)
+	if err != nil {
+		return Op{}, err
+	}
+	was := old
+	if !t.output {
+		was = template.RotateRect(old, l.authored.X, l.authored.Y, l.rotate)
+	}
+	next := was
+	switch op.Edge {
+	case "w":
+		next.Min.X += op.DX
+	case "e":
+		next.Max.X += op.DX
+	case "n":
+		next.Min.Y += op.DY
+	case "s":
+		next.Max.Y += op.DY
+	default:
+		return Op{}, fmt.Errorf("%q is not a side of a box", op.Edge)
+	}
+	if next.Dx() < 1 || next.Dy() < 1 {
+		return Op{}, errors.New("the box would be less than a pixel across")
+	}
+	if !t.output {
+		next = template.RotateRect(next, l.delivered.X, l.delivered.Y, 360-l.rotate)
 	}
 	writeRect(t.node, next)
 	l.changed = true

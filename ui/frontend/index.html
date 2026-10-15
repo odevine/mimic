@@ -1527,6 +1527,38 @@ Sideboard
                   >
                     <svg class="icon"><use href="icons.svg#i-fit" /></svg>
                   </button>
+                  <span class="divider" aria-hidden="true"></span>
+                  <button
+                    id="ed-overlays"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-pressed="true"
+                    aria-label="Overlays"
+                    data-tip="Show/Hide overlays (O)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-eye" /></svg>
+                  </button>
+                  <span class="divider" aria-hidden="true"></span>
+                  <button
+                    id="ed-copy-image"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Copy the image"
+                    data-tip="Copy image"
+                    disabled
+                  >
+                    <svg class="icon"><use href="icons.svg#i-copy" /></svg>
+                  </button>
+                  <button
+                    id="ed-save-image"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Save the image"
+                    data-tip="Save image"
+                    disabled
+                  >
+                    <svg class="icon"><use href="icons.svg#i-download" /></svg>
+                  </button>
                 </div>
               </div>
               <div
@@ -1724,13 +1756,13 @@ Sideboard
                         </p>
                         <p id="ed-selection-note" class="dim" hidden></p>
                         <dl class="ed-readout ed-readout-grid">
-                          <dt>X</dt>
+                          <dt id="ed-sel-x-l">X</dt>
                           <dd id="ed-sel-x"></dd>
-                          <dt>Width</dt>
+                          <dt id="ed-sel-w-l">Width</dt>
                           <dd id="ed-sel-w"></dd>
-                          <dt>Y</dt>
+                          <dt id="ed-sel-y-l">Y</dt>
                           <dd id="ed-sel-y"></dd>
-                          <dt>Height</dt>
+                          <dt id="ed-sel-h-l">Height</dt>
                           <dd id="ed-sel-h"></dd>
                         </dl>
                         <div id="ed-images" class="ed-images" hidden></div>

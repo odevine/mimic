@@ -170,3 +170,66 @@ test("a guide names the edge held and what else lies on the line", () => {
   const m = snapMove({ x: 21, y: 90, width: 10, height: 5 }, 0, 0, snapTargets(crowded, canvas, "", (it) => it.key, new Set(["text:title", "text:type", "text:a"])), 3).guides[0];
   assert.equal(m.to, "title left, type left, 1 more");
 });
+
+import { placement, stretchLine, lineHandles } from "../js/editorgeometry.js";
+
+test("a baseline box is moved and snapped by its line, and any other item by its own rectangle", () => {
+  const line = { x: 100, y: 220, width: 600, height: 0 };
+  const title = { kind: "text", key: "title", drawn: true, baseline: line, delivered: { x: 100, y: 180, width: 420, height: 52 } };
+  assert.equal(placement(title), line);
+  const oracle = item("text", "oracle", 100, 900, 800, 300);
+  assert.equal(placement(oracle), oracle.delivered);
+});
+
+test("a baseline snaps as one line and is named as one, whichever way the layout turns", () => {
+  const canvas = { width: 1000, height: 1400 };
+  const others = [
+    { kind: "text", key: "title", drawn: true, baseline: { x: 100, y: 220, width: 600, height: 0 }, delivered: { x: 100, y: 180, width: 420, height: 52 } },
+    { kind: "text", key: "type", drawn: true, baseline: { x: 440, y: 700, width: 0, height: 200 }, delivered: { x: 400, y: 700, width: 40, height: 200 } },
+  ];
+  const t = snapTargets(others, canvas, "", (it) => it.key, new Set(["text:title", "text:type"]));
+  // The line is on y once and not at its top, middle and bottom
+  assert.ok(t.y.includes(220));
+  assert.deepEqual(t.names.y.get(220).map((o) => o.text), ["title baseline"]);
+  assert.deepEqual(t.names.x.get(440).map((o) => o.text), ["type baseline"]);
+  // The line's ends and middle are on x
+  assert.deepEqual(t.names.x.get(100).map((o) => o.text), ["title left"]);
+  assert.ok(t.x.includes(400) && t.x.includes(700));
+
+  // Another baseline brought within reach lands on it, and the guide says baseline to baseline
+  const moving = { x: 120, y: 500, width: 300, height: 0 };
+  const got = snapMove(moving, 0, -277, t, 6);
+  assert.equal(got.dy, -280);
+  assert.deepEqual(got.guides.map((g) => [g.axis, g.edge, g.to]), [["y", "baseline", "title baseline"]]);
+  // And its left end lands on the line's left end
+  const left = snapMove(moving, -18, 0, t, 6);
+  assert.equal(left.dx, -20);
+  assert.deepEqual(left.guides.map((g) => [g.axis, g.edge, g.to]), [["x", "left", "title left"]]);
+});
+
+test("an end of a baseline is stretched along the line and stops at the least length", () => {
+  const line = { x: 100, y: 220, width: 600, height: 0 };
+  assert.deepEqual(stretchLine(line, "e", 50, 99), { line: { x: 100, y: 220, width: 650, height: 0 }, d: 50 });
+  assert.deepEqual(stretchLine(line, "w", 40, 99), { line: { x: 140, y: 220, width: 560, height: 0 }, d: 40 });
+  assert.deepEqual(stretchLine(line, "w", -30, 0), { line: { x: 70, y: 220, width: 630, height: 0 }, d: -30 });
+  // It cannot be made shorter than the least, and says how far the end really went
+  assert.deepEqual(stretchLine(line, "e", -9999, 0, 4), { line: { x: 100, y: 220, width: 4, height: 0 }, d: -596 });
+  assert.deepEqual(stretchLine(line, "w", 9999, 0, 4), { line: { x: 696, y: 220, width: 4, height: 0 }, d: 596 });
+  // A side the line does not run to moves nothing
+  assert.deepEqual(stretchLine(line, "n", 0, 20), { line, d: 0 });
+  const down = { x: 220, y: 100, width: 0, height: 600 };
+  assert.deepEqual(stretchLine(down, "s", 0, 25), { line: { x: 220, y: 100, width: 0, height: 625 }, d: 25 });
+  assert.deepEqual(stretchLine(down, "n", 0, 10), { line: { x: 220, y: 110, width: 0, height: 590 }, d: 10 });
+  assert.deepEqual(stretchLine(down, "e", 20, 0), { line: down, d: 0 });
+});
+
+test("a baseline has a handle at each end, and a vertical one at its top and bottom", () => {
+  assert.deepEqual(lineHandles({ x: 100, y: 220, width: 600, height: 0 }), [
+    { edge: "w", x: 100, y: 220 },
+    { edge: "e", x: 700, y: 220 },
+  ]);
+  assert.deepEqual(lineHandles({ x: 220, y: 100, width: 0, height: 600 }), [
+    { edge: "n", x: 220, y: 100 },
+    { edge: "s", x: 220, y: 700 },
+  ]);
+});

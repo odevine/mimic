@@ -2,6 +2,7 @@ package studio
 
 import (
 	"encoding/json"
+	"image"
 	"os"
 	"path/filepath"
 	"slices"
@@ -532,5 +533,131 @@ func TestEditsKeepTheArtTheCardCameWith(t *testing.T) {
 	}
 	if same := withEdits(c, nil); same.Name != c.Name || same.ArtworkURL != c.ArtworkURL {
 		t.Errorf("a card with no edits changed: %+v", same)
+	}
+}
+
+func TestDescribeSaysWhatAnEditorNeedsOfATextBox(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	v := describeFor(t, svc, sum.ID, "monocolored")
+
+	// The title sits on its baseline, which is a line across the box's width at its Y
+	title := item(t, v, "text", "title")
+	if title.Baseline == nil || title.Baseline.Height != 0 || title.Baseline.Width <= 0 {
+		t.Fatalf("title baseline = %+v, want a horizontal line", title.Baseline)
+	}
+	var box struct{ X, Y, W int }
+	src, _ := svc.Source(sum.ID)
+	for _, f := range src.Files {
+		if f.Name != "layouts/normal.json" {
+			continue
+		}
+		var l struct {
+			TextBoxes map[string]struct {
+				Rect struct{ X, Y, Width, Height int }
+			} `json:"textBoxes"`
+		}
+		if err := json.Unmarshal([]byte(f.Content), &l); err != nil {
+			t.Fatal(err)
+		}
+		r := l.TextBoxes["title"].Rect
+		box.X, box.Y, box.W = r.X, r.Y, r.Width
+	}
+	if *title.Baseline != (RectView{X: box.X, Y: box.Y, Width: box.W, Height: 0}) {
+		t.Errorf("baseline %+v is not the box's own X, Y and width %+v", *title.Baseline, box)
+	}
+	// The oracle text is not set on its baseline
+	if item(t, v, "text", "oracle").Baseline != nil {
+		t.Error("a box with an area has a baseline")
+	}
+	// Text that draws says how it fitted, and a layer or an art window does not
+	if fit := title.Fit; fit == nil || fit.Size <= 0 || fit.Wanted <= 0 || fit.Floor <= 0 || fit.Floor > fit.Wanted || fit.Lines != 1 {
+		t.Errorf("title fit = %+v", fit)
+	}
+	if item(t, v, "layer", "background").Fit != nil || item(t, v, "art", "0").Fit != nil {
+		t.Error("something that is not text has a fit")
+	}
+	// No override applies to the starter, and its title is narrowed to clear the mana cost
+	if title.Override != nil {
+		t.Errorf("override = %+v", title.Override)
+	}
+	if !title.Narrowed || title.Moved || title.Placed == nil || title.Placed.Width >= box.W {
+		t.Errorf("title narrowed %v moved %v placed %+v, want narrower than %d", title.Narrowed, title.Moved, title.Placed, box.W)
+	}
+	// A box the card leaves alone has no placement to report
+	if oracle := item(t, v, "text", "oracle"); oracle.Placed != nil || oracle.Moved || oracle.Narrowed {
+		t.Errorf("oracle = %+v", oracle)
+	}
+}
+
+func TestStretchMovesASideOfABaselineBoxAndUndoPutsItBack(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	was := item(t, describeFor(t, svc, sum.ID, "monocolored"), "text", "title").Baseline
+	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpStretch, Layout: "normal", Kind: draftedit.KindText, Key: "title", Edge: "e", DX: -20}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := item(t, describeFor(t, svc, sum.ID, "monocolored"), "text", "title").Baseline
+	if now.X != was.X || now.Y != was.Y || now.Width != was.Width-20 {
+		t.Errorf("the baseline went from %+v to %+v, want the same start and 20 shorter", *was, *now)
+	}
+	if _, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: res.Inverse}); err != nil {
+		t.Fatal(err)
+	}
+	if back := item(t, describeFor(t, svc, sum.ID, "monocolored"), "text", "title").Baseline; *back != *was {
+		t.Errorf("after undo the baseline is %+v, want %+v", *back, *was)
+	}
+}
+
+func TestARenderLeavesOutWhatItIsToldToHideAndNothingElse(t *testing.T) {
+	svc, ws, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	c := presetCard(t, "monocolored")
+	shown := renderDraft(t, svc, ws, sum.ID, c)
+	render := func(hide, show []string) image.Image {
+		t.Helper()
+		started, err := svc.Render(RenderRequest{ID: sum.ID, Card: c, Hide: hide, Show: show})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev := finish(t, ws, started.JobID); ev.Err != "" {
+			t.Fatalf("render failed: %s", ev.Err)
+		}
+		j, _ := ws.Jobs.Lookup(started.JobID)
+		img, _ := j.Result()
+		return img
+	}
+	if samePixels(shown, render([]string{"layer:background"}, nil)) {
+		t.Error("hiding the background changed nothing")
+	}
+	if samePixels(shown, render([]string{"text:title"}, nil)) {
+		t.Error("hiding the title changed nothing")
+	}
+	// A name that is nothing, and a layer shown that already draws, change nothing
+	if !samePixels(shown, render([]string{"layer:nothing", "text:nothing"}, []string{"layer:background"})) {
+		t.Error("names that match nothing changed the render")
+	}
+	// The template is as it was
+	if !samePixels(shown, renderDraft(t, svc, ws, sum.ID, c)) {
+		t.Error("a hidden render changed the next one")
+	}
+	// A strip of coverage cards ignores what the card is hiding
+	started, err := svc.Render(RenderRequest{ID: sum.ID, Card: c, Hide: []string{"layer:background"}, Coverage: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish(t, ws, started.JobID)
+	hidden, _ := ws.Jobs.Lookup(started.JobID)
+	plain, err := svc.Render(RenderRequest{ID: sum.ID, Card: c, Coverage: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish(t, ws, plain.JobID)
+	base, _ := ws.Jobs.Lookup(plain.JobID)
+	a, _ := hidden.Result()
+	b, _ := base.Result()
+	if !samePixels(a, b) {
+		t.Error("a coverage render was changed by what the card hides")
 	}
 }

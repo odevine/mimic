@@ -20,11 +20,19 @@ func NewDraftTemplate(id string, t *template.Template) *Template {
 	return &Template{Name: id, Version: DraftVersion, tmpl: t}
 }
 
+// Visibility is what a render leaves out and what it draws that its conditions would
+// not, as the engine names items: "layer:frame", "text:title", "art:0" and "symbol:set"
+// to hide, and "layer:crown" to show. It is for a preview, and changes nothing in a template
+type Visibility struct {
+	Hide []string
+	Show []string
+}
+
 // RenderThrough is Render through a template the caller names, in place of the one
 // the app chose for the face. A draft is rendered this way, since it is not one of
 // the installed templates
-func (p *Pipeline) RenderThrough(ctx context.Context, at *Template, d *card.Data, face int, art image.Image, dpi int, progress func(step string, frac float64)) (image.Image, error) {
-	buf, err := p.renderWith(ctx, at, d, face, art, dpi, progress)
+func (p *Pipeline) RenderThrough(ctx context.Context, at *Template, d *card.Data, face int, art image.Image, dpi int, vis Visibility, progress func(step string, frac float64)) (image.Image, error) {
+	buf, err := p.renderWith(ctx, at, d, face, art, dpi, vis, progress)
 	if err != nil {
 		return nil, err
 	}

@@ -290,6 +290,11 @@ type RenderRequest struct {
 	Card  card.Data       `json:"card"`
 	Edits *cardlist.Edits `json:"edits,omitempty"`
 	Face  int             `json:"face"`
+	// Hide names items to leave out of the drawing and Show layers to draw whatever their
+	// condition says, each as the engine names them, such as "layer:frame" or "text:title".
+	// They change the preview and nothing in the template
+	Hide []string `json:"hide,omitempty"`
+	Show []string `json:"show,omitempty"`
 	// Coverage draws it small and without the art, for a strip of many cards, where
 	// what is wanted is the frame each card gets
 	Coverage bool `json:"coverage,omitempty"`
@@ -326,11 +331,16 @@ func (s *Service) Render(req RenderRequest) (render.Started, error) {
 		dpi = layout.ClampDPI(coverageDPI)
 	}
 	at := pipeline.NewDraftTemplate(t.ID(), t)
+	hide, show := req.Hide, req.Show
+	if req.Coverage {
+		// A strip of cards shows the template as it is
+		hide, show = nil, nil
+	}
 
 	j := s.ws.Jobs.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	j.SetCancel(cancel)
-	go s.do(ctx, j, at, &req.Card, req.Face, dpi, req.Coverage)
+	go s.do(ctx, j, at, &req.Card, req.Face, dpi, req.Coverage, hide, show)
 	return render.Started{JobID: j.ID(), DPI: dpi}, nil
 }
 
@@ -347,7 +357,7 @@ func firstProblem(ds manifest.Diagnostics, err error) string {
 	return "The template did not load"
 }
 
-func (s *Service) do(parent context.Context, j *jobs.Job, at *pipeline.Template, d *card.Data, face, dpi int, noArt bool) {
+func (s *Service) do(parent context.Context, j *jobs.Job, at *pipeline.Template, d *card.Data, face, dpi int, noArt bool, hide, show []string) {
 	defer j.Cancel()
 	var art image.Image
 	var artErr error
@@ -360,7 +370,7 @@ func (s *Service) do(parent context.Context, j *jobs.Job, at *pipeline.Template,
 	ctx, cancel := context.WithTimeout(parent, workspace.RenderTimeout)
 	defer cancel()
 	var img image.Image
-	img, err := s.ws.Pipe.RenderThrough(ctx, at, d, face, art, dpi, progress.Render(func(step string, frac float64) {
+	img, err := s.ws.Pipe.RenderThrough(ctx, at, d, face, art, dpi, pipeline.Visibility{Hide: hide, Show: show}, progress.Render(func(step string, frac float64) {
 		j.Emit(jobs.Event{Step: step, Frac: frac})
 	}))
 	if err != nil {

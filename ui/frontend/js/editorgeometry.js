@@ -68,9 +68,62 @@ export function moveRect(rect, dx, dy) {
   return { ...rect, x: rect.x + dx, y: rect.y + dy };
 }
 
+// placement is the rectangle an item is moved and snapped by, which is the item's own, and
+// for a text box set on its baseline the line its text sits on, since where the ink lies
+// depends on the text and the baseline does not. The line is a rectangle with no thickness
+// across it
+export const placement = (item) => item.baseline || item.delivered;
+
+// stretchLine moves an end of a baseline by (dx, dy) along the line, which is horizontal
+// when its height is nothing and vertical otherwise, keeping it at least min long. It
+// returns the line and the distance the end moved, which is less than asked when the line
+// stopped at its least. An end the line does not run to moves nothing
+export function stretchLine(line, edge, dx, dy, min = 1) {
+  const { x, y, width, height } = line;
+  if (height === 0) {
+    if (edge === "w") {
+      const d = Math.min(dx, width - min);
+      return { line: { x: x + d, y, width: width - d, height }, d };
+    }
+    if (edge === "e") {
+      const d = Math.max(dx, min - width);
+      return { line: { x, y, width: width + d, height }, d };
+    }
+  } else if (width === 0) {
+    if (edge === "n") {
+      const d = Math.min(dy, height - min);
+      return { line: { x, y: y + d, width, height: height - d }, d };
+    }
+    if (edge === "s") {
+      const d = Math.max(dy, min - height);
+      return { line: { x, y, width, height: height + d }, d };
+    }
+  }
+  return { line, d: 0 };
+}
+
+// lineHandles are the two ends of a baseline a person can drag, each with the edge it
+// moves and where it is, in the finished image's pixels
+export function lineHandles(line) {
+  if (line.height === 0) {
+    return [
+      { edge: "w", x: line.x, y: line.y },
+      { edge: "e", x: line.x + line.width, y: line.y },
+    ];
+  }
+  return [
+    { edge: "n", x: line.x, y: line.y },
+    { edge: "s", x: line.x, y: line.y + line.height },
+  ];
+}
+
 const edges = (r) => ({ x: [r.x, r.x + r.width / 2, r.x + r.width], y: [r.y, r.y + r.height / 2, r.y + r.height] });
 
 const EDGE_NAMES = { x: ["left", "center", "right"], y: ["top", "middle", "bottom"] };
+
+// A rectangle with no thickness across an axis has one edge on it, which is a baseline
+const thin = (axis, r) => (axis === "y" ? r.height === 0 : r.width === 0);
+const edgeName = (axis, i, r) => (thin(axis, r) ? "baseline" : EDGE_NAMES[axis][i]);
 
 // snapTargets are the lines a moving item can snap to: the canvas's edges and middle
 // and the edges and middle of the items whose refs are in snap, which are the ones
@@ -84,15 +137,17 @@ export function snapTargets(items, canvas, except, nameOf = (it) => it.key, snap
     const e = edges(rect);
     for (const axis of ["x", "y"]) {
       e[axis].forEach((v, i) => {
+        // A line has one edge across itself, not three
+        if (i > 0 && thin(axis, rect)) return;
         const on = names[axis].get(v) || [];
-        on.push({ text: `${owner} ${EDGE_NAMES[axis][i]}`, rect: owner === "canvas" ? null : rect });
+        on.push({ text: `${owner} ${edgeName(axis, i, rect)}`, rect: owner === "canvas" ? null : rect });
         names[axis].set(v, on);
       });
     }
   };
   add("canvas", whole);
   for (const it of selectable(items)) {
-    if (refOf(it) !== except && snap.has(refOf(it))) add(nameOf(it), it.delivered);
+    if (refOf(it) !== except && snap.has(refOf(it))) add(nameOf(it), placement(it));
   }
   const sorted = (m) => [...m.keys()].sort((a, b) => a - b);
   return { x: sorted(names.x), y: sorted(names.y), names };
@@ -110,13 +165,13 @@ function nearest(values, lines, threshold) {
 }
 
 // A guide says which edge of the moving rectangle is on the line and what else is on it
-function guideFor(axis, hit, targets) {
+function guideFor(axis, hit, targets, rect) {
   const on = targets.names ? targets.names[axis].get(hit.at) || [] : [];
   const texts = on.map((o) => o.text);
   const shown = texts.length > 2 ? [...texts.slice(0, 2), `${texts.length - 2} more`] : texts;
   const boxes = [];
   for (const o of on) if (o.rect && !boxes.includes(o.rect)) boxes.push(o.rect);
-  return { axis, at: hit.at, edge: EDGE_NAMES[axis][hit.edge], to: shown.join(", "), boxes };
+  return { axis, at: hit.at, edge: edgeName(axis, hit.edge, rect), to: shown.join(", "), boxes };
 }
 
 // snapMove adjusts a move so that an edge or the middle of the rectangle lands on a
@@ -129,8 +184,8 @@ export function snapMove(rect, dx, dy, targets, threshold) {
   const sx = nearest(e.x, targets.x, threshold);
   const sy = nearest(e.y, targets.y, threshold);
   const guides = [];
-  if (sx) guides.push(guideFor("x", sx, targets));
-  if (sy) guides.push(guideFor("y", sy, targets));
+  if (sx) guides.push(guideFor("x", sx, targets, rect));
+  if (sy) guides.push(guideFor("y", sy, targets, rect));
   // A middle line can sit on a half pixel, and a move is whole pixels
   return { dx: Math.round(dx + (sx ? sx.d : 0)), dy: Math.round(dy + (sy ? sy.d : 0)), guides };
 }

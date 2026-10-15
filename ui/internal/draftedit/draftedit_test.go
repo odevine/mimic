@@ -628,3 +628,67 @@ func TestTakingTheLastFlowSettingOutTakesTheEmptyFlowOutToo(t *testing.T) {
 		t.Errorf("the file is not as it was:\n%s", both.Files["layouts/normal.json"])
 	}
 }
+
+// A stretch moves the side of a text box that faces a direction in the finished image,
+// whatever the layout's turn, and leaves the other three where they are
+func TestStretchMovesTheSideThatFacesThatWayInTheFinishedImage(t *testing.T) {
+	for _, rotate := range []int{0, 90, 180, 270} {
+		for _, c := range []struct {
+			edge string
+			dx   int
+			dy   int
+		}{{"w", 6, 0}, {"e", -5, 0}, {"n", 0, 3}, {"s", 0, -2}, {"e", 9, 0}} {
+			fsys := draft(rotate)
+			src, err := jsonedit.Parse(fsys["layouts/normal.json"].Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := rectOf(t, src.Path("textBoxes", "title", "rect"))
+			res := apply(t, fsys, Op{Op: OpStretch, Layout: "normal", Kind: KindText, Key: "title", Edge: c.edge, DX: c.dx, DY: c.dy})
+			after := rectOf(t, layoutAfter(t, res).Path("textBoxes", "title", "rect"))
+			was, now := template.RotateRect(before, 100, 60, rotate), template.RotateRect(after, 100, 60, rotate)
+			want := was
+			switch c.edge {
+			case "w":
+				want.Min.X += c.dx
+			case "e":
+				want.Max.X += c.dx
+			case "n":
+				want.Min.Y += c.dy
+			case "s":
+				want.Max.Y += c.dy
+			}
+			if now != want {
+				t.Errorf("rotate %d, %s by %d,%d: the box is %v in the finished image, want %v", rotate, c.edge, c.dx, c.dy, now, want)
+			}
+			// The inverse puts the box back as it was
+			fsys["layouts/normal.json"] = &fstest.MapFile{Data: res.Files["layouts/normal.json"]}
+			back := apply(t, fsys, res.Inverse...)
+			if got := rectOf(t, layoutAfter(t, back).Path("textBoxes", "title", "rect")); got != before {
+				t.Errorf("rotate %d, %s: undoing left %v, want %v", rotate, c.edge, got, before)
+			}
+		}
+	}
+}
+
+func TestStretchOfAnOutputSpaceBoxIsInTheFinishedImageAlready(t *testing.T) {
+	res := apply(t, draft(90), Op{Op: OpStretch, Layout: "normal", Kind: KindText, Key: "legal", Edge: "e", DX: 4})
+	got := rectOf(t, layoutAfter(t, res).Path("textBoxes", "legal", "rect"))
+	if want := image.Rect(3, 4, 27, 10); got != want {
+		t.Errorf("legal = %v, want %v", got, want)
+	}
+}
+
+func TestStretchIsRefusedForWhatCannotBeStretched(t *testing.T) {
+	cases := map[string]Op{
+		"a layer":           {Op: OpStretch, Layout: "normal", Kind: KindLayer, Key: "bg", Edge: "e", DX: 1},
+		"no such side":      {Op: OpStretch, Layout: "normal", Kind: KindText, Key: "title", Edge: "up", DX: 1},
+		"no such text box":  {Op: OpStretch, Layout: "normal", Kind: KindText, Key: "nothing", Edge: "e", DX: 1},
+		"less than a pixel": {Op: OpStretch, Layout: "normal", Kind: KindText, Key: "title", Edge: "e", DX: -1000},
+	}
+	for name, op := range cases {
+		if _, err := Apply(draft(0), []Op{op}); err == nil {
+			t.Errorf("%s was stretched", name)
+		}
+	}
+}

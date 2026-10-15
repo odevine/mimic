@@ -1261,20 +1261,140 @@ body.resizing-rows * {
   transform: translateY(-50%);
 }
 
-/* The part of a text box that its text keeps out of, hatched, with what it steps around */
-.ed-box.avoid {
-  border: 1px dashed var(--warn);
-  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--warn) 35%, transparent) 0 3px, transparent 3px 7px);
+
+
+/* A text box set on its baseline: the line its text sits on, dashed across the box's width
+   with a tick at each end, and the ends to drag */
+.ed-box.baseline {
+  border: 0;
+  outline: 0;
+  color: var(--accent);
 }
 
-.ed-avoid-label {
+.ed-box.baseline.h {
+  border-top: 1px dashed currentColor;
+}
+
+.ed-box.baseline.v {
+  border-left: 1px dashed currentColor;
+}
+
+.ed-box.baseline::before,
+.ed-box.baseline::after {
+  content: "";
   position: absolute;
+  background: currentColor;
+}
+
+.ed-box.baseline.h::before,
+.ed-box.baseline.h::after {
+  top: -4px;
+  width: 1px;
+  height: 9px;
+}
+
+.ed-box.baseline.h::before {
+  left: 0;
+}
+
+.ed-box.baseline.h::after {
   right: 0;
-  bottom: 100%;
-  padding: 0 4px;
+}
+
+.ed-box.baseline.v::before,
+.ed-box.baseline.v::after {
+  left: -4px;
+  width: 9px;
+  height: 1px;
+}
+
+.ed-box.baseline.v::before {
+  top: 0;
+}
+
+.ed-box.baseline.v::after {
+  bottom: 0;
+}
+
+
+
+
+
+/* A layer's eye: the preview leaves it out when it is off, and a layer forced to draw is marked */
+.ed-row-btn.forced {
+  color: var(--accent);
+}
+
+.ed-layer.hidden-item .ed-layer-name {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+#ed-selection-note[data-level="warn"] {
+  color: var(--warn);
+}
+
+/* Where the card put a box on its baseline, the line it ends up on, over the box's own line */
+.ed-box.placed-line {
+  color: var(--info);
+}
+
+.ed-box.placed-line.h {
+  margin-top: -1px;
+  border-top: 3px solid currentColor;
+}
+
+.ed-box.placed-line.v {
+  margin-left: -1px;
+  border-left: 3px solid currentColor;
+}
+
+/* The names of what is marked on the card, set beneath the selected box so none is written
+   over its text */
+.ed-caption {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.ed-tag {
+  padding: 0 5px;
+  border-left: 3px solid var(--accent);
   background: var(--surface);
   color: var(--text);
   font-size: 11px;
   line-height: 16px;
-  white-space: nowrap;
+}
+
+.ed-tag.placed {
+  border-left-color: var(--info);
+}
+
+.ed-tag.avoid {
+  border-left-color: var(--err);
+}
+
+/* The room a text box has, and what is in its way. The room left is a blue ghost beside its text,
+   a thing it keeps its text out of, stays clear of or moves for is outlined in red, and where the
+   room it has as written meets such a thing, which it cannot use, is striped in red */
+.ed-box.ghost {
+  border: 1px dashed color-mix(in srgb, var(--info) 70%, transparent);
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+}
+
+.ed-box.link {
+  outline: 2px solid var(--err);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+
+.ed-box.link.by {
+  outline-style: dashed;
+}
+
+.ed-box.hazard {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--err) 55%, transparent) 0 3px, transparent 3px 7px);
 }

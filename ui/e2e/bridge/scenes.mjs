@@ -9,7 +9,7 @@ import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
 import { noTemplate } from "../bridge-fixtures.mjs";
-import { assetsView, card, done, draftSummary, draftView, partView, presetCards, result, standardAssets } from "./cards.mjs";
+import { assetsView, at, card, describeView, done, draftSummary, draftView, partView, presetCards, result, standardAssets, standardItems } from "./cards.mjs";
 
 const ELF = {
   ManaCost: "{G}",
@@ -234,6 +234,35 @@ export const scenes = {
       await editor.exportButton.click();
       await expect(editor.exportDialog).toBeVisible();
       await expect(editor.exportCredits).toHaveCount(2);
+    },
+  },
+  "editor-baseline": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      const crown = { kind: "layer", key: "crown", part: "crown", drawn: false, why: 'its condition "legendary" does not hold for this card', authored: at(0, 0, 0, 0), delivered: at(0, 0, 0, 0) };
+      const items = [
+        standardItems[0],
+        standardItems[1],
+        crown,
+        standardItems[2],
+        { ...standardItems[3], ink: true, delivered: at(100, 100, 420, 52), authored: at(100, 100, 420, 52), baseline: at(100, 160, 600, 0), narrowed: true, placed: at(100, 80, 520, 80), override: { when: "legendary", index: 0 }, fit: { size: 30, wanted: 38, floor: 21, lines: 1, overflows: false } },
+        ...standardItems.slice(4),
+      ];
+      bridge.source.layout.textBoxes.title.flow = { clearOf: "mana" };
+      bridge.reply("Studio.Describe", () => describeView(items));
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(8);
+      await editor.sizeCanvas(400);
+      await editor.row("background").locator('[data-toggle="visible"]').click();
+      await editor.layers.filter({ has: page.locator(".ed-layer-name", { hasText: /^title$/ }) }).click();
+      await expect(page.locator("#ed-overlay .ed-box.baseline")).toHaveCount(1);
     },
   },
   "editor-coverage": {

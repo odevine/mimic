@@ -365,6 +365,7 @@ draftedit.Op struct {
 	dx int (omitempty)
 	dy int (omitempty)
 	rect draftedit.Rect (omitempty)
+	edge string (omitempty)
 	to int (omitempty)
 	path []string (omitempty)
 	value custom json.RawMessage (omitempty)
@@ -664,6 +665,7 @@ studio.DescribeRequest struct {
 	card card.Data
 	edits cardlist.Edits (omitempty)
 	face int
+	show []string (omitempty)
 }
 
 studio.DescribeView struct {
@@ -695,6 +697,14 @@ studio.ExportResult struct {
 studio.FileView struct {
 	name string
 	content string
+}
+
+studio.FitView struct {
+	size float64
+	wanted float64
+	floor float64
+	lines int
+	overflows bool
 }
 
 studio.FontRequest struct {
@@ -747,6 +757,12 @@ studio.ItemView struct {
 	ink bool (omitempty)
 	authored studio.RectView
 	delivered studio.RectView
+	baseline studio.RectView (omitempty)
+	placed studio.RectView (omitempty)
+	moved bool (omitempty)
+	narrowed bool (omitempty)
+	override studio.OverrideView (omitempty)
+	fit studio.FitView (omitempty)
 }
 
 studio.LayoutView struct {
@@ -780,6 +796,11 @@ studio.OpenView struct {
 	layouts []studio.LayoutView
 	diagnostics []studio.DiagnosticView
 	valid bool
+}
+
+studio.OverrideView struct {
+	when string
+	index int
 }
 
 studio.PartView struct {
@@ -838,6 +859,8 @@ studio.RenderRequest struct {
 	card card.Data
 	edits cardlist.Edits (omitempty)
 	face int
+	hide []string (omitempty)
+	show []string (omitempty)
 	coverage bool (omitempty)
 }
 

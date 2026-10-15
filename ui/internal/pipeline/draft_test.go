@@ -79,7 +79,7 @@ func TestRenderThroughUsesTheTemplateItIsGiven(t *testing.T) {
 
 	c := &card.Data{Name: "X", TypeLine: "Creature", Colors: []card.Color{card.White}, Layout: "normal"}
 	var steps int
-	img, err := p.RenderThrough(context.Background(), draft, c, 0, nil, 0, func(string, float64) { steps++ })
+	img, err := p.RenderThrough(context.Background(), draft, c, 0, nil, 0, Visibility{}, func(string, float64) { steps++ })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestRenderThroughUsesTheTemplateItIsGiven(t *testing.T) {
 	if steps == 0 {
 		t.Error("no progress was reported")
 	}
-	if _, err := p.RenderThrough(context.Background(), draft, c, 3, nil, 0, nil); err == nil {
+	if _, err := p.RenderThrough(context.Background(), draft, c, 3, nil, 0, Visibility{}, nil); err == nil {
 		t.Error("a face the card lacks rendered")
 	}
 }

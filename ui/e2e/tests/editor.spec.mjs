@@ -170,13 +170,13 @@ test("dragging a text box on the card saves the layout and draws the card again"
   // Pick the title where it is on the card, not from the list
   const box = await editor.overlay.boundingBox();
   await editor.layers.filter({ hasText: "title" }).click();
+  // The title is set on its baseline, so the selection reads as that line, and its ink is what
+  // the outline is drawn around
   const x = Number(await page.locator("#ed-sel-x").textContent());
-  const y = Number(await page.locator("#ed-sel-y").textContent());
-  const w = Number(await page.locator("#ed-sel-w").textContent());
-  const h = Number(await page.locator("#ed-sel-h").textContent());
+  const ink = await editor.selectionBox.boundingBox();
   await page.keyboard.press("Escape");
   await expect(editor.selection).toBeHidden();
-  const from = { x: box.x + ((x + w / 2) / CARD.width) * box.width, y: box.y + ((y + h / 2) / CARD.height) * box.height };
+  const from = { x: ink.x + ink.width / 2, y: ink.y + ink.height / 2 };
   await page.mouse.click(from.x, from.y);
   await expect(editor.selectionName).toHaveText("title");
 
@@ -789,7 +789,8 @@ test("a text box's flow is set from its fields, the part it keeps out of is hatc
   const file = draftFile(scratch, "flowing", "layouts", "normal.json");
   const original = await readFile(file, "utf8");
   await editor.layers.filter({ hasText: "title" }).click();
-  await expect(page.locator("#ed-selection-note")).toBeHidden();
+  // The title is narrowed to clear the mana cost for the card, and the note says so
+  await expect(page.locator("#ed-selection-note")).toHaveText("Narrowed to stay clear of mana for this card");
   // The title stays clear of the mana cost to begin with, and the layer it could step
   // around is the one the starter has
   await expect(editor.lever("lever-clearOf")).toHaveValue("mana");
@@ -797,16 +798,113 @@ test("a text box's flow is set from its fields, the part it keeps out of is hatc
   await editor.lever("lever-avoidLayer").selectOption("background");
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.flow).toEqual({ clearOf: "mana", avoidLayer: "background" });
   // The background fills the card, so the whole box is what the text keeps out of
-  await expect(page.locator("#ed-overlay .ed-box.avoid .ed-avoid-label")).toHaveText("Avoids background");
-  await expect(page.locator("#ed-selection-note")).toHaveText("Steps around background");
-  const hatched = await page.locator("#ed-overlay .ed-box.avoid").boundingBox();
+  const tags = page.locator("#ed-overlay .ed-box.sel .ed-tag.avoid");
+  await expect(tags.filter({ hasText: "Avoids background" })).toHaveCount(1);
+  await expect(page.locator("#ed-selection-note")).toContainText("Steps around background");
+  // The room the title has, as wide as its line and as tall as its text, is all striped
+  const stripes = await page.locator("#ed-overlay .ed-box.hazard").first().boundingBox();
   const outline = await page.locator("#ed-overlay .ed-box.sel").boundingBox();
-  expect(Math.abs(hatched.width - outline.width)).toBeLessThan(2);
-  expect(Math.abs(hatched.height - outline.height)).toBeLessThan(2);
+  expect(stripes.width).toBeGreaterThanOrEqual(outline.width - 2);
+  expect(Math.abs(stripes.height - outline.height)).toBeLessThan(2);
 
   await editor.undoButton.click();
   await expect(editor.lever("lever-avoidLayer")).toHaveValue("");
-  await expect(page.locator("#ed-overlay .ed-box.avoid")).toHaveCount(0);
+  await expect(tags.filter({ hasText: "Avoids background" })).toHaveCount(0);
   // The file is as it was, with no empty flow left behind
   expect(await readFile(file, "utf8")).toBe(original);
+});
+
+test("a baseline box shows its line, and dragging its end writes the new width to the file and undo takes it back", async ({ editor, scratch, page }) => {
+  await editor.create("Baselines", 100);
+  const file = draftFile(scratch, "baselines", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const was = JSON.parse(original).textBoxes.title.rect;
+  await selectTitle(editor);
+  await expect(page.locator("#ed-overlay .ed-box.baseline.h")).toHaveCount(1);
+  await expect(page.locator(".ed-readout-grid dt").nth(2)).toHaveText("Baseline");
+  // The line is the box's own X, Y and width, which the ink does not say
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(was.x));
+  await expect(page.locator("#ed-sel-w")).toHaveText(String(was.width));
+  await expect(page.locator("#ed-sel-y")).toHaveText(String(was.y));
+
+  const end = await page.locator("#ed-overlay .ed-baseline-handle[data-handle='e']").boundingBox();
+  const from = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x - 30, from.y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect.width).toBeLessThan(was.width - 20);
+  const after = JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect;
+  // Only the width moved, and the baseline stayed where it was
+  expect({ x: after.x, y: after.y, height: after.height }).toEqual({ x: was.x, y: was.y, height: was.height });
+  await editor.waitForPreview();
+
+  await editor.undoButton.click();
+  await expect.poll(async () => readFile(file, "utf8")).toBe(original);
+});
+
+test("hiding the background draws the card without it, and showing it again puts it back", async ({ editor, page }) => {
+  await editor.create("Hidden", 100);
+  const eye = editor.row("background").locator('[data-toggle="visible"]');
+  const [, , , alone] = await previewPixel(editor, 2, 2);
+  expect(alone).toBe(255);
+  await eye.click();
+  await expect(eye).toHaveAttribute("data-eye", "hidden");
+  await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(0);
+  await editor.waitForPreview();
+  await eye.click();
+  await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(255);
+  // Nothing was saved to the template for it
+  await expect(editor.undoButton).toBeDisabled();
+});
+
+test("the picture of the card is saved as a PNG named for the card", async ({ editor, scratch }) => {
+  await editor.create("Pictures", 100);
+  await editor.page.locator("#ed-save-image").click();
+  await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png");
+  expect(await scratch.saved()).toEqual(["Mirran Spy.png"]);
+  const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
+  expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  // It is the picture of the card as drawn at the preview resolution of the template
+  const size = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual(size);
+});
+
+test("hiding a layer is in the picture that is saved, and showing it again puts it back", async ({ editor, scratch }) => {
+  await editor.create("Hidden picture", 100);
+  const eye = editor.row("background").locator('[data-toggle="visible"]');
+  await eye.click();
+  await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(0);
+  await editor.waitForPreview();
+  await editor.page.locator("#ed-save-image").click();
+  await expect(editor.toasts.last()).toContainText("Saved");
+  const bytes = await readFile(scratch.savedPath((await scratch.saved())[0]));
+  // The file has what the card shows: the corner the background painted is not painted in it
+  const alpha = await editor.page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(2, 2, 1, 1).data[3];
+  }, bytes.toString("base64"));
+  expect(alpha).toBe(0);
+});
+
+test("the picture of the card is copied to the clipboard", async ({ editor, context, page, browserName }) => {
+  test.skip(browserName !== "chromium", "the clipboard can only be read back in Chromium");
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await editor.create("Copying", 100);
+  await page.locator("#ed-copy-image").click();
+  await expect(editor.toasts.last()).toHaveText("Copied the image");
+  const got = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read();
+    const blob = await item.getType("image/png");
+    return { types: item.types, size: blob.size, type: blob.type };
+  });
+  expect(got.types).toContain("image/png");
+  expect(got.size).toBeGreaterThan(100);
 });

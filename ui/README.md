@@ -353,8 +353,15 @@ another, and shows in
 a dimmer type what the test card does not draw, with the reason on hover. Dragging
 moves the selection, and the handles on a text box, an art window or a symbol
 resize it. A layer moves but has no handles, since its image is drawn at its own
-size. A text box set on its baseline is outlined where its text is, and has no
-handles either, since its rectangle only says where the first baseline starts. Edges and middles snap to the card's own lines within a few pixels, and to
+size. A text box set on its baseline is outlined where its text is, and its own place is
+drawn as well: a dashed line across the box's width at its baseline, with a tick at each end.
+Its height is not used, so it has no handles of an area. Dragging an
+end of the line stretches the box along it, which writes the new X and width and leaves the
+baseline where it is, and the selection reads as the line, with X, Width and Baseline, since
+the numbers of the ink depend on the text. A box on its baseline snaps by its line, to the card's
+lines and to the baselines of boxes marked as ones to snap to, and a guide says baseline
+to the other box's baseline. A layout that turns the card makes the line a vertical one,
+with its ends at the top and bottom. Edges and middles snap to the card's own lines within a few pixels, and to
 another item's only when that item is marked as one to snap to. Holding Option or
 Alt turns snapping off, and while a box is dragged the guide says which of its edges
 is held and what lies on that line, which is outlined. The arrow keys move the
@@ -373,6 +380,20 @@ the pointer is over the view, so Space still presses a button when it is anywher
 The middle button pans in either tool. A pan does not select or move anything or outline
 what is under the pointer, and what is drawn on the card, the outlines, handles and guides,
 goes with it. Fit puts the card back in the middle, and so does opening another template.
+
+Three more controls sit in the same cluster. An eye shows and hides the overlays, the marks the
+card draws for a selected item: the room a text box has left, what is in its way and the red
+stripes, the placement line of a box that was moved or narrowed, and the caption of tags beneath the
+outline. The selection's outline, a baseline and its ends to drag, the handles and the guides of a
+drag stay, since they are how an item is edited, and so do the notes under the selection's name.
+`O` does the same, and whether the overlays show is kept with the layout settings. Copy image puts the
+picture of the card as it is drawn now on the clipboard as a PNG, and Save image asks where to put it
+and writes the same picture as a PNG named for the card, in the folder the app saves renders to. It is
+the picture the card shows, at the preview resolution, with anything the layer eyes have hidden or
+forced left out or put in, and not a print resolution render, which Single makes. A window whose
+webview cannot put an image on the clipboard says so and points to Save image. Both wait until a card
+has been drawn, and a render that fails leaves nothing to copy or save.
+
 
 Every change is saved to the layout file as it is made, with the file's order and
 layout kept and only the numbers changed, and the card is drawn again a moment
@@ -398,13 +419,31 @@ closed, and it is closed to begin with, so a change to one side changes the othe
 shape the canvas had, in one change that undo takes back. Opening the padlock lets the
 two change on their own, and closing it again keeps the shape the canvas has then. It is
 closed again after the page is reloaded, since it is not kept with the template. About holds
-the template's name, description, author, license and credits. A text box's Flow group says which layer its text steps around, which box it stays clear of
-and how large a gap it keeps. When a text box that steps around a layer is selected, the part
-of the box that layer covers is hatched on the card with the layer's name, and a note under
-the selection's name says what the setting does for the card being tested: the text steps
-around the layer, or has the whole box because the card does not draw the layer, or because
-the layer does not reach the box. A box set to stay clear of another, or to move to
-another box's row, shows no region, since where it ends up depends on the text.
+the template's name, description, author, license and credits. What is marked on the card for a selected text box is named in a caption set beneath its outline,
+where none of its text is: baseline, what the card did to the box, and the layer its text keeps
+out of. Beneath the selection's name are the notes worth knowing about a text box for the card being
+tested. A box the card moved to another box's row or narrowed to stay clear of one is marked where
+it ends up, by a rectangle, or for a box on its baseline by the line it ends up on drawn over the
+box's own line so that what the card gave up shows past its end, with the box it was for taken from its flow, an override of the box that is in force
+is named by its condition, since the fields show the box as it is written, and text that shrank to
+fit is said with its size against the one the box asks for, in the warning color when it does
+not fit even at the smallest size.
+
+A text box's Flow group says which layer its text steps around, which box it stays clear of
+and how large a gap it keeps, and which layer it moves for. The card shows the room a selected
+text box has in three colors. Purple is the room its text takes, the outline every item has. A
+blue ghost is the room it has left, beside its text for a box on its baseline, from the text to the
+end of its line as the card left it, which is a narrower one when the card narrowed the box, and on
+both sides of text that is centered, and the whole box, tinted, for a box with an area. Red is what
+is in its way: the layer it steps around, the box it stays clear of and the layer it moves for are
+outlined in red, and where the room the box has as the layout gives it meets such a thing, which it
+cannot use, is striped in red. The red outlines are there in the other direction too: select the
+layer a box steps around, or the box another stays clear of, and the boxes that do so are outlined
+in dashed red and striped where their room meets the item. Red is not the yellow of the items a
+drag snaps to, so all of it stays on the card while a box is dragged and follows it, and a
+box moved on its baseline has the ghost and stripes move with its line. A note under the selection's
+name says what the setting does for the card being tested: the text steps around the layer, or
+has the whole box because the card does not draw the layer, or because the layer does not reach the box.
 A number, a color or a
 condition is checked as it is typed and its mistake shown under the field, a change
 is made a moment after typing stops, and an empty optional field takes its setting
@@ -446,6 +485,17 @@ snaps to, crossed out and faint while it is not. The three dots at the right ope
 menu with Duplicate, which copies the item a little way down and to the right, and
 Delete, which takes it out of the layout and leaves its part and images where they
 are. A symbol is moved and resized and has no menu to copy or delete it.
+
+An eye at the left of each row leaves the item out of the card's preview, or puts it back,
+and the card is drawn again without it. It changes only the preview: nothing is written to the
+template, it is not undone with the edits, and a template that is opened again starts with
+everything showing. A hidden item's name is struck through, it cannot be picked on the card, and
+the list still reaches it. The eye of a layer that the card does not draw, because its condition
+does not hold, is off, and pressing it draws the layer whatever the condition says, marked in the
+accent color, with the layout described again so the layer has a place on the card to be picked
+and text still steps around it as it would. Pressing it again lets go. Anything else the card does
+not draw has an eye that cannot be pressed. The strip of coverage cards ignores both, since it shows the
+template as it is.
 
 The plus beside the layers adds a text box that draws something the card has, an art
 window above a layer, or a layer for a part the template has or for a new part whose

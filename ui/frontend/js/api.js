@@ -227,16 +227,24 @@ export const api = {
   // edits are the card form's field values, as Single sends them, laid over the card by
   // the app, and may be null for none. setTestCard keeps the card as edited
   setTestCard: (id, card, edits, face) => rpc("Studio", "SetTestCard", { id, card, edits: edits || null, face: face || 0 }),
-  // coverage draws the card small and without its art, for a strip of many
-  renderDraft: (id, card, edits, face, coverage) => rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage }),
+  // coverage draws the card small and without its art, for a strip of many. view is
+  // { hide, show }, the items to leave out of the drawing and the layers to draw whatever
+  // their condition says, each named as "layer:frame" or "text:title", for a preview that
+  // looks at the template and changes none of it
+  renderDraft: (id, card, edits, face, coverage, view) =>
+    rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage, hide: (view && view.hide) || [], show: (view && view.show) || [] }),
   // describeDraft resolves to what the draft's layout draws for the card, in draw
   // order: { layout, authored, delivered, items, editable, reason, rev }, where an
   // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
-  // the places as { x, y, width, height }. applyDraft makes edits to the draft and
-  // saves them, each { op, layout, kind, key, dx, dy, rect, to } with its numbers in
-  // the finished image's pixels, and resolves to { rev, inverse }, the edits that
-  // undo them
-  describeDraft: (id, card, edits, face) => rpc("Studio", "Describe", { id, card, edits: edits || null, face: face || 0 }),
+  // the places as { x, y, width, height }. A text box also has baseline, the line its
+  // first baseline lies on, placed with moved and narrowed, where the card puts it,
+  // override, { when, index }, and fit, { size, wanted, floor, lines, overflows }. show
+  // is the layers to describe as drawn whatever their condition says
+  describeDraft: (id, card, edits, face, show) => rpc("Studio", "Describe", { id, card, edits: edits || null, face: face || 0, show: show || [] }),
+  // applyDraft makes edits to the draft and saves them, each { op, layout, kind, key, dx,
+  // dy, rect, to } with its numbers in the finished image's pixels, and resolves to { rev,
+  // inverse }, the edits that undo them. An op stretch, with a side edge of n, e, s or w and
+  // a dx or a dy, moves one side of a text box
   applyDraft: (id, ops) => rpc("Studio", "Apply", { id, ops }),
   // draftSource resolves to { files: [{ name, content }] }, template.json and each
   // layout as they are on disk. checkDraftFile resolves to { writable, problems }, what

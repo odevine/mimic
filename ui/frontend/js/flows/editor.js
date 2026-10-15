@@ -23,9 +23,10 @@ import {
   suggestedLabel,
   useMessage,
 } from "../editor.js";
-import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
+import { asPercent, hitTest, lineHandles, moveRect, nudgeFor, placement, refOf, resizeRect, snapMove, snapTargets, stretchLine, visibleHandles } from "../editorgeometry.js";
 import { createHistory } from "../editorhistory.js";
-import { avoidance } from "../editorflow.js";
+import { avoidance, captionTags, flowZones, placedLine, readout, referrers, selectionNotes } from "../editorflow.js";
+import { emptyVisibility, eyeState, hiddenRefs, requestLists, toggleEye } from "../editorvisibility.js";
 import { afterOps, isMarked, refsFor, withMark } from "../editormarks.js";
 import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
 import { kindIcon, moveTarget, reorderTarget, rowMenu } from "../editorlayers.js";
@@ -76,6 +77,14 @@ const store = {
   // the coverage strip: how each preset was drawn, { [id]: { state, src, reason } }, and
   // whether the template has changed since
   coverage: signal({ outcomes: {}, stale: false }),
+  // what the preview leaves out and the layers it draws whatever their condition says, which
+  // look at the template and change none of it: { hidden, forced }
+  visibility: signal(emptyVisibility()),
+  // whether the marks the card draws for a selected item show: the room it has, what is in its
+  // way and the names of them. The selection's outline, its baseline and its handles always do
+  overlays: signal(true),
+  // the render whose image is on the card now, or "" when there is none, which is what is copied and saved
+  shown: signal(""),
 };
 
 const history = createHistory();
@@ -141,6 +150,7 @@ function clearPreview() {
   batch(() => {
     store.layout.value = null;
     store.live.value = null;
+    store.shown.value = "";
   });
 }
 
@@ -156,7 +166,7 @@ async function render() {
   const name = (store.edits.peek() && store.edits.peek().name) || card.Name;
   begin(`Drawing ${name}`);
   try {
-    const { jobId } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek());
+    const { jobId } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek(), false, currentLists());
     if (seq !== renderSeq) {
       api.cancelRender(jobId);
       return;
@@ -171,6 +181,7 @@ async function render() {
     renderJobId = "";
     const img = $("ed-img");
     img.src = api.renderImageURL(jobId);
+    store.shown.value = jobId;
     $("ed-canvas").hidden = false;
     $("ed-placeholder").hidden = true;
     loadLayout();
@@ -246,6 +257,7 @@ async function open(id) {
   savedMarks = JSON.stringify([id, store.marks.peek()]);
   clearPreview();
   resetCoverage();
+  store.visibility.value = emptyVisibility();
   if (viewport) viewport.reset();
   store.source.value = null;
   store.assets.value = null;
@@ -802,13 +814,19 @@ const selectedItem = () => itemOf(store.layout.peek(), store.selected.peek());
 
 // loadLayout asks the app what the layout draws for the test card, which is where the
 // selection comes from. It is asked again after each edit and each render
+// currentLists are the names a render and a description are sent for the layout being shown
+function currentLists() {
+  const view = store.layout.peek();
+  return requestLists(store.visibility.peek(), view ? view.layout : "normal");
+}
+
 async function loadLayout() {
   const id = store.current.peek();
   const card = store.card.peek();
   if (!id || !card) return;
   const seq = ++describeSeq;
   try {
-    const view = await api.describeDraft(id, card, store.edits.peek(), store.face.peek());
+    const view = await api.describeDraft(id, card, store.edits.peek(), store.face.peek(), currentLists().show);
     if (seq !== describeSeq || id !== store.current.peek()) return;
     batch(() => {
       store.layout.value = view;
@@ -908,6 +926,21 @@ function saveMarks() {
 
 // lockedRefs are the items of the layout shown that cannot be picked on the card
 const lockedRefs = (view) => refsFor(store.marks.peek().locked, view.layout);
+
+// what the card cannot pick: what is locked and what the preview does not draw
+const unpickableRefs = (view) => new Set([...lockedRefs(view), ...hiddenRefs(store.visibility.peek(), view.layout)]);
+
+// pressEye hides or shows an item in the preview, or forces a layer the card does not
+// draw to be drawn. A forced layer changes what the card draws, so the layout is described
+// again, and the card is drawn again either way
+function pressEye(item) {
+  const view = store.layout.peek();
+  if (!view) return;
+  const next = toggleEye(store.visibility.peek(), view.layout, item);
+  store.visibility.value = next.vis;
+  if (next.described) loadLayout().then(scheduleRender);
+  else scheduleRender();
+}
 
 const isLocked = (view, item) => !!view && !!item && isMarked(store.marks.peek().locked, view.layout, refOf(item));
 
@@ -1049,7 +1082,7 @@ function nudgeSelected(dx, dy) {
   nudge = nudge || { ref: refOf(item), item, dx: 0, dy: 0, timer: 0 };
   nudge.dx += dx;
   nudge.dy += dy;
-  store.live.value = { rect: moveRect(item.delivered, nudge.dx, nudge.dy), guides: [] };
+  store.live.value = { rect: moveRect(item.delivered, nudge.dx, nudge.dy), line: item.baseline ? moveRect(item.baseline, nudge.dx, nudge.dy) : null, guides: [] };
   clearTimeout(nudge.timer);
   nudge.timer = setTimeout(flushNudge, 250);
 }
@@ -1095,11 +1128,14 @@ function onPointerDown(e) {
   const overlay = $("ed-overlay");
   const handle = e.target.closest && e.target.closest(".ed-handle");
   const current = selectedItem();
-  if (handle && current && view.editable && !isLocked(view, current)) {
+  if (handle && handle.dataset.line && current && current.baseline && view.editable && !isLocked(view, current)) {
+    // An end of the baseline stretches the box along it
+    gesture = { kind: "stretch", edge: handle.dataset.handle, item: current, start: { x: e.clientX, y: e.clientY }, rect0: current.delivered, line0: current.baseline, moved: false };
+  } else if (handle && current && view.editable && !isLocked(view, current)) {
     gesture = { kind: "resize", handle: handle.dataset.handle, item: current, start: { x: e.clientX, y: e.clientY }, rect0: current.delivered, moved: false };
   } else {
     const p = nativePoint(e);
-    const hit = hitTest(view.items, p, lockedRefs(view));
+    const hit = hitTest(view.items, p, unpickableRefs(view));
     store.selected.value = hit ? refOf(hit) : "";
     if (!hit) return;
     gesture = { kind: view.editable ? "move" : "click", item: hit, start: { x: e.clientX, y: e.clientY }, rect0: hit.delivered, moved: false, p };
@@ -1118,7 +1154,7 @@ function onPointerMove(e) {
   const view = store.layout.peek();
   if (!view) return;
   if (!gesture) {
-    const hit = e.buttons || panning() ? null : hitTest(view.items, nativePoint(e), lockedRefs(view));
+    const hit = e.buttons || panning() ? null : hitTest(view.items, nativePoint(e), unpickableRefs(view));
     store.hover.value = hit ? refOf(hit) : "";
     return;
   }
@@ -1137,12 +1173,18 @@ function onPointerMove(e) {
     store.live.value = { rect: resizeRect(g.rect0, g.handle, dx, dy), guides: [] };
     return;
   }
+  if (g.kind === "stretch") {
+    const got = stretchLine(g.line0, g.edge, dx, dy);
+    store.live.value = { rect: g.rect0, line: got.line, guides: [], edge: g.edge, d: got.d };
+    return;
+  }
   let guides = [];
   if (!e.altKey) {
-    const snapped = snapMove(g.rect0, dx, dy, snapTargets(view.items, view.delivered, refOf(g.item), nameOf, refsFor(store.marks.peek().snap, view.layout)), SNAP_PX * per);
+    // A box on its baseline is lined up by the baseline, and not by where its text lies
+    const snapped = snapMove(placement(g.item), dx, dy, snapTargets(view.items, view.delivered, refOf(g.item), nameOf, refsFor(store.marks.peek().snap, view.layout)), SNAP_PX * per);
     ({ dx, dy, guides } = snapped);
   }
-  store.live.value = { rect: moveRect(g.rect0, dx, dy), guides, dx, dy };
+  store.live.value = { rect: moveRect(g.rect0, dx, dy), line: g.item.baseline ? moveRect(g.item.baseline, dx, dy) : null, guides, dx, dy };
 }
 
 function endGesture() {
@@ -1167,6 +1209,9 @@ function onPointerUp(e) {
     commit([{ op: "move", ...target, dx: live.dx, dy: live.dy }], `Move ${nameOf(g.item)}`, "");
   } else if (g.kind === "resize") {
     commit([{ op: "resize", ...target, rect: live.rect }], `Resize ${nameOf(g.item)}`, "");
+  } else if (g.kind === "stretch" && live.d) {
+    const across = g.edge === "w" || g.edge === "e";
+    commit([{ op: "stretch", ...target, edge: g.edge, dx: across ? live.d : 0, dy: across ? 0 : live.d }], `Stretch ${nameOf(g.item)}`, "");
   } else {
     store.live.value = null;
   }
@@ -1246,6 +1291,11 @@ function onKey(e) {
     zoomKeys[e.key]();
     return;
   }
+  if (e.key.toLowerCase() === "o" && !e.shiftKey) {
+    e.preventDefault();
+    setOverlays(!store.overlays.peek());
+    return;
+  }
   if (e.key.toLowerCase() === "l" && !e.shiftKey && store.selected.peek()) {
     e.preventDefault();
     const view = store.layout.peek();
@@ -1260,6 +1310,26 @@ function onKey(e) {
 }
 
 // --- drawing the layout ---
+
+// canvasRotate is how the layout turns the card, and whether a text box is laid out in the
+// finished image already and so is not turned, from the layout's file
+function canvasRotate(view) {
+  const src = store.source.value;
+  const doc = src && src.docs[layoutFileOf(view)];
+  return {
+    rotate: (doc && doc.canvas && doc.canvas.rotate) || 0,
+    output: (item) => !!(doc && doc.textBoxes && doc.textBoxes[item.key] && doc.textBoxes[item.key].space === "output"),
+  };
+}
+
+// zonesOf is what to draw for the room a selected item has and what is in its way: from the
+// layout's file, the flow of a text box and the boxes that name the item in theirs
+function zonesOf(view, item, rect, line, reach) {
+  const src = store.source.value;
+  const doc = src && src.docs[layoutFileOf(view)];
+  const node = doc && item.kind === "text" ? (doc.textBoxes || {})[item.key] : null;
+  return flowZones({ item, rect, line, reach, flow: node ? node.flow : null, refs: referrers(doc, item), items: view.items });
+}
 
 // avoidOf says where a selected text box keeps its text out of a layer for the card being
 // drawn, from the box's flow in the layout file, or null when it names no layer
@@ -1300,10 +1370,41 @@ function drawOverlay() {
         const per = overlayBox().width / canvas.width;
         handles = visibleHandles(rect.width * per, rect.height * per).map((name) => h("div", { class: "ed-handle", dataset: { handle: name } }));
       }
-      // The part of the box the text keeps out of is hatched, beneath the outline
-      const avoid = avoidOf(view, item, rect);
-      if (avoid && avoid.rect) out.push(box(avoid.rect, "avoid", h("span", { class: "ed-avoid-label" }, `Avoids ${avoid.layer}`)));
-      out.push(box(rect, `sel${item.drawn ? "" : " idle"}${locked ? " locked" : ""}`, ...handles));
+      // The room a text box has left, what it keeps its text out of or stays clear of, and where
+      // its room meets it, are drawn beneath the outline, and they follow the box while it is dragged.
+      // Where the card put a box it moved or narrowed is the room's end, and a box on its baseline
+      // also has the line it ends up on drawn over its own
+      const turned = canvasRotate(view);
+      const bound = item.baseline ? (live && live.line ? live.line : item.baseline) : null;
+      let reach = null;
+      let placedMark = null;
+      if (item.placed && !live) {
+        const placed = placedLine(item, turned.rotate, turned.output(item));
+        reach = placed || item.placed;
+        if (placed) placedMark = box(placed, `placed-line ${placed.width === 0 ? "v" : "h"}`);
+      }
+      const marks = store.overlays.value;
+      const zones = marks ? zonesOf(view, item, rect, bound, reach) : { ghosts: [], links: [], hazards: [] };
+      for (const g of zones.ghosts) out.push(box(g, "ghost"));
+      for (const l of zones.links) out.push(box(l.rect, `link${l.reverse ? " by" : ""}`));
+      for (const z of zones.hazards) out.push(box(z, "hazard"));
+      // The names of the marks are set beneath the outline, where no text is
+      const tags = marks ? captionTags(live ? { ...item, moved: false, narrowed: false } : item, zones.links).map((t) => h("span", { class: `ed-tag ${t.tone}` }, t.text)) : [];
+      const caption = tags.length ? h("div", { class: "ed-caption" }, ...tags) : null;
+      out.push(box(rect, `sel${item.drawn ? "" : " idle"}${locked ? " locked" : ""}`, ...handles, caption));
+      // A box set on its baseline has the line its text sits on drawn across its width, with
+      // an end to drag at each side that stretches it
+      const line = live && live.line ? live.line : item.baseline;
+      if (line) {
+        out.push(box(line, `baseline ${line.width === 0 ? "v" : "h"}`));
+        // Drawn over the box's own line, the part of it that the card gave up shows past its end
+        if (placedMark && marks) out.push(placedMark);
+        if (view.editable && !locked) {
+          for (const end of lineHandles(line)) {
+            out.push(h("div", { class: "ed-handle ed-baseline-handle", dataset: { handle: end.edge, line: "1" }, style: `left:${(end.x / canvas.width) * 100}%;top:${(end.y / canvas.height) * 100}%` }));
+          }
+        }
+      }
     }
   }
   if (live) {
@@ -1329,6 +1430,7 @@ function drawOverlay() {
 function drawLayers() {
   const view = store.layout.value;
   const marks = store.marks.value;
+  store.visibility.value;
   const list = $("ed-layers");
   list.hidden = !view;
   $("ed-add").disabled = !view || !view.editable;
@@ -1357,6 +1459,21 @@ function layerRow(view, marks, item, layers) {
       { class: "ed-row-btn", type: "button", "aria-pressed": String(on), "aria-label": label, "data-tip": tip, dataset: { toggle: which }, onclick: () => setMarkOf(item, which, !on) },
       icon(on ? glyphOn : glyphOff),
     );
+  const eye = eyeState(store.visibility.peek(), view.layout, item);
+  const eyeButton = h(
+    "button",
+    {
+      class: `ed-row-btn${eye.kind === "forced" ? " forced" : ""}`,
+      type: "button",
+      "aria-pressed": String(eye.on),
+      "aria-label": eye.label,
+      "data-tip": eye.tip,
+      disabled: eye.disabled,
+      dataset: { toggle: "visible", eye: eye.kind },
+      onclick: () => pressEye(item),
+    },
+    icon(eye.on ? "eye" : "eye-off"),
+  );
   const at = layers.findIndex((it) => refOf(it) === ref);
   const menu = rowMenu(item, { editable: view.editable, at, layers: layers.length });
   const more = h(
@@ -1377,7 +1494,7 @@ function layerRow(view, marks, item, layers) {
   return h(
     "li",
     {
-      class: `ed-layer${item.drawn ? "" : " undrawn"}`,
+      class: `ed-layer${item.drawn ? "" : " undrawn"}${eye.kind === "hidden" ? " hidden-item" : ""}`,
       title: item.why || "",
       dataset: { ref },
       // A press on the row away from its controls selects it too
@@ -1394,6 +1511,7 @@ function layerRow(view, marks, item, layers) {
       h("span", { class: "ed-layer-kind", role: "img", "aria-label": KIND_LABEL[item.kind] || item.kind, title: KIND_LABEL[item.kind] || item.kind }, icon(kindIcon(item.kind))),
       h("span", { class: "ed-layer-name" }, name),
     ),
+    eyeButton,
     toggle("locked", locked, "lock", "lock-open", `Lock ${name} on the card`, "Lock/Unlock"),
     toggle("snap", snaps, "grid-on", "grid-off", `Snap other items to ${name}`, "Allow/Prevent snapping"),
     more,
@@ -1560,18 +1678,27 @@ function drawSelection() {
   const locked = isMarked(marks.locked, view.layout, refOf(item));
   $("ed-selection-kind").textContent = KIND_LABEL[item.kind];
   // What is worth saying about the item besides what it is, under its name
-  const notes = [];
-  if (!item.drawn) notes.push(`Not drawn: ${item.why}`);
-  if (locked) notes.push("Locked, so the card cannot pick or move it");
-  const avoid = avoidOf(view, item, rect);
-  if (avoid) notes.push(avoid.note);
-  $("ed-selection-note").hidden = !notes.length;
-  $("ed-selection-note").textContent = notes.join(". ");
-  const blank = rect.width === 0 && rect.height === 0;
-  $("ed-sel-x").textContent = blank ? "" : String(rect.x);
-  $("ed-sel-y").textContent = blank ? "" : String(rect.y);
-  $("ed-sel-w").textContent = blank ? "" : String(rect.width);
-  $("ed-sel-h").textContent = blank ? "" : String(rect.height);
+  const src = store.source.value;
+  const found = item.kind === "text" && src ? nodeOf(item, view, src) : null;
+  const vis = store.visibility.value;
+  const ref = refOf(item);
+  const notes = selectionNotes(item, {
+    locked,
+    hidden: vis.hidden.includes(`${view.layout}/${ref}`),
+    forced: vis.forced.includes(`${view.layout}/${ref}`),
+    flow: found && found.node ? found.node.flow : null,
+    avoid: avoidOf(view, item, rect),
+  });
+  const note = $("ed-selection-note");
+  note.hidden = !notes.length;
+  note.textContent = notes.map((n) => n.text).join(". ");
+  note.dataset.level = notes.some((n) => n.level === "warn") ? "warn" : "info";
+  // The place in one column and the size in the other, a baseline box by its line
+  const cells = readout(live && live.line ? { ...item, baseline: live.line } : item, rect);
+  ["x", "w", "y", "h"].forEach((id, i) => {
+    $(`ed-sel-${id}-l`).textContent = cells[i].label;
+    $(`ed-sel-${id}`).textContent = cells[i].value;
+  });
 }
 
 // --- the levers ---
@@ -2126,6 +2253,48 @@ async function enter() {
 
 export const editor = { newTemplate, copyTemplate };
 
+// setOverlays shows or hides the marks the card draws for a selected item, and keeps which with
+// the other layout settings
+function setOverlays(on) {
+  store.overlays.value = on;
+  keepLayout("editorOverlays", [on ? 0 : 1]);
+}
+
+// saveImage asks where to put the picture of the card that is shown, and writes it there as a PNG
+async function saveImage() {
+  const job = store.shown.peek();
+  if (!job) return;
+  try {
+    const path = await api.saveRender(job, app.settings.peek().outputDir || "");
+    if (path) toast(`Saved ${path.split(/[\\/]/).pop()}`, "ok");
+  } catch (err) {
+    toast(err.message, "err", 6000);
+  }
+}
+
+// copyImage puts the picture of the card that is shown on the clipboard. The clipboard is given a
+// promise for the image, so the press still counts as the gesture a write needs while the image is
+// fetched. A window that cannot hold an image on the clipboard says so and points to Save image
+async function copyImage() {
+  const job = store.shown.peek();
+  if (!job) return;
+  if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+    toast("This window cannot copy an image. Save image writes it to a file", "warn", 6000);
+    return;
+  }
+  try {
+    const png = fetch(api.renderImageURL(job)).then(async (r) => {
+      if (!r.ok) throw new Error("the picture could not be read");
+      const blob = await r.blob();
+      return blob.type === "image/png" ? blob : new Blob([blob], { type: "image/png" });
+    });
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    toast("Copied the image", "ok");
+  } catch (err) {
+    toast(`Could not copy the image: ${err.message}`, "err", 6000);
+  }
+}
+
 // initView wires the camera controls and the keys that pan and zoom the card's view
 function initView() {
   const stage = $("ed-stage");
@@ -2144,6 +2313,22 @@ function initView() {
     const on = tool.pan.value;
     $("ed-tool-select").setAttribute("aria-pressed", String(!on));
     $("ed-tool-pan").setAttribute("aria-pressed", String(on));
+  });
+  const saved = (app.settings.peek().splits || {}).editorOverlays;
+  store.overlays.value = !(Array.isArray(saved) && saved[0] === 1);
+  $("ed-overlays").addEventListener("click", () => setOverlays(!store.overlays.peek()));
+  effect(() => {
+    const on = store.overlays.value;
+    const button = $("ed-overlays");
+    button.setAttribute("aria-pressed", String(on));
+    button.replaceChildren(icon(on ? "eye" : "eye-off"));
+  });
+  $("ed-copy-image").addEventListener("click", copyImage);
+  $("ed-save-image").addEventListener("click", saveImage);
+  effect(() => {
+    const none = !store.shown.value;
+    $("ed-copy-image").disabled = none;
+    $("ed-save-image").disabled = none;
   });
   effect(() => {
     stage.classList.toggle("pan-mode", tool.pan.value || tool.space.value);

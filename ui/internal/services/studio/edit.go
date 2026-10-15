@@ -57,6 +57,46 @@ type ItemView struct {
 	Ink       bool     `json:"ink,omitempty"`
 	Authored  RectView `json:"authored"`
 	Delivered RectView `json:"delivered"`
+	// Baseline is, for an Ink item, the line its first baseline lies on, as a rectangle
+	// with no thickness across the line, in the finished image
+	Baseline *RectView `json:"baseline,omitempty"`
+	// Placed is, for a text box that draws, where it ends up once the card has moved it
+	// to another box's row (Moved) or narrowed it to clear one (Narrowed), in the
+	// finished image. It is there only for a box the card changes
+	Placed   *RectView `json:"placed,omitempty"`
+	Moved    bool      `json:"moved,omitempty"`
+	Narrowed bool      `json:"narrowed,omitempty"`
+	// Override is the override of a text box that is in force for the card
+	Override *OverrideView `json:"override,omitempty"`
+	// Fit is how a text box's text fitted
+	Fit *FitView `json:"fit,omitempty"`
+}
+
+// OverrideView names the override of a text box that is in force: its condition, and its
+// place in the layout's list of the box's overrides
+type OverrideView struct {
+	When  string `json:"when"`
+	Index int    `json:"index"`
+}
+
+// FitView says how a text box's text fitted: the size it is laid out at against the size
+// the box asks for, the least it may shrink to, how many lines it is set in, and whether it
+// overflows even at that least size. Sizes are in the layout's own pixels
+type FitView struct {
+	Size      float64 `json:"size"`
+	Wanted    float64 `json:"wanted"`
+	Floor     float64 `json:"floor"`
+	Lines     int     `json:"lines"`
+	Overflows bool    `json:"overflows"`
+}
+
+// optionalRect is a place that is there, or nil for none
+func optionalRect(r image.Rectangle) *RectView {
+	if r == (image.Rectangle{}) {
+		return nil
+	}
+	v := rectView(r)
+	return &v
 }
 
 // DescribeRequest is the card a draft is being tested with
@@ -65,6 +105,9 @@ type DescribeRequest struct {
 	Card  card.Data       `json:"card"`
 	Edits *cardlist.Edits `json:"edits,omitempty"`
 	Face  int             `json:"face"`
+	// Show names the layers to describe as drawn whether or not their condition holds,
+	// each as "layer:" and the stack entry's id
+	Show []string `json:"show,omitempty"`
 }
 
 // DescribeView is what the layout the card renders with draws, in draw order
@@ -94,7 +137,7 @@ func (s *Service) Describe(req DescribeRequest) (DescribeView, error) {
 		return DescribeView{}, apierr.New(apierr.BadRequest, firstProblem(ds, err))
 	}
 	req.Card = withEdits(req.Card, req.Edits)
-	r := template.RenderRequest{Card: &req.Card, Face: req.Face}
+	r := template.RenderRequest{Card: &req.Card, Face: req.Face, Show: req.Show}
 	// Whether art draws depends on the card having some, and its pixels do not matter
 	if req.Card.Face(req.Face).ArtworkURL != "" {
 		r.Art = image.NewNRGBA(image.Rect(0, 0, 1, 1))
@@ -111,10 +154,22 @@ func (s *Service) Describe(req DescribeRequest) (DescribeView, error) {
 		Rev:       s.rev(req.ID),
 	}
 	for i, it := range desc.Items {
-		view.Items[i] = ItemView{
+		v := ItemView{
 			Kind: string(it.Kind), Key: it.Key, Part: it.Part, After: it.After, Images: it.Images,
 			Drawn: it.Drawn, Why: it.Why, Ink: it.Ink, Authored: rectView(it.Authored), Delivered: rectView(it.Delivered),
+			Baseline: optionalRect(it.BaselineDelivered), Moved: it.Moved, Narrowed: it.Narrowed,
 		}
+		// Where the box is placed is worth saying only when the card changed it
+		if it.Moved || it.Narrowed {
+			v.Placed = optionalRect(it.PlacedDelivered)
+		}
+		if it.Override != nil {
+			v.Override = &OverrideView{When: it.Override.When, Index: it.Override.Index}
+		}
+		if f := it.Fit; f != nil {
+			v.Fit = &FitView{Size: f.Size, Wanted: f.Wanted, Floor: f.Floor, Lines: f.Lines, Overflows: f.Overflows}
+		}
+		view.Items[i] = v
 	}
 	if fsys, err := s.store.FS(req.ID); err == nil {
 		if err := draftedit.Editable(fsys, desc.Layout); err != nil {

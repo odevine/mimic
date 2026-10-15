@@ -233,6 +233,41 @@ func inkBounds(img image.Image, area image.Rectangle, flat color.Color) image.Re
 	return out
 }
 
+// A box set on the capitals of its text is shown where its text is, with the line it is
+// anchored to at its Y and the anchor named
+func TestDescribeShowsACapAnchoredBox(t *testing.T) {
+	for _, vAlign := range []string{"baseline", "cap-top", "cap-center"} {
+		tm := describeTemplate(t, func(m *manifest.Manifest) {
+			l := m.Layouts["test"]
+			title := l.TextBoxes["title"]
+			title.Rect = manifest.Rect{X: 48, Y: 120, Width: 520, Height: 52}
+			title.Text.VAlign = vAlign
+			l.TextBoxes["title"] = title
+			m.Layouts["test"] = l
+		})
+		c := creature(card.White)
+		c.Name = "Gopher Guard"
+		title := items(t, describe(t, tm, template.RenderRequest{Card: c}))["text:title"]
+		if !title.Ink || title.Anchor != vAlign {
+			t.Errorf("%s: title ink %v anchor %q, want ink and the anchor named", vAlign, title.Ink, title.Anchor)
+		}
+		if want := image.Rect(48, 120, 568, 120); title.BaselineAuthored != want {
+			t.Errorf("%s: anchor line %v, want %v", vAlign, title.BaselineAuthored, want)
+		}
+		// The capitals hang from Y for cap-top and are centered on it for cap-center
+		switch vAlign {
+		case "cap-top":
+			if title.Authored.Min.Y < 118 || title.Authored.Min.Y > 124 {
+				t.Errorf("cap-top ink starts at %d, want near 120", title.Authored.Min.Y)
+			}
+		case "cap-center":
+			if mid := (title.Authored.Min.Y + title.Authored.Max.Y) / 2; mid < 112 || mid > 128 {
+				t.Errorf("cap-center ink centered at %d, want near 120", mid)
+			}
+		}
+	}
+}
+
 // A box set on its baseline is shown where its text is drawn, which the box's own
 // rectangle does not say, and the rectangle stays the box for the others
 func TestDescribeShowsABaselineBoxWhereItsTextIs(t *testing.T) {

@@ -282,8 +282,11 @@ type TextStyle struct {
 	Color string `json:"color,omitempty"`
 	// Align is "left", "center", or "right". Empty is left
 	Align string `json:"align,omitempty"`
-	// VAlign anchors the text block vertically: "top", "center", "bottom", or
-	// "baseline", which sets the box's Y as the first line's baseline. Empty is top
+	// VAlign anchors the text block vertically: "top", "center", "bottom", or one of
+	// the single-line anchors that set the box's Y on the first line, "baseline" for its
+	// baseline, "cap-top" for the top of its capital letters and "cap-center" for their
+	// middle. Those three shrink to fit the width, and measure the capitals from the
+	// first text face on the line. Empty is top
 	VAlign string `json:"vAlign,omitempty"`
 	// LineSpacing is the baseline to baseline distance as a multiple of the font
 	// size, so 1 is solid. Zero is the face's natural line height

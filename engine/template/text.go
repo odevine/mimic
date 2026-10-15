@@ -344,7 +344,7 @@ func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
 // layoutFits reports whether a laid-out block fits box: a baseline box in one line no
 // wider than it, and any other in its height
 func layoutFits(lay textLayout, box TextBoxSpec) bool {
-	if box.VAlign == "baseline" {
+	if PointText(box.VAlign) {
 		return oneLineFits(lay, box)
 	}
 	return blockHeight(lay, box) <= box.Height
@@ -416,7 +416,7 @@ func countTextLines(lines []line) int {
 // pass or two, and gives up on the last layout rather than looping
 func layoutAvoiding(box TextBoxSpec, parts []TextPart, size float64) (textLayout, error) {
 	lay, err := layoutParts(box, parts, size, nil)
-	if err != nil || box.Avoid.Empty() || box.VAlign == "baseline" {
+	if err != nil || box.Avoid.Empty() || PointText(box.VAlign) {
 		return lay, err
 	}
 	var widths lineWidths
@@ -948,14 +948,49 @@ func blockInkHeight(lay textLayout, box TextBoxSpec, face font.Face) (height, ab
 	return height, above
 }
 
-// blockStart is the y of a laid-out block's first line slot in box. A baseline
-// anchor puts the first text line's baseline at box.Y, otherwise the block's ink
+// PointText reports whether a vertical anchor sets text as a single line placed from
+// box.Y, which are "baseline", "cap-top" and "cap-center". Such a box shrinks to fit its
+// width and ignores its height
+func PointText(vAlign string) bool {
+	switch vAlign {
+	case "baseline", "cap-top", "cap-center":
+		return true
+	}
+	return false
+}
+
+// capHeightPx is how far the face's capital letters rise above the baseline, estimated
+// from the ascent for a face that does not state it
+func capHeightPx(face font.Face) int {
+	m := face.Metrics()
+	if h := m.CapHeight.Round(); h > 0 {
+		return h
+	}
+	return int(0.7*fixedFloat(m.Ascent) + 0.5)
+}
+
+// baselineDrop is how far below box.Y the first baseline lies for a point text anchor.
+// The cap anchors measure from the top or the middle of the capitals at the size the
+// text is laid out at, so a title that shrinks stays on the same line through its capitals
+func baselineDrop(vAlign string, face font.Face) int {
+	switch vAlign {
+	case "cap-top":
+		return capHeightPx(face)
+	case "cap-center":
+		return capHeightPx(face) / 2
+	}
+	return 0
+}
+
+// blockStart is the y of a laid-out block's first line slot in box. A point text
+// anchor puts the first text line's baseline at box.Y, offset by the capitals for the
+// cap anchors, otherwise the block's ink
 // top is placed and the first slot backed off from it, since a slot holds the
 // face while the anchor is about what shows
 func blockStart(box TextBoxSpec, lay textLayout, face font.Face) int {
 	ascent := face.Metrics().Ascent.Ceil()
-	if box.VAlign == "baseline" {
-		return box.Y - ascent
+	if PointText(box.VAlign) {
+		return box.Y + baselineDrop(box.VAlign, face) - ascent
 	}
 	ink, above := blockInkHeight(lay, box, face)
 	return blockTop(box, ink) + above - ascent

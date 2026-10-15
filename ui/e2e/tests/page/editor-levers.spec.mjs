@@ -258,6 +258,58 @@ test("the template's name and details are edited, and a forked license is kept",
   await expect(editor.leverError("template-name")).toHaveText("This is needed");
 });
 
+test("the owner is the first half of the template's id, and changing it keeps the name half", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page, { template: (t) => (t.author = { name: "Jane Doe" }) });
+  await editor.openSection("about");
+  await expect(editor.lever("template-owner")).toHaveValue("user");
+  // The name half is the draft's own and is not offered for editing
+  await editor.lever("template-owner").fill("jane");
+  await editor.lever("template-owner").blur();
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops).toEqual([{ op: "set", layout: "", kind: "template", key: "", path: ["id"], value: "jane.mine" }]);
+  await expect(editor.lever("template-owner")).toHaveValue("jane");
+  // One undo puts the id back as it was
+  await editor.undoButton.click();
+  await expect.poll(() => applied(bridge).length).toBe(2);
+  expect(applied(bridge)[1].ops).toEqual([{ op: "set", layout: "", kind: "template", key: "", path: ["id"], value: "user.mine" }]);
+});
+
+test("an owner the engine would not read says why and changes nothing", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openSection("about");
+  for (const bad of ["Jane", "jane doe", "jane.doe", "-jane", "é"]) {
+    await editor.lever("template-owner").fill(bad);
+    await editor.lever("template-owner").blur();
+    await expect(editor.leverError("template-owner")).toContainText("lowercase letters, digits and hyphens");
+  }
+  await editor.lever("template-owner").fill("a".repeat(41));
+  await editor.lever("template-owner").blur();
+  await expect(editor.leverError("template-owner")).toContainText("40 characters or fewer");
+  await editor.lever("template-owner").fill("");
+  await editor.lever("template-owner").blur();
+  await expect(editor.leverError("template-owner")).toHaveText("This is needed");
+  expect(applied(bridge)).toEqual([]);
+});
+
+test("the owner can be filled from the author's name", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page, { template: (t) => (t.author = { name: "Jané Q. Doe" }) });
+  await editor.openSection("about");
+  const suggest = page.getByRole("button", { name: "Use the author's name" });
+  await expect(suggest).toBeEnabled();
+  await suggest.click();
+  await expect.poll(() => applied(bridge).length).toBe(1);
+  expect(applied(bridge)[0].ops).toEqual([{ op: "set", layout: "", kind: "template", key: "", path: ["id"], value: "jane-q-doe.mine" }]);
+  await expect(editor.lever("template-owner")).toHaveValue("jane-q-doe");
+  // Once the owner is the author's name there is nothing to fill in
+  await expect(suggest).toBeDisabled();
+});
+
+test("with no author there is nothing to fill the owner from", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openSection("about");
+  await expect(page.getByRole("button", { name: "Use the author's name" })).toBeDisabled();
+});
+
 test("the license of a copy cannot be changed", async ({ bridge, page }) => {
   const editor = await ready(bridge, page, { meta: { forkedFrom: "mimic.m15 0.1.0", lockedCredits: 1, licenseLocked: true }, template: (t) => (t.license = "CC BY 4.0") });
   await editor.openSection("about");

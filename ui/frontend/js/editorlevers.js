@@ -147,12 +147,48 @@ export function fieldGroups(kind, ctx) {
             { id: "description", label: "Description", path: ["description"], type: "text" },
             { id: "authorName", label: "Author", path: ["author", "name"], type: "text" },
             { id: "authorUrl", label: "Author link", path: ["author", "url"], type: "text" },
+            // The owner is the first half of the template's id, which is owner.name. It is kept
+            // apart from the author's name, which is free text, and can be filled from it
+            { id: "owner", label: "Owner", path: ["id"], type: "owner", owner: true, required: true, suggest: { from: ["author", "name"], label: "Use the author's name" } },
             { id: "license", label: "License", path: ["license"], type: "text", lockable: true },
           ],
         },
       ];
   }
   return [];
+}
+
+// OWNER is what the owner half of a template id may be, as the engine reads an id
+const OWNER = /^[a-z0-9][a-z0-9-]*$/;
+const OWNER_MAX = 40;
+
+// ownerOf is the owner half of a template id such as jane.pinlines, which is everything before the
+// first dot, or "" for an id with none
+export function ownerOf(id) {
+  const text = String(id ?? "");
+  const dot = text.indexOf(".");
+  return dot < 0 ? "" : text.slice(0, dot);
+}
+
+// nameOf is the half of a template id after the owner, which the owner field leaves alone
+export function nameOf(id) {
+  const text = String(id ?? "");
+  const dot = text.indexOf(".");
+  return dot < 0 ? "" : text.slice(dot + 1);
+}
+
+// ownerFrom makes an owner out of a name a person goes by: lowercase letters and digits, with a
+// hyphen between runs of anything else, or "" when there is nothing to make it of
+export function ownerFrom(name) {
+  const slug = String(name ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, OWNER_MAX)
+    .replace(/-+$/, "");
+  return slug;
 }
 
 // readPath follows keys down a parsed file, and gives undefined where there is
@@ -187,6 +223,9 @@ export function parseField(field, text) {
       if (!/^-?(\d+\.?\d*|\.\d+)$/.test(t)) return { ok: false, error: "Use a number" };
       return inRange(field, Number(t));
     }
+    case "owner":
+      if (t.length > OWNER_MAX) return { ok: false, error: `Use ${OWNER_MAX} characters or fewer` };
+      return OWNER.test(t) ? { ok: true, value: t } : { ok: false, error: "Use lowercase letters, digits and hyphens, starting with a letter or digit" };
     case "color":
       return /^#[0-9A-Fa-f]{6}$/.test(t) ? { ok: true, value: t.toUpperCase() } : { ok: false, error: "Use a color like #112233" };
     case "choice": {
@@ -210,6 +249,12 @@ function inRange(field, n) {
 // a layer's position can be written whole, since its two numbers go together
 export function editOps(target, field, parsed, ctx = {}) {
   const base = { layout: target.layout, kind: target.kind, key: target.key };
+  if (field.owner) {
+    // The owner is the first half of the id, and the name after it stays as it is. An id with no
+    // name yet is given the one the draft is kept under
+    const name = nameOf(ctx.id) || ctx.slug || "template";
+    return [{ op: "set", ...base, path: ["id"], value: `${parsed.value}.${name}` }];
+  }
   if (field.at) {
     // A layer's position is both numbers or neither, and one it has not set is where
     // its part puts it

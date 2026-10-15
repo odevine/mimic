@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove, keepRatio, sizeOps } from "../js/editorlevers.js";
+import { fieldGroups, readPath, displayValue, parseField, editOps, shadowOps, editLabel, layerAt, creditEdit, creditAdd, creditRemove, keepRatio, sizeOps, ownerOf, nameOf, ownerFrom } from "../js/editorlevers.js";
 
 const vocab = {
   draws: ["title", "oracle", "pt"],
@@ -206,4 +206,52 @@ test("a text box has a Flow group for the layer it steps around and the box it s
   assert.deepEqual(parseField(flow.fields[0], "pt"), { ok: true, value: "pt" });
   assert.deepEqual(parseField(flow.fields[2], "0.75"), { ok: true, value: 0.75 });
   assert.equal(parseField(flow.fields[2], "-1").ok, false);
+});
+
+test("the owner is the half of the id before the first dot, and the name the half after", () => {
+  assert.equal(ownerOf("jane.pinlines"), "jane");
+  assert.equal(nameOf("jane.pinlines"), "pinlines");
+  assert.equal(ownerOf("user.my-frame"), "user");
+  assert.equal(nameOf("a.b.c"), "b.c");
+  assert.equal(ownerOf("nodot"), "");
+  assert.equal(nameOf("nodot"), "");
+  assert.equal(ownerOf(undefined), "");
+});
+
+test("an owner is made of a name with lowercase letters, digits and single hyphens", () => {
+  assert.equal(ownerFrom("Jane Doe"), "jane-doe");
+  assert.equal(ownerFrom("  Jané Q. Doe!  "), "jane-q-doe");
+  assert.equal(ownerFrom("mimic"), "mimic");
+  assert.equal(ownerFrom("---"), "");
+  assert.equal(ownerFrom(""), "");
+  assert.equal(ownerFrom(undefined), "");
+  assert.equal(ownerFrom("日本語"), "");
+  const long = ownerFrom("a".repeat(30) + " " + "b".repeat(30));
+  assert.ok(long.length <= 40 && !long.endsWith("-"), long);
+});
+
+test("the template offers an owner field that is read from the id and can be filled from the author", () => {
+  const owner = find(fieldGroups("template", ctx), "owner");
+  assert.deepEqual(owner.path, ["id"]);
+  assert.equal(owner.owner, true);
+  assert.equal(owner.required, true);
+  assert.deepEqual(owner.suggest.from, ["author", "name"]);
+});
+
+test("an owner is checked the way the engine reads an id", () => {
+  const owner = find(fieldGroups("template", ctx), "owner");
+  assert.deepEqual(parseField(owner, " jane "), { ok: true, value: "jane" });
+  assert.deepEqual(parseField(owner, "jane-2"), { ok: true, value: "jane-2" });
+  for (const bad of ["Jane", "jane doe", "jane.doe", "-jane", "jane_doe"]) assert.equal(parseField(owner, bad).ok, false, bad);
+  assert.equal(parseField(owner, "a".repeat(41)).ok, false);
+  assert.deepEqual(parseField(owner, ""), { ok: false, error: "This is needed" });
+});
+
+test("changing the owner writes the whole id with the name after it kept", () => {
+  const owner = find(fieldGroups("template", ctx), "owner");
+  const target = { layout: "", kind: "template", key: "" };
+  assert.deepEqual(editOps(target, owner, { ok: true, value: "jane" }, { id: "user.my-frame", slug: "my-frame" }), [{ op: "set", layout: "", kind: "template", key: "", path: ["id"], value: "jane.my-frame" }]);
+  // An id with no name yet takes the one the draft is kept under
+  assert.equal(editOps(target, owner, { ok: true, value: "jane" }, { id: "nodot", slug: "my-frame" })[0].value, "jane.my-frame");
+  assert.equal(editOps(target, owner, { ok: true, value: "jane" }, { id: "user.a.b" })[0].value, "jane.a.b");
 });

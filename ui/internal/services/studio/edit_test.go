@@ -14,7 +14,9 @@ import (
 	"github.com/odevine/mimic/engine/manifest"
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/cardlist"
+	"github.com/odevine/mimic/ui/internal/catalog"
 	"github.com/odevine/mimic/ui/internal/draftedit"
+	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
@@ -720,5 +722,41 @@ func TestOpenAndApplyCarryTheDraftsStamp(t *testing.T) {
 	}
 	if after, _ := svc.Stamp(sum.ID); after == res.Stamp {
 		t.Error("a change outside the app left the stamp as it was")
+	}
+}
+
+func TestChangingTheTemplatesIdTakesBackTheCopyMadeUnderTheOldOne(t *testing.T) {
+	svc, _, _ := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	if _, err := svc.Use(sum.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !catalog.IsCached("user.frame", pipeline.DraftVersion) {
+		t.Fatal("Use did not install the draft")
+	}
+	set := draftedit.Op{Op: draftedit.OpSet, Kind: draftedit.KindTemplate, Path: []string{"id"}, Value: []byte(`"jane.frame"`)}
+	if _, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{set}}); err != nil {
+		t.Fatal(err)
+	}
+	if catalog.IsCached("user.frame", pipeline.DraftVersion) {
+		t.Error("the copy under the old id is still installed")
+	}
+	rel, err := svc.Release(sum.ID)
+	if err != nil || rel.TemplateID != "jane.frame" {
+		t.Errorf("Release = %+v, %v, want the template under its new id", rel, err)
+	}
+	got, _ := svc.Open(sum.ID)
+	if got.Draft.TemplateID != "jane.frame" {
+		t.Errorf("the draft's template id is %q", got.Draft.TemplateID)
+	}
+	// It is made available again under the new one, and an edit that leaves the id alone takes nothing back
+	if _, err := svc.Use(sum.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpMove, Layout: "normal", Kind: draftedit.KindText, Key: "title", DX: 3, DY: 3}}}); err != nil {
+		t.Fatal(err)
+	}
+	if !catalog.IsCached("jane.frame", pipeline.DraftVersion) {
+		t.Error("an edit that left the id alone took the installed copy back")
 	}
 }

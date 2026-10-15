@@ -365,6 +365,27 @@ test("the template's name is changed from its details and the picker follows", a
   await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).credits).toEqual([{ name: "Someone" }]);
 });
 
+test("the owner half of the template's id is changed from its details and undone", async ({ editor, scratch, page }) => {
+  await editor.create("Owner", 100);
+  const file = draftFile(scratch, "owner", "template.json");
+  expect(JSON.parse(await readFile(file, "utf8")).id).toBe("user.owner");
+  await editor.openSection("about");
+  await expect(page.locator("#ed-about-id")).toHaveText("user.owner");
+  await editor.lever("template-owner").fill("jane");
+  await editor.lever("template-owner").blur();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("jane.owner");
+  // What the details say of the template follows the file
+  await expect(page.locator("#ed-about-id")).toHaveText("jane.owner");
+  await editor.undoButton.click();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("user.owner");
+  await expect(editor.lever("template-owner")).toHaveValue("user");
+  // The author's name fills it in
+  await editor.lever("template-authorName").fill("Jane Q. Doe");
+  await editor.lever("template-authorName").blur();
+  await page.getByRole("button", { name: "Use the author's name" }).click();
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("jane-q-doe.owner");
+});
+
 test("a copy keeps the credits and license of the original out of reach of the levers", async ({ editor, templates, page }) => {
   await templates.show();
   await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();

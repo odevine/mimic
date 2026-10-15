@@ -454,7 +454,14 @@ closed, and it is closed to begin with, so a change to one side changes the othe
 shape the canvas had, in one change that undo takes back. Opening the padlock lets the
 two change on their own, and closing it again keeps the shape the canvas has then. It is
 closed again after the page is reloaded, since it is not kept with the template. About holds
-the template's name, description, author, license and credits. What is marked on the card for a selected text box is named in a caption set beneath its outline,
+the template's name, description, author, owner, license and credits. The owner is the first half of the
+template's id, which is `owner.name`, and starts as `user`. The name half is the one the draft was made
+under and stays. A person sets the owner once, to something like `jane`, so that templates shared as `.mimic`
+files do not all carry `user.` ids that collide when one is imported, and a button beside it fills it in
+from the author's name, as lowercase letters, digits and hyphens. Changing it takes back the copy that Use in
+mimic made under the old id, unless a run is in progress, in which case it stays and the library can remove
+it, and per-template choices such as face assignments, features and overrides belong to the id, so they
+start over under the new one. What is marked on the card for a selected text box is named in a caption set beneath its outline,
 where none of its text is: baseline, what the card did to the box, and the layer its text keeps
 out of. Beneath the selection's name are the notes worth knowing about a text box for the card being
 tested. A box the card moved to another box's row or narrowed to stay clear of one is marked where

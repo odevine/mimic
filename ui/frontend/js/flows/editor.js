@@ -37,7 +37,7 @@ import { createCardEditor, valuesOf } from "../components/cardEditor.js";
 import { createViewport } from "../components/viewport.js";
 import { initAssets } from "./editorassets.js";
 import { loadActiveTemplate } from "../components/templatePicker.js";
-import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, keepRatio, layerAt, parseField, readPath, shadowOps, sizeOps } from "../editorlevers.js";
+import { creditAdd, creditEdit, creditRemove, displayValue, editLabel, editOps, fieldGroups, keepRatio, layerAt, ownerFrom, ownerOf, parseField, readPath, shadowOps, sizeOps } from "../editorlevers.js";
 
 // The editor: build a template and see a test card drawn with it. A draft is a
 // template on disk that the app renders as it is, so everything shown here is read
@@ -1858,7 +1858,13 @@ function buildForm(container, scope, groups, spec) {
       }
       // A field with a unit says it inside the field, at its right
       const shown = f.unit ? h("span", { class: "ed-unit-field" }, c, h("span", { class: "ed-unit", "aria-hidden": "true" }, f.unit)) : c;
-      made.push([f.id, field(f.label, id, shown, err)]);
+      const row = field(f.label, id, shown, err);
+      // A field that can be filled from another offers to, under its error
+      if (f.suggest) {
+        ctl.suggest = h("button", { class: "btn subtle ed-suggest", type: "button", onclick: () => suggestFor(form, ctl) }, f.suggest.label);
+        row.append(ctl.suggest);
+      }
+      made.push([f.id, row]);
     }
     // A pair of fields that can be kept in proportion is drawn with a bracket joining
     // them and a padlock on it, which is the one a layer's row has
@@ -1910,6 +1916,7 @@ function syncRatio(form) {
 function valueIn(form, f) {
   const at = form.spec.at(f);
   if (!at) return undefined;
+  if (f.owner) return ownerOf(readPath(at, ["id"]));
   if (f.at) return layerAt(form.spec.entry(), form.spec.origin())[f.path[1]];
   return readPath(at, f.path);
 }
@@ -1932,6 +1939,26 @@ function fill(form) {
     ctl.c.removeAttribute("aria-invalid");
     ctl.err.hidden = true;
   }
+  for (const ctl of form.controls) {
+    if (ctl.suggest) ctl.suggest.disabled = !!form.spec.disabled || !suggestable(form, ctl);
+  }
+}
+
+// suggestFor fills a field from the one it names, such as the owner from the author's name, and
+// makes the change
+function suggestFor(form, ctl) {
+  const doc = form.spec.at(ctl.f);
+  const next = ownerFrom(readPath(doc, ctl.f.suggest.from));
+  if (!next) return;
+  ctl.c.value = next;
+  apply(form, ctl);
+}
+
+// suggestable says whether what a field offers to be filled from would change it
+function suggestable(form, ctl) {
+  const doc = form.spec.at(ctl.f);
+  const next = ownerFrom(readPath(doc, ctl.f.suggest.from));
+  return !!next && next !== valueIn(form, ctl.f);
 }
 
 // apply makes the change a field's text asks for, or says why it cannot be
@@ -1962,7 +1989,9 @@ function apply(form, ctl) {
     if (ops.length) commit(ops, "Change the size of the canvas", "");
     return;
   }
-  const ops = editOps(form.spec.target, f, parsed, { at: layerAt(form.spec.entry(), form.spec.origin()), part: form.spec.part });
+  const doc = form.spec.at(f) || {};
+  const slug = (store.view.peek() || { draft: {} }).draft.id;
+  const ops = editOps(form.spec.target, f, parsed, { at: layerAt(form.spec.entry(), form.spec.origin()), part: form.spec.part, id: doc.id, slug });
   commit(ops, editLabel(form.spec.target, f), `lever:${form.spec.target.kind}:${form.spec.target.key}:${f.id}`);
 }
 

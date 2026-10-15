@@ -244,8 +244,14 @@ func (s *Service) Apply(req ApplyRequest) (ApplyResult, error) {
 	if before && !after && !wholeFile {
 		return ApplyResult{}, apierr.Newf(apierr.BadRequest, "That is not allowed: %s", firstProblem(ds, nil))
 	}
+	was, _ := s.store.Get(req.ID)
 	if err := s.save(req.ID, res); err != nil {
 		return ApplyResult{}, err
+	}
+	// A change of the template's id leaves the copy made available under the old one behind, so
+	// it is taken out unless a run is using the templates, and the library can remove it then
+	if now, err := s.store.Get(req.ID); err == nil && was.TemplateID != "" && now.TemplateID != was.TemplateID && !s.ws.Run.Active() {
+		s.withdraw(was.TemplateID)
 	}
 	s.mu.Lock()
 	s.revs[req.ID]++

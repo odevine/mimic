@@ -1399,3 +1399,10 @@ body.resizing-rows * {
 .ed-box.hazard {
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--err) 55%, transparent) 0 3px, transparent 3px 7px);
 }
+
+/* A field that offers to be filled from another has the offer under it */
+.ed-lever .ed-suggest {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: 4px;
+}

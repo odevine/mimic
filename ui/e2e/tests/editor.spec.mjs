@@ -526,15 +526,16 @@ test("a hidden layer is left out of the card and the PNG saved of it, which is n
 });
 
 test("saving at full size draws the card at the template's own resolution and saves it", async ({ editor, scratch }) => {
-  // The preview draws at 300 dpi, so a template authored at 400 has a larger full size
+  // A template authored at 400 dpi is larger than the preview, whose resolution is a setting
   await editor.create("Full size", 400);
+  const { canvas } = await json(draftFile(scratch, "full-size", "layouts", "normal.json"));
   const [w, h] = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  expect(w).toBeLessThan(canvas.width);
   await editor.page.locator("#ed-save-image").click();
   await editor.page.getByRole("menuitem", { name: "At full size" }).click();
   await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png", { timeout: 60_000 });
   const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
-  expect(Math.abs(bytes.readUInt32BE(16) - Math.round((w * 400) / 300))).toBeLessThanOrEqual(2);
-  expect(Math.abs(bytes.readUInt32BE(20) - Math.round((h * 400) / 300))).toBeLessThanOrEqual(2);
+  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([canvas.width, canvas.height]);
   // The card on show is still the preview
   expect(await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight])).toEqual([w, h]);
 });

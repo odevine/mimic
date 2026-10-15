@@ -42,6 +42,10 @@ type Item struct {
 	// the first baseline, and the text sits above it. Such a box can be moved by
 	// them and not resized
 	Ink bool
+	// Anchor is, for an Ink item, the vertical anchor its Y is measured to, "baseline",
+	// "cap-top" or "cap-center", so the line below is the first baseline, the top of its
+	// capitals or their middle
+	Anchor string
 	// BaselineAuthored and BaselineDelivered are, for an Ink item, the line its first
 	// baseline lies on, from one end of the box's width to the other, in the same two
 	// canvases as Authored and Delivered. Each is a rectangle with no thickness across
@@ -284,9 +288,9 @@ func (d *describer) text(geo *template.Geometry) {
 		r := image.Rect(job.spec.X, job.spec.Y, job.spec.X+job.spec.Width, job.spec.Y+job.spec.Height)
 		// A box set on its baseline is shown where its text is. A box turned a quarter
 		// lays its text out in a rectangle of its own, so it keeps the box's
-		if it.Drawn && job.spec.VAlign == "baseline" && job.spec.Rotate == 0 {
+		if it.Drawn && template.PointText(job.spec.VAlign) && job.spec.Rotate == 0 {
 			if ink, err := template.MeasureTextBox(box, parts...); err == nil && !ink.Empty() {
-				r, it.Ink = ink, true
+				r, it.Ink, it.Anchor = ink, true, job.spec.VAlign
 				// The box's own place is the baseline, its Y, across its width
 				it.BaselineAuthored, it.BaselineDelivered = d.both(image.Rect(job.spec.X, job.spec.Y, job.spec.X+job.spec.Width, job.spec.Y), job.space == template.SpaceOutput)
 			}

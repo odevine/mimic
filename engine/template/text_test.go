@@ -842,3 +842,38 @@ func TestFitTextBoxSaysHowTheTextFitted(t *testing.T) {
 		t.Errorf("a padded box fitted as %+v, %v", fit, err)
 	}
 }
+
+func TestCapAnchorsPlaceTheCapitalsAtY(t *testing.T) {
+	// The face states no cap height, so capitals rise 0.56 of the size above the
+	// baseline. Each glyph advances a full size, so two of them in a 100 wide box
+	// shrink the text to 50
+	part := TextPart{Text: "ab", Src: inkSource{}}
+	for _, tt := range []struct {
+		vAlign        string
+		width, bottom int
+	}{
+		{"baseline", 1000, 300},
+		{"cap-top", 1000, 300 + 56},
+		{"cap-center", 1000, 300 + 28},
+		{"cap-center", 100, 300 + 14},
+		{"cap-top", 100, 300 + 28},
+	} {
+		box := TextBoxSpec{X: 0, Y: 300, Width: tt.width, Height: 10, FontSize: 100, MinFontSize: 10, VAlign: tt.vAlign}
+		got, err := MeasureTextBox(box, part)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The ink ends on the baseline, so that is how far below Y the anchor puts it
+		if got.Max.Y != tt.bottom {
+			t.Errorf("%s in %d: baseline at %d, want %d", tt.vAlign, tt.width, got.Max.Y, tt.bottom)
+		}
+	}
+}
+
+func TestPointTextAnchors(t *testing.T) {
+	for v, want := range map[string]bool{"baseline": true, "cap-top": true, "cap-center": true, "top": false, "center": false, "bottom": false, "": false} {
+		if PointText(v) != want {
+			t.Errorf("PointText(%q) = %v, want %v", v, !want, want)
+		}
+	}
+}

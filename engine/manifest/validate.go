@@ -632,9 +632,9 @@ func (v *validator) boxFields(path string, b *TextBox) {
 		v.c.errorf(tp+".align", "%q is not left, center, or right", t.Align)
 	}
 	switch t.VAlign {
-	case "", "top", "center", "bottom", "baseline":
+	case "", "top", "center", "bottom", "baseline", "cap-top", "cap-center":
 	default:
-		v.c.errorf(tp+".vAlign", "%q is not top, center, bottom, or baseline", t.VAlign)
+		v.c.errorf(tp+".vAlign", "%q is not top, center, bottom, baseline, cap-top, or cap-center", t.VAlign)
 	}
 	if t.LineSpacing < 0 || t.PaddingX < 0 || t.PaddingY < 0 {
 		v.c.errorf(tp, "line spacing and padding cannot be negative")

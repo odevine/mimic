@@ -94,8 +94,8 @@ func starterLayout(w, h, dpi int) manifest.Layout {
 	text := func(size float64, font, align, vAlign string) manifest.TextStyle {
 		return manifest.TextStyle{FontSize: math.Round(size * sx), Font: font, Color: "#000000", Align: align, VAlign: vAlign}
 	}
-	title := manifest.TextBox{Rect: rect(386, 510, 2400, 200), Text: text(156, "title", "left", "baseline"), Flow: manifest.Flow{ClearOf: "mana"}}
-	mana := manifest.TextBox{Rect: rect(2047, 506, 866, 200), Text: text(179, "", "right", "baseline")}
+	title := manifest.TextBox{Rect: rect(386, 455, 2400, 200), Text: text(156, "title", "left", "cap-center"), Flow: manifest.Flow{ClearOf: "mana"}}
+	mana := manifest.TextBox{Rect: rect(2047, 455, 866, 200), Text: text(179, "", "right", "cap-center")}
 	mana.Text.MinFontSize = math.Round(179 * sx)
 	mana.Text.Shadow = &manifest.Shadow{Distance: 0.0907, Angle: 25}
 	oracle := manifest.TextBox{Rect: rect(347, 2750, 2569, 1244), Text: text(150, "", "left", "center")}

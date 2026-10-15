@@ -2,6 +2,7 @@ package template
 
 import (
 	"image"
+	"math"
 	"strings"
 	"testing"
 
@@ -804,3 +805,40 @@ func TestMeasureTextBoxIsEmptyWhenNothingIsDrawn(t *testing.T) {
 }
 
 func pint(v int) *int { return &v }
+
+func TestFitTextBoxSaysHowTheTextFitted(t *testing.T) {
+	parts := func(text string) []TextPart { return []TextPart{{Text: text, Src: scaleSource{}}} }
+	// Room to spare keeps the size asked for
+	roomy := TextBoxSpec{Width: 1000, Height: 500, FontSize: 100, MinFontSize: 20}
+	fit, err := FitTextBox(roomy, parts("aaaa")...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fit.Size != 100 || fit.Wanted != 100 || fit.Floor != 20 || fit.Overflows || fit.Lines != 1 {
+		t.Errorf("a short text fitted as %+v", fit)
+	}
+	// Text that wraps past the height shrinks to a size that fits, over several lines
+	crowded := TextBoxSpec{Width: 1000, Height: 250, FontSize: 100, MinFontSize: 20}
+	fit, err = FitTextBox(crowded, parts("aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa")...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fit.Size >= fit.Wanted || fit.Size < fit.Floor || fit.Overflows || fit.Lines < 2 {
+		t.Errorf("crowded text fitted as %+v, want shrunk, not past the floor, and fitting", fit)
+	}
+	// Text that does not fit even at the floor is laid out at the floor and says it overflows
+	hopeless := TextBoxSpec{Width: 100, Height: 20, FontSize: 100, MinFontSize: 50}
+	fit, err = FitTextBox(hopeless, parts("aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa")...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fit.Size != 50 || !fit.Overflows {
+		t.Errorf("text that cannot fit fitted as %+v, want the floor and overflowing", fit)
+	}
+	// Padding takes room from the fit, and a floor the box does not name is a share of its size
+	padded := TextBoxSpec{Width: 1000, Height: 500, FontSize: 100, Padding: 100}
+	fit, err = FitTextBox(padded, parts("aaaa")...)
+	if err != nil || math.Abs(fit.Floor-55) > 1e-9 || fit.Wanted != 100 {
+		t.Errorf("a padded box fitted as %+v, %v", fit, err)
+	}
+}

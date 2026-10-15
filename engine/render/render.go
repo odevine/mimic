@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"strconv"
 	"strings"
 
 	"github.com/odevine/impasto/blend"
@@ -110,13 +111,16 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(layout.Stack)))
 		_, k := fc.get(e.Face)
-		node, err := layerNode(ctx, loads, t, req, geo, authored, e, k, scale)
-		if err != nil {
-			return nil, err
-		}
-		if node != nil {
-			nodes = append(nodes, node)
-			loads.total++
+		// A hidden entry is not loaded or drawn, and the art above it still takes its place
+		if !req.Hides("layer", e.ID) {
+			node, err := layerNode(ctx, loads, t, req, geo, authored, forced(req, e), k, scale)
+			if err != nil {
+				return nil, err
+			}
+			if node != nil {
+				nodes = append(nodes, node)
+				loads.total++
+			}
 		}
 
 		// The art takes its place in the stack whether or not the entry it follows
@@ -125,7 +129,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 			continue
 		}
 		for slotIdx, slot := range geo.Art {
-			if slot.After != e.ID {
+			if slot.After != e.ID || req.Hides("art", strconv.Itoa(slotIdx)) {
 				continue
 			}
 			src := req.Art
@@ -152,7 +156,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
 	syms := newSymbols(fr, boxes)
 
-	if drawSymbol {
+	if drawSymbol && !req.Hides("symbol", template.SymbolSet) {
 		node, err := symbolNode(req.SetSymbol, symSpec)
 		if err != nil {
 			return nil, err
@@ -171,6 +175,9 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		docW, docH := geo.Width, geo.Height
 		if job.space == template.SpaceOutput {
 			docW, docH = geo.DeliveredWidth, geo.DeliveredHeight
+		}
+		if req.Hides("text", job.key) {
+			continue
 		}
 		got, err := drawBox(req, t, layout, authored, job, boxes, fc, syms, fr, scale, docW, docH)
 		if err != nil {
@@ -282,6 +289,9 @@ type resolvedBox struct {
 	space   string
 	spec    template.TextBoxSpec
 	divider string
+	// pick is the override of the box that is in force, as an index into the box's
+	// overrides in the order they are tried, or -1 for the box as authored
+	pick int
 }
 
 // boxSet is a layout's text boxes after resolution for a card
@@ -322,11 +332,11 @@ func resolveBoxes(layout *template.Layout, geo *template.Geometry, fc *faces, fe
 				continue
 			}
 			sb := geo.Boxes[b.Key]
-			spec, divider := sb.Base, b.Base.Flow.Divider
+			spec, divider, pick := sb.Base, b.Base.Flow.Divider, -1
 			if i, ok := b.Pick(func(c frame.Condition) bool { return c.Met(k, features) }); ok {
-				spec, divider = sb.Overrides[i], b.Overrides[i].Box.Flow.Divider
+				spec, divider, pick = sb.Overrides[i], b.Overrides[i].Box.Flow.Divider, i
 			}
-			rb := resolvedBox{key: b.Key, draws: b.Draws, face: b.Face, space: b.Space, spec: spec, divider: divider}
+			rb := resolvedBox{key: b.Key, draws: b.Draws, face: b.Face, space: b.Space, spec: spec, divider: divider, pick: pick}
 			out.byKey[b.Key] = rb
 			out.jobs = append(out.jobs, rb)
 		}
@@ -351,7 +361,7 @@ func placeBox(req template.RenderRequest, t *template.Template, layout *template
 			return image.Rectangle{}, false
 		}
 		_, k := fc.get(e.Face)
-		return template.EntryBounds(t.Assets(), e, k, req.Features, scale, authored.X, authored.Y)
+		return template.EntryBounds(t.Assets(), forced(req, e), k, req.Features, scale, authored.X, authored.Y)
 	}
 	if box.DuckLayer != "" && box.DuckRow != "" {
 		if _, ok := bounds(box.DuckLayer); ok {
@@ -445,6 +455,18 @@ func lerp(from, to float64, i, n int) float64 {
 		return from
 	}
 	return from + (to-from)*float64(i+1)/float64(n)
+}
+
+// forced is the entry as the request has it: one it shows draws whatever its condition says,
+// so it is the entry without the condition, and any other is as it is. It is a copy, since
+// a template is shared by every render
+func forced(req template.RenderRequest, e *template.Entry) *template.Entry {
+	if !req.Shows(e.ID) {
+		return e
+	}
+	c := *e
+	c.Condition = frame.Condition{}
+	return &c
 }
 
 // layerNode builds one stack entry's node for this card, or returns nil when its

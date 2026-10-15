@@ -55,6 +55,37 @@ type RenderRequest struct {
 	// costs a fraction of the work while laying out identically. Zero renders at
 	// the template's own resolution
 	DPI int
+	// Hide names items of the layout to leave out of the drawing, each as the kind, a
+	// colon and the item's key, the way a description names them: "layer:frame" for a stack
+	// entry's id, "art:0" for an art window's index, "symbol:set" for a symbol's name and
+	// "text:title" for a text box's key. A hidden item is only not drawn. The rest of the
+	// card is laid out as it would be with the item there, so text still steps around a
+	// layer that is hidden and a box still gives way to one, and a description reports the
+	// item as it would draw. A name that matches nothing hides nothing
+	Hide []string
+	// Show names stack entries to draw even where their condition does not hold, as
+	// "layer:crown". A forced entry is there for the rest of the card, so text steps around
+	// it and a box ducks for it, and a description reports it drawn. It still draws nothing
+	// when no image of its part fits the card, or its opacity is 0, and an entry named by
+	// Hide as well is not drawn. Only layers can be shown, and any other name is ignored
+	Show []string
+}
+
+// Hides reports whether the request leaves an item out of the drawing
+func (r RenderRequest) Hides(kind, key string) bool { return named(r.Hide, kind, key) }
+
+// Shows reports whether the request draws a stack entry whatever its condition says
+func (r RenderRequest) Shows(key string) bool { return named(r.Show, "layer", key) }
+
+// named reports whether a list holds the name of an item, which is its kind, a colon and
+// its key
+func named(list []string, kind, key string) bool {
+	for _, h := range list {
+		if len(h) == len(kind)+1+len(key) && h[:len(kind)] == kind && h[len(kind)] == ':' && h[len(kind)+1:] == key {
+			return true
+		}
+	}
+	return false
 }
 
 // Report forwards a progress update when a callback is set, so a render's call

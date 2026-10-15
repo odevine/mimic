@@ -309,12 +309,7 @@ func axisPadding(axis *int, all int) int {
 // box's height. When even the floor overflows, the floor's layout is returned
 // for drawLayout to clip
 func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
-	fits := func(lay textLayout) bool {
-		if box.VAlign == "baseline" {
-			return oneLineFits(lay, box)
-		}
-		return blockHeight(lay, box) <= box.Height
-	}
+	fits := func(lay textLayout) bool { return layoutFits(lay, box) }
 	max := box.FontSize
 	lay, err := layoutAvoiding(box, parts, max)
 	if err != nil {
@@ -344,6 +339,48 @@ func fitLayout(box TextBoxSpec, parts []TextPart) (textLayout, error) {
 		}
 	}
 	return best, nil
+}
+
+// layoutFits reports whether a laid-out block fits box: a baseline box in one line no
+// wider than it, and any other in its height
+func layoutFits(lay textLayout, box TextBoxSpec) bool {
+	if box.VAlign == "baseline" {
+		return oneLineFits(lay, box)
+	}
+	return blockHeight(lay, box) <= box.Height
+}
+
+// TextFit says how a box's text fitted: the size it was laid out at against the size the
+// box asks for, and whether it fits at all
+type TextFit struct {
+	// Size is the font size the text is laid out at, and Wanted the size the box asks
+	// for, both in the document's pixels. Size is less than Wanted when the text
+	// shrank to fit
+	Size, Wanted float64
+	// Floor is the least size the box lets the text shrink to
+	Floor float64
+	// Overflows says the text does not fit even at the floor, so it runs past the box's
+	// height, or for a box set on its baseline, past its width or onto a second line
+	Overflows bool
+	// Lines is how many lines of text it is set in
+	Lines int
+}
+
+// FitTextBox lays the parts out in box the way RenderTextBox would and reports how they
+// fitted, without drawing anything
+func FitTextBox(box TextBoxSpec, parts ...TextPart) (TextFit, error) {
+	inner := insetBox(box)
+	lay, err := fitLayout(inner, parts)
+	if err != nil {
+		return TextFit{}, err
+	}
+	return TextFit{
+		Size:      lay.size,
+		Wanted:    inner.FontSize,
+		Floor:     minFontSize(inner),
+		Overflows: !layoutFits(lay, inner),
+		Lines:     countTextLines(lay.lines),
+	}, nil
 }
 
 // lineWidths is the room each text line of a block has, in the order the lines

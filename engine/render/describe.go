@@ -42,12 +42,44 @@ type Item struct {
 	// the first baseline, and the text sits above it. Such a box can be moved by
 	// them and not resized
 	Ink bool
+	// BaselineAuthored and BaselineDelivered are, for an Ink item, the line its first
+	// baseline lies on, from one end of the box's width to the other, in the same two
+	// canvases as Authored and Delivered. Each is a rectangle with no thickness across
+	// the line, since a quarter turn of the layout turns the line to a vertical one.
+	// The box's height has no part in where a baseline box draws, so this is all of the
+	// box's own rectangle that matters, and it is what Rect.Y, X and Width say. Both are
+	// empty for an item that is not Ink
+	BaselineAuthored  image.Rectangle
+	BaselineDelivered image.Rectangle
+	// PlacedAuthored and PlacedDelivered are, for a text box that draws, the rectangle it
+	// ends up in once the card has moved it to the row of another box or narrowed it to
+	// stay clear of one, in the same two canvases. The rectangles above are the box as the
+	// layout gives it, or where its text is. Moved says the box's place changed and
+	// Narrowed that its width did. Narrowing to keep out of a layer is not a change to the
+	// box, since it only shortens lines, and is not reported
+	PlacedAuthored  image.Rectangle
+	PlacedDelivered image.Rectangle
+	Moved           bool
+	Narrowed        bool
+	// Override is, for a text box, the override of it that is in force for this card,
+	// which is why its rectangle and style are not the ones the box is written with, or
+	// nil when the box stands as authored
+	Override *Override
+	// Fit is, for a text box that draws, how its text fitted
+	Fit *template.TextFit
 	// Authored is where the item is in the layout's own canvas and Delivered is where
 	// it is in the finished image, after the layout's rotation. Both are in the
 	// canvas's own pixels, not scaled for a preview. A layer's rectangle is the
 	// visible pixels of its image. A layer that does not draw has neither
 	Authored  image.Rectangle
 	Delivered image.Rectangle
+}
+
+// Override names the override of a text box that is in force: its condition as the layout
+// writes it, and its place among the box's overrides in the order the layout lists them
+type Override struct {
+	When  string
+	Index int
 }
 
 // Description is what a template's layout does for one card
@@ -114,21 +146,23 @@ type describer struct {
 // add places an item's rectangles, given in the canvas it was laid out in
 func (d *describer) add(it Item, r image.Rectangle, output bool) {
 	if !r.Empty() {
-		w, h := d.authored.X, d.authored.Y
-		deg := d.layout.Canvas.Rotate
-		switch {
-		case output:
-			it.Delivered = r
-			it.Authored = template.RotateRect(r, d.out.Delivered.X, d.out.Delivered.Y, 360-deg)
-		default:
-			it.Authored = r
-			it.Delivered = template.RotateRect(r, w, h, deg)
-		}
+		it.Authored, it.Delivered = d.both(r, output)
 	}
 	d.out.Items = append(d.out.Items, it)
 }
 
+// both gives a rectangle in the canvas it was laid out in as it is in the layout's own
+// canvas and in the finished image. A rectangle with no thickness turns the same way
+func (d *describer) both(r image.Rectangle, output bool) (authored, delivered image.Rectangle) {
+	deg := d.layout.Canvas.Rotate
+	if output {
+		return template.RotateRect(r, d.out.Delivered.X, d.out.Delivered.Y, 360-deg), r
+	}
+	return r, template.RotateRect(r, d.authored.X, d.authored.Y, deg)
+}
+
 func (d *describer) layer(e *template.Entry) {
+	e = forced(d.req, e)
 	it := Item{Kind: ItemLayer, Key: e.ID, Part: e.Part.Name}
 	_, k := d.fc.get(e.Face)
 	switch {
@@ -253,10 +287,40 @@ func (d *describer) text(geo *template.Geometry) {
 		if it.Drawn && job.spec.VAlign == "baseline" && job.spec.Rotate == 0 {
 			if ink, err := template.MeasureTextBox(box, parts...); err == nil && !ink.Empty() {
 				r, it.Ink = ink, true
+				// The box's own place is the baseline, its Y, across its width
+				it.BaselineAuthored, it.BaselineDelivered = d.both(image.Rect(job.spec.X, job.spec.Y, job.spec.X+job.spec.Width, job.spec.Y), job.space == template.SpaceOutput)
+			}
+		}
+		it.Override = d.override(b, job)
+		if it.Drawn {
+			placed := image.Rect(box.X, box.Y, box.X+box.Width, box.Y+box.Height)
+			it.PlacedAuthored, it.PlacedDelivered = d.both(placed, job.space == template.SpaceOutput)
+			it.Moved = box.X != job.spec.X || box.Y != job.spec.Y
+			it.Narrowed = box.Width < job.spec.Width
+			if fit, err := template.FitTextBox(box, parts...); err == nil {
+				it.Fit = &fit
 			}
 		}
 		d.add(it, r, job.space == template.SpaceOutput)
 	}
+}
+
+// override says which override of a box is in force for the card, or nil for none. The
+// layout tries overrides in an order of its own, so the index is where the override is in
+// the layout's list, found by its condition
+func (d *describer) override(b *template.Box, job resolvedBox) *Override {
+	if job.pick < 0 || job.pick >= len(b.Overrides) {
+		return nil
+	}
+	when := b.Overrides[job.pick].Condition.String()
+	index := job.pick
+	for i, o := range b.Base.When {
+		if o.Condition == when {
+			index = i
+			break
+		}
+	}
+	return &Override{When: when, Index: index}
 }
 
 func sortedKeys[V any](m map[string]V) []string {

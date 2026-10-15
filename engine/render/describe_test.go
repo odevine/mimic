@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"math"
 	"strings"
 	"testing"
 
@@ -264,6 +265,13 @@ func TestDescribeShowsABaselineBoxWhereItsTextIs(t *testing.T) {
 	if oracle := got["text:oracle"]; oracle.Ink || oracle.Authored != image.Rect(48, 300, 568, 500) {
 		t.Errorf("oracle = %+v, want the box's own rectangle", oracle)
 	}
+	// The box's own place is the baseline across its width, which the ink does not say
+	if want := image.Rect(48, 120, 568, 120); title.BaselineAuthored != want || title.BaselineDelivered != want {
+		t.Errorf("title baseline is %v and %v, want %v", title.BaselineAuthored, title.BaselineDelivered, want)
+	}
+	if oracle := got["text:oracle"]; !oracle.BaselineAuthored.Empty() || !oracle.BaselineDelivered.Empty() || oracle.BaselineAuthored != (image.Rectangle{}) {
+		t.Errorf("a box that is not set on its baseline has one: %v", oracle.BaselineAuthored)
+	}
 
 	// What it says matches what is drawn, to a pixel or two for the antialiasing
 	buf, err := Render(context.Background(), tm, req)
@@ -289,5 +297,191 @@ func TestDescribeKeepsAnUndrawnTextBoxItsOwnRectangle(t *testing.T) {
 	it := items(t, describe(t, tm, template.RenderRequest{Card: land}))["text:pt"]
 	if it.Drawn || it.Ink || it.Authored != image.Rect(560, 960, 680, 1010) {
 		t.Errorf("pt = %+v, want the box's rectangle", it)
+	}
+}
+
+func TestDescribeTurnsABaselineWithTheLayout(t *testing.T) {
+	const w, h = placeholderWidth, placeholderHeight
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		l.Canvas.Rotate = 90
+		title := l.TextBoxes["title"]
+		title.Rect = manifest.Rect{X: 48, Y: 120, Width: 520, Height: 52}
+		title.Text.VAlign = "baseline"
+		l.TextBoxes["title"] = title
+		out := box(30, 40, 200, 40, 24)
+		out.Draws = "artist"
+		out.Text.VAlign = "baseline"
+		out.Space = template.SpaceOutput
+		l.TextBoxes["legal"] = out
+		m.Layouts["test"] = l
+	})
+	c := creature(card.White)
+	c.Name = "Gopher Guard"
+	c.Artist = "Someone"
+	got := items(t, describe(t, tm, template.RenderRequest{Card: c}))
+
+	title := got["text:title"]
+	if !title.Ink {
+		t.Fatalf("title = %+v", title)
+	}
+	line := image.Rect(48, 120, 568, 120)
+	if title.BaselineAuthored != line {
+		t.Errorf("authored baseline %v, want %v", title.BaselineAuthored, line)
+	}
+	// A quarter turn makes the horizontal line a vertical one in the finished image, and
+	// it turns as the box's ink does
+	want := template.RotateRect(line, w, h, 90)
+	if title.BaselineDelivered != want || want.Dx() != 0 || want.Dy() != 520 {
+		t.Errorf("delivered baseline %v, want %v, a vertical line", title.BaselineDelivered, want)
+	}
+
+	// A box laid out in the finished image has its baseline there, and in the layout's
+	// own canvas it turns back
+	legal := got["text:legal"]
+	if !legal.Ink {
+		t.Fatalf("legal = %+v", legal)
+	}
+	if want := image.Rect(30, 40, 230, 40); legal.BaselineDelivered != want {
+		t.Errorf("an output box's baseline is %v, want %v", legal.BaselineDelivered, want)
+	}
+	if back := template.RotateRect(legal.BaselineAuthored, w, h, 90); back != legal.BaselineDelivered {
+		t.Errorf("legal baseline authored %v turns to %v, want %v", legal.BaselineAuthored, back, legal.BaselineDelivered)
+	}
+}
+
+func TestDescribeSaysHowTextFitted(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		short := box(48, 300, 520, 200, 28)
+		short.Draws = "oracle"
+		l.TextBoxes["oracle"] = short
+		// A one line title with room, and one in a box far too narrow for its name
+		wide := l.TextBoxes["title"]
+		wide.Text.VAlign = "baseline"
+		l.TextBoxes["title"] = wide
+		tight := box(48, 600, 60, 40, 38)
+		tight.Draws = "artist"
+		tight.Text.VAlign = "baseline"
+		l.TextBoxes["artist"] = tight
+		m.Layouts["test"] = l
+	})
+	c := creature(card.White)
+	c.Name = "Gopher"
+	c.Artist = "A Name Far Too Long To Fit In So Small A Box At Any Size"
+	c.OracleText = "Vigilance"
+	got := items(t, describe(t, tm, template.RenderRequest{Card: c}))
+
+	title := got["text:title"].Fit
+	if title == nil || title.Size != title.Wanted || title.Wanted != 38 || title.Overflows || title.Lines != 1 {
+		t.Errorf("a name with room fitted as %+v", title)
+	}
+	rules := got["text:oracle"].Fit
+	if rules == nil || rules.Size != 28 || rules.Overflows {
+		t.Errorf("a line of rules in a roomy box fitted as %+v", rules)
+	}
+	artist := got["text:artist"].Fit
+	if artist == nil || artist.Size >= artist.Wanted || artist.Size > artist.Floor+0.5 || !artist.Overflows {
+		t.Errorf("a name in a box too narrow for it fitted as %+v, want the floor and overflowing", artist)
+	}
+	if want := 38 * 0.55; math.Abs(artist.Floor-want) > 1e-9 {
+		t.Errorf("the floor is %v, want %v, a share of the size the box asks for", artist.Floor, want)
+	}
+	// What is not drawn, and what is not a text box, has no fit
+	if it := got["text:note"]; it.Fit != nil || it.Drawn {
+		t.Errorf("a box that does not draw has a fit: %+v", it.Fit)
+	}
+	if got["layer:frame"].Fit != nil {
+		t.Error("a layer has a fit")
+	}
+
+	// Text that needs the room shrinks to fit and no further
+	c.OracleText = strings.Repeat("Whenever this creature attacks, draw a card. ", 6)
+	crowded := items(t, describe(t, tm, template.RenderRequest{Card: c}))["text:oracle"].Fit
+	if crowded == nil || crowded.Size >= crowded.Wanted || crowded.Overflows || crowded.Lines < 2 {
+		t.Errorf("rules that need the room fitted as %+v, want smaller than asked for and fitting", crowded)
+	}
+}
+
+func TestDescribePlacesABoxWhereTheCardPutsIt(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		title := l.TextBoxes["title"]
+		title.Flow = manifest.Flow{ClearOf: "pt"}
+		l.TextBoxes["title"] = title
+		// The power and toughness sit on the title's row, at its right
+		pt := box(400, 40, 168, 52, 38)
+		pt.Text.Align = "right"
+		l.TextBoxes["pt"] = pt
+		m.Layouts["test"] = l
+	})
+	plain := items(t, describe(t, tm, template.RenderRequest{Card: creature(card.White)}))["text:title"]
+	if plain.Moved || !plain.Narrowed {
+		t.Fatalf("a title beside the stats, moved %v narrowed %v", plain.Moved, plain.Narrowed)
+	}
+	if own := image.Rect(48, 40, 568, 92); plain.Authored != own {
+		t.Fatalf("the box is %v, want its own rectangle %v", plain.Authored, own)
+	}
+	if p := plain.PlacedAuthored; p.Min != image.Pt(48, 40) || p.Dx() >= 520 || p.Dx() <= 0 || p.Dy() != 52 {
+		t.Errorf("the title is placed at %v, want the same row and narrower than 520", p)
+	}
+	if plain.PlacedDelivered != plain.PlacedAuthored {
+		t.Errorf("placed %v and %v in an unturned layout", plain.PlacedAuthored, plain.PlacedDelivered)
+	}
+}
+
+func TestDescribeMovesATitleToAnotherRow(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		title := l.TextBoxes["title"]
+		title.Flow = manifest.Flow{Duck: &manifest.Duck{Layer: "crown", Row: "pt"}}
+		l.TextBoxes["title"] = title
+		m.Layouts["test"] = l
+	})
+	still := items(t, describe(t, tm, template.RenderRequest{Card: creature(card.White)}))["text:title"]
+	if still.Moved || still.Narrowed || still.PlacedAuthored != still.Authored {
+		t.Errorf("a title for a card without the crown moved: %+v", still)
+	}
+	moved := items(t, describe(t, tm, template.RenderRequest{Card: legendary()}))["text:title"]
+	if !moved.Moved || moved.Narrowed {
+		t.Fatalf("moved %v narrowed %v for a card the crown draws for", moved.Moved, moved.Narrowed)
+	}
+	// The pt box's row is at 960, and the box keeps its size and place across
+	if want := image.Rect(48, 960, 568, 1012); moved.PlacedAuthored != want {
+		t.Errorf("the title is placed at %v, want %v", moved.PlacedAuthored, want)
+	}
+	if moved.Authored != image.Rect(48, 40, 568, 92) {
+		t.Errorf("the box's own rectangle changed to %v", moved.Authored)
+	}
+}
+
+func TestDescribeSaysWhichOverrideIsInForce(t *testing.T) {
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		title := l.TextBoxes["title"]
+		title.When = []manifest.Override{
+			when("land", `{"rect":{"x":10}}`),
+			when("legendary", `{"rect":{"x":60}}`),
+			when("legendary, creature", `{"rect":{"x":70}}`),
+		}
+		l.TextBoxes["title"] = title
+		m.Layouts["test"] = l
+	})
+	none := items(t, describe(t, tm, template.RenderRequest{Card: creature(card.White)}))["text:title"]
+	if none.Override != nil || none.Authored.Min.X != 48 {
+		t.Errorf("a card no override applies to has %+v at %v", none.Override, none.Authored)
+	}
+	// Two overrides hold, and the one naming more conditions wins, though it is written
+	// last, so its place in the layout's list is not its place in the order tried
+	got := items(t, describe(t, tm, template.RenderRequest{Card: legendary()}))["text:title"]
+	if got.Override == nil || got.Override.When != "legendary, creature" || got.Override.Index != 2 {
+		t.Fatalf("override = %+v, want the one for legendary, creature at index 2", got.Override)
+	}
+	if got.Authored.Min.X != 70 {
+		t.Errorf("the box is at %v, want the override's x of 70", got.Authored)
+	}
+	land := items(t, describe(t, tm, template.RenderRequest{Card: &card.Data{Name: "Land", TypeLine: "Land", Layout: "normal"}}))["text:title"]
+	if land.Override == nil || land.Override.Index != 0 || land.Override.When != "land" {
+		t.Errorf("override = %+v for a land", land.Override)
 	}
 }

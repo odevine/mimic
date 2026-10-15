@@ -244,6 +244,11 @@ func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image
 	if err != nil {
 		return nil, err
 	}
+	return p.renderWith(ctx, at, d, face, art, dpi, Visibility{}, progress)
+}
+
+// renderWith composites the card through at and reports the encoding step
+func (p *Pipeline) renderWith(ctx context.Context, at *Template, d *card.Data, face int, art image.Image, dpi int, vis Visibility, progress func(step string, frac float64)) (*raster.Buffer, error) {
 	pool, overrides := p.chosenFonts()
 	req := template.RenderRequest{
 		Card:          d,
@@ -253,6 +258,8 @@ func (p *Pipeline) render(ctx context.Context, d *card.Data, face int, art image
 		FontPool:      pool,
 		FontOverrides: overrides,
 		DPI:           dpi,
+		Hide:          vis.Hide,
+		Show:          vis.Show,
 	}
 	if progress != nil {
 		// The engine render is the bulk of the work, so it owns the bar up to

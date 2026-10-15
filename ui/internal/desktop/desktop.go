@@ -25,6 +25,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/studio"
 	"github.com/odevine/mimic/ui/internal/services/templates"
 	"github.com/odevine/mimic/ui/internal/workspace"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -53,6 +54,7 @@ type Services struct {
 	Settings  *settings.Service
 	Data      *data.Service
 	Overrides *overrides.Service
+	Studio    *studio.Service
 }
 
 // Options is what the shell needs from the binary around it
@@ -122,6 +124,7 @@ func Launch(o Options) error {
 		application.NewService(&Templates{templatesAPI: svc.Templates, lifecycle: startIf(!o.Smoke, svc.Templates.Startup)}),
 		application.NewService(&Settings{svc.Settings}),
 		application.NewService(&Overrides{svc.Overrides}),
+		application.NewService(&Studio{studioAPI: svc.Studio, lifecycle: lifecycle{stop: svc.Studio.Shutdown}}),
 		application.NewService(&Data{dataAPI: svc.Data, lifecycle: startIf(!o.Smoke, svc.Data.Startup)}),
 		application.NewService(&Updates{updatesAPI: updates, lifecycle: startIf(!o.Smoke, updates.startup)}),
 		application.NewService(jobs.NewService(ws.Jobs)),

@@ -1,764 +1,2604 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mimic</title>
-  <link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/batch.css">
-  <script>
-    // Apply the remembered theme before first paint so a light-theme user never
-    // sees a dark flash. The app copy in prefs is authoritative and app.js
-    // reconciles the two once it loads
-    try {
-      const t = localStorage.getItem("mimic.theme");
-      if (t) document.documentElement.dataset.theme = t;
-    } catch {}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mimic</title>
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/batch.css" />
+    <link rel="stylesheet" href="css/editor.css" />
+    <script>
+      // Apply the remembered theme before first paint so a light-theme user never
+      // sees a dark flash. The app copy in prefs is authoritative and app.js
+      // reconciles the two once it loads
+      try {
+        const t = localStorage.getItem("mimic.theme");
+        if (t) document.documentElement.dataset.theme = t;
+      } catch {}
 
-    // If the module graph fails to load, say so rather than leave a blank page
-    window.mimicBootFailed = function (why) {
-      if (document.documentElement.classList.contains("booted")) return;
-      const el = document.getElementById("boot-error");
-      const shell = document.getElementById("shell");
-      if (shell) shell.hidden = true;
-      if (el) {
-        el.hidden = false;
-        if (why) document.getElementById("boot-error-detail").textContent = why;
-      }
-    };
-    window.addEventListener("error", (e) => window.mimicBootFailed(e.message));
-  </script>
-  <script type="module" src="js/app.js" onerror="mimicBootFailed('The interface script could not be loaded.')"></script>
-</head>
-<body>
-  <div id="boot-error" class="boot-error" hidden>
-    <h1>mimic could not start its interface</h1>
-    <p class="dim">The app started, but the page's scripts failed to load. Restarting mimic usually fixes it.</p>
-    <p class="mono faint" id="boot-error-detail"></p>
-  </div>
+      // If the module graph fails to load, say so rather than leave a blank page
+      window.mimicBootFailed = function (why) {
+        if (document.documentElement.classList.contains("booted")) return;
+        const el = document.getElementById("boot-error");
+        const shell = document.getElementById("shell");
+        if (shell) shell.hidden = true;
+        if (el) {
+          el.hidden = false;
+          if (why)
+            document.getElementById("boot-error-detail").textContent = why;
+        }
+      };
+      window.addEventListener("error", (e) =>
+        window.mimicBootFailed(e.message),
+      );
+    </script>
+    <script
+      type="module"
+      src="js/app.js"
+      onerror="mimicBootFailed('The interface script could not be loaded.')"
+    ></script>
+  </head>
+  <body>
+    <div id="boot-error" class="boot-error" hidden>
+      <h1>mimic could not start its interface</h1>
+      <p class="dim">
+        The app started, but the page's scripts failed to load. Restarting mimic
+        usually fixes it.
+      </p>
+      <p class="mono faint" id="boot-error-detail"></p>
+    </div>
 
-  <div id="shell" class="shell">
-    <header class="topbar">
-      <div class="wordmark" role="img" aria-label="mimic"><span class="mark"></span></div>
-
-      <button id="template-trigger" class="btn subtle" type="button" data-tip="Manage templates">
-        <svg class="icon"><use href="icons.svg#i-layers"/></svg><span id="template-label" class="mono">…</span>
-      </button>
-
-      <button id="overrides-chip" class="chip overrides-chip" type="button" hidden>
-        <svg class="icon"><use href="icons.svg#i-warn"/></svg>
-        <span id="overrides-chip-label">Overrides</span>
-      </button>
-
-      <span class="spacer"></span>
-
-      <div id="no-template-strip" class="update-strip" role="status" hidden>
-        <span>Install a template to render cards</span>
-        <button id="no-template-action" class="btn" type="button">Open Templates</button>
-      </div>
-
-      <div id="update-strip" class="update-strip" role="status" hidden>
-        <span id="update-strip-text"></span>
-        <button id="update-strip-action" class="btn subtle" type="button"></button>
-        <button id="update-strip-dismiss" class="btn subtle icon-only" type="button" aria-label="Dismiss" data-tip="Dismiss"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
-      </div>
-
-      <button id="palette-btn" class="btn subtle" type="button" data-feature="palette" aria-label="Command palette">
-        <svg class="icon"><use href="icons.svg#i-command"/></svg><span>K</span>
-      </button>
-      <button id="settings-btn" class="btn subtle icon-only" type="button" aria-label="Settings" data-tip="Settings">
-        <svg class="icon"><use href="icons.svg#i-gear"/></svg>
-      </button>
-      <button id="help-btn" class="btn subtle icon-only" type="button" aria-label="Keyboard shortcuts" data-tip="Keyboard shortcuts (?)">
-        <svg class="icon"><use href="icons.svg#i-help"/></svg>
-      </button>
-    </header>
-
-    <nav class="rail" aria-label="Modes">
-      <button class="rail-item" type="button" data-mode="single" data-tip="Single (⌘1)">
-        <svg class="icon"><use href="icons.svg#i-card"/></svg><span class="rail-label">Single</span>
-      </button>
-      <button class="rail-item" type="button" data-mode="list" data-feature-indicator="flow.list">
-        <svg class="icon"><use href="icons.svg#i-list"/></svg><span class="rail-label">List</span>
-      </button>
-      <button class="rail-item" type="button" data-mode="art" data-feature-indicator="flow.art">
-        <svg class="icon"><use href="icons.svg#i-image"/></svg><span class="rail-label">Art</span>
-      </button>
-      <div class="rail-rule" role="separator"></div>
-      <button class="rail-item" type="button" data-mode="templates" data-tip="Templates (⌘4)">
-        <svg class="icon"><use href="icons.svg#i-layers"/></svg><span class="rail-label">Templates</span>
-        <span id="rail-overrides-dot" class="rail-dot warn" hidden></span>
-      </button>
-      <button class="rail-item" type="button" data-mode="run" data-feature-indicator="flow.run">
-        <svg class="icon"><use href="icons.svg#i-play"/></svg><span class="rail-label">Run</span>
-        <span id="rail-run-dot" class="rail-dot active" hidden></span>
-      </button>
-    </nav>
-
-    <main class="workspace">
-      <!-- Single: search, edit, render, download -->
-      <section id="mode-single" class="mode" data-mode-panel="single" aria-label="Single">
-        <div class="regions">
-          <div class="region fixed" data-region="0" style="width: 280px">
-            <form id="search-form" class="search-form" role="search">
-              <div class="search-field">
-                <svg class="icon"><use href="icons.svg#i-search"/></svg>
-                <input id="search-input" autocomplete="off" spellcheck="false"
-                       placeholder="Search Scryfall" aria-label="Search Scryfall">
-              </div>
-              <button id="recents-btn" class="btn subtle icon-only" type="button" aria-label="Recent searches"
-                      data-tip="Recent searches" aria-haspopup="true" aria-expanded="false" hidden>
-                <svg class="icon"><use href="icons.svg#i-clock"/></svg>
-              </button>
-            </form>
-            <ul id="results" class="results" role="listbox" aria-label="Search results"></ul>
-            <div class="panel-footer"><span id="results-count">Type a query and press Enter</span></div>
-          </div>
-
-          <div class="splitter" data-split="0" role="separator" aria-orientation="vertical" aria-label="Resize results"></div>
-
-          <div class="region grow" data-region="1">
-            <div id="single-empty" class="empty">
-              <svg class="icon icon-lg"><use href="icons.svg#i-card"/></svg>
-              <p class="lede">Search for a card, adjust anything about it, render, and download.</p>
-              <button id="empty-search" class="btn primary" type="button">
-                <svg class="icon"><use href="icons.svg#i-search"/></svg>Search Scryfall
-              </button>
-              <div class="rules">
-                <h3 class="section-heading">Search syntax</h3>
-                <table class="rules-table">
-                  <tr><td>lightning bolt</td><td>Cards whose name contains the words</td></tr>
-                  <tr><td>!"Lightning Bolt"</td><td>Exactly this name</td></tr>
-                  <tr><td>t:goblin c:r cmc=1</td><td>Type, color and mana value</td></tr>
-                  <tr><td>set:ima</td><td>Everything in one set</td></tr>
-                  <tr><td>unique:prints</td><td>List every printing, not one per card</td></tr>
-                </table>
-                <p class="faint" style="margin-top:8px">Any Scryfall query works. Press <kbd>/</kbd> to jump to search.</p>
-              </div>
-            </div>
-
-            <div id="editor" class="panel" hidden style="flex:1">
-              <div id="row-return" class="row-return" hidden>
-                <span>Editing <strong id="row-return-name"></strong> from your list.</span>
-                <span class="spacer"></span>
-                <button id="row-return-apply" class="btn primary" type="button">Apply to row</button>
-                <button id="row-return-cancel" class="btn subtle" type="button">Back to list</button>
-              </div>
-              <div class="editor-header">
-                <div class="editor-title">
-                  <h2 id="editor-title"></h2>
-                  <button id="revert-all" class="btn subtle" type="button" hidden data-tip="Restore every field to the fetched card">
-                    <svg class="icon"><use href="icons.svg#i-revert"/></svg>Revert all
-                  </button>
-                </div>
-                <div class="editor-tools">
-                  <button id="printing-trigger" class="btn dropdown-trigger printing-trigger" type="button" aria-haspopup="true" aria-expanded="false">
-                    <span class="dim">Printing</span>
-                    <span id="printing-label" class="mono"></span>
-                    <span id="printing-count" class="faint"></span>
-                    <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
-                  </button>
-                  <button id="face-toggle" class="btn subtle" type="button" data-feature="single.dfc" hidden data-tip="Preview the other face of this card">
-                    <svg class="icon"><use href="icons.svg#i-flip"/></svg><span id="face-toggle-label">Back face</span>
-                  </button>
-                </div>
-              </div>
-              <p id="face-note" class="face-note faint" hidden>Showing the back face. These fields edit the front face, and editing the back face is not supported yet.</p>
-              <form id="editor-form" class="editor-form panel-body" autocomplete="off"></form>
-            </div>
-          </div>
-
-          <div class="splitter" data-split="1" role="separator" aria-orientation="vertical" aria-label="Resize preview"></div>
-
-          <div class="region fixed preview-region" data-region="2" style="width: 440px">
-            <div id="stage" class="stage fit" data-feature-drop="single.artDrop">
-              <div class="stage-inner">
-                <div id="stage-placeholder" class="placeholder-card" aria-hidden="true"></div>
-                <img id="preview-img" class="card" alt="Card preview" hidden draggable="false">
-              </div>
-            </div>
-            <div id="activity" class="activity" data-state="idle" role="status" aria-live="polite">
-              <div class="activity-line">
-                <span class="activity-icon"><svg class="icon"><use id="activity-glyph" href="icons.svg#i-card"/></svg></span>
-                <div class="activity-text">
-                  <span id="activity-title" class="activity-title">No card selected</span>
-                  <span id="activity-step" class="activity-step"></span>
-                </div>
-                <span id="activity-meta" class="activity-meta tabular"></span>
-              </div>
-              <div class="activity-bar" aria-hidden="true"><div id="activity-fill" class="fill"></div></div>
-            </div>
-            <div class="preview-toolbar">
-              <button id="zoom-out" class="btn subtle icon-only" type="button" aria-label="Zoom out" data-tip="Zoom out">
-                <svg class="icon"><use href="icons.svg#i-zoom-out"/></svg>
-              </button>
-              <button id="zoom-label" class="btn subtle zoom-label tabular" type="button" data-tip="Cycle fit, 100% and 200%">Fit</button>
-              <button id="zoom-in" class="btn subtle icon-only" type="button" aria-label="Zoom in" data-tip="Zoom in">
-                <svg class="icon"><use href="icons.svg#i-zoom-in"/></svg>
-              </button>
-              <button id="zoom-fit" class="btn subtle icon-only" type="button" aria-label="Fit" data-tip="Fit to the stage">
-                <svg class="icon"><use href="icons.svg#i-fit"/></svg>
-              </button>
-              <span class="divider"></span>
-              <button class="btn subtle icon-only" type="button" aria-label="Compare with the Scryfall scan" data-feature="single.compare">
-                <svg class="icon"><use href="icons.svg#i-compare"/></svg>
-              </button>
-              <button class="btn subtle icon-only" type="button" aria-label="Replace the art with your own file" data-feature="single.artDrop">
-                <svg class="icon"><use href="icons.svg#i-upload"/></svg>
-              </button>
-              <span class="spacer"></span>
-              <button id="render-btn" class="btn" type="button" disabled data-tip="Render (⌘↵)">
-                <svg class="icon"><use href="icons.svg#i-render"/></svg>Render<span id="stale-dot" class="stale-dot" hidden></span>
-              </button>
-              <button id="save-btn" class="btn primary" type="button" disabled data-tip="Save PNG (⌘S)">
-                <svg class="icon"><use href="icons.svg#i-download"/></svg>Save
-              </button>
-            </div>
-          </div>
+    <div id="shell" class="shell">
+      <header class="topbar">
+        <div class="wordmark" role="img" aria-label="mimic">
+          <span class="mark"></span>
         </div>
-      </section>
 
-      <!-- From a List: paste, review, render to a folder -->
-      <section id="mode-list" class="mode" data-mode-panel="list" aria-label="From a list" hidden>
-        <div class="mode-body">
-          <div class="source-pane">
-            <div class="source-head">
-              <h2 class="section-heading">List</h2>
-              <span class="spacer"></span>
-              <button id="list-open" class="btn subtle" type="button" data-tip="Open a .txt, .dek or .csv file">
-                <svg class="icon"><use href="icons.svg#i-upload"/></svg>Open file
-              </button>
+        <button
+          id="template-trigger"
+          class="btn subtle"
+          type="button"
+          data-tip="Manage templates"
+        >
+          <svg class="icon"><use href="icons.svg#i-layers" /></svg
+          ><span id="template-label" class="mono">…</span>
+        </button>
+
+        <button
+          id="overrides-chip"
+          class="chip overrides-chip"
+          type="button"
+          hidden
+        >
+          <svg class="icon"><use href="icons.svg#i-warn" /></svg>
+          <span id="overrides-chip-label">Overrides</span>
+        </button>
+
+        <span class="spacer"></span>
+
+        <div id="no-template-strip" class="update-strip" role="status" hidden>
+          <span>Install a template to render cards</span>
+          <button id="no-template-action" class="btn" type="button">
+            Open Templates
+          </button>
+        </div>
+
+        <div id="update-strip" class="update-strip" role="status" hidden>
+          <span id="update-strip-text"></span>
+          <button
+            id="update-strip-action"
+            class="btn subtle"
+            type="button"
+          ></button>
+          <button
+            id="update-strip-dismiss"
+            class="btn subtle icon-only"
+            type="button"
+            aria-label="Dismiss"
+            data-tip="Dismiss"
+          >
+            <svg class="icon"><use href="icons.svg#i-close" /></svg>
+          </button>
+        </div>
+
+        <button
+          id="palette-btn"
+          class="btn subtle"
+          type="button"
+          data-feature="palette"
+          aria-label="Command palette"
+        >
+          <svg class="icon"><use href="icons.svg#i-command" /></svg
+          ><span>K</span>
+        </button>
+        <button
+          id="settings-btn"
+          class="btn subtle icon-only"
+          type="button"
+          aria-label="Settings"
+          data-tip="Settings"
+        >
+          <svg class="icon"><use href="icons.svg#i-gear" /></svg>
+        </button>
+        <button
+          id="help-btn"
+          class="btn subtle icon-only"
+          type="button"
+          aria-label="Keyboard shortcuts"
+          data-tip="Keyboard shortcuts (?)"
+        >
+          <svg class="icon"><use href="icons.svg#i-help" /></svg>
+        </button>
+      </header>
+
+      <nav class="rail" aria-label="Modes">
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="single"
+          data-tip="Single (⌘1)"
+        >
+          <svg class="icon"><use href="icons.svg#i-card" /></svg
+          ><span class="rail-label">Single</span>
+        </button>
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="list"
+          data-feature-indicator="flow.list"
+        >
+          <svg class="icon"><use href="icons.svg#i-list" /></svg
+          ><span class="rail-label">List</span>
+        </button>
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="art"
+          data-feature-indicator="flow.art"
+        >
+          <svg class="icon"><use href="icons.svg#i-image" /></svg
+          ><span class="rail-label">Art</span>
+        </button>
+        <div class="rail-rule" role="separator"></div>
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="templates"
+          data-tip="Templates (⌘4)"
+        >
+          <svg class="icon"><use href="icons.svg#i-layers" /></svg
+          ><span class="rail-label">Templates</span>
+          <span id="rail-overrides-dot" class="rail-dot warn" hidden></span>
+        </button>
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="run"
+          data-feature-indicator="flow.run"
+        >
+          <svg class="icon"><use href="icons.svg#i-play" /></svg
+          ><span class="rail-label">Run</span>
+          <span id="rail-run-dot" class="rail-dot active" hidden></span>
+        </button>
+        <button
+          class="rail-item"
+          type="button"
+          data-mode="editor"
+          data-tip="Editor (⌘6)"
+        >
+          <svg class="icon"><use href="icons.svg#i-sliders" /></svg
+          ><span class="rail-label">Editor</span>
+        </button>
+      </nav>
+
+      <main class="workspace">
+        <!-- Single: search, edit, render, download -->
+        <section
+          id="mode-single"
+          class="mode"
+          data-mode-panel="single"
+          aria-label="Single"
+        >
+          <div class="regions">
+            <div class="region fixed" data-region="0" style="width: 280px">
+              <form id="search-form" class="search-form" role="search">
+                <div class="search-field">
+                  <svg class="icon"><use href="icons.svg#i-search" /></svg>
+                  <input
+                    id="search-input"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="Search Scryfall"
+                    aria-label="Search Scryfall"
+                  />
+                </div>
+                <button
+                  id="recents-btn"
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Recent searches"
+                  data-tip="Recent searches"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  hidden
+                >
+                  <svg class="icon"><use href="icons.svg#i-clock" /></svg>
+                </button>
+              </form>
+              <ul
+                id="results"
+                class="results"
+                role="listbox"
+                aria-label="Search results"
+              ></ul>
+              <div class="panel-footer">
+                <span id="results-count">Type a query and press Enter</span>
+              </div>
             </div>
-            <textarea id="list-input" data-file-drop-target spellcheck="false" aria-label="Card list" placeholder="4 Lightning Bolt
+
+            <div
+              class="splitter"
+              data-split="0"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize results"
+            ></div>
+
+            <div class="region grow" data-region="1">
+              <div id="single-empty" class="empty">
+                <svg class="icon icon-lg"><use href="icons.svg#i-card" /></svg>
+                <p class="lede">
+                  Search for a card, adjust anything about it, render, and
+                  download.
+                </p>
+                <button id="empty-search" class="btn primary" type="button">
+                  <svg class="icon"><use href="icons.svg#i-search" /></svg
+                  >Search Scryfall
+                </button>
+                <div class="rules">
+                  <h3 class="section-heading">Search syntax</h3>
+                  <table class="rules-table">
+                    <tr>
+                      <td>lightning bolt</td>
+                      <td>Cards whose name contains the words</td>
+                    </tr>
+                    <tr>
+                      <td>!"Lightning Bolt"</td>
+                      <td>Exactly this name</td>
+                    </tr>
+                    <tr>
+                      <td>t:goblin c:r cmc=1</td>
+                      <td>Type, color and mana value</td>
+                    </tr>
+                    <tr>
+                      <td>set:ima</td>
+                      <td>Everything in one set</td>
+                    </tr>
+                    <tr>
+                      <td>unique:prints</td>
+                      <td>List every printing, not one per card</td>
+                    </tr>
+                  </table>
+                  <p class="faint" style="margin-top: 8px">
+                    Any Scryfall query works. Press <kbd>/</kbd> to jump to
+                    search.
+                  </p>
+                </div>
+              </div>
+
+              <div id="editor" class="panel" hidden style="flex: 1">
+                <div id="row-return" class="row-return" hidden>
+                  <span
+                    >Editing <strong id="row-return-name"></strong> from your
+                    list.</span
+                  >
+                  <span class="spacer"></span>
+                  <button
+                    id="row-return-apply"
+                    class="btn primary"
+                    type="button"
+                  >
+                    Apply to row
+                  </button>
+                  <button
+                    id="row-return-cancel"
+                    class="btn subtle"
+                    type="button"
+                  >
+                    Back to list
+                  </button>
+                </div>
+                <div class="editor-header">
+                  <div class="editor-title">
+                    <h2 id="editor-title"></h2>
+                    <button
+                      id="revert-all"
+                      class="btn subtle"
+                      type="button"
+                      hidden
+                      data-tip="Restore every field to the fetched card"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-revert" /></svg
+                      >Revert all
+                    </button>
+                  </div>
+                  <div class="editor-tools">
+                    <button
+                      id="printing-trigger"
+                      class="btn dropdown-trigger printing-trigger"
+                      type="button"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                    >
+                      <span class="dim">Printing</span>
+                      <span id="printing-label" class="mono"></span>
+                      <span id="printing-count" class="faint"></span>
+                      <svg class="icon chev">
+                        <use href="icons.svg#i-chevron-down" />
+                      </svg>
+                    </button>
+                    <button
+                      id="face-toggle"
+                      class="btn subtle"
+                      type="button"
+                      data-feature="single.dfc"
+                      hidden
+                      data-tip="Preview the other face of this card"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-flip" /></svg
+                      ><span id="face-toggle-label">Back face</span>
+                    </button>
+                  </div>
+                </div>
+                <p id="face-note" class="face-note faint" hidden>
+                  Showing the back face. These fields edit the front face, and
+                  editing the back face is not supported yet.
+                </p>
+                <form
+                  id="editor-form"
+                  class="editor-form panel-body"
+                  autocomplete="off"
+                ></form>
+              </div>
+            </div>
+
+            <div
+              class="splitter"
+              data-split="1"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize preview"
+            ></div>
+
+            <div
+              class="region fixed preview-region"
+              data-region="2"
+              style="width: 440px"
+            >
+              <div
+                id="stage"
+                class="stage fit"
+                data-feature-drop="single.artDrop"
+              >
+                <div class="stage-inner">
+                  <div
+                    id="stage-placeholder"
+                    class="placeholder-card"
+                    aria-hidden="true"
+                  ></div>
+                  <img
+                    id="preview-img"
+                    class="card"
+                    alt="Card preview"
+                    hidden
+                    draggable="false"
+                  />
+                </div>
+              </div>
+              <div
+                id="activity"
+                class="activity"
+                data-state="idle"
+                role="status"
+                aria-live="polite"
+              >
+                <div class="activity-line">
+                  <span class="activity-icon"
+                    ><svg class="icon">
+                      <use id="activity-glyph" href="icons.svg#i-card" /></svg
+                  ></span>
+                  <div class="activity-text">
+                    <span id="activity-title" class="activity-title"
+                      >No card selected</span
+                    >
+                    <span id="activity-step" class="activity-step"></span>
+                  </div>
+                  <span id="activity-meta" class="activity-meta tabular"></span>
+                </div>
+                <div class="activity-bar" aria-hidden="true">
+                  <div id="activity-fill" class="fill"></div>
+                </div>
+              </div>
+              <div class="preview-toolbar">
+                <button
+                  id="zoom-out"
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Zoom out"
+                  data-tip="Zoom out"
+                >
+                  <svg class="icon"><use href="icons.svg#i-zoom-out" /></svg>
+                </button>
+                <button
+                  id="zoom-label"
+                  class="btn subtle zoom-label tabular"
+                  type="button"
+                  data-tip="Cycle fit, 100% and 200%"
+                >
+                  Fit
+                </button>
+                <button
+                  id="zoom-in"
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Zoom in"
+                  data-tip="Zoom in"
+                >
+                  <svg class="icon"><use href="icons.svg#i-zoom-in" /></svg>
+                </button>
+                <button
+                  id="zoom-fit"
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Fit"
+                  data-tip="Fit to the stage"
+                >
+                  <svg class="icon"><use href="icons.svg#i-fit" /></svg>
+                </button>
+                <span class="divider"></span>
+                <button
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Compare with the Scryfall scan"
+                  data-feature="single.compare"
+                >
+                  <svg class="icon"><use href="icons.svg#i-compare" /></svg>
+                </button>
+                <button
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Replace the art with your own file"
+                  data-feature="single.artDrop"
+                >
+                  <svg class="icon"><use href="icons.svg#i-upload" /></svg>
+                </button>
+                <span class="spacer"></span>
+                <button
+                  id="render-btn"
+                  class="btn"
+                  type="button"
+                  disabled
+                  data-tip="Render (⌘↵)"
+                >
+                  <svg class="icon"><use href="icons.svg#i-render" /></svg
+                  >Render<span id="stale-dot" class="stale-dot" hidden></span>
+                </button>
+                <button
+                  id="save-btn"
+                  class="btn primary"
+                  type="button"
+                  disabled
+                  data-tip="Save PNG (⌘S)"
+                >
+                  <svg class="icon"><use href="icons.svg#i-download" /></svg
+                  >Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- From a List: paste, review, render to a folder -->
+        <section
+          id="mode-list"
+          class="mode"
+          data-mode-panel="list"
+          aria-label="From a list"
+          hidden
+        >
+          <div class="mode-body">
+            <div class="source-pane">
+              <div class="source-head">
+                <h2 class="section-heading">List</h2>
+                <span class="spacer"></span>
+                <button
+                  id="list-open"
+                  class="btn subtle"
+                  type="button"
+                  data-tip="Open a .txt, .dek or .csv file"
+                >
+                  <svg class="icon"><use href="icons.svg#i-upload" /></svg>Open
+                  file
+                </button>
+              </div>
+              <textarea
+                id="list-input"
+                data-file-drop-target
+                spellcheck="false"
+                aria-label="Card list"
+                placeholder="4 Lightning Bolt
 1 Counterspell (MH2) 267
 
 Sideboard
-2 Rest in Peace"></textarea>
-            <div class="source-actions">
-              <select id="list-format" aria-label="List format">
-                <option value="">Detect format</option>
-                <option value="names">Plain names</option>
-                <option value="quantity">Quantity prefix</option>
-                <option value="arena">Arena export</option>
-                <option value="csv">CSV</option>
-              </select>
-              <button id="list-resolve" class="btn primary" type="button" data-tip="Look every line up on Scryfall (⌘↵)">
-                <svg class="icon"><use href="icons.svg#i-search"/></svg>Resolve
-              </button>
-            </div>
-            <p id="list-detected" class="dim" role="status">Paste a list, drop a file, or open one from disk.</p>
-            <table class="rules-table dim">
-              <tr><td>Lightning Bolt</td><td>Plain names</td></tr>
-              <tr><td>4x Lightning Bolt</td><td>Quantity prefix</td></tr>
-              <tr><td>4 Bolt (2X2) 117</td><td>Arena, printing honored</td></tr>
-              <tr><td>name,power,…</td><td>CSV with any field</td></tr>
-              <tr><td>?t:goblin c:r</td><td>A Scryfall query</td></tr>
-              <tr><td>Sideboard</td><td>A section header</td></tr>
-            </table>
-          </div>
-
-          <div id="list-review" class="review-pane">
-            <div id="list-empty" class="empty">
-              <svg class="icon icon-lg"><use href="icons.svg#i-list"/></svg>
-              <p class="lede">Paste a decklist on the left and resolve it. Every line is checked against Scryfall before anything renders.</p>
-            </div>
-            <div id="list-review-body" class="review-body" hidden>
-              <div class="review-summary">
-                <span id="list-summary" class="summary-text tabular"></span>
-                <div id="list-progress" class="progress" hidden><div class="bar"></div></div>
-                <span class="spacer"></span>
-                <div id="list-chips" class="chips"></div>
-                <button id="list-actions" class="btn subtle dropdown-trigger" type="button" data-feature="list.bulk" aria-haspopup="true" aria-expanded="false">Actions<svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg></button>
-                <input id="list-filter" type="search" placeholder="Filter…" aria-label="Filter rows">
-              </div>
-              <div class="table-wrap">
-                <table id="list-table-el" class="table review-table">
-                  <thead>
-                    <tr>
-                      <th class="col-check"><input id="list-all" type="checkbox" aria-label="Render every shown row" checked></th>
-                      <th class="col-qty">Qty</th>
-                      <th>Card</th>
-                      <th class="col-set">Printing</th>
-                      <th class="col-group">Section</th>
-                      <th class="col-status">Status</th>
-                    </tr>
-                  </thead>
-                </table>
-                <p id="list-none" class="table-none dim" hidden>No rows match this filter.</p>
-              </div>
-              <div class="mode-footer">
-                <span class="dim">Output</span>
-                <button id="list-output" class="btn subtle folder-trigger" type="button" aria-haspopup="true" aria-expanded="false">
-                  <svg class="icon"><use href="icons.svg#i-folder"/></svg><span id="list-output-label" class="mono truncate"></span>
-                  <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
-                </button>
-                <select id="list-out-format" aria-label="Output format" data-feature="output.mpc">
-                  <option value="">PNGs</option>
-                  <option value="mpc">MPC Autofill project</option>
+2 Rest in Peace"
+              ></textarea>
+              <div class="source-actions">
+                <select id="list-format" aria-label="List format">
+                  <option value="">Detect format</option>
+                  <option value="names">Plain names</option>
+                  <option value="quantity">Quantity prefix</option>
+                  <option value="arena">Arena export</option>
+                  <option value="csv">CSV</option>
                 </select>
-                <button id="list-mpc" class="btn subtle folder-trigger" type="button" aria-haspopup="true" aria-expanded="false" hidden>
-                  <svg class="icon"><use href="icons.svg#i-gear"/></svg><span id="list-mpc-label" class="truncate"></span>
-                  <svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg>
+                <button
+                  id="list-resolve"
+                  class="btn primary"
+                  type="button"
+                  data-tip="Look every line up on Scryfall (⌘↵)"
+                >
+                  <svg class="icon"><use href="icons.svg#i-search" /></svg
+                  >Resolve
                 </button>
-                <span class="spacer"></span>
-                <span id="list-skip-note" class="dim"></span>
-                <span id="list-mpc-count" class="dim tabular" hidden></span>
-                <button id="list-render" class="btn primary" type="button" disabled>
-                  <svg class="icon"><use href="icons.svg#i-play"/></svg><span id="list-render-label">Render</span>
-                </button>
               </div>
-            </div>
-          </div>
-          <aside id="list-inspector" class="inspector" aria-label="Edit a row" hidden>
-            <div class="inspector-inner">
-              <div class="inspector-head">
-                <div class="inspector-title">
-                  <h2 id="inspector-title">Row</h2>
-                  <span id="inspector-sub" class="dim truncate"></span>
-                </div>
-                <button id="inspector-close" class="btn subtle icon-only" type="button" aria-label="Close" data-tip="Close (Esc)"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
-              </div>
-              <div class="inspector-tools">
-                <label class="inspector-qty"><span class="dim">Qty</span> <input id="inspector-qty" type="number" min="1" max="999" inputmode="numeric"></label>
-                <span class="spacer"></span>
-                <button id="inspector-single" class="btn subtle" type="button" data-tip="Preview this card in Single, and bring the edits back">Open in Single</button>
-                <button id="inspector-revert" class="btn subtle" type="button" data-tip="Remove every edit from this row">Revert row</button>
-              </div>
-              <form id="inspector-form" class="editor-form inspector-form"></form>
-            </div>
-          </aside>
-        </div>
-      </section>
-
-      <!-- From Your Art: gated on art override -->
-      <section id="mode-art" class="mode" data-mode-panel="art" aria-label="From your art" hidden>
-        <div class="gated-section" data-feature-section="flow.art" style="flex:1; display:flex">
-          <div class="gated-content mode-body" style="flex:1">
-            <div class="source-pane">
-              <h2 class="section-heading">Artwork folder</h2>
-              <div class="mono dim"><svg class="icon"><use href="icons.svg#i-folder"/></svg> ~/art/commander-deck</div>
-              <label class="dim"><input type="checkbox" tabindex="-1" checked> Include subfolders</label>
-              <p class="dim">The filename is the card name. PNG, JPEG and WebP are read.</p>
+              <p id="list-detected" class="dim" role="status">
+                Paste a list, drop a file, or open one from disk.
+              </p>
               <table class="rules-table dim">
-                <tr><td>Sol Ring.png</td><td>Name only</td></tr>
-                <tr><td>Sol Ring (C21).png</td><td>Set hint</td></tr>
-                <tr><td>Sol Ring [C21-263].png</td><td>Set and collector number</td></tr>
-                <tr><td>Sol Ring - alt.png</td><td>Variant label</td></tr>
-                <tr><td>sol_ring.png</td><td>Underscores read as spaces</td></tr>
+                <tr>
+                  <td>Lightning Bolt</td>
+                  <td>Plain names</td>
+                </tr>
+                <tr>
+                  <td>4x Lightning Bolt</td>
+                  <td>Quantity prefix</td>
+                </tr>
+                <tr>
+                  <td>4 Bolt (2X2) 117</td>
+                  <td>Arena, printing honored</td>
+                </tr>
+                <tr>
+                  <td>name,power,…</td>
+                  <td>CSV with any field</td>
+                </tr>
+                <tr>
+                  <td>?t:goblin c:r</td>
+                  <td>A Scryfall query</td>
+                </tr>
+                <tr>
+                  <td>Sideboard</td>
+                  <td>A section header</td>
+                </tr>
               </table>
             </div>
-            <div class="review-pane">
-              <div class="review-summary">
-                <span>38 files · 36 matched · 2 unmatched</span>
-                <span class="spacer"></span>
-                <button class="chip" type="button" tabindex="-1">All <span class="count">38</span></button>
-                <button class="chip" type="button" tabindex="-1" aria-pressed="true">Unmatched <span class="count">2</span></button>
-                <button class="chip" type="button" tabindex="-1">Missing art <span class="count">0</span></button>
+
+            <div id="list-review" class="review-pane">
+              <div id="list-empty" class="empty">
+                <svg class="icon icon-lg"><use href="icons.svg#i-list" /></svg>
+                <p class="lede">
+                  Paste a decklist on the left and resolve it. Every line is
+                  checked against Scryfall before anything renders.
+                </p>
               </div>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th style="width:32px"><input type="checkbox" tabindex="-1" checked></th><th style="width:72px">Art</th><th>Card</th><th>File</th></tr></thead>
-                  <tbody>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td><span class="thumb tall"></span></td><td><span class="pill ok">Sol Ring</span></td><td class="mono">Sol Ring (C21).png</td></tr>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td><span class="thumb tall"></span></td><td><span class="pill ok">Arcane Signet</span></td><td class="mono">Arcane Signet - alt.png</td></tr>
-                    <tr><td><input type="checkbox" tabindex="-1" checked></td><td><span class="thumb tall"></span></td><td><span class="pill ok">Swords to Plowshares</span></td><td class="mono">swords_to_plowshares.png</td></tr>
-                    <tr class="selected"><td><input type="checkbox" tabindex="-1" checked></td><td><span class="thumb tall"></span></td><td><span class="pill warn">unmatched</span></td><td class="mono">my cool dragon.png</td></tr>
-                    <tr class="expanded"><td></td><td></td><td colspan="2">⤷ Search for a card to attach…</td></tr>
-                  </tbody>
+              <div id="list-review-body" class="review-body" hidden>
+                <div class="review-summary">
+                  <span id="list-summary" class="summary-text tabular"></span>
+                  <div id="list-progress" class="progress" hidden>
+                    <div class="bar"></div>
+                  </div>
+                  <span class="spacer"></span>
+                  <div id="list-chips" class="chips"></div>
+                  <button
+                    id="list-actions"
+                    class="btn subtle dropdown-trigger"
+                    type="button"
+                    data-feature="list.bulk"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    Actions<svg class="icon chev">
+                      <use href="icons.svg#i-chevron-down" />
+                    </svg>
+                  </button>
+                  <input
+                    id="list-filter"
+                    type="search"
+                    placeholder="Filter…"
+                    aria-label="Filter rows"
+                  />
+                </div>
+                <div class="table-wrap">
+                  <table id="list-table-el" class="table review-table">
+                    <thead>
+                      <tr>
+                        <th class="col-check">
+                          <input
+                            id="list-all"
+                            type="checkbox"
+                            aria-label="Render every shown row"
+                            checked
+                          />
+                        </th>
+                        <th class="col-qty">Qty</th>
+                        <th>Card</th>
+                        <th class="col-set">Printing</th>
+                        <th class="col-group">Section</th>
+                        <th class="col-status">Status</th>
+                      </tr>
+                    </thead>
+                  </table>
+                  <p id="list-none" class="table-none dim" hidden>
+                    No rows match this filter.
+                  </p>
+                </div>
+                <div class="mode-footer">
+                  <span class="dim">Output</span>
+                  <button
+                    id="list-output"
+                    class="btn subtle folder-trigger"
+                    type="button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-folder" /></svg
+                    ><span id="list-output-label" class="mono truncate"></span>
+                    <svg class="icon chev">
+                      <use href="icons.svg#i-chevron-down" />
+                    </svg>
+                  </button>
+                  <select
+                    id="list-out-format"
+                    aria-label="Output format"
+                    data-feature="output.mpc"
+                  >
+                    <option value="">PNGs</option>
+                    <option value="mpc">MPC Autofill project</option>
+                  </select>
+                  <button
+                    id="list-mpc"
+                    class="btn subtle folder-trigger"
+                    type="button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    hidden
+                  >
+                    <svg class="icon"><use href="icons.svg#i-gear" /></svg
+                    ><span id="list-mpc-label" class="truncate"></span>
+                    <svg class="icon chev">
+                      <use href="icons.svg#i-chevron-down" />
+                    </svg>
+                  </button>
+                  <span class="spacer"></span>
+                  <span id="list-skip-note" class="dim"></span>
+                  <span id="list-mpc-count" class="dim tabular" hidden></span>
+                  <button
+                    id="list-render"
+                    class="btn primary"
+                    type="button"
+                    disabled
+                  >
+                    <svg class="icon"><use href="icons.svg#i-play" /></svg
+                    ><span id="list-render-label">Render</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <aside
+              id="list-inspector"
+              class="inspector"
+              aria-label="Edit a row"
+              hidden
+            >
+              <div class="inspector-inner">
+                <div class="inspector-head">
+                  <div class="inspector-title">
+                    <h2 id="inspector-title">Row</h2>
+                    <span id="inspector-sub" class="dim truncate"></span>
+                  </div>
+                  <button
+                    id="inspector-close"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Close"
+                    data-tip="Close (Esc)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-close" /></svg>
+                  </button>
+                </div>
+                <div class="inspector-tools">
+                  <label class="inspector-qty"
+                    ><span class="dim">Qty</span>
+                    <input
+                      id="inspector-qty"
+                      type="number"
+                      min="1"
+                      max="999"
+                      inputmode="numeric"
+                  /></label>
+                  <span class="spacer"></span>
+                  <button
+                    id="inspector-single"
+                    class="btn subtle"
+                    type="button"
+                    data-tip="Preview this card in Single, and bring the edits back"
+                  >
+                    Open in Single
+                  </button>
+                  <button
+                    id="inspector-revert"
+                    class="btn subtle"
+                    type="button"
+                    data-tip="Remove every edit from this row"
+                  >
+                    Revert row
+                  </button>
+                </div>
+                <form
+                  id="inspector-form"
+                  class="editor-form inspector-form"
+                ></form>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- From Your Art: gated on art override -->
+        <section
+          id="mode-art"
+          class="mode"
+          data-mode-panel="art"
+          aria-label="From your art"
+          hidden
+        >
+          <div
+            class="gated-section"
+            data-feature-section="flow.art"
+            style="flex: 1; display: flex"
+          >
+            <div class="gated-content mode-body" style="flex: 1">
+              <div class="source-pane">
+                <h2 class="section-heading">Artwork folder</h2>
+                <div class="mono dim">
+                  <svg class="icon"><use href="icons.svg#i-folder" /></svg>
+                  ~/art/commander-deck
+                </div>
+                <label class="dim"
+                  ><input type="checkbox" tabindex="-1" checked /> Include
+                  subfolders</label
+                >
+                <p class="dim">
+                  The filename is the card name. PNG, JPEG and WebP are read.
+                </p>
+                <table class="rules-table dim">
+                  <tr>
+                    <td>Sol Ring.png</td>
+                    <td>Name only</td>
+                  </tr>
+                  <tr>
+                    <td>Sol Ring (C21).png</td>
+                    <td>Set hint</td>
+                  </tr>
+                  <tr>
+                    <td>Sol Ring [C21-263].png</td>
+                    <td>Set and collector number</td>
+                  </tr>
+                  <tr>
+                    <td>Sol Ring - alt.png</td>
+                    <td>Variant label</td>
+                  </tr>
+                  <tr>
+                    <td>sol_ring.png</td>
+                    <td>Underscores read as spaces</td>
+                  </tr>
                 </table>
               </div>
-              <div class="mode-footer">
-                <span class="dim">Output</span><span class="mono">~/Documents/proxies</span>
-                <span class="spacer"></span>
-                <button class="btn primary" type="button" tabindex="-1"><svg class="icon"><use href="icons.svg#i-play"/></svg>Render 36 cards</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Templates: the library, which template renders each face, and overrides -->
-      <section id="mode-templates" class="mode" data-mode-panel="templates" aria-label="Templates" hidden>
-        <div class="mode-header">
-          <h2 class="section-heading">Templates</h2>
-          <button id="tm-tab-library" class="chip" type="button" aria-pressed="true" data-tab="library">Library</button>
-          <button id="tm-tab-defaults" class="chip" type="button" aria-pressed="false" data-tab="defaults">Defaults</button>
-          <button id="tm-tab-overrides" class="chip" type="button" aria-pressed="false" data-tab="overrides" data-feature-indicator="overrides">Overrides</button>
-        </div>
-
-        <div id="tm-library" class="tm-page" data-tab-panel="library">
-          <div class="tm-column">
-            <p class="tm-lede dim">Every template in the catalog, and any installed from a local folder. Download a version to install it, and select one to make it the active template for standard cards.</p>
-            <div id="tm-library-list" class="template-library"><p class="dim tm-empty">Loading catalog…</p></div>
-            <div id="tm-library-foot" class="tp-foot" hidden></div>
-          </div>
-        </div>
-
-        <div id="tm-defaults" class="tm-page" data-tab-panel="defaults" hidden>
-          <div class="tm-column">
-            <p class="tm-lede dim">Standard cards render with the active template, the same one the top bar shows. Each other kind of face renders with the template chosen here, or the first installed one that supports it. Only installed templates are listed.</p>
-            <div id="face-templates" class="tm-defaults"></div>
-          </div>
-        </div>
-
-        <div id="tm-overrides" class="tm-overrides" data-tab-panel="overrides" hidden>
-          <div class="mode-header tm-subheader">
-            <button id="scope-global" class="chip" type="button" aria-pressed="true">Global</button>
-            <button id="scope-template" class="chip" type="button" aria-pressed="false">Template</button>
-            <span class="spacer" style="flex:1"></span>
-            <button id="rules-disable-all" class="btn subtle" type="button" data-feature="overrides">Disable all</button>
-            <button id="preset-trigger" class="btn dropdown-trigger" type="button" data-feature="presets" aria-haspopup="true" aria-expanded="false"><span class="dim">Preset</span> <span id="preset-label">None</span><svg class="icon chev"><use href="icons.svg#i-chevron-down"/></svg></button>
-          </div>
-          <div id="scope-template-panel" class="gated-section" data-feature-section="overrides.layers" style="flex:1; display:flex" hidden>
-            <div class="gated-content mode-body" style="flex:1">
-              <div class="overrides-tree">
-                <div style="padding:10px 12px"><input tabindex="-1" placeholder="Filter layers…"></div>
-                <div class="tree-group">
-                  <div class="section-heading" style="margin-bottom:4px">Layers <span class="faint">16</span></div>
-                  <div class="tree-row"><span class="name">background</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                  <div class="tree-row"><span class="name">pinlines_textbox</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                  <div class="tree-row"><span class="name">legendary_crown</span><select class="tri" tabindex="-1"><option>off</option></select></div>
-                  <div class="tree-row"><span class="name">pt_box</span><select class="tri" tabindex="-1"><option>auto</option></select></div>
-                  <div class="tree-row"><span class="name">divider</span><select class="tri" tabindex="-1"><option>on</option></select></div>
+              <div class="review-pane">
+                <div class="review-summary">
+                  <span>38 files · 36 matched · 2 unmatched</span>
+                  <span class="spacer"></span>
+                  <button class="chip" type="button" tabindex="-1">
+                    All <span class="count">38</span>
+                  </button>
+                  <button
+                    class="chip"
+                    type="button"
+                    tabindex="-1"
+                    aria-pressed="true"
+                  >
+                    Unmatched <span class="count">2</span>
+                  </button>
+                  <button class="chip" type="button" tabindex="-1">
+                    Missing art <span class="count">0</span>
+                  </button>
                 </div>
-                <div class="tree-group">
-                  <div class="section-heading" style="margin-bottom:4px">Text boxes <span class="faint">5</span></div>
-                  <div class="tree-row"><span class="name">name</span></div>
-                  <div class="tree-row"><span class="name">mana cost</span></div>
-                  <div class="tree-row"><span class="name">oracle</span></div>
-                  <div class="tree-row" style="padding-left:28px"><span class="name dim">Font size</span><input style="width:64px;height:24px;min-height:0" tabindex="-1" value="92"><span class="faint">150</span></div>
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th style="width: 32px">
+                          <input type="checkbox" tabindex="-1" checked />
+                        </th>
+                        <th style="width: 72px">Art</th>
+                        <th>Card</th>
+                        <th>File</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><input type="checkbox" tabindex="-1" checked /></td>
+                        <td><span class="thumb tall"></span></td>
+                        <td><span class="pill ok">Sol Ring</span></td>
+                        <td class="mono">Sol Ring (C21).png</td>
+                      </tr>
+                      <tr>
+                        <td><input type="checkbox" tabindex="-1" checked /></td>
+                        <td><span class="thumb tall"></span></td>
+                        <td><span class="pill ok">Arcane Signet</span></td>
+                        <td class="mono">Arcane Signet - alt.png</td>
+                      </tr>
+                      <tr>
+                        <td><input type="checkbox" tabindex="-1" checked /></td>
+                        <td><span class="thumb tall"></span></td>
+                        <td>
+                          <span class="pill ok">Swords to Plowshares</span>
+                        </td>
+                        <td class="mono">swords_to_plowshares.png</td>
+                      </tr>
+                      <tr class="selected">
+                        <td><input type="checkbox" tabindex="-1" checked /></td>
+                        <td><span class="thumb tall"></span></td>
+                        <td><span class="pill warn">unmatched</span></td>
+                        <td class="mono">my cool dragon.png</td>
+                      </tr>
+                      <tr class="expanded">
+                        <td></td>
+                        <td></td>
+                        <td colspan="2">⤷ Search for a card to attach…</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="mode-footer">
+                  <span class="dim">Output</span
+                  ><span class="mono">~/Documents/proxies</span>
+                  <span class="spacer"></span>
+                  <button class="btn primary" type="button" tabindex="-1">
+                    <svg class="icon"><use href="icons.svg#i-play" /></svg
+                    >Render 36 cards
+                  </button>
                 </div>
               </div>
-              <div class="console-side" style="flex:1; width:auto; border-left:0">
-                <div class="placeholder-card" style="width:min(60%,300px)"></div>
-                <p class="dim" style="text-align:center">Sample <strong>Cryptic Command</strong> · Compare manifest and override</p>
-              </div>
             </div>
           </div>
-          <div id="scope-global-panel" class="gated-section" data-feature-section="overrides.global" style="flex:1; display:flex">
-            <div class="gated-content rules-pane" style="flex:1">
-              <p class="tm-lede dim">Rules apply to every card you render, in order from the top, and a field you edit yourself keeps your value. A rule fires when all of its conditions hold, and a rule with none fires for every card.</p>
-              <div id="rules-list" class="rules-list"></div>
-              <p id="rules-error" class="rules-error" role="alert" hidden></p>
-              <div class="rules-foot">
-                <button id="rule-add" class="btn" type="button"><svg class="icon"><use href="icons.svg#i-plus"/></svg>Add rule</button>
-                <span id="rules-status" class="dim tabular" role="status"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Run Console: watches a batch and stays readable after -->
-      <section id="mode-run" class="mode" data-mode-panel="run" aria-label="Run console" hidden>
-        <div id="run-empty" class="empty">
-          <svg class="icon icon-lg"><use href="icons.svg#i-play"/></svg>
-          <p class="lede">No run yet. Resolve a list and press Render, and its progress shows here.</p>
-          <button id="run-empty-list" class="btn primary" type="button">
-            <svg class="icon"><use href="icons.svg#i-list"/></svg>Go to List
-          </button>
-        </div>
-        <div id="run-body" class="run-body" hidden>
-          <div class="console-head">
-            <div class="line">
-              <h2 id="run-title" class="section-heading"></h2>
-              <span id="run-state" class="pill"></span>
-              <span class="spacer"></span>
-              <span id="run-meta" class="faint mono truncate"></span>
+        <!-- Templates: the library, which template renders each face, and overrides -->
+        <section
+          id="mode-templates"
+          class="mode"
+          data-mode-panel="templates"
+          aria-label="Templates"
+          hidden
+        >
+          <div class="mode-header">
+            <h2 class="section-heading">Templates</h2>
+            <button
+              id="tm-tab-library"
+              class="chip"
+              type="button"
+              aria-pressed="true"
+              data-tab="library"
+            >
+              Library
+            </button>
+            <button
+              id="tm-tab-defaults"
+              class="chip"
+              type="button"
+              aria-pressed="false"
+              data-tab="defaults"
+            >
+              Defaults
+            </button>
+            <button
+              id="tm-tab-overrides"
+              class="chip"
+              type="button"
+              aria-pressed="false"
+              data-tab="overrides"
+              data-feature-indicator="overrides"
+            >
+              Overrides
+            </button>
+          </div>
+
+          <div id="tm-library" class="tm-page" data-tab-panel="library">
+            <div class="tm-column">
+              <p class="tm-lede dim">
+                Every template in the catalog, and any installed from a local
+                folder. Download a version to install it, and select one to make
+                it the active template for standard cards.
+              </p>
+              <div class="tm-actions">
+                <button
+                  id="tm-import-template"
+                  class="btn"
+                  type="button"
+                  data-tip="Add a template from a .mimic file"
+                >
+                  <svg class="icon"><use href="icons.svg#i-upload" /></svg>Import
+                  template
+                </button>
+                <button
+                  id="tm-new-template"
+                  class="btn"
+                  type="button"
+                  data-tip="Start a template of your own in the editor"
+                >
+                  <svg class="icon"><use href="icons.svg#i-plus" /></svg>New
+                  template
+                </button>
+              </div>
+              <div id="tm-library-list" class="template-library">
+                <p class="dim tm-empty">Loading catalog…</p>
+              </div>
+              <div id="tm-library-foot" class="tp-foot" hidden></div>
             </div>
-            <div class="line">
-              <div id="run-bar" class="progress lg"><div class="bar"></div></div>
-              <span id="run-summary" class="run-summary" hidden></span>
-              <span id="run-count" class="tabular"></span>
-              <button id="run-failed" class="link-btn err-text" type="button" hidden></button>
-              <span id="run-elapsed" class="dim tabular"></span>
-              <span id="run-warmup" class="dim tabular" hidden></span>
-              <span id="run-rate" class="dim tabular" hidden></span>
-              <span id="run-eta" class="dim tabular" hidden></span>
+          </div>
+
+          <div
+            id="tm-defaults"
+            class="tm-page"
+            data-tab-panel="defaults"
+            hidden
+          >
+            <div class="tm-column">
+              <p class="tm-lede dim">
+                Standard cards render with the active template, the same one the
+                top bar shows. Each other kind of face renders with the template
+                chosen here, or the first installed one that supports it. Only
+                installed templates are listed.
+              </p>
+              <div id="face-templates" class="tm-defaults"></div>
             </div>
-            <div class="line">
-              <span class="dim">→</span><span id="run-out" class="mono dim truncate"></span>
-              <span class="spacer"></span>
-              <button id="run-stop" class="btn" type="button">
-                <svg class="icon"><use href="icons.svg#i-stop"/></svg>Stop
+          </div>
+
+          <div
+            id="tm-overrides"
+            class="tm-overrides"
+            data-tab-panel="overrides"
+            hidden
+          >
+            <div class="mode-header tm-subheader">
+              <button
+                id="scope-global"
+                class="chip"
+                type="button"
+                aria-pressed="true"
+              >
+                Global
               </button>
-              <button id="run-retry" class="btn" type="button" data-feature="run.retryFailed" hidden>
-                <svg class="icon"><use href="icons.svg#i-render"/></svg><span id="run-retry-label">Retry failed</span>
+              <button
+                id="scope-template"
+                class="chip"
+                type="button"
+                aria-pressed="false"
+              >
+                Template
               </button>
-              <button id="run-log-toggle" class="btn subtle" type="button" aria-expanded="false" aria-controls="run-log-panel">
-                <svg class="icon"><use href="icons.svg#i-list"/></svg>Log
+              <span class="spacer" style="flex: 1"></span>
+              <button
+                id="rules-disable-all"
+                class="btn subtle"
+                type="button"
+                data-feature="overrides"
+              >
+                Disable all
               </button>
-              <button id="run-open" class="btn subtle" type="button">
-                <svg class="icon"><use href="icons.svg#i-folder"/></svg>Open folder
+              <button
+                id="preset-trigger"
+                class="btn dropdown-trigger"
+                type="button"
+                data-feature="presets"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                <span class="dim">Preset</span>
+                <span id="preset-label">None</span
+                ><svg class="icon chev">
+                  <use href="icons.svg#i-chevron-down" />
+                </svg>
+              </button>
+            </div>
+            <div
+              id="scope-template-panel"
+              class="gated-section"
+              data-feature-section="overrides.layers"
+              style="flex: 1; display: flex"
+              hidden
+            >
+              <div class="gated-content mode-body" style="flex: 1">
+                <div class="overrides-tree">
+                  <div style="padding: 10px 12px">
+                    <input tabindex="-1" placeholder="Filter layers…" />
+                  </div>
+                  <div class="tree-group">
+                    <div class="section-heading" style="margin-bottom: 4px">
+                      Layers <span class="faint">16</span>
+                    </div>
+                    <div class="tree-row">
+                      <span class="name">background</span
+                      ><select class="tri" tabindex="-1">
+                        <option>auto</option>
+                      </select>
+                    </div>
+                    <div class="tree-row">
+                      <span class="name">pinlines_textbox</span
+                      ><select class="tri" tabindex="-1">
+                        <option>auto</option>
+                      </select>
+                    </div>
+                    <div class="tree-row">
+                      <span class="name">legendary_crown</span
+                      ><select class="tri" tabindex="-1">
+                        <option>off</option>
+                      </select>
+                    </div>
+                    <div class="tree-row">
+                      <span class="name">pt_box</span
+                      ><select class="tri" tabindex="-1">
+                        <option>auto</option>
+                      </select>
+                    </div>
+                    <div class="tree-row">
+                      <span class="name">divider</span
+                      ><select class="tri" tabindex="-1">
+                        <option>on</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="tree-group">
+                    <div class="section-heading" style="margin-bottom: 4px">
+                      Text boxes <span class="faint">5</span>
+                    </div>
+                    <div class="tree-row"><span class="name">name</span></div>
+                    <div class="tree-row">
+                      <span class="name">mana cost</span>
+                    </div>
+                    <div class="tree-row"><span class="name">oracle</span></div>
+                    <div class="tree-row" style="padding-left: 28px">
+                      <span class="name dim">Font size</span
+                      ><input
+                        style="width: 64px; height: 24px; min-height: 0"
+                        tabindex="-1"
+                        value="92"
+                      /><span class="faint">150</span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="console-side"
+                  style="flex: 1; width: auto; border-left: 0"
+                >
+                  <div
+                    class="placeholder-card"
+                    style="width: min(60%, 300px)"
+                  ></div>
+                  <p class="dim" style="text-align: center">
+                    Sample <strong>Cryptic Command</strong> · Compare manifest
+                    and override
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div
+              id="scope-global-panel"
+              class="gated-section"
+              data-feature-section="overrides.global"
+              style="flex: 1; display: flex"
+            >
+              <div class="gated-content rules-pane" style="flex: 1">
+                <p class="tm-lede dim">
+                  Rules apply to every card you render, in order from the top,
+                  and a field you edit yourself keeps your value. A rule fires
+                  when all of its conditions hold, and a rule with none fires
+                  for every card.
+                </p>
+                <div id="rules-list" class="rules-list"></div>
+                <p id="rules-error" class="rules-error" role="alert" hidden></p>
+                <div class="rules-foot">
+                  <button id="rule-add" class="btn" type="button">
+                    <svg class="icon"><use href="icons.svg#i-plus" /></svg>Add
+                    rule
+                  </button>
+                  <span
+                    id="rules-status"
+                    class="dim tabular"
+                    role="status"
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Editor: build a template and see a test card drawn with it -->
+        <section
+          id="mode-editor"
+          class="mode"
+          data-mode-panel="editor"
+          aria-label="Editor"
+          hidden
+        >
+          <div id="ed-empty" class="empty">
+            <svg class="icon icon-lg"><use href="icons.svg#i-sliders" /></svg>
+            <p class="lede">
+              Build a template of your own. Start from a blank card or from a
+              copy of one you have installed, and see a test card drawn with it
+              as you go.
+            </p>
+            <div class="ed-empty-actions">
+              <button id="ed-empty-new" class="btn primary" type="button">
+                <svg class="icon"><use href="icons.svg#i-plus" /></svg>New
+                template
+              </button>
+              <button id="ed-empty-copy" class="btn" type="button">
+                Copy an installed template
               </button>
             </div>
           </div>
-          <div id="run-log-panel" class="run-log-panel" hidden>
-            <div class="run-log-bar">
-              <span class="spacer"></span>
-              <button id="run-log-copy" class="btn subtle" type="button">Copy</button>
-              <button id="run-log-save" class="btn subtle" type="button">Save</button>
+
+          <div id="ed-workspace" class="regions" hidden>
+            <div class="region fixed" data-region="0" style="width: 300px">
+              <div class="ed-draft">
+                <div class="ed-draft-head">
+                  <label class="section-heading" for="ed-draft-select"
+                    >Template</label
+                  >
+                  <span class="ed-history">
+                    <button
+                      id="ed-undo"
+                      class="btn subtle icon-only"
+                      type="button"
+                      aria-label="Undo"
+                      data-tip="Undo (⌘Z)"
+                      disabled
+                    >
+                      <svg class="icon"><use href="icons.svg#i-revert" /></svg>
+                    </button>
+                    <button
+                      id="ed-redo"
+                      class="btn subtle icon-only ed-redo"
+                      type="button"
+                      aria-label="Redo"
+                      data-tip="Redo (⇧⌘Z)"
+                      disabled
+                    >
+                      <svg class="icon"><use href="icons.svg#i-revert" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="ed-draft-row">
+                  <select id="ed-draft-select"></select>
+                  <button
+                    id="ed-new"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="New template"
+                    data-tip="New template"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-plus" /></svg>
+                  </button>
+                  <button id="ed-rename" class="btn subtle" type="button">
+                    Rename
+                  </button>
+                  <button
+                    id="ed-delete"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Delete template"
+                    data-tip="Delete template"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-trash" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="ed-about-sec" class="ed-fold ed-canvas-sec collapsed">
+                <h3 class="ed-sec-title">
+                  <button
+                    id="ed-about-toggle"
+                    class="ed-sec-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="ed-about-body"
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="icons.svg#i-chevron-down" /></svg
+                    ><span class="section-heading">About</span>
+                  </button>
+                </h3>
+                <div
+                  id="ed-about-body"
+                  class="ed-fold-body"
+                  role="region"
+                  tabindex="0"
+                  aria-labelledby="ed-about-toggle"
+                  hidden
+                >
+  <p id="ed-about-name" class="ed-about-name"></p>
+                    <p id="ed-about-id" class="ed-about-id mono"></p>
+                    <p id="ed-about-fork" class="dim" hidden></p>
+                    <ul
+                      id="ed-layouts"
+                      class="ed-layouts"
+                      aria-label="Layouts"
+                    ></ul>
+                    <h4 class="ed-subheading">Template details</h4>
+                    <div id="ed-template-levers" class="ed-levers"></div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Credits</h4>
+                      <div id="ed-credits" class="ed-credits"></div>
+                      <button
+                        id="ed-credit-add"
+                        class="btn subtle"
+                        type="button"
+                      >
+                        <svg class="icon"><use href="icons.svg#i-plus" /></svg
+                        >Add a credit
+                      </button>
+                    </div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Fonts</h4>
+                      <div id="ed-fonts" class="ed-fonts"></div>
+                      <button
+                        id="ed-font-add"
+                        class="btn subtle"
+                        type="button"
+                        data-feature="editor.fonts"
+                      >
+                        <svg class="icon"><use href="icons.svg#i-plus" /></svg
+                        >Add a font
+                      </button>
+                      <h4 class="ed-subheading">Text roles</h4>
+                      <div id="ed-roles" class="ed-levers"></div>
+                    </div>
+                </div>
+              </div>
+              <div id="ed-canvas-sec" class="ed-fold ed-canvas-sec collapsed">
+                <h3 class="ed-sec-title">
+                  <button
+                    id="ed-canvas-toggle"
+                    class="ed-sec-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="ed-canvas-body"
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="icons.svg#i-chevron-down" /></svg
+                    ><span class="section-heading">Canvas</span>
+                  </button>
+                </h3>
+                <div
+                  id="ed-canvas-body"
+                  class="ed-fold-body"
+                  role="region"
+                  tabindex="0"
+                  aria-labelledby="ed-canvas-toggle"
+                  hidden
+                >
+                  <div id="ed-canvas-levers" class="ed-levers"></div>
+                </div>
+              </div>
+              <div id="ed-left-sections" class="ed-sections">
+                <section id="ed-search-sec" class="ed-sec" data-sec="search">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title">
+                      <button
+                        id="ed-search-toggle"
+                        class="ed-sec-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="ed-search-body"
+                      >
+                        <svg class="icon" aria-hidden="true">
+                          <use href="icons.svg#i-chevron-down" /></svg
+                        ><span class="ed-sec-name section-heading"
+                          >Search Scryfall</span
+                        >
+                      </button>
+                    </h3>
+                  </div>
+                  <div
+                    id="ed-search-body"
+                    class="ed-sec-body ed-search-body"
+                    role="region"
+                    tabindex="0"
+                    aria-labelledby="ed-search-toggle"
+                    hidden
+                  >
+                    <form id="ed-search-form" class="search-form" role="search">
+                      <div class="search-field">
+                        <svg class="icon">
+                          <use href="icons.svg#i-search" />
+                        </svg>
+                        <input
+                          id="ed-search-input"
+                          autocomplete="off"
+                          spellcheck="false"
+                          placeholder="Search Scryfall"
+                          aria-label="Search Scryfall for a test card"
+                        />
+                      </div>
+                    </form>
+                    <ul
+                      id="ed-results"
+                      class="results"
+                      role="listbox"
+                      aria-label="Search results"
+                    ></ul>
+                    <div class="panel-footer">
+                      <span id="ed-results-count"
+                        >Pick a preset above, or search for a card</span
+                      >
+                    </div>
+                  </div>
+                </section>
+                <div
+                  class="ed-vsplit"
+                  role="separator"
+                  aria-orientation="horizontal"
+                ></div>
+                <section class="ed-sec" data-sec="card">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title">
+                      <button
+                        id="ed-card-toggle"
+                        class="ed-sec-toggle"
+                        type="button"
+                        aria-expanded="true"
+                        aria-controls="ed-card-body"
+                      >
+                        <svg class="icon" aria-hidden="true">
+                          <use href="icons.svg#i-chevron-down" /></svg
+                        ><span class="ed-sec-name section-heading"
+                          >Test card</span
+                        >
+                      </button>
+                    </h3>
+                  </div>
+                  <div
+                    id="ed-card-body"
+                    class="ed-sec-body"
+                    role="region"
+                    tabindex="0"
+                    aria-labelledby="ed-card-toggle"
+                  >
+                    <p id="ed-card-line" class="ed-card-line"></p>
+                    <div
+                      id="ed-presets"
+                      class="ed-presets"
+                      role="group"
+                      aria-label="Preset cards"
+                    ></div>
+                    <button
+                      id="ed-save-preset"
+                      class="btn subtle ed-save-preset"
+                      type="button"
+                      data-tip="Keep this card, with the changes made to its fields, in the list of test cards"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-star" /></svg
+                      >Save as a test card…
+                    </button>
+                    <details
+                      id="ed-fine-details"
+                      class="disclosure ed-properties"
+                      open
+                    >
+                      <summary>
+                        <svg class="icon" aria-hidden="true">
+                          <use href="icons.svg#i-chevron-down" /></svg
+                        >Properties
+                      </summary>
+                      <p class="dim ed-fine-lede">
+                        Change any field to test the template against the rules
+                        it follows. A preset stops being the one in use once a
+                        field is changed.
+                      </p>
+                      <button
+                        id="ed-fine-revert"
+                        class="btn subtle"
+                        type="button"
+                        hidden
+                        data-tip="Restore every field to the card as it was chosen"
+                      >
+                        <svg class="icon"><use href="icons.svg#i-revert" /></svg
+                        >Revert all
+                      </button>
+                      <form
+                        id="ed-card-form"
+                        class="editor-form ed-card-form"
+                        autocomplete="off"
+                      ></form>
+                    </details>
+                  </div>
+                </section>
+              </div>
             </div>
-            <pre id="run-log" class="log" tabindex="0" aria-label="Run log"></pre>
+
+            <div
+              class="splitter"
+              data-split="0"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the test card column"
+            ></div>
+
+            <div class="region grow preview-region" data-region="1">
+              <div class="ed-viewport">
+                <div id="ed-stage" class="stage fit">
+                  <div class="stage-inner">
+                    <div
+                      id="ed-placeholder"
+                      class="placeholder-card"
+                      aria-hidden="true"
+                    ></div>
+                    <div id="ed-canvas" class="ed-canvas" hidden>
+                      <img
+                        id="ed-img"
+                        class="card"
+                        alt="The test card drawn with the template"
+                        draggable="false"
+                      />
+                      <div
+                        id="ed-overlay"
+                        class="ed-overlay"
+                        aria-hidden="true"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="ed-camera"
+                  role="toolbar"
+                  aria-label="View of the card"
+                >
+                  <div
+                    class="ed-camera-group"
+                    role="group"
+                    aria-label="What dragging does"
+                  >
+                    <button
+                      id="ed-tool-select"
+                      class="btn subtle icon-only ed-tool"
+                      type="button"
+                      aria-pressed="true"
+                      aria-label="Select"
+                      data-tip="Select/Move"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-cursor" /></svg>
+                    </button>
+                    <button
+                      id="ed-tool-pan"
+                      class="btn subtle icon-only ed-tool"
+                      type="button"
+                      aria-pressed="false"
+                      aria-label="Pan"
+                      data-tip="Pan"
+                    >
+                      <svg class="icon"><use href="icons.svg#i-hand" /></svg>
+                    </button>
+                  </div>
+                  <span class="divider" aria-hidden="true"></span>
+                  <button
+                    id="ed-zoom-out"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Zoom out"
+                    data-tip="Zoom out (-)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-zoom-out" /></svg>
+                  </button>
+                  <button
+                    id="ed-zoom-label"
+                    class="btn subtle zoom-label tabular"
+                    type="button"
+                    data-tip="Cycle fit, 100% and 200%"
+                  >
+                    Fit
+                  </button>
+                  <button
+                    id="ed-zoom-in"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Zoom in"
+                    data-tip="Zoom in (+)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-zoom-in" /></svg>
+                  </button>
+                  <button
+                    id="ed-zoom-fit"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Fit the card to the view"
+                    data-tip="Fit to the view (0)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-fit" /></svg>
+                  </button>
+                  <span class="divider" aria-hidden="true"></span>
+                  <button
+                    id="ed-overlays"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-pressed="true"
+                    aria-label="Overlays"
+                    data-tip="Show/Hide overlays (O)"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-eye" /></svg>
+                  </button>
+                  <span class="divider" aria-hidden="true"></span>
+                  <button
+                    id="ed-save-image"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Save the image"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    data-tip="Save image"
+                    disabled
+                  >
+                    <svg class="icon"><use href="icons.svg#i-download" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div
+                id="ed-activity"
+                class="activity"
+                data-state="idle"
+                role="status"
+                aria-live="polite"
+              >
+                <div class="activity-line">
+                  <span class="activity-icon"
+                    ><svg class="icon">
+                      <use
+                        id="ed-activity-glyph"
+                        href="icons.svg#i-card"
+                      /></svg
+                  ></span>
+                  <div class="activity-text">
+                    <span id="ed-activity-title" class="activity-title"></span>
+                    <span id="ed-activity-step" class="activity-step"></span>
+                  </div>
+                  <span
+                    id="ed-activity-meta"
+                    class="activity-meta tabular"
+                  ></span>
+                </div>
+                <div class="activity-bar" aria-hidden="true">
+                  <div id="ed-activity-fill" class="fill"></div>
+                </div>
+              </div>
+              <details id="ed-coverage" class="disclosure ed-coverage">
+                <summary>
+                  <svg class="icon" aria-hidden="true">
+                    <use href="icons.svg#i-chevron-down" /></svg
+                  >Coverage
+                </summary>
+                <div class="ed-coverage-head">
+                  <p id="ed-coverage-line" class="dim"></p>
+                  <button id="ed-coverage-run" class="btn" type="button">
+                    Draw every test card
+                  </button>
+                </div>
+                <ul
+                  id="ed-coverage-tiles"
+                  class="ed-coverage-tiles"
+                  aria-label="Test cards drawn small"
+                ></ul>
+              </details>
+              <div id="ed-json-pane" class="ed-json" hidden>
+                <div class="ed-json-head">
+                  <div
+                    id="ed-json-tabs"
+                    class="ed-json-tabs"
+                    role="tablist"
+                    aria-label="Files of the template"
+                  ></div>
+                  <span
+                    id="ed-json-status"
+                    class="ed-json-status dim"
+                    role="status"
+                  ></span>
+                  <button
+                    id="ed-json-close"
+                    class="btn subtle icon-only"
+                    type="button"
+                    aria-label="Close the JSON editor"
+                    data-tip="Close"
+                  >
+                    <svg class="icon"><use href="icons.svg#i-close" /></svg>
+                  </button>
+                </div>
+                <div class="ed-json-body">
+                  <div
+                    id="ed-json-gutter"
+                    class="ed-json-gutter"
+                    aria-hidden="true"
+                  ></div>
+                  <textarea
+                    id="ed-json-text"
+                    class="ed-json-text mono"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    wrap="off"
+                    aria-label="The file's JSON"
+                  ></textarea>
+                </div>
+                <ul
+                  id="ed-json-problems"
+                  class="ed-json-problems"
+                  aria-label="Problems in this file"
+                ></ul>
+              </div>
+            </div>
+
+            <div
+              class="splitter"
+              data-split="1"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the details column"
+            ></div>
+
+            <div class="region fixed" data-region="2" style="width: 320px">
+              <div class="ed-side">
+                <div id="ed-sections" class="ed-sections">
+                  <section class="ed-sec" data-sec="layers">
+                    <div class="ed-sec-head">
+                      <h3 class="ed-sec-title">
+                        <button
+                          id="ed-sec-layers-toggle"
+                          class="ed-sec-toggle"
+                          type="button"
+                          aria-expanded="true"
+                          aria-controls="ed-sec-layers-body"
+                        >
+                          <svg class="icon" aria-hidden="true">
+                            <use href="icons.svg#i-chevron-down" /></svg
+                          ><span class="ed-sec-name section-heading"
+                            >Layers</span
+                          >
+                        </button>
+                      </h3>
+                      <span class="ed-history">
+                        <button
+                          id="ed-add"
+                          class="btn subtle icon-only"
+                          type="button"
+                          aria-label="Add a layer, text box or art window"
+                          data-tip="Add layer"
+                          disabled
+                        >
+                          <svg class="icon">
+                            <use href="icons.svg#i-plus" />
+                          </svg>
+                        </button>
+                      </span>
+                    </div>
+                    <div
+                      id="ed-sec-layers-body"
+                      class="ed-sec-body"
+                      role="region"
+                      tabindex="0"
+                      aria-labelledby="ed-sec-layers-toggle"
+                    >
+                      <p id="ed-layers-none" class="dim">
+                        Nothing is drawn yet.
+                      </p>
+                      <ul
+                        id="ed-layers"
+                        class="ed-layers"
+                        aria-label="Layers"
+                        hidden
+                      ></ul>
+                    </div>
+                  </section>
+                  <div
+                    class="ed-vsplit"
+                    role="separator"
+                    aria-orientation="horizontal"
+                  ></div>
+                  <section class="ed-sec" data-sec="selection">
+                    <div class="ed-sec-head">
+                      <h3 class="ed-sec-title">
+                        <button
+                          id="ed-sec-selection-toggle"
+                          class="ed-sec-toggle"
+                          type="button"
+                          aria-expanded="true"
+                          aria-controls="ed-sec-selection-body"
+                        >
+                          <svg class="icon" aria-hidden="true">
+                            <use href="icons.svg#i-chevron-down" /></svg
+                          ><span class="ed-sec-name section-heading"
+                            >Selection</span
+                          >
+                        </button>
+                      </h3>
+                    </div>
+                    <div
+                      id="ed-sec-selection-body"
+                      class="ed-sec-body"
+                      role="region"
+                      tabindex="0"
+                      aria-labelledby="ed-sec-selection-toggle"
+                    >
+                      <p id="ed-selection-none" class="dim">
+                        Click the card, or a layer in the list.
+                      </p>
+                      <div id="ed-selection" hidden>
+                        <p class="ed-about-name ed-selection-head">
+                          <span id="ed-selection-name"></span
+                          ><span class="dim" aria-hidden="true"> - </span
+                          ><span id="ed-selection-kind" class="dim"></span>
+                        </p>
+                        <p id="ed-selection-note" class="dim" hidden></p>
+                        <dl class="ed-readout ed-readout-grid">
+                          <dt id="ed-sel-x-l">X</dt>
+                          <dd id="ed-sel-x"></dd>
+                          <dt id="ed-sel-w-l">Width</dt>
+                          <dd id="ed-sel-w"></dd>
+                          <dt id="ed-sel-y-l">Y</dt>
+                          <dd id="ed-sel-y"></dd>
+                          <dt id="ed-sel-h-l">Height</dt>
+                          <dd id="ed-sel-h"></dd>
+                        </dl>
+                        <div id="ed-images" class="ed-images" hidden></div>
+                        <div id="ed-levers" class="ed-levers"></div>
+                      </div>
+                      <p id="ed-edit-note" class="dim" hidden></p>
+                    </div>
+                  </section>
+                  <div
+                    class="ed-vsplit"
+                    role="separator"
+                    aria-orientation="horizontal"
+                  ></div>
+                  <section class="ed-sec" data-sec="problems">
+                    <div class="ed-sec-head">
+                      <h3 class="ed-sec-title">
+                        <button
+                          id="ed-sec-problems-toggle"
+                          class="ed-sec-toggle"
+                          type="button"
+                          aria-expanded="true"
+                          aria-controls="ed-sec-problems-body"
+                        >
+                          <svg class="icon" aria-hidden="true">
+                            <use href="icons.svg#i-chevron-down" /></svg
+                          ><span class="ed-sec-name section-heading"
+                            >Problems</span
+                          >
+                          <span
+                            id="ed-problems-count"
+                            class="ed-problems-count"
+                          ></span>
+                        </button>
+                      </h3>
+                    </div>
+                    <div
+                      id="ed-sec-problems-body"
+                      class="ed-sec-body"
+                      role="region"
+                      tabindex="0"
+                      aria-labelledby="ed-sec-problems-toggle"
+                    >
+                      <p id="ed-problems-none" class="dim">None found.</p>
+                      <ul id="ed-problems" class="ed-problems"></ul>
+                    </div>
+                  </section>
+                </div>
+                <div
+                  class="ed-footer"
+                  role="group"
+                  aria-label="Use the template"
+                >
+                  <button id="ed-use" class="btn primary" type="button">
+                    Use in mimic
+                  </button>
+                  <button id="ed-export" class="btn" type="button">
+                    Export
+                  </button>
+                  <button id="ed-folder" class="btn" type="button">
+                    Show folder
+                  </button>
+                  <button
+                    id="ed-json"
+                    class="btn"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="ed-json-pane"
+                  >
+                    Edit JSON
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="mode-body">
-            <div class="review-pane">
-              <div class="review-summary">
-                <div id="run-chips" class="chips"></div>
+        </section>
+
+        <!-- Run Console: watches a batch and stays readable after -->
+        <section
+          id="mode-run"
+          class="mode"
+          data-mode-panel="run"
+          aria-label="Run console"
+          hidden
+        >
+          <div id="run-empty" class="empty">
+            <svg class="icon icon-lg"><use href="icons.svg#i-play" /></svg>
+            <p class="lede">
+              No run yet. Resolve a list and press Render, and its progress
+              shows here.
+            </p>
+            <button id="run-empty-list" class="btn primary" type="button">
+              <svg class="icon"><use href="icons.svg#i-list" /></svg>Go to List
+            </button>
+          </div>
+          <div id="run-body" class="run-body" hidden>
+            <div class="console-head">
+              <div class="line">
+                <h2 id="run-title" class="section-heading"></h2>
+                <span id="run-state" class="pill"></span>
                 <span class="spacer"></span>
-                <input id="run-filter" type="search" placeholder="Filter…" aria-label="Filter cards">
+                <span id="run-meta" class="faint mono truncate"></span>
               </div>
-              <ul id="run-rows" class="run-rows"></ul>
+              <div class="line">
+                <div id="run-bar" class="progress lg">
+                  <div class="bar"></div>
+                </div>
+                <span id="run-summary" class="run-summary" hidden></span>
+                <span id="run-count" class="tabular"></span>
+                <button
+                  id="run-failed"
+                  class="link-btn err-text"
+                  type="button"
+                  hidden
+                ></button>
+                <span id="run-elapsed" class="dim tabular"></span>
+                <span id="run-warmup" class="dim tabular" hidden></span>
+                <span id="run-rate" class="dim tabular" hidden></span>
+                <span id="run-eta" class="dim tabular" hidden></span>
+              </div>
+              <div class="line">
+                <span class="dim">→</span
+                ><span id="run-out" class="mono dim truncate"></span>
+                <span class="spacer"></span>
+                <button id="run-stop" class="btn" type="button">
+                  <svg class="icon"><use href="icons.svg#i-stop" /></svg>Stop
+                </button>
+                <button
+                  id="run-retry"
+                  class="btn"
+                  type="button"
+                  data-feature="run.retryFailed"
+                  hidden
+                >
+                  <svg class="icon"><use href="icons.svg#i-render" /></svg
+                  ><span id="run-retry-label">Retry failed</span>
+                </button>
+                <button
+                  id="run-log-toggle"
+                  class="btn subtle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="run-log-panel"
+                >
+                  <svg class="icon"><use href="icons.svg#i-list" /></svg>Log
+                </button>
+                <button id="run-open" class="btn subtle" type="button">
+                  <svg class="icon"><use href="icons.svg#i-folder" /></svg>Open
+                  folder
+                </button>
+              </div>
             </div>
-            <div id="run-side" class="console-side" hidden>
-              <button id="run-preview-close" class="btn subtle icon-only" type="button" aria-label="Close preview">
-                <svg class="icon"><use href="icons.svg#i-close"/></svg>
-              </button>
-              <div class="run-preview">
-                <div id="run-placeholder" class="placeholder-card"></div>
-                <img id="run-image" class="card" alt="" hidden>
-                <p id="run-caption" class="mono dim truncate"></p>
+            <div id="run-log-panel" class="run-log-panel" hidden>
+              <div class="run-log-bar">
+                <span class="spacer"></span>
+                <button id="run-log-copy" class="btn subtle" type="button">
+                  Copy
+                </button>
+                <button id="run-log-save" class="btn subtle" type="button">
+                  Save
+                </button>
+              </div>
+              <pre
+                id="run-log"
+                class="log"
+                tabindex="0"
+                aria-label="Run log"
+              ></pre>
+            </div>
+            <div class="mode-body">
+              <div class="review-pane">
+                <div class="review-summary">
+                  <div id="run-chips" class="chips"></div>
+                  <span class="spacer"></span>
+                  <input
+                    id="run-filter"
+                    type="search"
+                    placeholder="Filter…"
+                    aria-label="Filter cards"
+                  />
+                </div>
+                <ul id="run-rows" class="run-rows"></ul>
+              </div>
+              <div id="run-side" class="console-side" hidden>
+                <button
+                  id="run-preview-close"
+                  class="btn subtle icon-only"
+                  type="button"
+                  aria-label="Close preview"
+                >
+                  <svg class="icon"><use href="icons.svg#i-close" /></svg>
+                </button>
+                <div class="run-preview">
+                  <div id="run-placeholder" class="placeholder-card"></div>
+                  <img id="run-image" class="card" alt="" hidden />
+                  <p id="run-caption" class="mono dim truncate"></p>
+                </div>
               </div>
             </div>
           </div>
+        </section>
+      </main>
+
+      <footer class="statusbar">
+        <span id="status" class="status-text" role="status">Ready.</span>
+        <div id="status-progress" class="progress" hidden>
+          <div class="bar"></div>
         </div>
-      </section>
-    </main>
-
-    <footer class="statusbar">
-      <span id="status" class="status-text" role="status">Ready.</span>
-      <div id="status-progress" class="progress" hidden><div class="bar"></div></div>
-      <span id="template-state" class="template-state mono"></span>
-    </footer>
-  </div>
-
-  <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
-    <div class="dialog-head">
-      <h2 id="settings-title">Settings</h2>
-      <button class="btn subtle icon-only" type="button" data-close aria-label="Close"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
+        <span id="template-state" class="template-state mono"></span>
+      </footer>
     </div>
-    <div class="dialog-body">
-      <section class="settings-group">
-        <h3 class="section-heading">Rendering</h3>
-        <div class="setting">
-          <label for="preview-select">Preview resolution</label>
-          <div class="inline">
-            <select id="preview-select"></select>
-            <input id="preview-dpi" type="number" inputmode="numeric" aria-label="Preview dpi" hidden>
-          </div>
-          <p class="desc" id="preview-size"></p>
-        </div>
-        <div class="setting">
-          <label for="output-select">Output resolution</label>
-          <div class="inline">
-            <select id="output-select"></select>
-            <input id="output-dpi" type="number" inputmode="numeric" aria-label="Output dpi" hidden>
-          </div>
-          <p class="desc" id="output-size"></p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.bitDepth">PNG bit depth</span>
-          <select data-feature="settings.bitDepth" aria-label="PNG bit depth"><option>8-bit</option><option>16-bit</option></select>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.bleed">Include bleed</span>
-          <span class="inline"><input type="checkbox" checked data-feature="settings.bleed" aria-label="Include bleed"></span>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.concurrency">Render concurrency</span>
-          <select id="concurrency-select" data-feature="settings.concurrency" aria-label="Render concurrency"></select>
-          <p class="desc" id="concurrency-note"></p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.layerCache">Layer cache</span>
-          <select id="layer-cache-select" data-feature="settings.layerCache" aria-label="Layer cache size">
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-            <option value="xlarge">Extra large</option>
-          </select>
-          <p class="desc">Keeps decoded frame layers in memory so cards that share a frame skip decoding it again. A larger cache speeds up long batches and uses more memory, which can lower how many cards Automatic renders at once.</p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.imageFormat">Image format</span>
-          <select id="image-format-select" data-feature="settings.imageFormat" aria-label="Image format">
-            <option value="jpeg">JPEG · quicker batches, smaller files</option>
-            <option value="png">PNG · lossless</option>
-          </select>
-          <p class="desc">JPEG is written at quality 95, which is close to indistinguishable from the render at print size, and it encodes several times faster than PNG. An MPC Autofill project is always PNG.</p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.pngCompression">PNG compression</span>
-          <select id="png-compression-select" data-feature="settings.pngCompression" aria-label="PNG compression">
-            <option value="balanced">Balanced · smaller files</option>
-            <option value="fast">Fast · quicker batches, larger files</option>
-          </select>
-          <p class="desc">Applies when the image format is PNG. Fast spends less time compressing each card, so batches finish sooner, but the files come out larger. The pixels are identical either way. File size matters most when uploading to MPC Autofill, which hides images over its size limit.</p>
-        </div>
-      </section>
 
-      <section class="settings-group">
-        <h3 class="section-heading">Output</h3>
-        <div class="setting">
-          <span class="label" data-feature="settings.outputDir">Default folder</span>
-          <input id="output-dir-input" class="mono" placeholder="~/Documents/proxies" spellcheck="false" data-feature="settings.outputDir" aria-label="Default folder">
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.filenameTemplate">Filename template</span>
-          <input class="mono" value="{name} [{set}-{number}]" data-feature="settings.filenameTemplate" aria-label="Filename template">
-          <p class="desc">Lightning Bolt [2X2-117].png</p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.runReport">Write run report</span>
-          <span class="inline"><input type="checkbox" checked data-feature="settings.runReport" aria-label="Write run report"></span>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="output.pdf">Print sheets (PDF)</span>
-          <span class="inline"><input type="checkbox" data-feature="output.pdf" aria-label="Print sheets"></span>
-        </div>
-      </section>
+    <dialog
+      id="settings-dialog"
+      class="dialog"
+      aria-labelledby="settings-title"
+    >
+      <div class="dialog-head">
+        <h2 id="settings-title">Settings</h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <section class="settings-group">
+          <h3 class="section-heading">Rendering</h3>
+          <div class="setting">
+            <label for="preview-select">Preview resolution</label>
+            <div class="inline">
+              <select id="preview-select"></select>
+              <input
+                id="preview-dpi"
+                type="number"
+                inputmode="numeric"
+                aria-label="Preview dpi"
+                hidden
+              />
+            </div>
+            <p class="desc" id="preview-size"></p>
+          </div>
+          <div class="setting">
+            <label for="output-select">Output resolution</label>
+            <div class="inline">
+              <select id="output-select"></select>
+              <input
+                id="output-dpi"
+                type="number"
+                inputmode="numeric"
+                aria-label="Output dpi"
+                hidden
+              />
+            </div>
+            <p class="desc" id="output-size"></p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.bitDepth"
+              >PNG bit depth</span
+            >
+            <select data-feature="settings.bitDepth" aria-label="PNG bit depth">
+              <option>8-bit</option>
+              <option>16-bit</option>
+            </select>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.bleed"
+              >Include bleed</span
+            >
+            <span class="inline"
+              ><input
+                type="checkbox"
+                checked
+                data-feature="settings.bleed"
+                aria-label="Include bleed"
+            /></span>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.concurrency"
+              >Render concurrency</span
+            >
+            <select
+              id="concurrency-select"
+              data-feature="settings.concurrency"
+              aria-label="Render concurrency"
+            ></select>
+            <p class="desc" id="concurrency-note"></p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.layerCache"
+              >Layer cache</span
+            >
+            <select
+              id="layer-cache-select"
+              data-feature="settings.layerCache"
+              aria-label="Layer cache size"
+            >
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+              <option value="xlarge">Extra large</option>
+            </select>
+            <p class="desc">
+              Keeps decoded frame layers in memory so cards that share a frame
+              skip decoding it again. A larger cache speeds up long batches and
+              uses more memory, which can lower how many cards Automatic renders
+              at once.
+            </p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.imageFormat"
+              >Image format</span
+            >
+            <select
+              id="image-format-select"
+              data-feature="settings.imageFormat"
+              aria-label="Image format"
+            >
+              <option value="jpeg">
+                JPEG · quicker batches, smaller files
+              </option>
+              <option value="png">PNG · lossless</option>
+            </select>
+            <p class="desc">
+              JPEG is written at quality 95, which is close to indistinguishable
+              from the render at print size, and it encodes several times faster
+              than PNG. An MPC Autofill project is always PNG.
+            </p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.pngCompression"
+              >PNG compression</span
+            >
+            <select
+              id="png-compression-select"
+              data-feature="settings.pngCompression"
+              aria-label="PNG compression"
+            >
+              <option value="balanced">Balanced · smaller files</option>
+              <option value="fast">Fast · quicker batches, larger files</option>
+            </select>
+            <p class="desc">
+              Applies when the image format is PNG. Fast spends less time
+              compressing each card, so batches finish sooner, but the files
+              come out larger. The pixels are identical either way. File size
+              matters most when uploading to MPC Autofill, which hides images
+              over its size limit.
+            </p>
+          </div>
+        </section>
 
-      <section class="settings-group">
-        <h3 class="section-heading">Sources</h3>
-        <div class="setting">
-          <label for="card-data-select" data-feature="settings.localData">Card data</label>
-          <select id="card-data-select" data-feature="settings.localData">
-            <option value="api">Scryfall API</option>
-            <option value="local">Local copy</option>
-          </select>
-          <div id="card-data" class="card-data" role="status" aria-live="polite">
-            <p id="card-data-text"></p>
-            <div id="card-data-progress" class="progress" hidden><div class="bar"></div></div>
-            <div class="card-data-actions">
-              <button id="card-data-download" class="btn" type="button" hidden>
-                <svg class="icon"><use href="icons.svg#i-download"/></svg><span id="card-data-download-label">Download</span>
+        <section class="settings-group">
+          <h3 class="section-heading">Output</h3>
+          <div class="setting">
+            <span class="label" data-feature="settings.outputDir"
+              >Default folder</span
+            >
+            <input
+              id="output-dir-input"
+              class="mono"
+              placeholder="~/Documents/proxies"
+              spellcheck="false"
+              data-feature="settings.outputDir"
+              aria-label="Default folder"
+            />
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.filenameTemplate"
+              >Filename template</span
+            >
+            <input
+              class="mono"
+              value="{name} [{set}-{number}]"
+              data-feature="settings.filenameTemplate"
+              aria-label="Filename template"
+            />
+            <p class="desc">Lightning Bolt [2X2-117].png</p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.runReport"
+              >Write run report</span
+            >
+            <span class="inline"
+              ><input
+                type="checkbox"
+                checked
+                data-feature="settings.runReport"
+                aria-label="Write run report"
+            /></span>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="output.pdf"
+              >Print sheets (PDF)</span
+            >
+            <span class="inline"
+              ><input
+                type="checkbox"
+                data-feature="output.pdf"
+                aria-label="Print sheets"
+            /></span>
+          </div>
+        </section>
+
+        <section class="settings-group">
+          <h3 class="section-heading">Sources</h3>
+          <div class="setting">
+            <label for="card-data-select" data-feature="settings.localData"
+              >Card data</label
+            >
+            <select id="card-data-select" data-feature="settings.localData">
+              <option value="api">Scryfall API</option>
+              <option value="local">Local copy</option>
+            </select>
+            <div
+              id="card-data"
+              class="card-data"
+              role="status"
+              aria-live="polite"
+            >
+              <p id="card-data-text"></p>
+              <div id="card-data-progress" class="progress" hidden>
+                <div class="bar"></div>
+              </div>
+              <div class="card-data-actions">
+                <button
+                  id="card-data-download"
+                  class="btn"
+                  type="button"
+                  hidden
+                >
+                  <svg class="icon"><use href="icons.svg#i-download" /></svg
+                  ><span id="card-data-download-label">Download</span>
+                </button>
+                <button
+                  id="card-data-remove"
+                  class="btn subtle"
+                  type="button"
+                  hidden
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.fonts">Fonts</span>
+            <div id="fonts" class="fonts" role="status" aria-live="polite">
+              <p id="fonts-source"></p>
+              <ul id="fonts-roles" class="fonts-roles"></ul>
+              <p id="fonts-metrics" class="fonts-note" hidden>
+                A template lays its text out for its own fonts, so another font
+                may sit a little differently.
+              </p>
+              <p id="fonts-pool-title" class="fonts-subhead" hidden></p>
+              <ul id="fonts-pool" class="fonts-pool"></ul>
+              <div class="card-data-actions">
+                <button id="fonts-add" class="btn" type="button" hidden>
+                  <svg class="icon"><use href="icons.svg#i-plus" /></svg
+                  ><span>Add font</span>
+                </button>
+                <button id="fonts-open" class="btn" type="button" hidden>
+                  <svg class="icon"><use href="icons.svg#i-folder" /></svg
+                  ><span>Open folder</span>
+                </button>
+                <button
+                  id="fonts-reset"
+                  class="btn subtle"
+                  type="button"
+                  hidden
+                >
+                  Reset all
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.scryfallRate"
+              >Scryfall requests per second</span
+            >
+            <span class="inline"
+              ><input
+                type="number"
+                value="10"
+                data-feature="settings.scryfallRate"
+                aria-label="Scryfall rate"
+            /></span>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.preferNonPromo"
+              >Prefer non-promo printings</span
+            >
+            <span class="inline"
+              ><input
+                type="checkbox"
+                checked
+                data-feature="settings.preferNonPromo"
+                aria-label="Prefer non-promo printings"
+            /></span>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.language"
+              >Default language</span
+            >
+            <select
+              data-feature="settings.language"
+              aria-label="Default language"
+            >
+              <option>English</option>
+            </select>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.filenameRegex"
+              >Art filename pattern</span
+            >
+            <input
+              class="mono"
+              placeholder="(?P&lt;name&gt;.+?)( \((?P&lt;set&gt;\w+)\))?"
+              data-feature="settings.filenameRegex"
+              aria-label="Art filename pattern"
+            />
+          </div>
+        </section>
+
+        <section class="settings-group">
+          <h3 class="section-heading">Interface</h3>
+          <div class="setting">
+            <label for="theme-select">Theme</label>
+            <select id="theme-select">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">Match the system</option>
+            </select>
+          </div>
+          <div class="setting">
+            <label for="expand-printings">List every printing</label>
+            <span class="inline"
+              ><input id="expand-printings" type="checkbox"
+            /></span>
+            <p class="desc">
+              Show each printing as its own search result rather than one row
+              per card.
+            </p>
+          </div>
+          <div class="setting">
+            <label for="notify-run">Notify when a run finishes</label>
+            <span class="inline"
+              ><input id="notify-run" type="checkbox"
+            /></span>
+            <p class="desc">
+              Post a system notification with the number of cards rendered and
+              failed, when the window is not in front.
+            </p>
+          </div>
+          <div class="setting">
+            <label for="live-preview">Live preview</label>
+            <span class="inline"
+              ><input id="live-preview" type="checkbox"
+            /></span>
+            <p class="desc">
+              Redraw the card as you edit its fields. When off, press Render or
+              ⌘↵.
+            </p>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.density">Density</span>
+            <select data-feature="settings.density" aria-label="Density">
+              <option>Compact</option>
+            </select>
+          </div>
+          <div class="setting">
+            <span class="label" data-feature="settings.restoreSession"
+              >Restore last session</span
+            >
+            <span class="inline"
+              ><input
+                type="checkbox"
+                data-feature="settings.restoreSession"
+                aria-label="Restore last session"
+            /></span>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h3 class="section-heading">Updates</h3>
+          <div class="setting">
+            <span class="label" id="update-version"></span>
+            <span class="inline">
+              <button id="update-check" class="btn" type="button">
+                Check for updates
               </button>
-              <button id="card-data-remove" class="btn subtle" type="button" hidden>Remove</button>
+              <button
+                id="update-action"
+                class="btn primary"
+                type="button"
+                hidden
+              ></button>
+            </span>
+            <p class="desc" id="update-summary"></p>
+            <pre class="update-notes mono" id="update-notes" hidden></pre>
+          </div>
+          <div class="setting">
+            <label for="check-updates">Check at launch</label>
+            <span class="inline"
+              ><input id="check-updates" type="checkbox"
+            /></span>
+            <p class="desc">
+              Look for a newer release when mimic starts, at most once a day.
+              Nothing downloads until you choose to install it.
+            </p>
+          </div>
+        </section>
+        <p class="faint" style="margin-top: 20px">
+          Settings live in <span class="mono">prefs.json</span> in your user
+          config folder, under <span class="mono">mimic</span>. Editing that
+          file by hand is supported.
+        </p>
+      </div>
+      <div class="dialog-foot">
+        <span id="settings-status" class="status"></span>
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button id="settings-save" class="btn primary" type="button">
+          Save
+        </button>
+      </div>
+    </dialog>
+
+    <dialog
+      id="draft-dialog"
+      class="dialog"
+      aria-labelledby="draft-dialog-title"
+      style="width: min(480px, calc(100vw - 32px))"
+    >
+      <div class="dialog-head">
+        <h2 id="draft-dialog-title"></h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p id="draft-dialog-lede" class="dim"></p>
+        <div class="setting">
+          <label for="draft-name">Name</label>
+          <input
+            id="draft-name"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="80"
+          />
+        </div>
+        <div id="draft-dpi-row" class="setting">
+          <label for="draft-dpi">Resolution</label>
+          <span class="inline"
+            ><input
+              id="draft-dpi"
+              inputmode="numeric"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="draft-dpi-size"
+            /><span class="dim">dpi</span></span
+          >
+          <p id="draft-dpi-size" class="desc"></p>
+        </div>
+        <p id="draft-error" class="rules-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button id="draft-confirm" class="btn primary" type="button"></button>
+      </div>
+    </dialog>
+
+    <dialog
+      id="ed-export-dialog"
+      class="dialog"
+      aria-labelledby="ed-export-title"
+      style="width: min(520px, calc(100vw - 32px))"
+    >
+      <div class="dialog-head">
+        <h2 id="ed-export-title">Export the template</h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p class="dim">
+          The bundle carries the template's images, license and credits, and
+          anyone who has it can use them. Check what it says before it goes
+          anywhere.
+        </p>
+        <dl id="ed-export-facts" class="ed-readout ed-export-facts"></dl>
+        <h3 class="ed-subheading">Credits</h3>
+        <p id="ed-export-nocredits" class="dim">This template lists no credits.</p>
+        <ul id="ed-export-credits" class="ed-export-credits"></ul>
+        <ul id="ed-export-problems" class="ed-problems"></ul>
+        <p id="ed-export-error" class="rules-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button id="ed-export-confirm" class="btn primary" type="button">
+          Choose where to save…
+        </button>
+      </div>
+    </dialog>
+
+    <dialog
+      id="ed-add-dialog"
+      class="dialog"
+      aria-labelledby="ed-add-title"
+      style="width: min(480px, calc(100vw - 32px))"
+    >
+      <div class="dialog-head">
+        <h2 id="ed-add-title">Add to the template</h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="setting">
+          <label for="ed-add-kind">Add</label>
+          <select id="ed-add-kind">
+            <option value="text">A text box</option>
+            <option value="art">An art window</option>
+            <option value="layer">A layer</option>
+          </select>
+        </div>
+        <div id="ed-add-text" class="setting">
+          <label for="ed-add-draws">It draws</label>
+          <select id="ed-add-draws"></select>
+          <p class="desc">
+            The card's own text for it. A box is placed in the middle of the
+            card to be dragged where it goes
+          </p>
+        </div>
+        <div id="ed-add-art" class="setting" hidden>
+          <label for="ed-add-after">It sits above</label>
+          <select id="ed-add-after"></select>
+          <p class="desc">
+            The card's artwork shows through the window, above the layer chosen
+          </p>
+        </div>
+        <div id="ed-add-layer" hidden>
+          <div class="setting">
+            <label for="ed-add-part">It draws</label>
+            <select id="ed-add-part"></select>
+          </div>
+          <div id="ed-add-newpart">
+            <div class="setting">
+              <label for="ed-add-partname">Name of the new part</label>
+              <input
+                id="ed-add-partname"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="40"
+              />
+            </div>
+            <div class="setting">
+              <label for="ed-add-slot">It follows</label>
+              <select id="ed-add-slot"></select>
+              <p class="desc">
+                A part that follows the card's colors has an image for each
+                color. The PNG chosen next is its first, and the rest are added
+                in the layer's panel
+              </p>
             </div>
           </div>
         </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.fonts">Fonts</span>
-          <div id="fonts" class="fonts" role="status" aria-live="polite">
-            <p id="fonts-source"></p>
-            <ul id="fonts-roles" class="fonts-roles"></ul>
-            <p id="fonts-metrics" class="fonts-note" hidden>A template lays its text out for its own fonts, so another font may sit a little differently.</p>
-            <p id="fonts-pool-title" class="fonts-subhead" hidden></p>
-            <ul id="fonts-pool" class="fonts-pool"></ul>
-            <div class="card-data-actions">
-              <button id="fonts-add" class="btn" type="button" hidden>
-                <svg class="icon"><use href="icons.svg#i-plus"/></svg><span>Add font</span>
-              </button>
-              <button id="fonts-open" class="btn" type="button" hidden>
-                <svg class="icon"><use href="icons.svg#i-folder"/></svg><span>Open folder</span>
-              </button>
-              <button id="fonts-reset" class="btn subtle" type="button" hidden>Reset all</button>
-            </div>
-          </div>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.scryfallRate">Scryfall requests per second</span>
-          <span class="inline"><input type="number" value="10" data-feature="settings.scryfallRate" aria-label="Scryfall rate"></span>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.preferNonPromo">Prefer non-promo printings</span>
-          <span class="inline"><input type="checkbox" checked data-feature="settings.preferNonPromo" aria-label="Prefer non-promo printings"></span>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.language">Default language</span>
-          <select data-feature="settings.language" aria-label="Default language"><option>English</option></select>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.filenameRegex">Art filename pattern</span>
-          <input class="mono" placeholder="(?P&lt;name&gt;.+?)( \((?P&lt;set&gt;\w+)\))?" data-feature="settings.filenameRegex" aria-label="Art filename pattern">
-        </div>
-      </section>
+        <p id="ed-add-error" class="rules-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button id="ed-add-confirm" class="btn primary" type="button">
+          Add
+        </button>
+      </div>
+    </dialog>
 
-      <section class="settings-group">
-        <h3 class="section-heading">Interface</h3>
-        <div class="setting">
-          <label for="theme-select">Theme</label>
-          <select id="theme-select">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="system">Match the system</option>
-          </select>
-        </div>
-        <div class="setting">
-          <label for="expand-printings">List every printing</label>
-          <span class="inline"><input id="expand-printings" type="checkbox"></span>
-          <p class="desc">Show each printing as its own search result rather than one row per card.</p>
-        </div>
-        <div class="setting">
-          <label for="notify-run">Notify when a run finishes</label>
-          <span class="inline"><input id="notify-run" type="checkbox"></span>
-          <p class="desc">Post a system notification with the number of cards rendered and failed, when the window is not in front.</p>
-        </div>
-        <div class="setting">
-          <label for="live-preview">Live preview</label>
-          <span class="inline"><input id="live-preview" type="checkbox"></span>
-          <p class="desc">Redraw the card as you edit its fields. When off, press Render or ⌘↵.</p>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.density">Density</span>
-          <select data-feature="settings.density" aria-label="Density"><option>Compact</option></select>
-        </div>
-        <div class="setting">
-          <span class="label" data-feature="settings.restoreSession">Restore last session</span>
-          <span class="inline"><input type="checkbox" data-feature="settings.restoreSession" aria-label="Restore last session"></span>
-        </div>
-      </section>
-      <section class="settings-group">
-        <h3 class="section-heading">Updates</h3>
-        <div class="setting">
-          <span class="label" id="update-version"></span>
-          <span class="inline">
-            <button id="update-check" class="btn" type="button">Check for updates</button>
-            <button id="update-action" class="btn primary" type="button" hidden></button>
-          </span>
-          <p class="desc" id="update-summary"></p>
-          <pre class="update-notes mono" id="update-notes" hidden></pre>
-        </div>
-        <div class="setting">
-          <label for="check-updates">Check at launch</label>
-          <span class="inline"><input id="check-updates" type="checkbox"></span>
-          <p class="desc">Look for a newer release when mimic starts, at most once a day. Nothing downloads until you choose to install it.</p>
-        </div>
-      </section>
-      <p class="faint" style="margin-top:20px">Settings live in <span class="mono">prefs.json</span> in your user config folder, under <span class="mono">mimic</span>. Editing that file by hand is supported.</p>
-    </div>
-    <div class="dialog-foot">
-      <span id="settings-status" class="status"></span>
-      <button class="btn" type="button" data-close>Cancel</button>
-      <button id="settings-save" class="btn primary" type="button">Save</button>
-    </div>
-  </dialog>
+    <dialog
+      id="shortcuts-dialog"
+      class="dialog"
+      aria-labelledby="shortcuts-title"
+      style="width: min(460px, calc(100vw - 32px))"
+    >
+      <div class="dialog-head">
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <button
+          class="btn subtle icon-only"
+          type="button"
+          data-close
+          aria-label="Close"
+        >
+          <svg class="icon"><use href="icons.svg#i-close" /></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <dl class="shortcut-list">
+          <dt><kbd class="mod">⌘</kbd><kbd>1</kbd>–<kbd>6</kbd></dt>
+          <dd>Switch mode</dd>
+          <dt><kbd>/</kbd></dt>
+          <dd>Focus search</dd>
+          <dt><kbd>↑</kbd><kbd>↓</kbd></dt>
+          <dd>Move through results</dd>
+          <dt><kbd>↵</kbd></dt>
+          <dd>Open the focused result, or render from a single-line field</dd>
+          <dt><kbd class="mod">⌘</kbd><kbd>↵</kbd></dt>
+          <dd>Render</dd>
+          <dt><kbd class="mod">⌘</kbd><kbd>S</kbd></dt>
+          <dd>Save PNG</dd>
+          <dt><kbd>0</kbd><kbd>1</kbd><kbd>2</kbd></dt>
+          <dd>Preview at fit, 100% or 200% when not typing</dd>
+          <dt><kbd class="mod">⌘</kbd><kbd>K</kbd></dt>
+          <dd>Command palette <span class="faint">(planned)</span></dd>
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Close a menu or dialog</dd>
+          <dt><kbd>?</kbd></dt>
+          <dd>This reference</dd>
+        </dl>
+      </div>
+    </dialog>
 
-  <dialog id="shortcuts-dialog" class="dialog" aria-labelledby="shortcuts-title" style="width:min(460px, calc(100vw - 32px))">
-    <div class="dialog-head">
-      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
-      <button class="btn subtle icon-only" type="button" data-close aria-label="Close"><svg class="icon"><use href="icons.svg#i-close"/></svg></button>
-    </div>
-    <div class="dialog-body">
-      <dl class="shortcut-list">
-        <dt><kbd class="mod">⌘</kbd><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Switch mode</dd>
-        <dt><kbd>/</kbd></dt><dd>Focus search</dd>
-        <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Move through results</dd>
-        <dt><kbd>↵</kbd></dt><dd>Open the focused result, or render from a single-line field</dd>
-        <dt><kbd class="mod">⌘</kbd><kbd>↵</kbd></dt><dd>Render</dd>
-        <dt><kbd class="mod">⌘</kbd><kbd>S</kbd></dt><dd>Save PNG</dd>
-        <dt><kbd>0</kbd><kbd>1</kbd><kbd>2</kbd></dt><dd>Preview at fit, 100% or 200% when not typing</dd>
-        <dt><kbd class="mod">⌘</kbd><kbd>K</kbd></dt><dd>Command palette <span class="faint">(planned)</span></dd>
-        <dt><kbd>Esc</kbd></dt><dd>Close a menu or dialog</dd>
-        <dt><kbd>?</kbd></dt><dd>This reference</dd>
-      </dl>
-    </div>
-  </dialog>
-
-  <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
-  <div id="toasts" class="toasts" aria-live="polite"></div>
-</body>
+    <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+  </body>
 </html>

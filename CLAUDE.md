@@ -8,11 +8,10 @@ follow. When a human contributor's instructions conflict with it, theirs win.
 
 The repository holds two Go modules that are versioned and released separately.
 
-| Directory      | Contents                                                              |
-| -------------- | --------------------------------------------------------------------- |
-| `engine/`      | The renderer library and the `rendercard` command                     |
-| `ui/`          | The desktop app: Wails v3 shell, Go services and an embedded frontend |
-| `local-fonts/` | A drop folder for real card fonts, which are not tracked              |
+| Directory | Contents                                                              |
+| --------- | --------------------------------------------------------------------- |
+| `engine/` | The renderer library and the `rendercard` command                     |
+| `ui/`     | The desktop app: Wails v3 shell, Go services and an embedded frontend |
 
 `ui` depends on a released `engine` through the pin in `ui/go.mod`. Frame
 templates live in the separate `mimic-templates` repository, and layer

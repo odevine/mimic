@@ -79,6 +79,16 @@ var features = []feature{
 	{key: "settings.density", state: gatePlanned, reason: "A denser layout is planned. Tracked in #82"},
 	{key: "settings.restoreSession", state: gatePlanned, reason: "Restoring the last session is planned. Tracked in #82"},
 
+	{key: "flow.editor", state: gateLive},
+	{key: "editor.move", state: gateLive},
+	{key: "editor.levers", state: gateLive},
+	{key: "editor.json", state: gateLive},
+	{key: "editor.assets", state: gateLive},
+	{key: "editor.fonts", state: gateLive},
+	{key: "editor.use", state: gateLive},
+	{key: "editor.export", state: gateLive},
+	{key: "editor.coverage", state: gateLive},
+
 	{key: "output.mpc", state: gateLive},
 	{key: "output.pdf", state: gatePlanned, reason: "Print sheets are planned. Tracked in #85"},
 }

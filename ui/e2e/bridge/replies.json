@@ -5,9 +5,36 @@
     "testBuild": true
   },
   "Settings.Capabilities": {
+    "editor.assets": {
+      "state": "live"
+    },
+    "editor.coverage": {
+      "state": "live"
+    },
+    "editor.export": {
+      "state": "live"
+    },
+    "editor.fonts": {
+      "state": "live"
+    },
+    "editor.json": {
+      "state": "live"
+    },
+    "editor.levers": {
+      "state": "live"
+    },
+    "editor.move": {
+      "state": "live"
+    },
+    "editor.use": {
+      "state": "live"
+    },
     "flow.art": {
       "state": "needs-engine",
       "reason": "Needs engine support for art override. Tracked in #81"
+    },
+    "flow.editor": {
+      "state": "live"
     },
     "flow.list": {
       "state": "live"
@@ -277,5 +304,119 @@
     ],
     "maxCards": 612,
     "cardback": null
+  },
+  "Studio.List": [],
+  "Studio.Presets": [
+    {
+      "id": "monocolored",
+      "label": "Monocolored",
+      "name": "Mirran Spy",
+      "set": "mbs",
+      "number": "26"
+    },
+    {
+      "id": "two-colors",
+      "label": "Two Colors",
+      "name": "Consuming Aberration",
+      "set": "gtc",
+      "number": "152"
+    },
+    {
+      "id": "three-colors",
+      "label": "Three Colors",
+      "name": "Eerie Ultimatum",
+      "set": "iko",
+      "number": "184"
+    },
+    {
+      "id": "legendary",
+      "label": "Legendary",
+      "name": "Norin the Wary",
+      "set": "tsp",
+      "number": "171"
+    },
+    {
+      "id": "artifact",
+      "label": "Artifact",
+      "name": "Sensei's Divining Top",
+      "set": "2x2",
+      "number": "314"
+    },
+    {
+      "id": "land",
+      "label": "Land",
+      "name": "Flooded Strand",
+      "set": "ktk",
+      "number": "233"
+    }
+  ],
+  "Studio.Vocabulary": {
+    "draws": [
+      "artist",
+      "collector",
+      "copyright",
+      "flipside_pt",
+      "fuse",
+      "mana",
+      "oracle",
+      "pt",
+      "set",
+      "title",
+      "type"
+    ],
+    "conditions": [
+      "back",
+      "color_indicator",
+      "companion",
+      "creature",
+      "front",
+      "fuse",
+      "icon_left",
+      "icon_right",
+      "land",
+      "legendary",
+      "nonland",
+      "nonlegendary",
+      "nonnyx",
+      "nyx",
+      "set_symbol"
+    ],
+    "fontRoles": [
+      "title",
+      "body",
+      "body-italic",
+      "mana",
+      "small-caps",
+      "info"
+    ],
+    "blendModes": [
+      "normal",
+      "multiply",
+      "screen",
+      "overlay",
+      "softlight",
+      "hardlight",
+      "colordodge",
+      "colorburn",
+      "darken",
+      "lighten",
+      "difference",
+      "exclusion",
+      "hue",
+      "saturation",
+      "color",
+      "luminosity"
+    ],
+    "slots": [
+      "background",
+      "pinlines",
+      "twins",
+      "ptBox",
+      "crown",
+      "indicator",
+      "transform_icon",
+      "fuse",
+      "fuse_pinlines"
+    ]
   }
 }

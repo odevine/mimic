@@ -16,4 +16,7 @@ export const CALLS = [
   ["Overrides.Presets"],
   ["Run.Latest"],
   ["Run.MPCInfo"],
+  ["Studio.List"],
+  ["Studio.Presets"],
+  ["Studio.Vocabulary"],
 ];

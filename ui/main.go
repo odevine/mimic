@@ -21,6 +21,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/studio"
 	"github.com/odevine/mimic/ui/internal/services/templates"
 	"github.com/odevine/mimic/ui/internal/testbuild"
 	"github.com/odevine/mimic/ui/internal/workspace"
@@ -80,6 +81,7 @@ func launch() error {
 			Settings:  settings.New(ws),
 			Data:      data.New(ws, desktop.OpenPath),
 			Overrides: overrides.New(ws),
+			Studio:    newStudio(ws, *smoke),
 		},
 		Frontend:        staticFS(),
 		Smoke:           *smoke,
@@ -103,4 +105,14 @@ func checkSmokeOutput(dir string) error {
 		return fmt.Errorf("the launch check's card %s is empty", files[0])
 	}
 	return nil
+}
+
+// newStudio is the editor's service. The launch check has no network, so its presets look
+// up made-up cards
+func newStudio(ws *workspace.Workspace, smoke bool) *studio.Service {
+	s := studio.New(ws, desktop.OpenPath)
+	if smoke {
+		s.UseStandIn()
+	}
+	return s
 }

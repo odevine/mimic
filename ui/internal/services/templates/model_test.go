@@ -129,3 +129,48 @@ func TestBuildTemplateRowsLocalOnlyTemplate(t *testing.T) {
 		t.Fatalf("local-only row = %+v, want a single local version", row)
 	}
 }
+
+func TestVersionLabelNamesTheVersionsThatAreNotReleases(t *testing.T) {
+	cases := map[string]string{
+		pipeline.LocalVersion: "local (developer assets)",
+		pipeline.DraftVersion: "draft (from the editor)",
+		"1.2.3":               "1.2.3",
+	}
+	for in, want := range cases {
+		if got := versionLabel(in); got != want {
+			t.Errorf("versionLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestATemplateTheEditorMadeIsListedAtTheDraftVersion(t *testing.T) {
+	in := pipeline.Installed{ID: "user.mine", Info: template.Info{Name: "Mine"}}
+	rows := buildTemplateRows(nil, []pipeline.Installed{in}, func(string) bool { return false }, func(string, string) bool { return true }, func(string) []string { return []string{pipeline.DraftVersion} })
+	row, ok := findRow(rows, "user.mine")
+	if !ok || len(row.versions) != 1 || row.versions[0].version != "draft" || !row.versions[0].selectable || !row.versions[0].cached {
+		t.Fatalf("row = %+v, %v", row, ok)
+	}
+}
+
+func TestACachedVersionTheCatalogDoesNotListIsAVersionOfItsTemplate(t *testing.T) {
+	idx := oneTemplate("mimic.m15", catalog.Version{Version: "1.0.0", Format: 2})
+	cached := func(id string) []string {
+		if id == "mimic.m15" {
+			return []string{"2.0.0-rc.1", "1.0.0"}
+		}
+		return nil
+	}
+	rows := buildTemplateRows(idx, nil, func(string) bool { return false }, func(id, ver string) bool { return ver == "1.0.0" }, cached)
+	row, ok := findRow(rows, "mimic.m15")
+	if !ok || len(row.versions) != 2 {
+		t.Fatalf("versions = %+v, want the catalog's and the one that was imported", row.versions)
+	}
+	listed, _ := findVer(row.versions, "1.0.0")
+	imported, ok := findVer(row.versions, "2.0.0-rc.1")
+	if !ok || !imported.cached || !imported.selectable || imported.inCatalog {
+		t.Errorf("imported version = %+v, want cached, selectable and not in the catalog", imported)
+	}
+	if !listed.inCatalog {
+		t.Errorf("the catalog's version = %+v, want it said to be in the catalog", listed)
+	}
+}

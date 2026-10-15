@@ -224,6 +224,26 @@ func ManagedFontsDir() string {
 	return filepath.Join(base, "mimic", "fonts")
 }
 
+// DraftsDir is where the editor keeps the templates being built, beside the
+// template cache, or "" when there is no config directory
+func DraftsDir() string {
+	base, err := UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mimic", "drafts")
+}
+
+// TestCardsPath is the file the editor keeps the test cards a person saved in, beside
+// the drafts, or "" when there is no config directory
+func TestCardsPath() string {
+	base, err := UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "mimic", "testcards.json")
+}
+
 // CardbackPath is where the uploaded cardback is kept, beside prefs.json
 func CardbackPath() (string, error) {
 	base, err := UserConfigDir()

@@ -4,6 +4,7 @@ import { app, effect } from "../state.js";
 import { toast } from "../components/toast.js";
 import { loadActiveTemplate } from "../components/templatePicker.js";
 import { describeShape, layoutChips } from "../supports.js";
+import { editor } from "./editor.js";
 
 // The Templates mode keeps everything about templates in one place. Library
 // lists the catalog and installs or activates a version, Defaults picks which
@@ -29,19 +30,23 @@ function sizeLabel(bytes) {
   return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
 
-// versionRow draws one version with what can be done with it. A template that
-// renders only other faces, such as transform, is never the active template,
-// so its versions are downloaded or shown as installed rather than selected
+// versionRow draws one version with what can be done with it, in the same columns on every row: the
+// version, then its main action or its state, then the icons to edit a copy and to remove it. A cell
+// stays empty when the version has no such action, such as a developer folder that cannot be
+// removed, so the buttons of one row line up with the others'. A template that renders only other
+// faces, such as transform, is never the active template, so its versions are downloaded or shown
+// as installed rather than selected
 function versionRow(t, v) {
-  const row = h("div", { class: `tp-row${v.active ? " active" : ""}` }, h("span", { class: "tp-label" }, v.label));
+  const name = `${t.title || t.name} ${v.label}`;
+  const primary = h("span", { class: "tp-primary" });
   if (v.active) {
-    row.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "active"));
+    primary.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "active"));
   } else if (!t.standard && v.selectable && v.cached) {
-    row.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "installed"));
+    primary.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "installed"));
   } else if (v.action === "select" || v.action === "download") {
     const size = v.action === "download" ? sizeLabel(v.size) : "";
     const label = v.action === "download" ? `Download${size ? ` · ${size}` : ""}` : "Select";
-    row.append(
+    primary.append(
       h(
         "button",
         {
@@ -55,9 +60,72 @@ function versionRow(t, v) {
       ),
     );
   } else {
-    row.append(h("span", { class: "tp-reason" }, icon("lock", "icon gate-glyph"), v.reason || "unavailable"));
+    primary.append(h("span", { class: "tp-reason", title: v.reason || "unavailable" }, icon("lock", "icon gate-glyph"), v.reason || "unavailable"));
   }
-  return row;
+  // An installed version can be copied into the editor and changed there
+  const edit = h("span", { class: "tp-slot" });
+  if (v.cached && v.selectable) {
+    edit.append(
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn subtle icon-only tp-edit",
+          style: "min-height:0;height:24px;width:24px",
+          "aria-label": `Edit a copy of ${name}`,
+          "data-tip": "Edit",
+          onclick: () => editor.copyTemplate(t.name, v.version, t.title || t.name),
+        },
+        icon("edit"),
+      ),
+    );
+  }
+  const erase = h("span", { class: "tp-slot" });
+  if (v.removable) {
+    erase.append(
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn subtle icon-only tp-remove",
+          style: "min-height:0;height:24px;width:24px",
+          "aria-label": `Remove ${name}`,
+          "data-tip": "Remove",
+          onclick: () => remove(t, v),
+        },
+        icon("trash"),
+      ),
+    );
+  }
+  return h("div", { class: `tp-row${v.active ? " active" : ""}` }, h("span", { class: "tp-label" }, v.label), primary, edit, erase);
+}
+
+// removeNote says what removing a version leaves, by whether it can be had again
+function removeNote(v) {
+  const was = v.active ? " It is the template in use, so the app switches to another version of it, or to none if that was the only one." : "";
+  if (v.restorable) return `It is deleted from this computer. The catalog still lists it, so it can be downloaded again.${was}`;
+  if (v.version === "draft") return `It is deleted from this computer. The draft stays in the Editor, where Use in mimic makes it available again.${was}`;
+  return `It is deleted from this computer. The catalog does not list it, so it can come back only from the file it was imported from.${was}`;
+}
+
+// remove deletes a version of a template from the library after asking. The template in use is
+// read again when it was the one removed
+async function remove(t, v) {
+  if (busy) return;
+  const name = `${t.title || t.name} ${v.label}`;
+  if (!(await api.confirm(`Remove ${name}?`, removeNote(v), "Remove"))) return;
+  busy = true;
+  try {
+    const res = await api.removeTemplate(t.name, v.version);
+    await loadLibrary();
+    if (res.active) await changed();
+    toast(`Removed ${name}`, "ok");
+  } catch (err) {
+    toast(err.message, "err", 7000);
+    await loadLibrary();
+  } finally {
+    busy = false;
+  }
 }
 
 // aboutTemplate says who made an installed template and whose art it is cut from. Links open in the browser through the page's one handler
@@ -272,7 +340,33 @@ function refresh() {
   if (tab === "defaults") loadDefaults();
 }
 
+// importTemplate installs a .mimic file the person chooses beside the templates that were
+// downloaded. A different copy of a version that is installed is asked about first, since
+// importing it takes the place of the one there
+async function importTemplate() {
+  if (busy) return;
+  busy = true;
+  try {
+    const path = await api.chooseTemplateFile();
+    if (!path) return;
+    let res = await api.importTemplate(path, false);
+    if (res.exists) {
+      const ok = await api.confirm("Replace the installed template?", `${res.title} ${res.version} is installed already, and the file you chose is a different copy of it. Replace the installed one with it?`, "Replace");
+      if (!ok) return;
+      res = await api.importTemplate(path, true);
+    }
+    await loadLibrary();
+    if (res.active) await changed();
+    toast(res.same ? `${res.title} ${res.version} is installed already` : `${res.replaced ? "Replaced" : "Imported"} ${res.title} ${res.version}`, "ok");
+  } catch (err) {
+    toast(err.message, "err", 7000);
+  } finally {
+    busy = false;
+  }
+}
+
 export function initTemplates() {
+  $("tm-import-template").addEventListener("click", importTemplate);
   for (const chip of document.querySelectorAll("#mode-templates [data-tab]")) {
     chip.addEventListener("click", () => showTab(chip.dataset.tab));
   }

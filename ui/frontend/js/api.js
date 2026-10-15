@@ -109,6 +109,8 @@ export function watchJob(jobId, onStep) {
 const TEXT_LISTS = [{ name: "Card lists", pattern: "*.txt;*.csv;*.dek;*.mtga" }];
 const IMAGES = [{ name: "Images", pattern: "*.png;*.jpg;*.jpeg" }];
 const FONTS = [{ name: "Fonts", pattern: "*.ttf;*.otf" }];
+const PNGS = [{ name: "PNG images", pattern: "*.png" }];
+const BUNDLES = [{ name: "mimic templates", pattern: "*.mimic" }];
 
 const SYSTEM = "System";
 
@@ -194,12 +196,116 @@ export const api = {
   activeTemplate: () => rpc("Templates", "Active"),
   selectTemplate: async (name, version, install = false) => ({ jobId: await rpc("Templates", "Select", { name, version, install }) }),
   selectEvents: (jobId, onStep) => watchJob(jobId, onStep),
+  // chooseTemplateFile asks for a .mimic bundle and resolves to its path, or an empty string when
+  // the user cancelled. importTemplate installs the file at path beside the downloaded ones and
+  // resolves to { template, version, title, same, replaced, exists, active }. exists says a
+  // different copy of that version is installed and nothing was written, until it is sent again
+  // with replace
+  chooseTemplateFile: () => pickFile({ title: "Choose a template", filters: BUNDLES }),
+  importTemplate: (path, replace) => rpc("Templates", "Import", { path, replace: !!replace }),
+  // removeTemplate deletes an installed version from the library, and resolves to { template,
+  // version, active, now }. active says it was the template in use, which the app switched away
+  // from to the template named by now
+  removeTemplate: (template, version) => rpc("Templates", "Remove", { template, version }),
   // setTemplateFeature keeps the value chosen for one feature of an installed
   // template, and resolves to the template's details with it in force. A null
   // value takes the choice back
   setTemplateFeature: (template, name, value) => rpc("Templates", "SetFeature", { template, name, value }),
   faceTemplates: () => rpc("Templates", "Faces"),
   setFaceTemplate: (key, name, version) => rpc("Templates", "SetFace", { key, name, version }),
+
+  // The editor's drafts. A draft is { id, templateId, name, updated, forkedFrom,
+  // problem }. createDraft starts a blank template and forkDraft copies an
+  // installed template version, each resolving to the new draft, and openDraft
+  // resolves to { draft, meta, layouts, diagnostics, valid }. renderDraft starts a job
+  // like render does, and resolves to { jobId, dpi }, so its events, image and cancel
+  // are the render ones
+  drafts: () => rpc("Studio", "List"),
+  createDraft: (name, dpi) => rpc("Studio", "Create", { name, dpi: dpi || 0 }),
+  forkDraft: (template, version, name) => rpc("Studio", "Fork", { template, version, name }),
+  renameDraft: (id, name) => rpc("Studio", "Rename", { id, name }),
+  deleteDraft: (id) => rpc("Studio", "Delete", id),
+  openDraft: (id) => rpc("Studio", "Open", id),
+  // testCards lists the preset test cards, each { id, label, name, set, number }, real
+  // printings that are looked up when one is chosen. resolveTestCard resolves to the
+  // card a preset names, as Scryfall has it, or rejects with why it could not be found
+  // A test card a person saved has user: true and can be removed. saveTestCard keeps a
+  // card, as the form has edited it, under a name, and resolves to its preset
+  testCards: () => rpc("Studio", "Presets"),
+  resolveTestCard: (id) => rpc("Studio", "ResolvePreset", id),
+  saveTestCard: (label, card, edits, face) => rpc("Studio", "SavePreset", { label, card, edits: edits || null, face: face || 0 }),
+  deleteTestCard: (id) => rpc("Studio", "DeletePreset", id),
+  // edits are the card form's field values, as Single sends them, laid over the card by
+  // the app, and may be null for none. setTestCard keeps the card as edited
+  setTestCard: (id, card, edits, face) => rpc("Studio", "SetTestCard", { id, card, edits: edits || null, face: face || 0 }),
+  // coverage draws the card small and without its art, for a strip of many. view is
+  // { hide, show }, the items to leave out of the drawing and the layers to draw whatever
+  // their condition says, each named as "layer:frame" or "text:title", for a preview that
+  // looks at the template and changes none of it, and full draws at the resolution the
+  // layout is authored at and not the preview's
+  renderDraft: (id, card, edits, face, coverage, view) =>
+    rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage, hide: (view && view.hide) || [], show: (view && view.show) || [], full: !!(view && view.full) }),
+  // describeDraft resolves to what the draft's layout draws for the card, in draw
+  // order: { layout, authored, delivered, items, editable, reason, rev }, where an
+  // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
+  // the places as { x, y, width, height }. A text box also has baseline, the line its
+  // first baseline lies on, or with anchor cap-top or cap-center the top or middle of its capitals, placed with moved and narrowed, where the card puts it,
+  // override, { when, index }, and fit, { size, wanted, floor, lines, overflows }. show
+  // is the layers to describe as drawn whatever their condition says
+  describeDraft: (id, card, edits, face, show) => rpc("Studio", "Describe", { id, card, edits: edits || null, face: face || 0, show: show || [] }),
+  // applyDraft makes edits to the draft and saves them, each { op, layout, kind, key, dx,
+  // dy, rect, to } with its numbers in the finished image's pixels, and resolves to { rev,
+  // inverse }, the edits that undo them. An op stretch, with a side edge of n, e, s or w and
+  // a dx or a dy, moves one side of a text box
+  applyDraft: (id, ops) => rpc("Studio", "Apply", { id, ops }),
+  // draftSource resolves to { files: [{ name, content }] }, template.json and each
+  // layout as they are on disk. checkDraftFile resolves to { writable, problems }, what
+  // the text would do as a file without saving it, each problem { severity, line,
+  // column, path, message }. draftVocabulary resolves to the names a field can take:
+  // { draws, conditions, fontRoles, blendModes, slots }. An edit of a field is an op
+  // set or unset with a kind, a key and a path of keys, and a whole file is an op
+  // replace with a file and its content
+  draftSource: (id) => rpc("Studio", "Source", id),
+  checkDraftFile: (id, file, content) => rpc("Studio", "CheckFile", { id, file, content }),
+  draftVocabulary: () => rpc("Studio", "Vocabulary"),
+  // draftAssets resolves to the draft's images and fonts as { parts, fonts, roles,
+  // builtins, slots }. A part is { name, slot, dir, materials, problems } with a
+  // material { key, state, file, width, height, bytes, from }, and its state is
+  // image, blended, any, missing or extra. draftThumbs resolves to a data URL for each
+  // image path it was given. importDraftImage and importDraftFont ask for a file and
+  // resolve to null when the user cancelled, and otherwise to { rev, inverse, valid,
+  // diagnostics, id, warnings } like an apply does. The image goes in as the
+  // material of the part, which is made with the slot when it is new. The font goes
+  // in with the roles named, and its id is the result's id
+  draftAssets: (id) => rpc("Studio", "Assets", id),
+  draftThumbs: (id, files, edge) => rpc("Studio", "Thumbs", { id, files, edge: edge || 0 }),
+  importDraftImage: async (id, part, material, slot) => {
+    const path = await pickFile({ title: "Choose a PNG image", filters: PNGS });
+    return path ? rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }) : null;
+  },
+  importDraftFont: async (id, assign) => {
+    const path = await pickFile({ title: "Choose a font", filters: FONTS });
+    return path ? rpc("Studio", "ImportFont", { id, path, assign: assign || [] }) : null;
+  },
+  // setDraftMarks keeps which elements are locked and which ones a drag snaps to,
+  // each named "layout/kind:key"
+  setDraftMarks: (id, locked, snapTo) => rpc("Studio", "SetMarks", { id, locked, snapTo }),
+  // releaseDraft resolves to what a bundle of the draft would say and whether it can be
+  // made: { templateId, name, version, author, license, credits, filename, installed,
+  // active, diagnostics, ready }. useDraft makes the draft a template the other modes
+  // can use, and resolves to { template, version, replaced, active }. exportDraft asks
+  // where to save a bundle and resolves to { path, bytes }, or null when the user
+  // cancelled. showDraftFolder opens the draft's folder
+  releaseDraft: (id) => rpc("Studio", "Release", id),
+  useDraft: (id) => rpc("Studio", "Use", id),
+  exportDraft: async (id, filename) => {
+    const path = await pickFile({ title: "Export the template", name: filename, save: true, filters: BUNDLES });
+    return path ? rpc("Studio", "Export", { id, path }) : null;
+  },
+  showDraftFolder: (id) => rpc("Studio", "ShowFolder", id),
+  // draftStamp resolves to a fingerprint of the draft's template files, which changes when
+  // anything writes them, and openDraft and applyDraft carry it as stamp
+  draftStamp: (id) => rpc("Studio", "Stamp", id),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

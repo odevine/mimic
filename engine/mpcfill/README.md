@@ -164,7 +164,7 @@ plus 0.12 inches (3.048 mm) of bleed on each side.
 The website hides images above 1500 DPI (5568 pixels tall) or 30 MB with its
 default search settings, and an image it hides cannot survive an import. `DPI`,
 `MaxDPI`, and `MaxImageBytes` state those rules for checking an image before it
-goes in a project. Mimic's templates top out at 1200 DPI, and a card rendered
+goes in a project. mimic's templates top out at 1200 DPI, and a card rendered
 at that resolution is around 10 MB.
 
 ## What is not here

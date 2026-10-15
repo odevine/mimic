@@ -14,13 +14,14 @@ import { initSingle, single } from "./flows/single.js";
 import { initList, list } from "./flows/list.js";
 import { initRun } from "./flows/run.js";
 import { initTemplates } from "./flows/templates.js";
+import { initEditor } from "./flows/editor.js";
 import { initOverrides } from "./flows/overrides.js";
 import { initUpdates } from "./components/updates.js";
 
 // Entry point: loads what every mode shares, wires the shell, and routes
 // between modes. Switching modes changes the workspace and nothing else
 
-const MODES = ["single", "list", "art", "templates", "run"];
+const MODES = ["single", "list", "art", "templates", "run", "editor"];
 
 async function loadCapabilities() {
   try {
@@ -153,7 +154,7 @@ function initKeyboard() {
     const dialogOpen = !!document.querySelector("dialog[open]");
 
     if (modKey(e) && !e.shiftKey && !e.altKey) {
-      if (/^[1-5]$/.test(e.key) && !menuOwnsShortcuts) {
+      if (/^[1-6]$/.test(e.key) && !menuOwnsShortcuts) {
         e.preventDefault();
         setMode(MODES[Number(e.key) - 1]);
         return;
@@ -221,12 +222,18 @@ async function boot() {
   initList();
   initRun();
   initTemplates();
+  initEditor();
   initOverrides();
   initKeyboard();
   initLinks();
   initUpdates();
   initSplitters(document.querySelector("#mode-single .regions"), (app.settings.peek().splits || {}).single, (w) =>
     persistSplits("single", w),
+  );
+  // The editor is hidden while the page boots, so its columns cannot be measured and
+  // start from these widths
+  initSplitters(document.querySelector("#mode-editor .regions"), (app.settings.peek().splits || {}).editor || [300, 320], (w) =>
+    persistSplits("editor", w),
   );
 
   // Anything resolved against the template refreshes when it changes, which is

@@ -140,8 +140,8 @@ export function createCardEditor(ctx) {
       {
         type: "button",
         class: "btn subtle icon-only",
-        "aria-label": "Insert a mana symbol",
-        "data-tip": "Insert a mana symbol",
+        "aria-label": "Insert Symbol",
+        "data-tip": "Insert Symbol",
         onclick: (e) => openPopover(e.currentTarget, symbolPalette((code) => insertAtCursor(input, code)), { align: "end" }),
       },
       icon("symbols"),

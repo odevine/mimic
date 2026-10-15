@@ -2,6 +2,7 @@ import { test as base, expect } from "@playwright/test";
 import { Fake } from "./fake.mjs";
 import { Scratch } from "./scratch.mjs";
 import { servers } from "./servers.mjs";
+import { EditorPage } from "./pages/EditorPage.mjs";
 import { ListPage } from "./pages/ListPage.mjs";
 import { OverridesPage } from "./pages/OverridesPage.mjs";
 import { RunPage } from "./pages/RunPage.mjs";
@@ -24,6 +25,8 @@ async function restoreDefaults(page, defaults) {
     for (const p of await api.presets()) await api.deletePreset(p.name);
     await api.saveSettings(defaults);
     for (const f of (await api.fonts()).pool) if (f.removable) await api.removeFont(f.name);
+    for (const d of await api.drafts()) await api.deleteDraft(d.id);
+    for (const p of await api.testCards()) if (p.user) await api.deleteTestCard(p.id);
   }, defaults);
 }
 
@@ -89,6 +92,11 @@ export const test = base.extend({
   },
   settings: async ({ app }, use) => use(new SettingsDialog(app)),
   templates: async ({ app }, use) => use(new TemplatesPage(app)),
+  editor: async ({ app }, use) => {
+    const editor = new EditorPage(app);
+    await editor.show();
+    await use(editor);
+  },
 });
 
 export { expect };

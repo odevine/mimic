@@ -3,12 +3,13 @@
 // its state, with nothing in it that changes from one run to the next except
 // what its mask names
 import { expect } from "@playwright/test";
+import { EditorPage } from "../pages/EditorPage.mjs";
 import { ListPage } from "../pages/ListPage.mjs";
 import { OverridesPage } from "../pages/OverridesPage.mjs";
 import { SettingsDialog } from "../pages/SettingsDialog.mjs";
 import { SinglePage } from "../pages/SinglePage.mjs";
 import { noTemplate } from "../bridge-fixtures.mjs";
-import { card, done, result } from "./cards.mjs";
+import { assetsView, at, card, describeView, done, draftSummary, draftView, partView, presetCards, result, standardAssets, standardItems } from "./cards.mjs";
 
 const ELF = {
   ManaCost: "{G}",
@@ -102,6 +103,296 @@ export const scenes = {
       await expect(single.activity).toHaveAttribute("data-state", "done");
     },
   },
+  "editor-empty": {
+    run: async ({ bridge, page }) => {
+      await bridge.boot();
+      await new EditorPage(page).show();
+      await expect(page.locator("#ed-empty")).toBeVisible();
+    },
+  },
+  "editor-draft": {
+    mask: ["#ed-stage", "#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame", { forkedFrom: "mimic.m15 1.0.0" });
+      bridge.reply("Studio.List", [mine, draftSummary("older", "Older frame", { updated: "2026-10-01T09:00:00Z" })]);
+      bridge.reply(
+        "Studio.Open",
+        draftView(mine, { diagnostics: [{ severity: "warning", path: "template.json", message: "the template has no description" }] }),
+      );
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.activity).toHaveAttribute("data-state", "done");
+      await expect(editor.problems).toHaveCount(1);
+    },
+  },
+  "editor-selection": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.activity).toHaveAttribute("data-state", "done");
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "oracle" }).click();
+      await expect(editor.handles).toHaveCount(8);
+      // The first edit is made, so undo is there and the stand-in for the card is hidden
+      await page.keyboard.press("ArrowRight");
+      await expect(editor.undoButton).toBeEnabled();
+    },
+  },
+  "editor-card-fields": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.openFine();
+      // A field is changed, so the preset lets go and the form says what differs
+      await editor.cardField("typeLine").fill("Land");
+      await expect(page.locator("#ed-fine-revert")).toBeVisible();
+    },
+  },
+  "editor-images": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine, { meta: { locked: ["normal/text:title"], snapTo: ["normal/text:oracle"] } }));
+      bridge.assets = assetsView([partView("background", "", ["any"]), partView("frame", "background", [..."wubrg"], { problems: ["The images are not one size: 1000x1400 for w, u, b, r; 1002x1400 for g"] })]);
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "frame" }).click();
+      await expect(editor.images.locator('.ed-cell[data-material="w"] img')).toHaveCount(1);
+    },
+  },
+  "editor-add": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.addButton.click();
+      await editor.addKind.selectOption("layer");
+      await editor.addPart.selectOption({ label: "A new part from a PNG image" });
+      await editor.addPartName.fill("glow");
+      await expect(editor.addSlot).toBeVisible();
+    },
+  },
+  "editor-export": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      bridge.reply("Studio.Release", {
+        templateId: "user.my-frame",
+        name: "My frame",
+        version: "0.1.0",
+        author: "Jane Doe",
+        license: "CC-BY-4.0",
+        credits: [
+          { name: "Forked from mimic.m15 1.2.0", note: "frame art", url: "https://example.com/m15" },
+          { name: "Jane Doe", note: "new pinlines" },
+        ],
+        filename: "user.my-frame-0.1.0.mimic",
+        installed: false,
+        active: false,
+        diagnostics: [{ severity: "warning", message: "parts/frame/w.png is larger than the canvas" }],
+        ready: true,
+      });
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.exportButton.click();
+      await expect(editor.exportDialog).toBeVisible();
+      await expect(editor.exportCredits).toHaveCount(2);
+    },
+  },
+  "editor-baseline": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      const crown = { kind: "layer", key: "crown", part: "crown", drawn: false, why: 'its condition "legendary" does not hold for this card', authored: at(0, 0, 0, 0), delivered: at(0, 0, 0, 0) };
+      const items = [
+        standardItems[0],
+        standardItems[1],
+        crown,
+        standardItems[2],
+        { ...standardItems[3], ink: true, delivered: at(100, 100, 420, 52), authored: at(100, 100, 420, 52), baseline: at(100, 160, 600, 0), narrowed: true, placed: at(100, 80, 520, 80), override: { when: "legendary", index: 0 }, fit: { size: 30, wanted: 38, floor: 21, lines: 1, overflows: false } },
+        ...standardItems.slice(4),
+      ];
+      bridge.source.layout.textBoxes.title.flow = { clearOf: "mana" };
+      bridge.reply("Studio.Describe", () => describeView(items));
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(8);
+      await editor.sizeCanvas(400);
+      await editor.row("background").locator('[data-toggle="visible"]').click();
+      await editor.layers.filter({ has: page.locator(".ed-layer-name", { hasText: /^title$/ }) }).click();
+      await expect(page.locator("#ed-overlay .ed-box.baseline")).toHaveCount(1);
+    },
+  },
+  "editor-coverage": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      let issued = 0;
+      bridge.reply("Studio.Render", () => ({ jobId: `job-${++issued}`, dpi: 40 }));
+      bridge.reply("Studio.ResolvePreset", (id) => presetCards[id]);
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.coverage.locator("summary").click();
+      await editor.coverageRun.click();
+      for (let n = 2; n <= 7; n++) {
+        await expect.poll(() => issued).toBeGreaterThanOrEqual(n);
+        await bridge.job(`job-${n}`, [n === 7 ? { seq: 1, done: true, error: "no frame for a land with this condition" } : done(1)]);
+      }
+      await expect(editor.coverageLine).toHaveText("5 of 6 drawn. Not drawn: Land");
+    },
+  },
+  "editor-fonts": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      const base = standardAssets();
+      bridge.assets = assetsView(base.parts, {
+        fonts: [
+          { id: "plantin-regular", file: "font/plantin-regular.ttf", family: "Plantin", style: "Regular" },
+          { id: "lost", file: "font/lost.otf", family: "Lost Face", style: "Bold", missing: true },
+        ],
+        roles: base.roles.map((r) => (r.role === "body" ? { ...r, font: "plantin-regular" } : r)),
+      });
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await new EditorPage(page).openSection("about");
+      await expect(editor.fonts).toHaveCount(2);
+      await expect(page.locator("#ed-role-body")).toHaveValue("font:plantin-regular");
+    },
+  },
+  "editor-levers": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine, { meta: { forkedFrom: "mimic.m15 1.0.0", lockedCredits: 1, licenseLocked: true } }));
+      bridge.source.template.license = "CC BY 4.0";
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await expect(editor.layers).toHaveCount(7);
+      await editor.sizeCanvas(300);
+      await editor.layers.filter({ hasText: "title" }).click();
+      await expect(editor.lever("lever-fontSize")).toHaveValue("60");
+      await editor.openCanvas();
+      // The width and height are kept in proportion to begin with, so the padlock is closed
+      await expect(page.locator("#ed-canvas-levers [data-ratio='lock']")).toHaveAttribute("aria-pressed", "true");
+      await page.locator("#lever-shadow-on").check();
+      await new EditorPage(page).openSection("about");
+      await expect(editor.lever("template-license")).toHaveValue("CC BY 4.0");
+      await editor.lever("lever-color").fill("red");
+      await editor.lever("lever-color").blur();
+      await expect(editor.leverError("lever-color")).toBeVisible();
+    },
+  },
+  "editor-json": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const mine = draftSummary("my-frame", "My frame");
+      bridge.reply("Studio.List", [mine]);
+      bridge.reply("Studio.Open", draftView(mine));
+      bridge.reply("Studio.CheckFile", () => ({
+        writable: false,
+        problems: [
+          { severity: "error", line: 12, column: 5, message: "invalid character '}' looking for beginning of object key string" },
+          { severity: "warning", path: "template.json", message: "the template has no description" },
+        ],
+      }));
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
+      await bridge.job("job-1", [done(1)]);
+      await editor.jsonButton.click();
+      await editor.jsonTabs.nth(1).click();
+      await expect(editor.jsonProblems).toHaveCount(2);
+    },
+  },
+  "editor-problems": {
+    mask: ["#ed-activity"],
+    run: async ({ bridge, page }) => {
+      const broken = draftSummary("broken", "Broken frame");
+      bridge.reply("Studio.List", [broken]);
+      bridge.reply(
+        "Studio.Open",
+        draftView(broken, {
+          valid: false,
+          layouts: [],
+          diagnostics: [
+            { severity: "error", path: "layouts/normal.json", message: "unexpected end of JSON input" },
+            { severity: "error", path: "layouts.normal.art[0].after", message: "names no stack entry, \"background\"" },
+          ],
+        }),
+      );
+      await bridge.boot();
+      await new EditorPage(page).show();
+      await expect(page.locator("#ed-problems li")).toHaveCount(2);
+    },
+  },
+  "editor-new-dialog": {
+    run: async ({ bridge, page }) => {
+      await bridge.boot();
+      const editor = new EditorPage(page);
+      await editor.show();
+      await editor.openNewDialog();
+      await editor.dialogName.fill("My frame");
+    },
+  },
   "list-review": {
     run: async ({ bridge, page }) => void (await resolvedList(bridge, page)),
   },
@@ -122,7 +413,7 @@ export const scenes = {
   },
   "templates-library": {
     run: async ({ bridge, page }) => {
-      const version = (v, extra) => ({ version: v, label: v, cached: true, selectable: true, active: false, action: "select", ...extra });
+      const version = (v, extra) => ({ version: v, label: v, cached: true, selectable: true, active: false, action: "select", removable: true, restorable: true, ...extra });
       bridge.reply("Templates.List", [
         {
           name: "mimic.m15",

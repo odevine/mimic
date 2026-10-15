@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { Bridge, loadReplies } from "./bridge.mjs";
-import { installedFonts, installedTemplate } from "./bridge/cards.mjs";
+import { PIXEL, Source, describeView, installedFonts, installedTemplate, presetCards, standardAssets } from "./bridge/cards.mjs";
 
 // A page test gets a bridge on a fresh page. It sets replies, then boots the
 // page, and fails if the page made a call no reply covers. The app is answered as
@@ -12,6 +12,24 @@ export const test = base.extend({
     await bridge.install();
     bridge.reply("Templates.Active", installedTemplate);
     bridge.reply("Data.Fonts", installedFonts);
+    // A draft draws the standard layers, and an edit to it is saved and can be undone
+    bridge.reply("Studio.Describe", () => describeView());
+    bridge.reply("Studio.Apply", (req) => ({
+      rev: 1,
+      inverse: req.ops.map((op) => ({ ...op, dx: -(op.dx || 0), dy: -(op.dy || 0) })).reverse(),
+      valid: true,
+      diagnostics: [],
+    }));
+    bridge.source = new Source();
+    bridge.reply("Studio.Source", () => bridge.source.files());
+    bridge.reply("Studio.CheckFile", () => ({ writable: true, problems: [] }));
+    // Its images and fonts are those the standard layers draw from, and a thumbnail is a pixel
+    // A preset is looked up as the real card it names
+    bridge.reply("Studio.ResolvePreset", (id) => presetCards[id]);
+    bridge.assets = standardAssets();
+    bridge.reply("Studio.Assets", () => bridge.assets);
+    bridge.reply("Studio.Thumbs", (req) => Object.fromEntries(req.files.map((f) => [f, PIXEL])));
+    bridge.reply("Studio.SetMarks", null);
     const external = [];
     await page.route((url) => !["app.test", "127.0.0.1", "localhost"].includes(url.hostname), (route) => {
       external.push(route.request().url());

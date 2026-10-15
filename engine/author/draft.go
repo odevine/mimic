@@ -58,7 +58,7 @@ func (d *Draft) Open(opt Options) (*template.Template, manifest.Diagnostics, err
 }
 
 // Forget drops the decoded copies of the image at path, a slash separated path from
-// the template's folder, so a file that has changed is read again. The studio calls
+// the template's folder, so a file that has changed is read again. The editor calls
 // it after replacing an image. Paths that did not change keep their decoded images
 func (d *Draft) Forget(path string) { d.cache.Forget(path) }
 

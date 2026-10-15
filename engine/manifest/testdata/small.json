@@ -3,7 +3,7 @@
   "id": "mimic.test",
   "name": "Test frame",
   "description": "A small template that uses every part of the format",
-  "author": { "name": "Mimic", "url": "https://example.com" },
+  "author": { "name": "mimic", "url": "https://example.com" },
   "license": "CC0-1.0",
   "credits": [{ "name": "A. Artist", "url": "https://example.com/a", "note": "pinline art" }],
   "features": {

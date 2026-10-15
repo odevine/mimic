@@ -40,6 +40,33 @@ Settings.Put(prefs.Settings) -> prefs.Settings
 Settings.Resolution() -> settings.Resolutions !
 Settings.Resources(string) -> settings.ResourcesView
 Settings.SetResolution(settings.ResolutionRequest) -> settings.Resolutions !
+Studio.Apply(studio.ApplyRequest) -> studio.ApplyResult !
+Studio.Assets(string) -> studio.AssetsView !
+Studio.CheckFile(studio.CheckRequest) -> studio.CheckResult !
+Studio.Create(studio.CreateRequest) -> drafts.Summary !
+Studio.Delete(string) !
+Studio.DeletePreset(string) !
+Studio.Describe(studio.DescribeRequest) -> studio.DescribeView !
+Studio.Export(studio.ExportRequest) -> studio.ExportResult !
+Studio.Fork(studio.ForkRequest) -> drafts.Summary !
+Studio.ImportFont(studio.FontRequest) -> studio.ImportResult !
+Studio.ImportImage(studio.ImageRequest) -> studio.ImportResult !
+Studio.List() -> []drafts.Summary !
+Studio.Open(string) -> studio.OpenView !
+Studio.Presets() -> []studio.Preset
+Studio.Release(string) -> studio.ReleaseView !
+Studio.Rename(studio.RenameRequest) -> drafts.Summary !
+Studio.Render(studio.RenderRequest) -> render.Started !
+Studio.ResolvePreset(string) -> cardlist.ShapedCard !
+Studio.SavePreset(studio.SavePresetRequest) -> studio.Preset !
+Studio.SetMarks(studio.MarksRequest) !
+Studio.SetTestCard(studio.TestCardRequest) !
+Studio.ShowFolder(string) !
+Studio.Source(string) -> studio.SourceView !
+Studio.Stamp(string) -> string !
+Studio.Thumbs(studio.ThumbRequest) -> map[string]string !
+Studio.Use(string) -> studio.UseResult !
+Studio.Vocabulary() -> studio.VocabView
 System.Confirm(desktop.ConfirmRequest) -> bool
 System.OpenURL(string) !
 System.PickFile(desktop.PickRequest) -> string !
@@ -48,7 +75,9 @@ System.SmokeResult(bool, string)
 System.Version() -> desktop.VersionInfo
 Templates.Active() -> templates.ActiveView
 Templates.Faces() -> []pipeline.FaceRow
+Templates.Import(templates.ImportRequest) -> templates.ImportResult !
 Templates.List() -> []templates.TemplateView
+Templates.Remove(templates.RemoveRequest) -> templates.RemoveResult !
 Templates.Select(templates.SelectRequest) -> string !
 Templates.SetFace(templates.FaceChoice) -> []pipeline.FaceRow !
 Templates.SetFeature(templates.FeatureChoice) -> templates.DetailsView !
@@ -331,6 +360,51 @@ desktop.VersionInfo struct {
 	testBuild bool (omitempty)
 }
 
+draftedit.Op struct {
+	op string
+	layout string
+	kind string
+	key string
+	dx int (omitempty)
+	dy int (omitempty)
+	rect draftedit.Rect (omitempty)
+	edge string (omitempty)
+	to int (omitempty)
+	path []string (omitempty)
+	value custom json.RawMessage (omitempty)
+	file string (omitempty)
+	content string (omitempty)
+	before string (omitempty)
+	as string (omitempty)
+	stash string (omitempty)
+}
+
+draftedit.Rect struct {
+	x int
+	y int
+	width int
+	height int
+}
+
+drafts.Meta struct {
+	forkedFrom string (omitempty)
+	lockedCredits int (omitempty)
+	licenseLocked bool (omitempty)
+	testCard card.Data (omitempty)
+	face int (omitempty)
+	locked []string (omitempty)
+	snapTo []string (omitempty)
+}
+
+drafts.Summary struct {
+	id string
+	templateId string
+	name string
+	updated time
+	forkedFrom string (omitempty)
+	problem string (omitempty)
+}
+
 float64 = float64
 
 frame.Kind = string
@@ -549,6 +623,313 @@ settings.ResourcesView struct {
 
 string = string
 
+studio.ApplyRequest struct {
+	id string
+	ops []draftedit.Op
+}
+
+studio.ApplyResult struct {
+	rev int
+	inverse []draftedit.Op
+	valid bool
+	diagnostics []studio.DiagnosticView
+	stamp string
+}
+
+studio.AssetsView struct {
+	parts []studio.PartView
+	fonts []studio.FontView
+	roles []studio.RoleView
+	builtins []studio.BuiltinView
+	slots []studio.SlotView
+}
+
+studio.BuiltinView struct {
+	id string
+}
+
+studio.CheckRequest struct {
+	id string
+	file string
+	content string
+}
+
+studio.CheckResult struct {
+	writable bool
+	problems []studio.Problem
+}
+
+studio.CreateRequest struct {
+	name string
+	dpi int
+}
+
+studio.DescribeRequest struct {
+	id string
+	card card.Data
+	edits cardlist.Edits (omitempty)
+	face int
+	show []string (omitempty)
+}
+
+studio.DescribeView struct {
+	layout string
+	authored studio.SizeView
+	delivered studio.SizeView
+	items []studio.ItemView
+	editable bool
+	reason string (omitempty)
+	rev int
+}
+
+studio.DiagnosticView struct {
+	severity string
+	path string (omitempty)
+	message string
+}
+
+studio.ExportRequest struct {
+	id string
+	path string
+}
+
+studio.ExportResult struct {
+	path string
+	bytes int64
+}
+
+studio.FileView struct {
+	name string
+	content string
+}
+
+studio.FitView struct {
+	size float64
+	wanted float64
+	floor float64
+	lines int
+	overflows bool
+}
+
+studio.FontRequest struct {
+	id string
+	path string
+	assign []string
+}
+
+studio.FontView struct {
+	id string
+	file string
+	family string (omitempty)
+	style string (omitempty)
+	source string (omitempty)
+	license string (omitempty)
+	missing bool (omitempty)
+}
+
+studio.ForkRequest struct {
+	template string
+	version string
+	name string
+}
+
+studio.ImageRequest struct {
+	id string
+	part string
+	material string
+	slot string
+	path string
+}
+
+studio.ImportResult struct {
+	rev int
+	inverse []draftedit.Op
+	valid bool
+	diagnostics []studio.DiagnosticView
+	stamp string
+	id string
+	warnings []string
+}
+
+studio.ItemView struct {
+	kind string
+	key string
+	part string (omitempty)
+	after string (omitempty)
+	images []string (omitempty)
+	drawn bool
+	why string (omitempty)
+	ink bool (omitempty)
+	authored studio.RectView
+	delivered studio.RectView
+	baseline studio.RectView (omitempty)
+	anchor string (omitempty)
+	placed studio.RectView (omitempty)
+	moved bool (omitempty)
+	narrowed bool (omitempty)
+	override studio.OverrideView (omitempty)
+	fit studio.FitView (omitempty)
+}
+
+studio.LayoutView struct {
+	name string
+	width int
+	height int
+	dpi int
+	rotate int (omitempty)
+	serves []frame.Shape
+}
+
+studio.MarksRequest struct {
+	id string
+	locked []string
+	snapTo []string
+}
+
+studio.MaterialView struct {
+	key string
+	state string
+	file string (omitempty)
+	width int (omitempty)
+	height int (omitempty)
+	bytes int64 (omitempty)
+	from []string (omitempty)
+}
+
+studio.OpenView struct {
+	draft drafts.Summary
+	meta drafts.Meta
+	layouts []studio.LayoutView
+	diagnostics []studio.DiagnosticView
+	valid bool
+	stamp string
+}
+
+studio.OverrideView struct {
+	when string
+	index int
+}
+
+studio.PartView struct {
+	name string
+	slot string (omitempty)
+	dir string
+	materials []studio.MaterialView
+	problems []string (omitempty)
+}
+
+studio.Preset struct {
+	id string
+	label string
+	name string
+	set string
+	number string
+	user bool (omitempty)
+}
+
+studio.Problem struct {
+	severity string
+	line int (omitempty)
+	column int (omitempty)
+	path string (omitempty)
+	message string
+}
+
+studio.RectView struct {
+	x int
+	y int
+	width int
+	height int
+}
+
+studio.ReleaseView struct {
+	templateId string
+	name string
+	version string
+	author string
+	license string
+	credits []manifest.Credit
+	filename string
+	installed bool
+	active bool
+	diagnostics []studio.DiagnosticView
+	ready bool
+}
+
+studio.RenameRequest struct {
+	id string
+	name string
+}
+
+studio.RenderRequest struct {
+	id string
+	card card.Data
+	edits cardlist.Edits (omitempty)
+	face int
+	hide []string (omitempty)
+	show []string (omitempty)
+	coverage bool (omitempty)
+	full bool (omitempty)
+}
+
+studio.RoleView struct {
+	role string
+	label string
+	standard bool
+	font string (omitempty)
+	builtin string (omitempty)
+	default string (omitempty)
+}
+
+studio.SavePresetRequest struct {
+	label string
+	card card.Data
+	edits cardlist.Edits (omitempty)
+	face int
+}
+
+studio.SizeView struct {
+	width int
+	height int
+}
+
+studio.SlotView struct {
+	name string
+	materials []string
+}
+
+studio.SourceView struct {
+	files []studio.FileView
+}
+
+studio.TestCardRequest struct {
+	id string
+	card card.Data
+	edits cardlist.Edits (omitempty)
+	face int
+}
+
+studio.ThumbRequest struct {
+	id string
+	files []string
+	edge int
+}
+
+studio.UseResult struct {
+	template string
+	version string
+	replaced bool
+	active bool
+}
+
+studio.VocabView struct {
+	draws []string
+	conditions []string
+	fontRoles []string
+	blendModes []string
+	slots []string
+}
+
 template.Resolution struct {
 	dpi int
 	width int
@@ -596,6 +977,33 @@ templates.FeatureView struct {
 	value any
 }
 
+templates.ImportRequest struct {
+	path string
+	replace bool
+}
+
+templates.ImportResult struct {
+	template string
+	version string
+	title string
+	same bool
+	replaced bool
+	exists bool
+	active bool
+}
+
+templates.RemoveRequest struct {
+	template string
+	version string
+}
+
+templates.RemoveResult struct {
+	template string
+	version string
+	active bool
+	now string (omitempty)
+}
+
 templates.SelectRequest struct {
 	name string
 	version string
@@ -621,6 +1029,8 @@ templates.VersionView struct {
 	size int64 (omitempty)
 	reason string (omitempty)
 	action string
+	removable bool
+	restorable bool
 }
 
 uint64 = uint64

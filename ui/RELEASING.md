@@ -63,9 +63,7 @@ engine, so say which engine each build used when quoting a result.
 
 `cmd/throughput` renders a JSON file of run rows through the run service and
 prints cards per second for each pass. It renders with an installed template, so
-install `mimic.m15` first, either from the Templates tab or as a loose folder
-with its `manifest.json` under `assets/` or `../assets/` of the directory it runs
-from. Take the rows from the local card data, one hundred distinct English cards
+install `mimic.m15` first from the Templates tab. Take the rows from the local card data, one hundred distinct English cards
 with art, and run it three times. The first pass fetches art and the later ones
 measure rendering.
 

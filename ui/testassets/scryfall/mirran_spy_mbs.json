@@ -1,0 +1,28 @@
+{
+  "object": "card",
+  "id": "00000000-0000-4000-8000-0000000b0011",
+  "oracle_id": "00000000-0000-4000-9000-0000000b0011",
+  "lang": "en",
+  "layout": "normal",
+  "name": "Mirran Spy",
+  "type_line": "Creature — Human Rogue",
+  "oracle_text": "Flying\nWhenever you cast an artifact spell, you may untap target creature.",
+  "colors": [
+    "U"
+  ],
+  "color_identity": [
+    "U"
+  ],
+  "rarity": "common",
+  "collector_number": "26",
+  "set": "mbs",
+  "set_name": "Mirrodin Besieged",
+  "released_at": "2011-02-04",
+  "artist": "Eric Deschamps",
+  "image_uris": {
+    "art_crop": "https://cards.scryfall.io/art_crop/front/mirran-spy-mbs.jpg"
+  },
+  "mana_cost": "{1}{U}",
+  "power": "1",
+  "toughness": "1"
+}

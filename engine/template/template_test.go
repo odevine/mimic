@@ -114,7 +114,7 @@ func TestPrimaryIsTheLayoutForAnOrdinaryCard(t *testing.T) {
 func TestInfoDescribesTheTemplateWithoutDrawingIt(t *testing.T) {
 	tmpl, _ := smallTemplate(t)
 	info := tmpl.Info()
-	if info.ID != "mimic.test" || info.Name != "Test frame" || info.License != "CC0-1.0" || info.Author.Name != "Mimic" {
+	if info.ID != "mimic.test" || info.Name != "Test frame" || info.License != "CC0-1.0" || info.Author.Name != "mimic" {
 		t.Errorf("info = %+v", info)
 	}
 	if len(info.Credits) != 1 || info.Credits[0].Name != "A. Artist" || len(info.Shapes) != 4 {

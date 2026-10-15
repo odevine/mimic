@@ -7,6 +7,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/batch"
 	"github.com/odevine/mimic/ui/internal/carddata"
 	"github.com/odevine/mimic/ui/internal/cardlist"
+	"github.com/odevine/mimic/ui/internal/drafts"
 	"github.com/odevine/mimic/ui/internal/pipeline"
 	"github.com/odevine/mimic/ui/internal/prefs"
 	"github.com/odevine/mimic/ui/internal/rules"
@@ -17,6 +18,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/services/render"
 	"github.com/odevine/mimic/ui/internal/services/run"
 	"github.com/odevine/mimic/ui/internal/services/settings"
+	"github.com/odevine/mimic/ui/internal/services/studio"
 	"github.com/odevine/mimic/ui/internal/services/templates"
 )
 
@@ -77,6 +79,8 @@ type templatesAPI interface {
 	Faces() []pipeline.FaceRow
 	SetFace(c templates.FaceChoice) ([]pipeline.FaceRow, error)
 	SetFeature(c templates.FeatureChoice) (*templates.DetailsView, error)
+	Import(req templates.ImportRequest) (templates.ImportResult, error)
+	Remove(req templates.RemoveRequest) (templates.RemoveResult, error)
 }
 
 // Templates is the bound template service
@@ -124,5 +128,41 @@ type dataAPI interface {
 // Data is the bound card data and fonts service
 type Data struct {
 	dataAPI
+	lifecycle
+}
+
+type studioAPI interface {
+	List() ([]drafts.Summary, error)
+	Create(req studio.CreateRequest) (drafts.Summary, error)
+	Fork(req studio.ForkRequest) (drafts.Summary, error)
+	Rename(req studio.RenameRequest) (drafts.Summary, error)
+	Delete(id string) error
+	Open(id string) (studio.OpenView, error)
+	Presets() []studio.Preset
+	ResolvePreset(id string) (*cardlist.ShapedCard, error)
+	SavePreset(req studio.SavePresetRequest) (studio.Preset, error)
+	DeletePreset(id string) error
+	SetTestCard(req studio.TestCardRequest) error
+	Render(req studio.RenderRequest) (render.Started, error)
+	Describe(req studio.DescribeRequest) (studio.DescribeView, error)
+	Apply(req studio.ApplyRequest) (studio.ApplyResult, error)
+	Source(id string) (studio.SourceView, error)
+	CheckFile(req studio.CheckRequest) (studio.CheckResult, error)
+	Vocabulary() studio.VocabView
+	Assets(id string) (studio.AssetsView, error)
+	Thumbs(req studio.ThumbRequest) (map[string]string, error)
+	ImportImage(req studio.ImageRequest) (studio.ImportResult, error)
+	ImportFont(req studio.FontRequest) (studio.ImportResult, error)
+	SetMarks(req studio.MarksRequest) error
+	Release(id string) (studio.ReleaseView, error)
+	Use(id string) (studio.UseResult, error)
+	Export(req studio.ExportRequest) (studio.ExportResult, error)
+	ShowFolder(id string) error
+	Stamp(id string) (string, error)
+}
+
+// Studio is the bound template editor service
+type Studio struct {
+	studioAPI
 	lifecycle
 }

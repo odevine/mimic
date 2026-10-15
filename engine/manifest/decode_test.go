@@ -14,7 +14,7 @@ func TestDecodeReadsTheSmallManifestWithoutAProblem(t *testing.T) {
 	if len(ds) != 0 {
 		t.Fatalf("diagnostics = %v, want none", ds)
 	}
-	if m.ID != "mimic.test" || m.Name != "Test frame" || m.License != "CC0-1.0" || m.Author.Name != "Mimic" {
+	if m.ID != "mimic.test" || m.Name != "Test frame" || m.License != "CC0-1.0" || m.Author.Name != "mimic" {
 		t.Errorf("header = %+v", m)
 	}
 	if len(m.Credits) != 1 || m.Credits[0].Name != "A. Artist" {

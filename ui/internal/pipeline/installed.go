@@ -27,6 +27,10 @@ var LooseDirBases = []string{"assets", filepath.Join("..", "assets")}
 // earlier format and is not a template
 var idRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$`)
 
+// ValidID reports whether a name has the form of a template id, which is the name
+// of its folder in the bundle cache
+func ValidID(id string) bool { return idRe.MatchString(id) }
+
 // Installed is a template that can render without a download: it has a loose
 // developer folder or a cached bundle
 type Installed struct {

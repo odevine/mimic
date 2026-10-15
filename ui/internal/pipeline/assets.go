@@ -118,6 +118,9 @@ func Resolve(id string) (*Template, Source, error) {
 	return at, SourcePlaceholder, nil
 }
 
+// Placeholder is the template the app draws with when none is installed
+func Placeholder() (*Template, error) { return placeholderActive() }
+
 // FromVersion builds the template for an explicit selection. The synthetic
 // local version uses the loose directory; any other version is ensured in the
 // cache (downloaded and verified when missing) and opened as a bundle. progress

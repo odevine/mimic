@@ -18,13 +18,14 @@ const (
 	issuesURL = "https://github.com/odevine/mimic/issues"
 )
 
-// The modes the View menu switches between, in the order of ⌘1 to ⌘5
+// The modes the View menu switches between, in the order of ⌘1 to ⌘6
 var modeItems = []struct{ key, label string }{
 	{"single", "Single"},
 	{"list", "From a List"},
 	{"art", "From Your Art"},
 	{"templates", "Templates"},
 	{"run", "Run"},
+	{"editor", "Editor"},
 }
 
 // menu builds the application menu. A choice that changes the page is sent to it

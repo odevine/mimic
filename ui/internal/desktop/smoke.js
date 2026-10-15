@@ -204,6 +204,118 @@ async function flows(outDir) {
     notes.push("Single shows a rendered preview");
   }
 
+  // The editor makes a template from its dialog and draws a test card with it,
+  // through the same image route
+  {
+    doc.querySelector('button[data-mode="editor"]').click();
+    await until("the editor", () => shown($("ed-empty")) || shown($("ed-workspace")));
+    (shown($("ed-empty-new")) ? $("ed-empty-new") : $("ed-new")).click();
+    await until("the new template dialog", () => $("draft-dialog").open);
+    type($("draft-name"), "Smoke frame");
+    type($("draft-dpi"), "100");
+    $("draft-confirm").click();
+    await until("the dialog to close", () => !$("draft-dialog").open);
+    await until(
+      () => `the test card (the strip reads "${$("ed-activity-title").textContent}", "${$("ed-activity-step").textContent}")`,
+      () => {
+        const img = $("ed-img");
+        return $("ed-activity").dataset.state === "done" && img.complete && img.naturalWidth > 0;
+      },
+      30000,
+    );
+    notes.push("the editor draws a test card with a new template");
+
+    // A layer picked from the list is moved a pixel with an arrow key, which is saved
+    // and read back as the new place
+    const rows = await until("the layers", () => doc.querySelectorAll("#ed-layers .ed-layer").length > 3 && [...doc.querySelectorAll("#ed-layers .ed-layer")]);
+    rows.find((row) => /^title/.test(row.textContent)).click();
+    const readX = () => Number($("ed-sel-x").textContent);
+    await until("the selection", () => shown($("ed-selection")) && $("ed-selection-name").textContent === "title");
+    const x = readX();
+    doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    try {
+      await until(() => `the title to move (it is at ${readX()}, from ${x})`, () => readX() === x + 1 && !$("ed-undo").disabled);
+    } catch (err) {
+      // Say where the nudge got to, since a window with no display to look at is all there is to go on
+      const active = doc.activeElement;
+      const src = await api.draftSource(doc.querySelector("#ed-about-id").textContent.replace(/^user\./, "")).catch(() => null);
+      const rect = src && src.files.find((f) => f.name === "layouts/normal.json");
+      let inFile = "unread";
+      try {
+        inFile = JSON.stringify(JSON.parse(rect.content).textBoxes.title.rect);
+      } catch {
+        // The file could not be read, which the note says
+      }
+      throw new Error(
+        `${err.message}. Focus is on ${active ? `${active.tagName}#${active.id}` : "nothing"}, ` +
+          `${doc.querySelectorAll("dialog[open]").length} dialogs are open, the mode is ${doc.querySelector(".mode:not([hidden])")?.id}, ` +
+          `undo is ${$("ed-undo").disabled ? "off" : "on"}, the title's rect in the file is ${inFile}, the toasts "${$("toasts").textContent}"`,
+      );
+    }
+    doc.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    await until("the move to be undone", () => readX() === x && $("ed-undo").disabled);
+    notes.push("an edit in the editor is saved, shown and undone");
+
+    // A lever changes a field in the file, and the JSON editor shows the file with it
+    const size = $("lever-fontSize");
+    const was = Number(size.value);
+    type(size, String(was + 3));
+    const draftId = $("ed-about-id").textContent.replace(/^user\./, "");
+    const sizeInFile = async () => {
+      const src = await api.draftSource(draftId);
+      const layout = JSON.parse(src.files.find((f) => f.name === "layouts/normal.json").content);
+      return layout.textBoxes.title.text.fontSize;
+    };
+    const end = Date.now() + 20000;
+    while ((await sizeInFile()) !== was + 3) {
+      if (Date.now() > end) throw new Error("timed out waiting for the lever's change to be saved");
+      await sleep(100);
+    }
+    $("ed-json").click();
+    await until("the JSON editor", () => {
+      if (!shown($("ed-json-pane"))) return false;
+      try {
+        return !!JSON.parse($("ed-json-text").value).contract;
+      } catch {
+        return false;
+      }
+    });
+    $("ed-json-close").click();
+    $("ed-undo").click();
+    await until("the lever's change to be undone", () => Number($("lever-fontSize").value) === was);
+    notes.push("a lever edits the file and the JSON editor shows it");
+
+    // A text box is added from the dialog, which is saved, locking it is kept with the
+    // draft, and undo takes the box away
+    const boxKeys = async () => {
+      const src = await api.draftSource(draftId);
+      return Object.keys(JSON.parse(src.files.find((f) => f.name === "layouts/normal.json").content).textBoxes);
+    };
+    $("ed-add").click();
+    await until("the add dialog", () => $("ed-add-dialog").open);
+    $("ed-add-confirm").click();
+    await until("the add dialog to close", () => !$("ed-add-dialog").open);
+    const added = Date.now() + 20000;
+    while (!(await boxKeys()).includes("artist_2")) {
+      if (Date.now() > added) throw new Error("timed out waiting for the new text box to be saved");
+      await sleep(100);
+    }
+    await until("the new box to be selected", () => $("ed-selection-name").textContent === "artist_2");
+    doc.querySelector('#ed-layers .ed-layer.selected [data-toggle="locked"]').click();
+    const locked = Date.now() + 20000;
+    while (!((await api.openDraft(draftId)).meta.locked || []).includes("normal/text:artist_2")) {
+      if (Date.now() > locked) throw new Error("timed out waiting for the lock to be kept");
+      await sleep(100);
+    }
+    $("ed-undo").click();
+    const gone = Date.now() + 20000;
+    while ((await boxKeys()).includes("artist_2")) {
+      if (Date.now() > gone) throw new Error("timed out waiting for the new text box to be undone");
+      await sleep(100);
+    }
+    notes.push("a text box is added, locked and undone");
+  }
+
   return notes;
 }
 

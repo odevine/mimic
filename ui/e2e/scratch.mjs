@@ -20,11 +20,11 @@ export class Scratch {
     await mkdir(path.join(this.dialogs, "open"), { recursive: true });
   }
 
-  // offer puts a file where an open dialog will find it, from text or a path
+  // offer puts a file where an open dialog will find it, from text, bytes or a path
   async offer(name, contents) {
     await mkdir(path.join(this.dialogs, "open"), { recursive: true });
     const dest = path.join(this.dialogs, "open", name);
-    if (typeof contents === "string") await writeFile(dest, contents);
+    if (typeof contents === "string" || Buffer.isBuffer(contents)) await writeFile(dest, contents);
     else await copyFile(contents.path, dest);
   }
 

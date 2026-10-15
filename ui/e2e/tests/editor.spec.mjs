@@ -894,17 +894,16 @@ test("hiding a layer is in the picture that is saved, and showing it again puts 
   expect(alpha).toBe(0);
 });
 
-test("the picture of the card is copied to the clipboard", async ({ editor, context, page, browserName }) => {
-  test.skip(browserName !== "chromium", "the clipboard can only be read back in Chromium");
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await editor.create("Copying", 100);
-  await page.locator("#ed-copy-image").click();
-  await expect(editor.toasts.last()).toHaveText("Copied the image");
-  const got = await page.evaluate(async () => {
-    const [item] = await navigator.clipboard.read();
-    const blob = await item.getType("image/png");
-    return { types: item.types, size: blob.size, type: blob.type };
-  });
-  expect(got.types).toContain("image/png");
-  expect(got.size).toBeGreaterThan(100);
+test("full size draws the card at the template's own resolution and saves it", async ({ editor, scratch }) => {
+  // The preview draws at 300 dpi, so a template authored at 400 has a larger full size
+  await editor.create("Full size", 400);
+  const [w, h] = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  await editor.page.locator("#ed-render-full").click();
+  await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png", { timeout: 60_000 });
+  const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
+  expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  expect(Math.abs(bytes.readUInt32BE(16) - Math.round((w * 400) / 300))).toBeLessThanOrEqual(2);
+  expect(Math.abs(bytes.readUInt32BE(20) - Math.round((h * 400) / 300))).toBeLessThanOrEqual(2);
+  // The card on show is still the preview
+  expect(await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight])).toEqual([w, h]);
 });

@@ -15,6 +15,7 @@ import (
 	"github.com/odevine/mimic/ui/internal/apierr"
 	"github.com/odevine/mimic/ui/internal/cardlist"
 	"github.com/odevine/mimic/ui/internal/draftedit"
+	"github.com/odevine/mimic/ui/internal/workspace"
 )
 
 func describeFor(t *testing.T, svc *Service, id, preset string) DescribeView {
@@ -668,5 +669,56 @@ func TestARenderLeavesOutWhatItIsToldToHideAndNothingElse(t *testing.T) {
 	b, _ := base.Result()
 	if !samePixels(a, b) {
 		t.Error("a coverage render was changed by what the card hides")
+	}
+}
+
+func TestFullDrawsAtTheResolutionTheLayoutIsAuthoredAt(t *testing.T) {
+	svc, ws, _ := newService(t)
+	sum, err := svc.Create(CreateRequest{Name: "Frame", DPI: 400})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := presetCard(t, "monocolored")
+	preview, err := svc.Render(RenderRequest{ID: sum.ID, Card: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, err := svc.Render(RenderRequest{ID: sum.ID, Card: c, Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.DPI != workspace.DefaultPreviewDPI || full.DPI != 400 {
+		t.Errorf("the preview drew at %d and the full size at %d, want %d and 400", preview.DPI, full.DPI, workspace.DefaultPreviewDPI)
+	}
+	for _, id := range []string{preview.JobID, full.JobID} {
+		if j, ok := ws.Jobs.Lookup(id); ok {
+			j.Cancel()
+		}
+	}
+}
+
+func TestOpenAndApplyCarryTheDraftsStamp(t *testing.T) {
+	svc, _, dir := newService(t)
+	sum, _ := svc.Create(CreateRequest{Name: "Frame", DPI: 100})
+	opened, err := svc.Open(sum.ID)
+	if err != nil || opened.Stamp == "" {
+		t.Fatalf("Open stamp = %q, %v", opened.Stamp, err)
+	}
+	res, err := svc.Apply(ApplyRequest{ID: sum.ID, Ops: []draftedit.Op{{Op: draftedit.OpMove, Layout: "normal", Kind: draftedit.KindText, Key: "title", DX: 5, DY: 5}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now, _ := svc.Stamp(sum.ID)
+	if res.Stamp != now || now == opened.Stamp {
+		t.Errorf("Apply stamp %q, the draft's now %q, before %q, want the first to be the second and not the third", res.Stamp, now, opened.Stamp)
+	}
+	// A file written outside the app moves it, which is what the page asks after the window regains focus
+	file := filepath.Join(dir, sum.ID, "layouts", "normal.json")
+	raw, _ := os.ReadFile(file)
+	if err := os.WriteFile(file, append(raw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := svc.Stamp(sum.ID); after == res.Stamp {
+		t.Error("a change outside the app left the stamp as it was")
 	}
 }

@@ -156,6 +156,7 @@ type studioAPI interface {
 	Use(id string) (studio.UseResult, error)
 	Export(req studio.ExportRequest) (studio.ExportResult, error)
 	ShowFolder(id string) error
+	Stamp(id string) (string, error)
 }
 
 // Studio is the bound template editor service

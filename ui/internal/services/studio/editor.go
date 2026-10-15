@@ -196,6 +196,14 @@ type OpenView struct {
 	Diagnostics []DiagnosticView `json:"diagnostics"`
 	// Valid is whether the draft loads and can render
 	Valid bool `json:"valid"`
+	// Stamp is Stamp's answer as the files were read
+	Stamp string `json:"stamp"`
+}
+
+// Stamp is a fingerprint of the draft's template files that changes when any of them
+// does, for a page to tell that something outside the app changed them
+func (s *Service) Stamp(id string) (string, error) {
+	return s.store.Stamp(id)
 }
 
 // Open reads a draft as it is now, so a change made outside the app is seen. It
@@ -215,6 +223,7 @@ func (s *Service) Open(id string) (OpenView, error) {
 		return OpenView{}, err
 	}
 	view := OpenView{Draft: sum, Meta: meta, Layouts: []LayoutView{}, Diagnostics: []DiagnosticView{}}
+	view.Stamp, _ = s.store.Stamp(id)
 	t, ds, err := d.Open(author.Options{})
 	view.Diagnostics = diagnosticViews(ds)
 	if err != nil && t == nil {
@@ -298,6 +307,8 @@ type RenderRequest struct {
 	// Coverage draws it small and without the art, for a strip of many cards, where
 	// what is wanted is the frame each card gets
 	Coverage bool `json:"coverage,omitempty"`
+	// Full draws it at the resolution the layout is authored at and not the preview's
+	Full bool `json:"full,omitempty"`
 }
 
 // coverageDPI is the resolution a coverage render is drawn at, which is the layout's
@@ -305,7 +316,7 @@ type RenderRequest struct {
 const coverageDPI = 40
 
 // Render draws the card through the draft as it is on disk, at the preview
-// resolution, and returns the job to watch. Its image is read with the same route
+// resolution or the layout's own with Full, and returns the job to watch. Its image is read with the same route
 // as any render. A draft that does not load, or does not render the card, is
 // refused here with the reason
 func (s *Service) Render(req RenderRequest) (render.Started, error) {
@@ -329,6 +340,8 @@ func (s *Service) Render(req RenderRequest) (render.Started, error) {
 	dpi := layout.ClampDPI(s.ws.RenderDPI(workspace.TargetPreview))
 	if req.Coverage {
 		dpi = layout.ClampDPI(coverageDPI)
+	} else if req.Full {
+		dpi = layout.NativeDPI()
 	}
 	at := pipeline.NewDraftTemplate(t.ID(), t)
 	hide, show := req.Hide, req.Show

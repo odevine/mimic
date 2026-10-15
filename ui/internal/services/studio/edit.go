@@ -212,6 +212,8 @@ type ApplyResult struct {
 	// it, the errors and the warnings
 	Valid       bool             `json:"valid"`
 	Diagnostics []DiagnosticView `json:"diagnostics"`
+	// Stamp is the draft's fingerprint after the change, as Stamp gives it
+	Stamp string `json:"stamp"`
 }
 
 // Apply makes the edits to the draft's files and saves them at once. A batch that
@@ -249,7 +251,8 @@ func (s *Service) Apply(req ApplyRequest) (ApplyResult, error) {
 	s.revs[req.ID]++
 	rev := s.revs[req.ID]
 	s.mu.Unlock()
-	return ApplyResult{Rev: rev, Inverse: res.Inverse, Valid: after, Diagnostics: diagnosticViews(ds)}, nil
+	stamp, _ := s.store.Stamp(req.ID)
+	return ApplyResult{Rev: rev, Inverse: res.Inverse, Valid: after, Diagnostics: diagnosticViews(ds), Stamp: stamp}, nil
 }
 
 // save writes what a batch changed and removes what it took away, and has the draft

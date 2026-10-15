@@ -391,13 +391,26 @@ card draws for a selected item: the room a text box has left, what is in its way
 stripes, the placement line of a box that was moved or narrowed, and the caption of tags beneath the
 outline. The selection's outline, a baseline and its ends to drag, the handles and the guides of a
 drag stay, since they are how an item is edited, and so do the notes under the selection's name.
-`O` does the same, and whether the overlays show is kept with the layout settings. Copy image puts the
-picture of the card as it is drawn now on the clipboard as a PNG, and Save image asks where to put it
-and writes the same picture as a PNG named for the card, in the folder the app saves renders to. It is
-the picture the card shows, at the preview resolution, with anything the layer eyes have hidden or
-forced left out or put in, and not a print resolution render, which Single makes. A window whose
-webview cannot put an image on the clipboard says so and points to Save image. Both wait until a card
-has been drawn, and a render that fails leaves nothing to copy or save.
+`O` does the same, and whether the overlays show is kept with the layout settings. Save image asks where to put
+the picture of the card as it is drawn now and writes it as a PNG named for the card, in the folder
+the app saves renders to. It is the picture the card shows, at the preview resolution, with anything
+the layer eyes have hidden or forced left out or put in. Render at full size draws the card again at
+the resolution the layout is authored at, which the preview is not, and asks where to put that picture
+the same way, leaving the preview as it is. Both wait until a card has been drawn, and a render that
+fails leaves nothing to save.
+
+A PNG dropped on the card or on the layers list adds it to the template. A dialog names the file, offers
+a name for the part made from it and asks what it follows, either nothing, so it draws on every card, or
+one of the frame's color slots, and then makes the part with the image as its first, and a layer on top of
+the stack for it, as one step of undo. Several files dropped are asked about one after another, and
+closing the dialog leaves the rest. A file that is not a PNG is said and starts nothing, and a drop
+on another mode, or on a template that cannot be changed, does nothing.
+
+The files of a template can change under the editor, from another program. When the window comes back to
+the front, the editor compares a fingerprint of the template's files with the one it last wrote or read,
+and reads the template again if they differ, which draws the card again and starts its undo history over.
+Text typed in the JSON editor that was not applied is asked about first, and a no leaves it and the files
+as they are. The app's own notes in the draft, which card was tested and what is locked, are not counted.
 
 
 Every change is saved to the layout file as it is made, with the file's order and

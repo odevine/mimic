@@ -4,40 +4,6 @@ import { done, draftSummary, draftView, describeView, standardItems } from "../.
 
 const mine = draftSummary("mine", "Mine");
 
-// A clipboard that keeps what it is given, as the page sees it, since a test cannot read the system's
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__clip = [];
-    if (typeof ClipboardItem === "undefined") {
-      window.ClipboardItem = class {
-        constructor(map) {
-          this.map = map;
-          this.types = Object.keys(map);
-        }
-        async getType(type) {
-          return await this.map[type];
-        }
-      };
-    }
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        write: async (items) => {
-          if (window.__clipFails) throw new Error(window.__clipFails);
-          for (const item of items) {
-            const got = {};
-            for (const type of item.types) {
-              const blob = await item.getType(type);
-              got[type] = { size: blob.size, type: blob.type };
-            }
-            window.__clip.push(got);
-          }
-        },
-      },
-    });
-  });
-});
-
 async function ready(bridge, page) {
   bridge.reply("Studio.Describe", () => describeView(standardItems));
   bridge.reply("Studio.List", [mine]);
@@ -49,18 +15,19 @@ async function ready(bridge, page) {
   return editor;
 }
 
-const copy = (page) => page.locator("#ed-copy-image");
+const full = (page) => page.locator("#ed-render-full");
 const save = (page) => page.locator("#ed-save-image");
 
-test("the card's picture can be copied and saved once there is one, and not before", async ({ bridge, page }) => {
+test("the card's picture can be saved and drawn at full size once there is one, and not before", async ({ bridge, page }) => {
   await ready(bridge, page);
-  await expect(copy(page)).toBeDisabled();
+  await expect(full(page)).toBeDisabled();
   await expect(save(page)).toBeDisabled();
   await bridge.job("job-1", [done(1)]);
-  await expect(copy(page)).toBeEnabled();
+  await expect(full(page)).toBeEnabled();
   await expect(save(page)).toBeEnabled();
-  await expect(copy(page)).toHaveAttribute("data-tip", "Copy image");
+  await expect(full(page)).toHaveAttribute("data-tip", "Render at full size");
   await expect(save(page)).toHaveAttribute("data-tip", "Save image");
+  await expect(page.locator("#ed-copy-image")).toHaveCount(0);
 });
 
 test("saving asks where to put the picture and writes the render that is shown", async ({ bridge, page }) => {
@@ -95,35 +62,53 @@ test("a save that is cancelled writes nothing and one that fails says why", asyn
   await expect(page.locator(".toast.err")).toContainText("permission denied");
 });
 
-test("copying puts the picture on the clipboard as a PNG", async ({ bridge, page }) => {
+test("full size draws the card at the layout's own resolution, then asks where to put it", async ({ bridge, page }) => {
+  bridge.reply("Render.SuggestedFilename", "Mirran Spy.png");
+  bridge.reply("System.PickFile", "/out/Mirran Spy.png");
+  bridge.reply("Render.Save", null);
   await ready(bridge, page);
   await bridge.job("job-1", [done(1)]);
-  await expect(copy(page)).toBeEnabled();
-  await copy(page).click();
-  await expect(page.locator("#toasts .toast").last()).toHaveText("Copied the image");
-  const clip = await page.evaluate(() => window.__clip);
-  expect(clip).toHaveLength(1);
-  expect(Object.keys(clip[0])).toEqual(["image/png"]);
-  expect(clip[0]["image/png"].size).toBeGreaterThan(0);
-  expect(clip[0]["image/png"].type).toBe("image/png");
+  const shown = await page.locator("#ed-img").getAttribute("src");
+  await expect(full(page)).toBeEnabled();
+  await full(page).click();
+  await expect(full(page)).toBeDisabled();
+  await expect(full(page)).toHaveAttribute("aria-busy", "true");
+  await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(2);
+  const [req] = bridge.calledWith("Studio.Render")[1];
+  expect(req).toMatchObject({ full: true, coverage: false });
+  // The preview's own render did not ask for it
+  expect(bridge.calledWith("Studio.Render")[0][0].full).toBe(false);
+  await bridge.job("job-2", [done(1)]);
+  await expect(page.locator("#toasts .toast").last()).toHaveText("Saved Mirran Spy.png");
+  expect(bridge.calledWith("Render.Save")).toEqual([["job-2", "/out/Mirran Spy.png"]]);
+  // The card on show is still the preview, and the button is ready again
+  await expect(page.locator("#ed-img")).toHaveAttribute("src", shown);
+  await expect(full(page)).toBeEnabled();
+  await expect(full(page)).toHaveAttribute("aria-busy", "false");
 });
 
-test("a copy the window refuses, or cannot make, says so and points to saving", async ({ bridge, page }) => {
+test("a full size render that is not saved or that fails leaves the preview and says why", async ({ bridge, page }) => {
+  bridge.reply("Render.SuggestedFilename", "Mirran Spy.png");
+  bridge.reply("System.PickFile", "");
+  bridge.reply("Render.Save", null);
   await ready(bridge, page);
   await bridge.job("job-1", [done(1)]);
-  await page.evaluate(() => {
-    window.__clipFails = "not allowed";
-  });
-  await copy(page).click();
-  await expect(page.locator(".toast.err")).toContainText("Could not copy the image: not allowed");
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
-  });
-  await copy(page).click();
-  await expect(page.locator(".toast.warn")).toContainText("Save image writes it to a file");
+  await full(page).click();
+  await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(2);
+  await bridge.job("job-2", [done(1)]);
+  await expect.poll(() => bridge.calledWith("System.PickFile").length).toBe(1);
+  expect(bridge.calledWith("Render.Save")).toEqual([]);
+  await expect(page.locator("#toasts .toast")).toHaveCount(0);
+  await expect(full(page)).toBeEnabled();
+
+  await full(page).click();
+  await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(3);
+  await bridge.job("job-3", [{ seq: 1, done: true, error: "out of memory" }]);
+  await expect(page.locator(".toast.err")).toContainText("out of memory");
+  await expect(full(page)).toBeEnabled();
 });
 
-test("what is copied and saved is the render that is shown now, and nothing when there is none", async ({ bridge, page }) => {
+test("what is saved is the render that is shown now, and nothing when there is none", async ({ bridge, page }) => {
   bridge.reply("Render.SuggestedFilename", "Mirran Spy.png");
   bridge.reply("System.PickFile", "/out/a.png");
   bridge.reply("Render.Save", null);
@@ -143,6 +128,6 @@ test("what is copied and saved is the render that is shown now, and nothing when
   await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(3);
   await bridge.job("job-3", [{ seq: 1, done: true, error: "a layer image is missing" }]);
   await expect(editor.activity).toHaveAttribute("data-state", "error");
-  await expect(copy(page)).toBeDisabled();
+  await expect(full(page)).toBeDisabled();
   await expect(save(page)).toBeDisabled();
 });

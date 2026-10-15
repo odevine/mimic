@@ -196,6 +196,54 @@ async function render() {
   }
 }
 
+// --- files changed outside the app ---
+
+// diskStamp is the fingerprint of the draft's files as the app last wrote or read them, so a
+// different one when the window comes back says something else changed them
+let diskStamp = "";
+let diskChecking = false;
+
+// keepStamp takes up the fingerprint of a draft after a change the app made without an edit
+function keepStamp(id) {
+  api
+    .draftStamp(id)
+    .then((stamp) => {
+      if (id === store.current.peek()) diskStamp = stamp;
+    })
+    .catch(() => {});
+}
+
+// checkDisk reads the draft again when its files were changed outside the app. Text in the JSON
+// editor that was not applied is asked about first, since reading again drops it, and a no leaves
+// the text and the files as they are
+async function checkDisk() {
+  const id = store.current.peek();
+  if (!id || diskChecking || app.mode.peek() !== "editor" || document.querySelector("dialog[open]")) return;
+  diskChecking = true;
+  try {
+    // The app's own changes finish first, so they are not taken for another's
+    await chain.catch(() => {});
+    if (id !== store.current.peek()) return;
+    const now = await api.draftStamp(id);
+    if (!diskStamp || now === diskStamp) {
+      diskStamp = diskStamp || now;
+      return;
+    }
+    diskStamp = now;
+    if (json.dirty && !(await api.confirm("Read the files again?", "This template's files were changed outside the app. The text in the JSON editor has changes that are not applied, and reading the files again drops them.", "Read again"))) {
+      return;
+    }
+    if (id !== store.current.peek()) return;
+    json.dirty = false;
+    toast("This template was changed outside the app, so it was read again", "ok", 5000);
+    await open(id);
+  } catch {
+    // A draft that cannot be read is found out when it is next opened
+  } finally {
+    diskChecking = false;
+  }
+}
+
 // --- drafts ---
 
 async function loadDrafts() {
@@ -240,6 +288,7 @@ async function open(id) {
     return;
   }
   if (seq !== openSeq) return;
+  diskStamp = view.stamp || "";
   await loadPresets();
   const start = startingCard(view.meta, store.presets.peek());
   history.clear();
@@ -491,6 +540,7 @@ function rename() {
     name: view.draft.name,
     onDone: async (name) => {
       await api.renameDraft(view.draft.id, name);
+      keepStamp(view.draft.id);
       await loadDrafts();
       store.view.value = { ...store.view.peek(), draft: { ...store.view.peek().draft, name } };
     },
@@ -843,6 +893,7 @@ async function loadLayout() {
 // the details show, which are read again
 async function adopt(id, res, ops) {
   if (id !== store.current.peek()) return;
+  if (res.stamp) diskStamp = res.stamp;
   const view = store.view.peek();
   if (view) store.view.value = { ...view, valid: res.valid, diagnostics: res.diagnostics || [] };
   if (!res.valid) {
@@ -2272,27 +2323,38 @@ async function saveImage() {
   }
 }
 
-// copyImage puts the picture of the card that is shown on the clipboard. The clipboard is given a
-// promise for the image, so the press still counts as the gesture a write needs while the image is
-// fetched. A window that cannot hold an image on the clipboard says so and points to Save image
-async function copyImage() {
-  const job = store.shown.peek();
-  if (!job) return;
-  if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
-    toast("This window cannot copy an image. Save image writes it to a file", "warn", 6000);
-    return;
-  }
+// renderFullSize draws the test card at the resolution the layout is authored at, which the preview
+// is not, and asks where to put the picture. The preview and the card shown are left as they are
+let fullBusy = false;
+async function renderFullSize() {
+  const id = store.current.peek();
+  const card = store.card.peek();
+  const view = store.view.peek();
+  if (fullBusy || !id || !card || !view || !view.valid) return;
+  const name = (store.edits.peek() && store.edits.peek().name) || card.Name;
+  const was = app.status.peek();
+  setFullBusy(true);
+  app.status.value = `Drawing ${name} at full size`;
+  let jobId = "";
   try {
-    const png = fetch(api.renderImageURL(job)).then(async (r) => {
-      if (!r.ok) throw new Error("the picture could not be read");
-      const blob = await r.blob();
-      return blob.type === "image/png" ? blob : new Blob([blob], { type: "image/png" });
-    });
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-    toast("Copied the image", "ok");
+    ({ jobId } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek(), false, { ...currentLists(), full: true }));
+    await api.renderEvents(jobId, () => {});
+    const path = await api.saveRender(jobId, app.settings.peek().outputDir || "");
+    if (path) toast(`Saved ${path.split(/[\\/]/).pop()}`, "ok");
   } catch (err) {
-    toast(`Could not copy the image: ${err.message}`, "err", 6000);
+    toast(err.message, "err", 6000);
+  } finally {
+    if (jobId) api.cancelRender(jobId);
+    app.status.value = was;
+    setFullBusy(false);
   }
+}
+
+function setFullBusy(on) {
+  fullBusy = on;
+  const button = $("ed-render-full");
+  button.setAttribute("aria-busy", String(on));
+  button.disabled = on || !store.shown.peek();
 }
 
 // initView wires the camera controls and the keys that pan and zoom the card's view
@@ -2323,12 +2385,12 @@ function initView() {
     button.setAttribute("aria-pressed", String(on));
     button.replaceChildren(icon(on ? "eye" : "eye-off"));
   });
-  $("ed-copy-image").addEventListener("click", copyImage);
   $("ed-save-image").addEventListener("click", saveImage);
+  $("ed-render-full").addEventListener("click", renderFullSize);
   effect(() => {
     const none = !store.shown.value;
-    $("ed-copy-image").disabled = none;
     $("ed-save-image").disabled = none;
+    $("ed-render-full").disabled = none || fullBusy;
   });
   effect(() => {
     stage.classList.toggle("pan-mode", tool.pan.value || tool.space.value);
@@ -2357,6 +2419,7 @@ function initView() {
   window.addEventListener("blur", () => {
     tool.space.value = false;
   });
+  window.addEventListener("focus", checkDisk);
 }
 
 let layoutTimer = 0;
@@ -2440,7 +2503,7 @@ export function initEditor() {
   $("ed-layers").addEventListener("keydown", onLayersKey);
   $("ed-undo").addEventListener("click", undo);
   $("ed-redo").addEventListener("click", redo);
-  initAssets({ store, commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
+  initAssets({ store, droppable: () => app.mode.peek() === "editor" && !!store.layout.peek() && store.layout.peek().editable && !document.querySelector("dialog[open]:not(#ed-drop-dialog)"), commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
   document.addEventListener("keydown", onKey);
   $("ed-credit-add").addEventListener("click", addCredit);
   $("ed-use").addEventListener("click", useTemplate);

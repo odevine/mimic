@@ -63,6 +63,7 @@ Studio.SetMarks(studio.MarksRequest) !
 Studio.SetTestCard(studio.TestCardRequest) !
 Studio.ShowFolder(string) !
 Studio.Source(string) -> studio.SourceView !
+Studio.Stamp(string) -> string !
 Studio.Thumbs(studio.ThumbRequest) -> map[string]string !
 Studio.Use(string) -> studio.UseResult !
 Studio.Vocabulary() -> studio.VocabView
@@ -630,6 +631,7 @@ studio.ApplyResult struct {
 	inverse []draftedit.Op
 	valid bool
 	diagnostics []studio.DiagnosticView
+	stamp string
 }
 
 studio.AssetsView struct {
@@ -742,6 +744,7 @@ studio.ImportResult struct {
 	inverse []draftedit.Op
 	valid bool
 	diagnostics []studio.DiagnosticView
+	stamp string
 	id string
 	warnings []string
 }
@@ -797,6 +800,7 @@ studio.OpenView struct {
 	layouts []studio.LayoutView
 	diagnostics []studio.DiagnosticView
 	valid bool
+	stamp string
 }
 
 studio.OverrideView struct {
@@ -863,6 +867,7 @@ studio.RenderRequest struct {
 	hide []string (omitempty)
 	show []string (omitempty)
 	coverage bool (omitempty)
+	full bool (omitempty)
 }
 
 studio.RoleView struct {

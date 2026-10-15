@@ -352,3 +352,45 @@ func TestPutFileMakesTheFoldersAndRemoveFileTidiesThem(t *testing.T) {
 	}
 	valid(t, s, sum.ID)
 }
+
+func TestStampChangesWhenAFileDoesAndNotForTheAppsOwnNotes(t *testing.T) {
+	s := newStore(t)
+	sum, err := s.Create("Stamped", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.Stamp(sum.ID)
+	if err != nil || a == "" {
+		t.Fatalf("Stamp = %q, %v", a, err)
+	}
+	if b, _ := s.Stamp(sum.ID); b != a {
+		t.Errorf("an untouched draft changed its stamp: %s then %s", a, b)
+	}
+	// The meta file holds the app's own notes, such as the test card and what is locked
+	if err := s.SaveMeta(sum.ID, Meta{Locked: []string{"layer:frame"}}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := s.Stamp(sum.ID); b != a {
+		t.Error("the app's notes changed the stamp")
+	}
+	// A template file written by anything else does
+	p, _ := s.Path(sum.ID)
+	file := filepath.Join(p, "template.json")
+	raw, _ := os.ReadFile(file)
+	if err := os.WriteFile(file, append(raw, ' '), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := s.Stamp(sum.ID)
+	if b == a {
+		t.Error("a changed file left the stamp as it was")
+	}
+	if err := os.WriteFile(filepath.Join(p, "parts-new.png"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := s.Stamp(sum.ID); c == b {
+		t.Error("a new file left the stamp as it was")
+	}
+	if _, err := s.Stamp("nope"); err == nil {
+		t.Error("a draft that does not exist has a stamp")
+	}
+}

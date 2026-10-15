@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"os"
 	"path"
@@ -148,6 +149,41 @@ func (s *Store) FS(id string) (fs.FS, error) {
 		return nil, apierr.New(apierr.NotFound, "That draft no longer exists")
 	}
 	return os.DirFS(p), nil
+}
+
+// Stamp is a short fingerprint of a draft's template files, which changes when any of
+// them is written, added or removed and not for the app's own notes in the meta file,
+// so a caller can tell that something outside the app changed the draft. It reads each
+// file's name, size and time and no content
+func (s *Store) Stamp(id string) (string, error) {
+	p, err := s.Path(id)
+	if err != nil {
+		return "", err
+	}
+	h := fnv.New64a()
+	err = filepath.WalkDir(p, func(file string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := d.Name()
+		if d.IsDir() {
+			return nil
+		}
+		if name == metaFile || strings.HasPrefix(name, stagingMark) {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(p, file)
+		fmt.Fprintf(h, "%s|%d|%d\n", filepath.ToSlash(rel), info.Size(), info.ModTime().UnixNano())
+		return nil
+	})
+	if err != nil {
+		return "", apierr.Wrap(apierr.Internal, "Could not read the draft's files", err)
+	}
+	return fmt.Sprintf("%x", h.Sum64()), nil
 }
 
 // TemplateID is the id a draft's template carries

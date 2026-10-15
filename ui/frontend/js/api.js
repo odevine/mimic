@@ -230,9 +230,10 @@ export const api = {
   // coverage draws the card small and without its art, for a strip of many. view is
   // { hide, show }, the items to leave out of the drawing and the layers to draw whatever
   // their condition says, each named as "layer:frame" or "text:title", for a preview that
-  // looks at the template and changes none of it
+  // looks at the template and changes none of it, and full draws at the resolution the
+  // layout is authored at and not the preview's
   renderDraft: (id, card, edits, face, coverage, view) =>
-    rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage, hide: (view && view.hide) || [], show: (view && view.show) || [] }),
+    rpc("Studio", "Render", { id, card, edits: edits || null, face: face || 0, coverage: !!coverage, hide: (view && view.hide) || [], show: (view && view.show) || [], full: !!(view && view.full) }),
   // describeDraft resolves to what the draft's layout draws for the card, in draw
   // order: { layout, authored, delivered, items, editable, reason, rev }, where an
   // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
@@ -271,6 +272,8 @@ export const api = {
     const path = await pickFile({ title: "Choose a PNG image", filters: PNGS });
     return path ? rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }) : null;
   },
+  // importDraftImageAt does the same for a file already chosen, such as one dropped on the window
+  importDraftImageAt: (id, part, material, slot, path) => rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }),
   importDraftFont: async (id, assign) => {
     const path = await pickFile({ title: "Choose a font", filters: FONTS });
     return path ? rpc("Studio", "ImportFont", { id, path, assign: assign || [] }) : null;
@@ -291,6 +294,9 @@ export const api = {
     return path ? rpc("Studio", "Export", { id, path }) : null;
   },
   showDraftFolder: (id) => rpc("Studio", "ShowFolder", id),
+  // draftStamp resolves to a fingerprint of the draft's template files, which changes when
+  // anything writes them, and openDraft and applyDraft carry it as stamp
+  draftStamp: (id) => rpc("Studio", "Stamp", id),
 
   // resolve parses a list and resolves to { jobId, format, rows }, with one
   // resolved row per event on the stream

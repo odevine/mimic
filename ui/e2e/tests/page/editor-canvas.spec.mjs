@@ -503,6 +503,12 @@ test("opening another template resets the view, the selection, the undo history 
   await expect(editor.selection).toBeHidden();
   await expect.poll(() => renders(bridge).at(-1).id).toBe("other");
   expect(renders(bridge).at(-1).hide).toEqual([]);
-  await bridge.job(`job-${renders(bridge).length}`, [done(1)]);
-  await expect(eye(editor, "title")).toHaveAttribute("data-eye", "shown");
+  // The newest render is answered until the other template's layers are listed, since
+  // how many renders opening it starts depends on timing
+  await expect
+    .poll(async () => {
+      await bridge.job(`job-${renders(bridge).length}`, [done(1)]);
+      return eye(editor, "title").getAttribute("data-eye", { timeout: 200 }).catch(() => null);
+    })
+    .toBe("shown");
 });

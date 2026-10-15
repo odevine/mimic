@@ -42,6 +42,15 @@ type Item struct {
 	// the first baseline, and the text sits above it. Such a box can be moved by
 	// them and not resized
 	Ink bool
+	// BaselineAuthored and BaselineDelivered are, for an Ink item, the line its first
+	// baseline lies on, from one end of the box's width to the other, in the same two
+	// canvases as Authored and Delivered. Each is a rectangle with no thickness across
+	// the line, since a quarter turn of the layout turns the line to a vertical one.
+	// The box's height has no part in where a baseline box draws, so this is all of the
+	// box's own rectangle that matters, and it is what Rect.Y, X and Width say. Both are
+	// empty for an item that is not Ink
+	BaselineAuthored  image.Rectangle
+	BaselineDelivered image.Rectangle
 	// Authored is where the item is in the layout's own canvas and Delivered is where
 	// it is in the finished image, after the layout's rotation. Both are in the
 	// canvas's own pixels, not scaled for a preview. A layer's rectangle is the
@@ -114,18 +123,19 @@ type describer struct {
 // add places an item's rectangles, given in the canvas it was laid out in
 func (d *describer) add(it Item, r image.Rectangle, output bool) {
 	if !r.Empty() {
-		w, h := d.authored.X, d.authored.Y
-		deg := d.layout.Canvas.Rotate
-		switch {
-		case output:
-			it.Delivered = r
-			it.Authored = template.RotateRect(r, d.out.Delivered.X, d.out.Delivered.Y, 360-deg)
-		default:
-			it.Authored = r
-			it.Delivered = template.RotateRect(r, w, h, deg)
-		}
+		it.Authored, it.Delivered = d.both(r, output)
 	}
 	d.out.Items = append(d.out.Items, it)
+}
+
+// both gives a rectangle in the canvas it was laid out in as it is in the layout's own
+// canvas and in the finished image. A rectangle with no thickness turns the same way
+func (d *describer) both(r image.Rectangle, output bool) (authored, delivered image.Rectangle) {
+	deg := d.layout.Canvas.Rotate
+	if output {
+		return template.RotateRect(r, d.out.Delivered.X, d.out.Delivered.Y, 360-deg), r
+	}
+	return r, template.RotateRect(r, d.authored.X, d.authored.Y, deg)
 }
 
 func (d *describer) layer(e *template.Entry) {
@@ -253,6 +263,8 @@ func (d *describer) text(geo *template.Geometry) {
 		if it.Drawn && job.spec.VAlign == "baseline" && job.spec.Rotate == 0 {
 			if ink, err := template.MeasureTextBox(box, parts...); err == nil && !ink.Empty() {
 				r, it.Ink = ink, true
+				// The box's own place is the baseline, its Y, across its width
+				it.BaselineAuthored, it.BaselineDelivered = d.both(image.Rect(job.spec.X, job.spec.Y, job.spec.X+job.spec.Width, job.spec.Y), job.space == template.SpaceOutput)
 			}
 		}
 		d.add(it, r, job.space == template.SpaceOutput)

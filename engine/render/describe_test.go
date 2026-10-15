@@ -264,6 +264,13 @@ func TestDescribeShowsABaselineBoxWhereItsTextIs(t *testing.T) {
 	if oracle := got["text:oracle"]; oracle.Ink || oracle.Authored != image.Rect(48, 300, 568, 500) {
 		t.Errorf("oracle = %+v, want the box's own rectangle", oracle)
 	}
+	// The box's own place is the baseline across its width, which the ink does not say
+	if want := image.Rect(48, 120, 568, 120); title.BaselineAuthored != want || title.BaselineDelivered != want {
+		t.Errorf("title baseline is %v and %v, want %v", title.BaselineAuthored, title.BaselineDelivered, want)
+	}
+	if oracle := got["text:oracle"]; !oracle.BaselineAuthored.Empty() || !oracle.BaselineDelivered.Empty() || oracle.BaselineAuthored != (image.Rectangle{}) {
+		t.Errorf("a box that is not set on its baseline has one: %v", oracle.BaselineAuthored)
+	}
 
 	// What it says matches what is drawn, to a pixel or two for the antialiasing
 	buf, err := Render(context.Background(), tm, req)
@@ -289,5 +296,55 @@ func TestDescribeKeepsAnUndrawnTextBoxItsOwnRectangle(t *testing.T) {
 	it := items(t, describe(t, tm, template.RenderRequest{Card: land}))["text:pt"]
 	if it.Drawn || it.Ink || it.Authored != image.Rect(560, 960, 680, 1010) {
 		t.Errorf("pt = %+v, want the box's rectangle", it)
+	}
+}
+
+func TestDescribeTurnsABaselineWithTheLayout(t *testing.T) {
+	const w, h = placeholderWidth, placeholderHeight
+	tm := describeTemplate(t, func(m *manifest.Manifest) {
+		l := m.Layouts["test"]
+		l.Canvas.Rotate = 90
+		title := l.TextBoxes["title"]
+		title.Rect = manifest.Rect{X: 48, Y: 120, Width: 520, Height: 52}
+		title.Text.VAlign = "baseline"
+		l.TextBoxes["title"] = title
+		out := box(30, 40, 200, 40, 24)
+		out.Draws = "artist"
+		out.Text.VAlign = "baseline"
+		out.Space = template.SpaceOutput
+		l.TextBoxes["legal"] = out
+		m.Layouts["test"] = l
+	})
+	c := creature(card.White)
+	c.Name = "Gopher Guard"
+	c.Artist = "Someone"
+	got := items(t, describe(t, tm, template.RenderRequest{Card: c}))
+
+	title := got["text:title"]
+	if !title.Ink {
+		t.Fatalf("title = %+v", title)
+	}
+	line := image.Rect(48, 120, 568, 120)
+	if title.BaselineAuthored != line {
+		t.Errorf("authored baseline %v, want %v", title.BaselineAuthored, line)
+	}
+	// A quarter turn makes the horizontal line a vertical one in the finished image, and
+	// it turns as the box's ink does
+	want := template.RotateRect(line, w, h, 90)
+	if title.BaselineDelivered != want || want.Dx() != 0 || want.Dy() != 520 {
+		t.Errorf("delivered baseline %v, want %v, a vertical line", title.BaselineDelivered, want)
+	}
+
+	// A box laid out in the finished image has its baseline there, and in the layout's
+	// own canvas it turns back
+	legal := got["text:legal"]
+	if !legal.Ink {
+		t.Fatalf("legal = %+v", legal)
+	}
+	if want := image.Rect(30, 40, 230, 40); legal.BaselineDelivered != want {
+		t.Errorf("an output box's baseline is %v, want %v", legal.BaselineDelivered, want)
+	}
+	if back := template.RotateRect(legal.BaselineAuthored, w, h, 90); back != legal.BaselineDelivered {
+		t.Errorf("legal baseline authored %v turns to %v, want %v", legal.BaselineAuthored, back, legal.BaselineDelivered)
 	}
 }

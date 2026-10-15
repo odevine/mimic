@@ -611,7 +611,7 @@ every font in the folder, and a choice is kept by Save. A role whose chosen font
 is no longer in the folder says so and draws with the template's own. Add font
 copies a `.ttf` or `.otf` into a `fonts` folder beside `prefs.json`, and Remove
 deletes one. Those write at once rather than on Save, and the next render uses
-them. When `-fonts` or a checkout's `local-fonts/` is in use instead, the panel
+them. When `-fonts` is in use instead, the panel
 lists that folder's fonts and cannot add or remove them. Fonts added by an
 earlier version, one folder for each role, are moved up into the folder and
 assigned to their roles the first time the app starts. The standard roles and the

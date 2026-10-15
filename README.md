@@ -69,11 +69,10 @@ go run -tags gtk3 . # Linux
 
 The repository holds two Go modules, each versioned and released on its own.
 
-| Directory      | Contents                                                        |
-| -------------- | --------------------------------------------------------------- |
-| `engine/`      | The renderer: Scryfall lookups, templates, text layout          |
-| `ui/`          | The `mimic` desktop app and its embedded web frontend           |
-| `local-fonts/` | A drop folder for real card fonts, which are not tracked        |
+| Directory | Contents                                               |
+| --------- | ------------------------------------------------------ |
+| `engine/` | The renderer: Scryfall lookups, templates, text layout |
+| `ui/`     | The `mimic` desktop app and its embedded web frontend  |
 
 The [engine README](engine/README.md) covers the rendering library and the
 `rendercard` command, and the [ui README](ui/README.md) covers the app, its
@@ -119,10 +118,9 @@ template can define roles of its own, which appear in the same list.
 | Collector info | collector number and set code | Gotham Medium           |
 
 The app keeps added fonts in a `fonts` folder under the per-OS user config
-directory. Two other sources take priority over that folder. The `-fonts <dir>`
-flag points the app at any folder of fonts, and a run from a checkout uses
-`local-fonts/` as its [README](local-fonts/README.md) describes. Fonts in either
-one can be assigned to roles, and are changed there rather than in the app.
+directory. The `-fonts <dir>` flag points the app at any folder of fonts instead,
+which takes priority over that folder. Fonts in it can be assigned to roles, and
+are changed there rather than in the app.
 
 Layer compositing is handled by [impasto](https://github.com/odevine/impasto), a
 pure-Go library for Photoshop-style layered images.

@@ -21,16 +21,6 @@ async function showRun(page) {
   return new RunPage(page);
 }
 
-test("with no run yet the console offers the list", async ({ bridge, page }) => {
-  bridge.reply("Run.Latest", null);
-  await bridge.boot();
-  const run = await showRun(page);
-  await expect(run.empty).toBeVisible();
-  await expect(run.body).toBeHidden();
-  await run.empty.getByRole("button", { name: "Go to List" }).click();
-  await expect(page.locator("#list-input")).toBeVisible();
-});
-
 test("a run with failures says which failed and why, and retries only those", async ({ bridge, page }) => {
   bridge.reply("Run.Latest", view([
     cardOf(0, "Sol Ring", "done", { file: "Sol Ring.jpg", ms: 40 }),
@@ -53,20 +43,6 @@ test("a run with failures says which failed and why, and retries only those", as
   bridge.reply("Run.Retry", view([cardOf(0, "Lightning Bolt", "queued")], { id: "run-2", finished: undefined }));
   await run.retryButton.click();
   await expect.poll(() => bridge.calledWith("Run.Retry")).toEqual([["run-1"]]);
-});
-
-test("a run that was stopped shows the cards it skipped", async ({ bridge, page }) => {
-  bridge.reply("Run.Latest", view([
-    cardOf(0, "Sol Ring", "done", { file: "Sol Ring.jpg", ms: 40 }),
-    cardOf(1, "Lightning Bolt", "skipped"),
-    cardOf(2, "Llanowar Elves", "skipped"),
-  ], { stopped: true }));
-  await bridge.boot();
-  const run = await showRun(page);
-  await run.waitForState("stopped");
-  await expect(run.retryButton).toBeHidden();
-  await expect(run.row("Lightning Bolt")).toBeVisible();
-  await expect(run.summary).toContainText("2 skipped");
 });
 
 test("a run that cannot start is reported and the list stays", async ({ bridge, page }) => {

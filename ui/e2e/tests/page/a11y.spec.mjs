@@ -17,10 +17,6 @@ import { scenes } from "../../bridge/scenes.mjs";
 // says about it
 const generic = (target) => target.replace(/tbody\[data-id="\d+"\]/g, "tbody");
 
-// What axe finds depends on how the browser draws the page, so the scan is taken
-// in Chromium
-test.skip(({ browserName }) => browserName !== "chromium", "the scan is taken in Chromium");
-
 const allowlist = JSON.parse(await readFile(path.join(import.meta.dirname, "../../a11y-allowlist.json"), "utf8"));
 const used = new Set();
 const dump = new Map();

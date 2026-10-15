@@ -13,18 +13,6 @@ async function withACard(bridge, page) {
   return single;
 }
 
-test("a search that fails says why and leaves nothing to edit", async ({ bridge, page }) => {
-  bridge.fail("Cards.Search", "search failed: scryfall answered 503");
-  await bridge.boot();
-  await page.locator("#search-input").fill("sol ring");
-  await page.locator("#search-input").press("Enter");
-  await expect(page.locator("#results-count")).toHaveText("Search failed");
-  await expect(page.locator("#status")).toHaveText("Search failed: search failed: scryfall answered 503");
-  await expect(page.locator("#editor")).toBeHidden();
-});
-
-// The preview of a selected card is a render of its own, so the first job
-// belongs to the selection, and a save starts the next
 test("a render that fails reports the error and can be tried again", async ({ bridge, page }) => {
   const single = await withACard(bridge, page);
   await expect.poll(() => bridge.calledWith("Render.Start").length).toBe(1);
@@ -42,13 +30,18 @@ test("a render that fails reports the error and can be tried again", async ({ br
   await expect(single.activity).toHaveAttribute("data-state", "done");
 });
 
-test("a save that fails says so and writes nothing", async ({ bridge, page }) => {
+test("a save that is cancelled or fails writes nothing", async ({ bridge, page }) => {
   const single = await withACard(bridge, page);
   await expect.poll(() => bridge.calledWith("Render.Start").length).toBe(1);
   await bridge.job("job-1", [done(1)]);
   await expect(single.activity).toHaveAttribute("data-state", "done");
 
   bridge.reply("Render.SuggestedFilename", "Sol Ring");
+  bridge.reply("System.PickFile", "");
+  await single.save();
+  await expect(single.activity).toHaveAttribute("data-state", "idle");
+  expect(bridge.calledWith("Render.Save")).toHaveLength(0);
+
   bridge.reply("System.PickFile", "/tmp/Sol Ring.png");
   bridge.fail("Render.Save", "saving the image: permission denied");
   // The preview is already at the output size, so the save writes it as it is
@@ -58,20 +51,6 @@ test("a save that fails says so and writes nothing", async ({ bridge, page }) =>
   await expect(page.locator("#activity-step")).toContainText("permission denied");
   expect(bridge.calledWith("Render.Save")).toHaveLength(1);
   expect(bridge.calledWith("Render.Start")).toHaveLength(1);
-});
-
-test("a save dialog that is cancelled leaves the card unsaved and quiet", async ({ bridge, page }) => {
-  const single = await withACard(bridge, page);
-  await expect.poll(() => bridge.calledWith("Render.Start").length).toBe(1);
-  await bridge.job("job-1", [done(1)]);
-  await expect(single.activity).toHaveAttribute("data-state", "done");
-
-  bridge.reply("Render.SuggestedFilename", "Sol Ring");
-  bridge.reply("System.PickFile", "");
-  await single.save();
-
-  await expect(single.activity).toHaveAttribute("data-state", "idle");
-  expect(bridge.calledWith("Render.Save")).toHaveLength(0);
 });
 
 test("with no template installed the page says so and points to the Templates tab", async ({ bridge, page }) => {

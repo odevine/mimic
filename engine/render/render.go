@@ -289,6 +289,9 @@ type resolvedBox struct {
 	space   string
 	spec    template.TextBoxSpec
 	divider string
+	// pick is the override of the box that is in force, as an index into the box's
+	// overrides in the order they are tried, or -1 for the box as authored
+	pick int
 }
 
 // boxSet is a layout's text boxes after resolution for a card
@@ -329,11 +332,11 @@ func resolveBoxes(layout *template.Layout, geo *template.Geometry, fc *faces, fe
 				continue
 			}
 			sb := geo.Boxes[b.Key]
-			spec, divider := sb.Base, b.Base.Flow.Divider
+			spec, divider, pick := sb.Base, b.Base.Flow.Divider, -1
 			if i, ok := b.Pick(func(c frame.Condition) bool { return c.Met(k, features) }); ok {
-				spec, divider = sb.Overrides[i], b.Overrides[i].Box.Flow.Divider
+				spec, divider, pick = sb.Overrides[i], b.Overrides[i].Box.Flow.Divider, i
 			}
-			rb := resolvedBox{key: b.Key, draws: b.Draws, face: b.Face, space: b.Space, spec: spec, divider: divider}
+			rb := resolvedBox{key: b.Key, draws: b.Draws, face: b.Face, space: b.Space, spec: spec, divider: divider, pick: pick}
 			out.byKey[b.Key] = rb
 			out.jobs = append(out.jobs, rb)
 		}

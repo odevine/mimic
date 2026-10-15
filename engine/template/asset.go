@@ -29,9 +29,9 @@ type TextBoxSpec struct {
 	FontSize float64 `json:"fontSize"`
 	Align    string  `json:"align"` // "left" | "center" | "right"
 	Color    string  `json:"color"` // "#RRGGBB"
-	// VAlign anchors the text block vertically: "top", "center", "bottom", or
-	// "baseline", which sets Y as the first line's baseline for point text.
-	// Empty means top
+	// VAlign anchors the text block vertically: "top", "center", "bottom", or one of
+	// "baseline", "cap-top" and "cap-center", which set Y on the first line of point text,
+	// at its baseline, the top of its capitals or their middle. Empty means top
 	VAlign string `json:"vAlign,omitempty"`
 	// LineSpacing sets the baseline-to-baseline distance to this multiple of the
 	// font size, the way leading reads in a PSD, so 1.0 is solid. Zero or less
@@ -39,7 +39,7 @@ type TextBoxSpec struct {
 	LineSpacing float64 `json:"lineSpacing,omitempty"`
 	// MinFontSize is the floor for shrink-to-fit on an area box. Text that still
 	// overflows at this size is clipped. Zero means a default fraction of
-	// FontSize. A baseline-anchored box does not shrink, so it ignores this
+	// FontSize. A point text box shrinks to its width and not its height, so it ignores this
 	MinFontSize float64 `json:"minFontSize,omitempty"`
 	// Padding insets the text from the box edge on every side, so the box can
 	// stay the size of the visible panel while the text keeps a margin. Zero

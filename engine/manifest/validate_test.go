@@ -131,7 +131,7 @@ func TestEachMistakeIsReportedAtItsPath(t *testing.T) {
 		{"a font role that does not exist", []change{{title + ".text.font", "comic"}}, title + ".text.font", Error, "is not a font role"},
 		{"a color that is not hex", []change{{title + ".text.color", "red"}}, title + ".text.color", Error, "#RRGGBB"},
 		{"an alignment that does not exist", []change{{title + ".text.align", "middle"}}, title + ".text.align", Error, "is not left, center, or right"},
-		{"a vertical alignment that does not exist", []change{{title + ".text.vAlign", "middle"}}, title + ".text.vAlign", Error, "is not top, center, bottom, or baseline"},
+		{"a vertical alignment that does not exist", []change{{title + ".text.vAlign", "middle"}}, title + ".text.vAlign", Error, "is not top, center, bottom, baseline, cap-top, or cap-center"},
 		{"negative padding", []change{{title + ".text.paddingX", -3}}, title + ".text", Error, "cannot be negative"},
 		{"a shadow that is too opaque", []change{{normal + "textBoxes.mana.text.shadow.opacity", 2}}, normal + "textBoxes.mana.text.shadow", Error, "opacity is from 0 to 1"},
 		{"a shadow color that is not hex", []change{{normal + "textBoxes.mana.text.shadow.color", "black"}}, normal + "textBoxes.mana.text.shadow.color", Error, "#RRGGBB"},

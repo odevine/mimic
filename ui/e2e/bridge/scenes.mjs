@@ -413,7 +413,7 @@ export const scenes = {
   },
   "templates-library": {
     run: async ({ bridge, page }) => {
-      const version = (v, extra) => ({ version: v, label: v, cached: true, selectable: true, active: false, action: "select", ...extra });
+      const version = (v, extra) => ({ version: v, label: v, cached: true, selectable: true, active: false, action: "select", removable: true, restorable: true, ...extra });
       bridge.reply("Templates.List", [
         {
           name: "mimic.m15",

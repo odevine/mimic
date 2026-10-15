@@ -66,6 +66,11 @@ type VersionView struct {
 	Size   int64  `json:"size,omitempty"`
 	Reason string `json:"reason,omitempty"`
 	Action string `json:"action"`
+	// Removable says the version is a bundle in the app's own cache, which Remove can
+	// delete. A loose developer folder is not. Restorable says the catalog lists it, so
+	// it can be downloaded again, and a version that is not can only come back from a file
+	Removable  bool `json:"removable"`
+	Restorable bool `json:"restorable"`
 }
 
 // TemplateView is one template block: its id, its description, and its versions
@@ -163,6 +168,8 @@ func (s *Service) List(ctx context.Context) []TemplateView {
 				Size:       v.size,
 				Active:     row.name == activeName && v.version == activeVersion,
 				Reason:     v.reason,
+				Removable:  v.cached && v.version != pipeline.LocalVersion,
+				Restorable: v.inCatalog,
 			}
 			switch {
 			case vv.Active, !v.selectable:

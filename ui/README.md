@@ -320,6 +320,18 @@ template. Importing a file that is installed already says so, and one that is a 
 installed version asks before it takes that one's place, reopening the template in use when that is the
 one replaced. A file the app cannot read says why and changes nothing.
 
+Each version in the library that the app keeps, whether downloaded, imported or made available from the
+Editor, has a remove button. It asks first, and says whether the version can come back: one the catalog
+lists can be downloaded again, a draft is still in the Editor, where Use in mimic makes it available again,
+and an imported version can return only from its file. Removing deletes the bundle from the cache, and the
+template's folder with its last one. A version in use is switched away from first, to the newest other
+version of the same template, or else to the template the app starts with, or to none when that is not
+installed either, and a choice of template for a face that named the removed version stops applying. A
+developer folder in a checkout's `assets` has no button, since the app does not keep it, and nothing can be
+removed while a run is in progress. A version in the cache that the catalog does not list, such as one
+imported for a template the catalog carries, is listed beside the catalog's versions so it can be selected
+and removed.
+
 The left column picks the draft, with Undo and Redo beside its name since they take
 back a change made anywhere in the template, has the template's About and its canvas under
 it, and picks the card the draft is drawn with, from six presets, which are real cards that are looked

@@ -77,6 +77,7 @@ Templates.Active() -> templates.ActiveView
 Templates.Faces() -> []pipeline.FaceRow
 Templates.Import(templates.ImportRequest) -> templates.ImportResult !
 Templates.List() -> []templates.TemplateView
+Templates.Remove(templates.RemoveRequest) -> templates.RemoveResult !
 Templates.Select(templates.SelectRequest) -> string !
 Templates.SetFace(templates.FaceChoice) -> []pipeline.FaceRow !
 Templates.SetFeature(templates.FeatureChoice) -> templates.DetailsView !
@@ -991,6 +992,18 @@ templates.ImportResult struct {
 	active bool
 }
 
+templates.RemoveRequest struct {
+	template string
+	version string
+}
+
+templates.RemoveResult struct {
+	template string
+	version string
+	active bool
+	now string (omitempty)
+}
+
 templates.SelectRequest struct {
 	name string
 	version string
@@ -1016,6 +1029,8 @@ templates.VersionView struct {
 	size int64 (omitempty)
 	reason string (omitempty)
 	action string
+	removable bool
+	restorable bool
 }
 
 uint64 = uint64

@@ -70,7 +70,7 @@ test("an installed template offers the choices it declares", async ({ templates,
   await expect(templates.entry("test.featured").getByLabel("Tone")).toHaveValue("dark");
 });
 
-test("a template exported from the editor is imported from its file and is listed as installed", async ({ editor, templates, scratch }) => {
+test("a template exported from the editor is imported from its file, listed as installed, and removed again", async ({ editor, templates, scratch }) => {
   await editor.create("Portable", 100);
   await editor.exportButton.click();
   await editor.exportConfirm.click();
@@ -91,5 +91,18 @@ test("a template exported from the editor is imported from its file and is liste
   await expect(editor.toasts.last()).toHaveText("Portable 0.1.0 is installed already");
   await entry.getByRole("button", { name: "Select" }).click();
   await expect(templates.label).toHaveText("Portable · 0.1.0");
+
+  // Removing it asks first, takes the bundle out of the library and out of use, and the editor's
+  // draft is untouched
+  await scratch.decline();
+  await entry.getByRole("button", { name: "Remove Portable 0.1.0" }).click();
+  await expect(entry).toBeVisible();
+  await scratch.reset();
+  await entry.getByRole("button", { name: "Remove Portable 0.1.0" }).click();
+  await expect(editor.toasts.last()).toHaveText("Removed Portable 0.1.0");
+  await expect(templates.libraryList.locator(".tp-template", { hasText: "user.portable" })).toHaveCount(0);
+  await expect(templates.label).toHaveText("No template installed");
+  await editor.show();
+  await expect(editor.page.locator("#ed-draft-select")).toContainText("Portable");
   await scratch.reset();
 });

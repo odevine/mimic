@@ -151,3 +151,26 @@ func TestATemplateTheEditorMadeIsListedAtTheDraftVersion(t *testing.T) {
 		t.Fatalf("row = %+v, %v", row, ok)
 	}
 }
+
+func TestACachedVersionTheCatalogDoesNotListIsAVersionOfItsTemplate(t *testing.T) {
+	idx := oneTemplate("mimic.m15", catalog.Version{Version: "1.0.0", Format: 2})
+	cached := func(id string) []string {
+		if id == "mimic.m15" {
+			return []string{"2.0.0-rc.1", "1.0.0"}
+		}
+		return nil
+	}
+	rows := buildTemplateRows(idx, nil, func(string) bool { return false }, func(id, ver string) bool { return ver == "1.0.0" }, cached)
+	row, ok := findRow(rows, "mimic.m15")
+	if !ok || len(row.versions) != 2 {
+		t.Fatalf("versions = %+v, want the catalog's and the one that was imported", row.versions)
+	}
+	listed, _ := findVer(row.versions, "1.0.0")
+	imported, ok := findVer(row.versions, "2.0.0-rc.1")
+	if !ok || !imported.cached || !imported.selectable || imported.inCatalog {
+		t.Errorf("imported version = %+v, want cached, selectable and not in the catalog", imported)
+	}
+	if !listed.inCatalog {
+		t.Errorf("the catalog's version = %+v, want it said to be in the catalog", listed)
+	}
+}

@@ -203,6 +203,10 @@ export const api = {
   // with replace
   chooseTemplateFile: () => pickFile({ title: "Choose a template", filters: BUNDLES }),
   importTemplate: (path, replace) => rpc("Templates", "Import", { path, replace: !!replace }),
+  // removeTemplate deletes an installed version from the library, and resolves to { template,
+  // version, active, now }. active says it was the template in use, which the app switched away
+  // from to the template named by now
+  removeTemplate: (template, version) => rpc("Templates", "Remove", { template, version }),
   // setTemplateFeature keeps the value chosen for one feature of an installed
   // template, and resolves to the template's details with it in force. A null
   // value takes the choice back

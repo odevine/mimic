@@ -74,7 +74,52 @@ function versionRow(t, v) {
       ),
     );
   }
+  if (v.removable) {
+    const name = `${t.title || t.name} ${v.label}`;
+    row.append(
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn subtle icon-only tp-remove",
+          style: "min-height:0;height:24px;width:24px",
+          "aria-label": `Remove ${name}`,
+          "data-tip": "Remove",
+          onclick: () => remove(t, v),
+        },
+        icon("trash"),
+      ),
+    );
+  }
   return row;
+}
+
+// removeNote says what removing a version leaves, by whether it can be had again
+function removeNote(v) {
+  const was = v.active ? " It is the template in use, so the app switches to another version of it, or to none if that was the only one." : "";
+  if (v.restorable) return `It is deleted from this computer. The catalog still lists it, so it can be downloaded again.${was}`;
+  if (v.version === "draft") return `It is deleted from this computer. The draft stays in the Editor, where Use in mimic makes it available again.${was}`;
+  return `It is deleted from this computer. The catalog does not list it, so it can come back only from the file it was imported from.${was}`;
+}
+
+// remove deletes a version of a template from the library after asking. The template in use is
+// read again when it was the one removed
+async function remove(t, v) {
+  if (busy) return;
+  const name = `${t.title || t.name} ${v.label}`;
+  if (!(await api.confirm(`Remove ${name}?`, removeNote(v), "Remove"))) return;
+  busy = true;
+  try {
+    const res = await api.removeTemplate(t.name, v.version);
+    await loadLibrary();
+    if (res.active) await changed();
+    toast(`Removed ${name}`, "ok");
+  } catch (err) {
+    toast(err.message, "err", 7000);
+    await loadLibrary();
+  } finally {
+    busy = false;
+  }
 }
 
 // aboutTemplate says who made an installed template and whose art it is cut from. Links open in the browser through the page's one handler

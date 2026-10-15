@@ -21,6 +21,9 @@ type versionRow struct {
 	cached     bool
 	selectable bool
 	reason     string
+	// inCatalog says the catalog lists this version, so a copy that is removed can be
+	// downloaded again
+	inCatalog bool
 }
 
 // templateRow is one template in the manager: its versions, and whether it
@@ -65,9 +68,18 @@ func buildTemplateRows(idx *catalog.Index, installed []pipeline.Installed, hasLo
 			if hasLocal(t.Name) {
 				row.versions = append(row.versions, localRow())
 			}
+			listed := map[string]bool{}
 			for _, v := range t.Versions {
 				if v.Readable() {
 					row.versions = append(row.versions, catalogRow(v, isCached(t.Name, v.Version)))
+					listed[v.Version] = true
+				}
+			}
+			// A version in the cache that the catalog does not list, such as one imported from a
+			// file, is listed too, so it can be selected and removed
+			for _, v := range cachedVersions(t.Name) {
+				if !listed[v] {
+					row.versions = append(row.versions, versionRow{version: v, cached: true, selectable: true})
 				}
 			}
 			// A template with nothing this engine reads is not worth a row
@@ -104,7 +116,7 @@ func localRow() versionRow {
 
 // catalogRow turns a catalog version into a model row, deciding selectability
 func catalogRow(v catalog.Version, cached bool) versionRow {
-	r := versionRow{version: v.Version, size: v.Size, cached: cached}
+	r := versionRow{version: v.Version, size: v.Size, cached: cached, inCatalog: true}
 	switch {
 	case !templateVersionSatisfied(v.MinEngine):
 		r.reason = "needs engine " + v.MinEngine

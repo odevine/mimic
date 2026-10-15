@@ -361,7 +361,12 @@ baseline where it is, and the selection reads as the line, with X, Width and Bas
 the numbers of the ink depend on the text. A box on its baseline snaps by its line, to the card's
 lines and to the baselines of boxes marked as ones to snap to, and a guide says baseline
 to the other box's baseline. A layout that turns the card makes the line a vertical one,
-with its ends at the top and bottom. Edges and middles snap to the card's own lines within a few pixels, and to
+with its ends at the top and bottom. The Vertical choice of a text box also offers cap-top and
+cap-center, which set the box's Y on the top or the middle of the text's capital letters and not
+on its baseline, so a title that shrinks to fit stays centered with a mana cost on the same Y. The
+line, its caption and the selection's third number are then named cap top or cap center. An edit that
+sets either one names the engine release that reads them in the template's minEngine, raising an
+older one, and undoing the edit puts it back. Edges and middles snap to the card's own lines within a few pixels, and to
 another item's only when that item is marked as one to snap to. Holding Option or
 Alt turns snapping off, and while a box is dragged the guide says which of its edges
 is held and what lies on that line, which is outlined. The arrow keys move the

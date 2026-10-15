@@ -107,7 +107,9 @@ func TestApplyMovesAnElementSavesItAndRendersFromTheNewFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Rev != 1 || len(res.Inverse) != 1 {
+	// The starter sets its title on the middle of its capitals, which an older engine does
+	// not read, so the first edit of its layout names the release that does
+	if res.Rev != 1 || len(res.Inverse) != 2 || res.Inverse[0].Op != draftedit.OpUnset || res.Inverse[0].Path[0] != "minEngine" {
 		t.Fatalf("result = %+v", res)
 	}
 	now := describeFor(t, svc, sum.ID, "monocolored")
@@ -545,6 +547,13 @@ func TestDescribeSaysWhatAnEditorNeedsOfATextBox(t *testing.T) {
 	title := item(t, v, "text", "title")
 	if title.Baseline == nil || title.Baseline.Height != 0 || title.Baseline.Width <= 0 {
 		t.Fatalf("title baseline = %+v, want a horizontal line", title.Baseline)
+	}
+	// A new template sets its title on the middle of its capitals, and says so
+	if title.Anchor != "cap-center" {
+		t.Errorf("title anchor = %q, want cap-center", title.Anchor)
+	}
+	if mana := item(t, v, "text", "mana"); mana.Anchor != "cap-center" {
+		t.Errorf("mana anchor = %q, want cap-center", mana.Anchor)
 	}
 	var box struct{ X, Y, W int }
 	src, _ := svc.Source(sum.ID)

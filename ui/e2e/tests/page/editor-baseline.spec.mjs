@@ -73,6 +73,14 @@ test("a baseline box has its line drawn across its width, with an end to drag at
   await expect(page.locator("#ed-overlay .ed-baseline-handle")).toHaveCount(0);
 });
 
+test("a box set on the middle of its capitals names its line and reads by it", async ({ bridge, page }) => {
+  const { editor } = await ready(bridge, page, { items: baselineItems({ type: { anchor: "cap-center" } }) });
+  await select(editor, "type");
+  await expect(page.locator("#ed-overlay .ed-box.sel .ed-caption .ed-tag.line")).toHaveText("cap center");
+  await expect(page.locator("#ed-overlay .ed-box.baseline.h")).toHaveCount(1);
+  await expect(page.locator(".ed-readout-grid dt")).toHaveText(["X", "Width", "Cap center", ""]);
+});
+
 test("the selection of a baseline box reads as its line, and the box's own height is left out", async ({ bridge, page }) => {
   const { editor } = await ready(bridge, page);
   await select(editor, "type");

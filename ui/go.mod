@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/odevine/impasto v0.2.2
-	github.com/odevine/mimic/engine v0.19.4
+	github.com/odevine/mimic/engine v0.19.5
 	github.com/wailsapp/wails/v3 v3.0.0-beta.28
 	golang.org/x/mod v0.41.0
 	golang.org/x/sys v0.48.0

@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strconv"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/odevine/mimic/engine/template"
 	"github.com/odevine/mimic/ui/internal/jsonedit"
 )
@@ -190,23 +192,48 @@ func ApplyWith(fsys fs.FS, ops []Op, blobs Blobs) (*Result, error) {
 // and an edit that gives it its first font or role names this one
 const MinEngineForFonts = "0.19.0"
 
+// MinEngineForCapAnchors is the first engine release that reads the cap-top and
+// cap-center vertical anchors, which an older one rejects
+const MinEngineForCapAnchors = "0.19.5"
+
+var capAnchor = regexp.MustCompile(`"vAlign":"cap-(top|center)"`)
+
 // nameMinEngine names the engine release a template needs when an edit has just given
-// it fonts or roles and it names none, and returns the operation that takes it away
+// it fonts, roles or a cap anchor and it names none or an older one, and returns the
+// operation that puts back what it said before
 func (w *work) nameMinEngine() (Op, bool) {
-	if !w.sourceChanged || w.source == nil {
+	need := ""
+	if w.sourceChanged && w.source != nil {
+		defines := func(key string) bool {
+			n := w.source.Field(key)
+			return n != nil && n.Kind() == jsonedit.Object && len(n.Keys()) > 0
+		}
+		if defines("fonts") || defines("roles") {
+			need = MinEngineForFonts
+		}
+	}
+	for _, l := range w.layouts {
+		if l.changed && capAnchor.Match(l.root.Compact()) && (need == "" || semver.Compare("v"+MinEngineForCapAnchors, "v"+need) > 0) {
+			need = MinEngineForCapAnchors
+		}
+	}
+	if need == "" {
 		return Op{}, false
 	}
-	defines := func(key string) bool {
-		n := w.source.Field(key)
-		return n != nil && n.Kind() == jsonedit.Object && len(n.Keys()) > 0
-	}
-	if !defines("fonts") && !defines("roles") {
+	src, err := w.sourceNode()
+	if err != nil {
 		return Op{}, false
 	}
-	if _, named := w.source.Field("minEngine").String(); named {
+	old, named := src.Field("minEngine").String()
+	if named && semver.IsValid("v"+old) && semver.Compare("v"+old, "v"+need) >= 0 {
 		return Op{}, false
 	}
-	_ = w.source.Set("minEngine", jsonedit.NewString(MinEngineForFonts))
+	_ = src.Set("minEngine", jsonedit.NewString(need))
+	w.sourceChanged = true
+	if named {
+		raw, _ := json.Marshal(old)
+		return Op{Op: OpSet, Kind: KindTemplate, Path: []string{"minEngine"}, Value: raw}, true
+	}
 	return Op{Op: OpUnset, Kind: KindTemplate, Path: []string{"minEngine"}}, true
 }
 

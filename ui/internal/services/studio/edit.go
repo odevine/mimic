@@ -60,6 +60,9 @@ type ItemView struct {
 	// Baseline is, for an Ink item, the line its first baseline lies on, as a rectangle
 	// with no thickness across the line, in the finished image
 	Baseline *RectView `json:"baseline,omitempty"`
+	// Anchor is, for an Ink item, the vertical anchor the line is measured to, baseline,
+	// cap-top or cap-center
+	Anchor string `json:"anchor,omitempty"`
 	// Placed is, for a text box that draws, where it ends up once the card has moved it
 	// to another box's row (Moved) or narrowed it to clear one (Narrowed), in the
 	// finished image. It is there only for a box the card changes
@@ -157,7 +160,7 @@ func (s *Service) Describe(req DescribeRequest) (DescribeView, error) {
 		v := ItemView{
 			Kind: string(it.Kind), Key: it.Key, Part: it.Part, After: it.After, Images: it.Images,
 			Drawn: it.Drawn, Why: it.Why, Ink: it.Ink, Authored: rectView(it.Authored), Delivered: rectView(it.Delivered),
-			Baseline: optionalRect(it.BaselineDelivered), Moved: it.Moved, Narrowed: it.Narrowed,
+			Baseline: optionalRect(it.BaselineDelivered), Anchor: it.Anchor, Moved: it.Moved, Narrowed: it.Narrowed,
 		}
 		// Where the box is placed is worth saying only when the card changed it
 		if it.Moved || it.Narrowed {

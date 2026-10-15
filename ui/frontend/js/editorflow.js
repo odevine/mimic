@@ -35,10 +35,15 @@ export function avoidance(box, rect, flow, items) {
 
 const fixed = (n) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
+// anchorName is what the line a box is set on is called, from the anchor it is measured to,
+// where an item that names none is on its baseline
+export const anchorName = (item) => ({ "cap-top": "cap top", "cap-center": "cap center" })[item && item.anchor] || "baseline";
+const capital = (s) => s[0].toUpperCase() + s.slice(1);
+
 // readout is the four numbers under the selection's name, as the cells of two columns read
 // across: the place in the first and the size in the second. A box set on its baseline is
 // the line its text sits on, and its own height is not used, so the line's place and length
-// are what is said, with the one across the line called the baseline. A cell with nothing
+// are what is said, with the one across the line named for the anchor, the baseline or the capitals. A cell with nothing
 // to say is empty
 export function readout(item, rect) {
   const blank = !rect || (rect.width === 0 && rect.height === 0);
@@ -46,8 +51,8 @@ export function readout(item, rect) {
   const line = item && item.baseline;
   if (line && !blank) {
     // A turned layout makes the line a vertical one, which runs down and sits across at X
-    if (line.height === 0) return [cell("X", line.x), cell("Width", line.width), cell("Baseline", line.y), { label: "", value: "" }];
-    return [cell("Baseline", line.x), cell("Length", line.height), cell("Y", line.y), { label: "", value: "" }];
+    if (line.height === 0) return [cell("X", line.x), cell("Width", line.width), cell(capital(anchorName(item)), line.y), { label: "", value: "" }];
+    return [cell(capital(anchorName(item)), line.x), cell("Length", line.height), cell("Y", line.y), { label: "", value: "" }];
   }
   return [cell("X", rect ? rect.x : 0), cell("Width", rect ? rect.width : 0), cell("Y", rect ? rect.y : 0), cell("Height", rect ? rect.height : 0)];
 }
@@ -228,7 +233,7 @@ export function flowZones({ item, rect, line = null, reach = null, flow = null, 
 export function captionTags(item, links = []) {
   if (!item) return [];
   const tags = [];
-  if (item.baseline) tags.push({ text: "baseline", tone: "line" });
+  if (item.baseline) tags.push({ text: anchorName(item), tone: "line" });
   if (item.moved || item.narrowed) tags.push({ text: item.moved && item.narrowed ? "Moved and narrowed" : item.moved ? "Moved" : "Narrowed", tone: "placed" });
   const said = {
     avoid: (l) => (l.reverse ? `Avoided by ${l.label}` : `Avoids ${l.label}`),

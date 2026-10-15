@@ -758,6 +758,7 @@ studio.ItemView struct {
 	authored studio.RectView
 	delivered studio.RectView
 	baseline studio.RectView (omitempty)
+	anchor string (omitempty)
 	placed studio.RectView (omitempty)
 	moved bool (omitempty)
 	narrowed bool (omitempty)

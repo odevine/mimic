@@ -86,6 +86,19 @@ test("a box set on its baseline reads as the line its text sits on", () => {
   ]);
 });
 
+test("a box set on its capitals names its line for the anchor", () => {
+  const item = { kind: "text", anchor: "cap-center", baseline: r(100, 220, 600, 0) };
+  assert.equal(readout(item, r(100, 180, 420, 52))[2].label, "Cap center");
+  assert.equal(readout({ ...item, anchor: "cap-top" }, r(100, 180, 420, 52))[2].label, "Cap top");
+  assert.equal(readout({ ...item, anchor: "baseline" }, r(100, 180, 420, 52))[2].label, "Baseline");
+  assert.equal(readout({ ...item, anchor: undefined }, r(100, 180, 420, 52))[2].label, "Baseline");
+  const turned = { kind: "text", anchor: "cap-top", baseline: r(220, 100, 0, 600) };
+  assert.equal(readout(turned, r(180, 100, 52, 420))[0].label, "Cap top");
+  assert.deepEqual(captionTags(item).map((t) => t.text), ["cap center"]);
+  assert.deepEqual(captionTags({ ...item, anchor: "cap-top" }).map((t) => t.text), ["cap top"]);
+  assert.deepEqual(captionTags({ baseline: r(1, 2, 3, 0) }).map((t) => t.text), ["baseline"]);
+});
+
 test("the fit is said when the text shrank or does not fit, and not when it did", () => {
   assert.equal(fitNote(null), null);
   assert.equal(fitNote({ size: 36, wanted: 36, floor: 20, overflows: false }), null);

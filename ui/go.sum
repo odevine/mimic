@@ -296,6 +296,8 @@ github.com/odevine/mimic/engine v0.19.3 h1:TlQQQSkveNSs+LHFthEUz0uAKlocSuGzwZbrf
 github.com/odevine/mimic/engine v0.19.3/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
 github.com/odevine/mimic/engine v0.19.4 h1:PUFooXVnQyWedexwJjr4vTjeRAfSC/FICZnIEPwosjA=
 github.com/odevine/mimic/engine v0.19.4/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
+github.com/odevine/mimic/engine v0.19.5 h1:3RYdqQjmMD8czfkqGM7j0iEmX/tzVO82DJFCqnNS3/0=
+github.com/odevine/mimic/engine v0.19.5/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
 github.com/pjbgf/sha1cd v0.6.0 h1:3WJ8Wz8gvDz29quX1OcEmkAlUg9diU4GxJHqs0/XiwU=

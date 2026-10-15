@@ -316,3 +316,42 @@ func TestAnEditThatGivesATemplateFontsOrRolesNamesTheEngineThatReadsThem(t *test
 		t.Error("a description named an engine")
 	}
 }
+
+func TestACapAnchorNamesTheEngineThatReadsIt(t *testing.T) {
+	set := Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Path: []string{"text", "vAlign"}, Value: raw(`"cap-center"`)}
+	minEngine := func(res *Result) string {
+		src, err := jsonedit.Parse(res.Files["template.json"])
+		if err != nil {
+			t.Fatalf("template.json: %v in %s", err, res.Files["template.json"])
+		}
+		v, _ := src.Field("minEngine").String()
+		return v
+	}
+	fsys := draft(0)
+	if got := minEngine(applyWith(t, fsys, nil, set)); got != MinEngineForCapAnchors {
+		t.Errorf("minEngine = %q, want %q", got, MinEngineForCapAnchors)
+	}
+	// The edit undoes whole, minEngine included
+	roundTrip(t, fsys, nil, set)
+
+	// A release already named that reads it stays, and an older one is raised and put back
+	newer := draft(0)
+	newer["template.json"] = &fstest.MapFile{Data: []byte(strings.Replace(sourceJSON, `"name": "Test",`, `"name": "Test",
+  "minEngine": "0.20.0",`, 1))}
+	if res := applyWith(t, newer, nil, set); res.Files["template.json"] != nil {
+		t.Errorf("a newer release was rewritten: %s", res.Files["template.json"])
+	}
+	older := draft(0)
+	older["template.json"] = &fstest.MapFile{Data: []byte(strings.Replace(sourceJSON, `"name": "Test",`, `"name": "Test",
+  "minEngine": "0.18.0",`, 1))}
+	if got := minEngine(applyWith(t, older, nil, set)); got != MinEngineForCapAnchors {
+		t.Errorf("an older release became %q, want %q", got, MinEngineForCapAnchors)
+	}
+	roundTrip(t, older, nil, set)
+
+	// Other anchors, and other edits, name nothing
+	other := Op{Op: OpSet, Layout: "normal", Kind: KindText, Key: "title", Path: []string{"text", "vAlign"}, Value: raw(`"baseline"`)}
+	if res := applyWith(t, fsys, nil, other); res.Files["template.json"] != nil {
+		t.Error("a baseline anchor changed template.json")
+	}
+}

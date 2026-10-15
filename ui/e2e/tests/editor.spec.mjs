@@ -821,7 +821,7 @@ test("a baseline box shows its line, and dragging its end writes the new width t
   const was = JSON.parse(original).textBoxes.title.rect;
   await selectTitle(editor);
   await expect(page.locator("#ed-overlay .ed-box.baseline.h")).toHaveCount(1);
-  await expect(page.locator(".ed-readout-grid dt").nth(2)).toHaveText("Baseline");
+  await expect(page.locator(".ed-readout-grid dt").nth(2)).toHaveText("Cap center");
   // The line is the box's own X, Y and width, which the ink does not say
   await expect(page.locator("#ed-sel-x")).toHaveText(String(was.x));
   await expect(page.locator("#ed-sel-w")).toHaveText(String(was.width));

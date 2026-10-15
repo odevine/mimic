@@ -89,7 +89,7 @@ test("a text box's levers show what its file holds", async ({ bridge, page }) =>
   // The choices are the names the app offers, with the default first
   await expect(editor.lever("lever-draws").locator("option").first()).toHaveText("Default (the box's own name)");
   await expect(editor.lever("lever-draws").locator("option")).toHaveCount(12);
-  await expect(editor.lever("lever-vAlign").locator("option")).toHaveText(["Default (top)", "top", "center", "bottom", "baseline"]);
+  await expect(editor.lever("lever-vAlign").locator("option")).toHaveText(["Default (top)", "top", "center", "bottom", "baseline", "cap-top", "cap-center"]);
 });
 
 test("typing a number changes the field once the typing stops, and a run is one edit", async ({ bridge, page }) => {

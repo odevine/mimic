@@ -5,6 +5,9 @@
 
 const ALIGN = ["left", "center", "right"];
 const VALIGN = ["top", "center", "bottom"];
+// The anchors that set a text box on one line from its Y, at the baseline, the top of the
+// capital letters or their middle
+const POINT_ANCHORS = ["baseline", "cap-top", "cap-center"];
 const TURNS = ["0", "90", "180", "270"];
 
 const choice = (values) => values.map((v) => ({ value: v, label: v }));
@@ -54,7 +57,7 @@ export function fieldGroups(kind, ctx) {
             num("fontSize", "Size", ["text", "fontSize"], { min: 1, required: true }),
             { id: "color", label: "Color", path: ["text", "color"], type: "color" },
             { id: "align", label: "Align", path: ["text", "align"], type: "choice", options: choice(ALIGN), empty: "left" },
-            { id: "vAlign", label: "Vertical", path: ["text", "vAlign"], type: "choice", options: choice([...VALIGN, "baseline"]), empty: "top" },
+            { id: "vAlign", label: "Vertical", path: ["text", "vAlign"], type: "choice", options: choice([...VALIGN, ...POINT_ANCHORS]), empty: "top" },
             num("lineSpacing", "Line spacing", ["text", "lineSpacing"], { min: 0, step: 0.05 }),
             num("minFontSize", "Smallest size", ["text", "minFontSize"], { min: 0 }),
             int("paddingX", "Padding across", ["text", "paddingX"], { min: 0 }),

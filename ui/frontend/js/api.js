@@ -237,7 +237,7 @@ export const api = {
   // order: { layout, authored, delivered, items, editable, reason, rev }, where an
   // item is { kind, key, part, after, images, drawn, why, authored, delivered } with
   // the places as { x, y, width, height }. A text box also has baseline, the line its
-  // first baseline lies on, placed with moved and narrowed, where the card puts it,
+  // first baseline lies on, or with anchor cap-top or cap-center the top or middle of its capitals, placed with moved and narrowed, where the card puts it,
   // override, { when, index }, and fit, { size, wanted, floor, lines, overflows }. show
   // is the layers to describe as drawn whatever their condition says
   describeDraft: (id, card, edits, face, show) => rpc("Studio", "Describe", { id, card, edits: edits || null, face: face || 0, show: show || [] }),

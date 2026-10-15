@@ -30,19 +30,23 @@ function sizeLabel(bytes) {
   return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
 
-// versionRow draws one version with what can be done with it. A template that
-// renders only other faces, such as transform, is never the active template,
-// so its versions are downloaded or shown as installed rather than selected
+// versionRow draws one version with what can be done with it, in the same columns on every row: the
+// version, then its main action or its state, then the icons to edit a copy and to remove it. A cell
+// stays empty when the version has no such action, such as a developer folder that cannot be
+// removed, so the buttons of one row line up with the others'. A template that renders only other
+// faces, such as transform, is never the active template, so its versions are downloaded or shown
+// as installed rather than selected
 function versionRow(t, v) {
-  const row = h("div", { class: `tp-row${v.active ? " active" : ""}` }, h("span", { class: "tp-label" }, v.label));
+  const name = `${t.title || t.name} ${v.label}`;
+  const primary = h("span", { class: "tp-primary" });
   if (v.active) {
-    row.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "active"));
+    primary.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "active"));
   } else if (!t.standard && v.selectable && v.cached) {
-    row.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "installed"));
+    primary.append(h("span", { class: "tp-reason" }, icon("check", "icon"), "installed"));
   } else if (v.action === "select" || v.action === "download") {
     const size = v.action === "download" ? sizeLabel(v.size) : "";
     const label = v.action === "download" ? `Download${size ? ` · ${size}` : ""}` : "Select";
-    row.append(
+    primary.append(
       h(
         "button",
         {
@@ -56,27 +60,29 @@ function versionRow(t, v) {
       ),
     );
   } else {
-    row.append(h("span", { class: "tp-reason" }, icon("lock", "icon gate-glyph"), v.reason || "unavailable"));
+    primary.append(h("span", { class: "tp-reason", title: v.reason || "unavailable" }, icon("lock", "icon gate-glyph"), v.reason || "unavailable"));
   }
   // An installed version can be copied into the editor and changed there
+  const edit = h("span", { class: "tp-slot" });
   if (v.cached && v.selectable) {
-    row.append(
+    edit.append(
       h(
         "button",
         {
           type: "button",
-          class: "btn subtle",
-          style: "min-height:0;height:24px",
-          title: "Make a copy of this template that you can change in the editor",
+          class: "btn subtle icon-only tp-edit",
+          style: "min-height:0;height:24px;width:24px",
+          "aria-label": `Edit a copy of ${name}`,
+          "data-tip": "Edit",
           onclick: () => editor.copyTemplate(t.name, v.version, t.title || t.name),
         },
-        "Edit a copy",
+        icon("edit"),
       ),
     );
   }
+  const erase = h("span", { class: "tp-slot" });
   if (v.removable) {
-    const name = `${t.title || t.name} ${v.label}`;
-    row.append(
+    erase.append(
       h(
         "button",
         {
@@ -91,7 +97,7 @@ function versionRow(t, v) {
       ),
     );
   }
-  return row;
+  return h("div", { class: `tp-row${v.active ? " active" : ""}` }, h("span", { class: "tp-label" }, v.label), primary, edit, erase);
 }
 
 // removeNote says what removing a version leaves, by whether it can be had again

@@ -91,3 +91,46 @@ test("a removal that fails says why and the library is read again", async ({ pag
   await expect.poll(() => bridge.calledWith("Templates.List").length).toBeGreaterThan(lists);
   await expect(removeButton(page, "Modern frame (M15) 1.2.0")).toBeEnabled();
 });
+
+test("the actions of every row sit in the same columns, with or without a remove button", async ({ page, bridge }) => {
+  await ready(bridge, page, [
+    row("mimic.m15", "Modern frame (M15)", [
+      version("local", { label: "local (developer assets)", removable: false, restorable: false, active: true, action: "" }),
+      version("1.2.0"),
+      version("1.1.0", { cached: false, action: "download", removable: false, size: 235_000_000 }),
+      version("0.9.0", { cached: false, selectable: false, action: "", removable: false, reason: "needs engine 0.4.0" }),
+    ]),
+  ]);
+  const rows = page.locator("#tm-library .tp-row");
+  await expect(rows).toHaveCount(4);
+  const box = async (row, selector) => (await rows.nth(row).locator(selector).first().boundingBox());
+  const edits = [];
+  const erases = [];
+  const primaries = [];
+  for (let i = 0; i < 4; i++) {
+    const slots = rows.nth(i).locator(".tp-slot");
+    edits.push((await slots.nth(0).boundingBox()).x);
+    erases.push((await slots.nth(1).boundingBox()).x);
+    const p = await box(i, ".tp-primary");
+    primaries.push(p.x + p.width);
+  }
+  // The edit and remove cells and the right edge of the main action are one column down the list
+  for (const col of [edits, erases, primaries]) expect(Math.max(...col) - Math.min(...col)).toBeLessThan(1);
+  // A developer folder cannot be removed, and its cell is left empty
+  await expect(rows.nth(0).locator(".tp-slot").nth(1).locator("button")).toHaveCount(0);
+  await expect(rows.nth(0).locator(".tp-slot").nth(0).locator("button")).toHaveCount(1);
+  await expect(rows.nth(1).locator(".tp-slot button")).toHaveCount(2);
+  // A version that is not installed has neither
+  await expect(rows.nth(2).locator(".tp-slot button")).toHaveCount(0);
+  // The edit button is an icon, named for what it does and said as Edit on hover
+  const edit = page.getByRole("button", { name: "Edit a copy of Modern frame (M15) 1.2.0" });
+  await expect(edit).toHaveAttribute("data-tip", "Edit");
+  await expect(edit).toHaveText("");
+  await expect(edit.locator("svg use")).toHaveAttribute("href", "icons.svg#i-edit");
+  // The icons sit to the right of the main action, in the order edit then remove
+  const e = await edit.boundingBox();
+  const r = await removeButton(page, "Modern frame (M15) 1.2.0").boundingBox();
+  const main = await rows.nth(1).locator(".tp-primary").boundingBox();
+  expect(e.x).toBeGreaterThanOrEqual(main.x + main.width - 1);
+  expect(r.x).toBeGreaterThan(e.x);
+});

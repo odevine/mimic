@@ -306,7 +306,7 @@ template.
 
 New template, in Editor or in the Templates library, starts from a plain card
 with the standard text boxes at a resolution of 72 to 1200 dpi, 800 by default,
-and draws it at once. Edit a copy, beside each installed version in the library,
+and draws it at once. Edit a copy, the pencil icon beside each installed version in the library,
 starts from that template instead. The copy keeps the original's license and
 credits and adds a credit that names the original and its version, and it is
 independent of the original from then on.
@@ -321,7 +321,9 @@ installed version asks before it takes that one's place, reopening the template 
 one replaced. A file the app cannot read says why and changes nothing.
 
 Each version in the library that the app keeps, whether downloaded, imported or made available from the
-Editor, has a remove button. It asks first, and says whether the version can come back: one the catalog
+Editor, has a remove button, the last of the icons on its row. The rows keep their actions in the same columns, the
+main action or state, then edit, then remove, and a version with no such action leaves its cell empty so the
+others line up. It asks first, and says whether the version can come back: one the catalog
 lists can be downloaded again, a draft is still in the Editor, where Use in mimic makes it available again,
 and an imported version can return only from its file. Removing deletes the bundle from the cache, and the
 template's folder with its last one. A version in use is switched away from first, to the newest other

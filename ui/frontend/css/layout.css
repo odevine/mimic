@@ -126,7 +126,8 @@
 }
 
 .template-library .tp-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9.5rem 24px 24px;
   align-items: center;
   gap: 8px;
   min-height: 30px;
@@ -139,12 +140,28 @@
 }
 
 .template-library .tp-row .tp-label {
-  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 12px;
 }
 
+/* The main action or state sits against the icons, in a column as wide for every row */
+.template-library .tp-row .tp-primary {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.template-library .tp-row .tp-slot {
+  display: flex;
+  justify-content: center;
+}
+
 .template-library .tp-row .tp-reason {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: inline-flex;
   align-items: center;
   gap: 5px;

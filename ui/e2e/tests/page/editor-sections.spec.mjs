@@ -3,7 +3,7 @@ import { EditorPage } from "../../pages/EditorPage.mjs";
 import { done, draftSummary, draftView } from "../../bridge/cards.mjs";
 
 const mine = draftSummary("mine", "Mine");
-const NAMES = ["layers", "selection", "about", "problems"];
+const NAMES = ["layers", "selection", "problems"];
 const sec = (name) => `[data-sec="${name}"]`;
 
 async function ready(bridge, page, { open, settings = {} } = {}) {
@@ -26,10 +26,8 @@ const bottom = (b) => b.y + b.height;
 test("the column starts with the layers and selection open, the layers with the most room", async ({ bridge, page }) => {
   const editor = await ready(bridge, page);
   for (const name of ["layers", "selection"]) await expect(editor.sectionToggle(name)).toHaveAttribute("aria-expanded", "true");
-  for (const name of ["about", "problems"]) {
-    await expect(editor.sectionToggle(name)).toHaveAttribute("aria-expanded", "false");
-    await expect(editor.sectionBody(name)).toBeHidden();
-  }
+  await expect(editor.sectionToggle("problems")).toHaveAttribute("aria-expanded", "false");
+  await expect(editor.sectionBody("problems")).toBeHidden();
   const layers = await box(page, sec("layers"));
   const selection = await box(page, sec("selection"));
   expect(layers.height).toBeGreaterThan(selection.height * 1.2);
@@ -86,12 +84,12 @@ test("the buttons stay at the bottom whatever the sections do", async ({ bridge,
 test("collapsed sections at the bottom rest against the buttons, and the open ones take the room", async ({ bridge, page }) => {
   const editor = await ready(bridge, page);
   const footer = await box(page, ".ed-footer");
-  // About and problems are collapsed, and the last of them touches the buttons
+  // The problems are collapsed, and touch the buttons
   expect(bottom(await box(page, sec("problems")))).toBeCloseTo(footer.y, 0);
-  expect(bottom(await box(page, sec("selection")))).toBeLessThan((await box(page, sec("about"))).y + 2);
+  expect(bottom(await box(page, sec("selection")))).toBeLessThan((await box(page, sec("problems"))).y + 2);
   const column = await box(page, "#ed-sections");
   // The open sections fill what the collapsed ones leave
-  const used = (await box(page, sec("layers"))).height + (await box(page, sec("selection"))).height + (await box(page, sec("about"))).height + (await box(page, sec("problems"))).height;
+  const used = (await box(page, sec("layers"))).height + (await box(page, sec("selection"))).height + (await box(page, sec("problems"))).height;
   expect(used).toBeCloseTo(column.height, -1);
 
   // With every section collapsed they are still against the buttons, with the room above them
@@ -104,16 +102,16 @@ test("collapsed sections at the bottom rest against the buttons, and the open on
 
   // A section in the middle that is collapsed stays where it is, between two that are open
   await editor.openSection("layers");
-  await editor.openSection("about");
+  await editor.openSection("problems");
   const middle = await box(page, sec("selection"));
   expect(middle.y).toBeCloseTo(bottom(await box(page, sec("layers"))), 0);
-  expect(bottom(middle)).toBeCloseTo((await box(page, sec("about"))).y, 0);
+  expect(bottom(middle)).toBeCloseTo((await box(page, sec("problems"))).y, 0);
 });
 
 test("the template's details are always shown in full, with nothing to collapse", async ({ bridge, page }) => {
   const editor = await ready(bridge, page);
   await editor.openSection("about");
-  expect(await page.locator("#ed-sec-about-body details, #ed-sec-about-body summary").count()).toBe(0);
+  expect(await page.locator("#ed-about-body details, #ed-about-body summary").count()).toBe(0);
   for (const id of ["ed-template-levers", "ed-credits", "ed-credit-add", "ed-fonts", "ed-font-add", "ed-roles"]) await expect(page.locator(`#${id}`)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Template details" })).toBeVisible();
 });
@@ -136,9 +134,9 @@ test("dragging the line between two open sections shares their height differentl
   // It is kept with the other layout settings, as which are collapsed and how much room each has
   await expect.poll(() => bridge.calledWith("Settings.Put").length).toBeGreaterThan(0);
   const kept = bridge.calledWith("Settings.Put").at(-1)[0].splits.editorSections;
-  expect(kept).toHaveLength(8);
-  expect(kept.slice(0, 4)).toEqual([0, 0, 1, 1]);
-  expect(kept[4]).toBeGreaterThan(kept[5]);
+  expect(kept).toHaveLength(6);
+  expect(kept.slice(0, 3)).toEqual([0, 0, 1]);
+  expect(kept[3]).toBeGreaterThan(kept[4]);
 });
 
 test("a line cannot be dragged past what leaves a section its minimum", async ({ bridge, page }) => {
@@ -177,7 +175,7 @@ test("a line is there only between two sections that are open", async ({ bridge,
   await expect(page.locator(".ed-vsplit:visible")).toHaveCount(1);
   await editor.collapseSection("selection");
   await expect(page.locator(".ed-vsplit:visible")).toHaveCount(0);
-  await editor.openSection("about");
+  await editor.openSection("problems");
   await expect(page.locator(".ed-vsplit:visible")).toHaveCount(1);
   await editor.openSection("selection");
   await expect(page.locator(".ed-vsplit:visible")).toHaveCount(2);
@@ -185,17 +183,16 @@ test("a line is there only between two sections that are open", async ({ bridge,
 });
 
 test("how the column was left is kept for the next time", async ({ bridge, page }) => {
-  const settings = { splits: { editorSections: [1, 0, 0, 1, 100, 400, 200, 90] } };
+  const settings = { splits: { editorSections: [1, 0, 0, 100, 400, 200] } };
   const editor = await ready(bridge, page, { settings });
   await expect(editor.sectionToggle("layers")).toHaveAttribute("aria-expanded", "false");
   await expect(editor.sectionToggle("selection")).toHaveAttribute("aria-expanded", "true");
-  await expect(editor.sectionToggle("about")).toHaveAttribute("aria-expanded", "true");
-  await expect(editor.sectionToggle("problems")).toHaveAttribute("aria-expanded", "false");
-  // The selection has twice the about section's room, as it was left
+  await expect(editor.sectionToggle("problems")).toHaveAttribute("aria-expanded", "true");
+  // The selection has twice the problems' room, as it was left
   const selection = (await box(page, sec("selection"))).height;
-  const about = (await box(page, sec("about"))).height;
-  expect(selection / about).toBeGreaterThan(1.7);
-  expect(selection / about).toBeLessThan(2.3);
+  const problems = (await box(page, sec("problems"))).height;
+  expect(selection / problems).toBeGreaterThan(1.7);
+  expect(selection / problems).toBeLessThan(2.3);
 });
 
 test("a template that does not load has its problems shown, and the count says how bad", async ({ bridge, page }) => {
@@ -271,4 +268,41 @@ test("a canvas left open is open again", async ({ bridge, page }) => {
   const editor = await ready(bridge, page, { settings: { splits: { editorCanvas: [0] } } });
   await expect(editor.canvasToggle).toHaveAttribute("aria-expanded", "true");
   await expect(editor.canvasBody).toBeVisible();
+});
+
+test("about is under the template in the left column, above the canvas, and starts collapsed", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await expect(page.locator('[data-region="2"] #ed-about-sec, #ed-sec-about-toggle')).toHaveCount(0);
+  await expect(page.locator('[data-region="0"] #ed-about-sec')).toHaveCount(1);
+  await expect(editor.sectionToggle("about")).toContainText("About");
+  await expect(editor.sectionToggle("about")).toHaveAttribute("aria-expanded", "false");
+  await expect(editor.sectionBody("about")).toBeHidden();
+  const template = await box(page, ".ed-draft");
+  const about = await box(page, "#ed-about-sec");
+  const canvas = await box(page, "#ed-canvas-sec");
+  expect(about.y).toBeGreaterThanOrEqual(template.y + template.height - 1);
+  expect(bottom(about)).toBeLessThanOrEqual(canvas.y + 1);
+  await editor.openSection("about");
+  await expect(editor.aboutName).toHaveText("Mine");
+  await expect(editor.aboutId).toHaveText("user.mine");
+  await editor.collapseSection("about");
+});
+
+test("whether about is open is kept with the layout, as the canvas is", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openSection("about");
+  await expect.poll(() => bridge.calledWith("Settings.Put").length).toBeGreaterThan(0);
+  expect(bridge.calledWith("Settings.Put").at(-1)[0].splits.editorAbout).toEqual([0]);
+  await editor.collapseSection("about");
+  await expect.poll(() => bridge.calledWith("Settings.Put").at(-1)[0].splits.editorAbout).toEqual([1]);
+});
+
+test("the search is above the test card in the left column and starts collapsed", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await expect(editor.searchToggle).toHaveAttribute("aria-expanded", "false");
+  const search = await box(page, '[data-sec="search"]');
+  const card = await box(page, '[data-sec="card"]');
+  expect(search.y).toBeLessThan(card.y);
+  expect(bottom(search)).toBeLessThanOrEqual(card.y + 1);
+  await expect(page.locator("#ed-card-toggle")).toHaveAttribute("aria-expanded", "true");
 });

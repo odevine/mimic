@@ -46,7 +46,7 @@ func TestThePresetsAreSixRealPrintingsNamedBySetAndNumber(t *testing.T) {
 		{"monocolored", "Monocolored", "Mirran Spy", "mbs", "26", false},
 		{"two-colors", "Two Colors", "Consuming Aberration", "gtc", "152", false},
 		{"three-colors", "Three Colors", "Eerie Ultimatum", "iko", "184", false},
-		{"legendary", "Legendary Creature", "Norin the Wary", "tsp", "171", false},
+		{"legendary", "Legendary", "Norin the Wary", "tsp", "171", false},
 		{"artifact", "Artifact", "Sensei's Divining Top", "2x2", "314", false},
 		{"land", "Land", "Flooded Strand", "ktk", "233", false},
 	}

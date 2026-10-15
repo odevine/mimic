@@ -612,6 +612,12 @@ body.resizing-rows * {
   font-size: 12px;
 }
 
+/* The selection's place and size, the place in one column and the size in the other */
+.ed-readout.ed-readout-grid {
+  grid-template-columns: auto 1fr auto 1fr;
+  column-gap: 8px;
+}
+
 .ed-readout dt {
   color: var(--text-dim);
 }
@@ -946,12 +952,20 @@ body.resizing-rows * {
   color: var(--text-dim);
 }
 
-.ed-cell-remove {
+/* The button sits in the corner of the image it takes away, over the cell's padding */
+.btn.icon-only.ed-cell-remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  padding: 2px;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   line-height: 0;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
+
+.btn.icon-only.ed-cell-remove:hover {
+  background: var(--surface-raised);
 }
 
 .ed-cell-remove .icon {
@@ -1023,6 +1037,10 @@ body.resizing-rows * {
   border: 1.5px solid var(--border-strong);
   border-left: 0;
   border-radius: 0 5px 5px 0;
+}
+
+.ed-ratio:has(.ed-ratio-lock[aria-pressed="true"]) .ed-ratio-bracket {
+  border-color: var(--text);
 }
 
 .ed-ratio-lock {
@@ -1221,4 +1239,42 @@ body.resizing-rows * {
   padding-left: 18px;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+/* A field's unit sits inside it at the right, out of the way of the number */
+.ed-unit-field {
+  position: relative;
+  display: block;
+}
+
+.ed-unit-field > input {
+  padding-right: 34px;
+}
+
+.ed-unit {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+/* The part of a text box that its text keeps out of, hatched, with what it steps around */
+.ed-box.avoid {
+  border: 1px dashed var(--warn);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--warn) 35%, transparent) 0 3px, transparent 3px 7px);
+}
+
+.ed-avoid-label {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  padding: 0 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
 }

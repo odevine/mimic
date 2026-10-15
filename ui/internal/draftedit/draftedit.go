@@ -607,9 +607,9 @@ func (w *work) change(op Op) (Op, error) {
 		}
 	} else {
 		old = node.DeletePath(op.Path)
-		// A list of fonts, roles or variants that has nothing left in it is taken out
+		// A list of fonts, roles or variants, or a flow, that has nothing left in it is taken out
 		// too, so the file is as it was before the first one was added
-		if emptied := op.Path[0]; len(op.Path) > 1 && (emptied == "fonts" || emptied == "roles" || emptied == "variants") {
+		if emptied := op.Path[0]; len(op.Path) > 1 && (emptied == "fonts" || emptied == "roles" || emptied == "variants" || emptied == "flow") {
 			if list := node.Field(emptied); list != nil && list.Kind() == jsonedit.Object && len(list.Keys()) == 0 {
 				node.Delete(emptied)
 			}

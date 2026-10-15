@@ -25,6 +25,7 @@ import {
 } from "../editor.js";
 import { asPercent, hitTest, moveRect, nudgeFor, refOf, resizeRect, snapMove, snapTargets, visibleHandles } from "../editorgeometry.js";
 import { createHistory } from "../editorhistory.js";
+import { avoidance } from "../editorflow.js";
 import { afterOps, isMarked, refsFor, withMark } from "../editormarks.js";
 import { deleteLabel, deleteOp, duplicateOp } from "../editorassets.js";
 import { kindIcon, moveTarget, reorderTarget, rowMenu } from "../editorlayers.js";
@@ -1260,6 +1261,15 @@ function onKey(e) {
 
 // --- drawing the layout ---
 
+// avoidOf says where a selected text box keeps its text out of a layer for the card being
+// drawn, from the box's flow in the layout file, or null when it names no layer
+function avoidOf(view, item, rect) {
+  const src = store.source.value;
+  if (!item || item.kind !== "text" || !src) return null;
+  const found = nodeOf(item, view, src);
+  return avoidance(item, rect, found && found.node ? found.node.flow : null, view.items);
+}
+
 function drawOverlay() {
   const view = store.layout.value;
   const sel = store.selected.value;
@@ -1290,6 +1300,9 @@ function drawOverlay() {
         const per = overlayBox().width / canvas.width;
         handles = visibleHandles(rect.width * per, rect.height * per).map((name) => h("div", { class: "ed-handle", dataset: { handle: name } }));
       }
+      // The part of the box the text keeps out of is hatched, beneath the outline
+      const avoid = avoidOf(view, item, rect);
+      if (avoid && avoid.rect) out.push(box(avoid.rect, "avoid", h("span", { class: "ed-avoid-label" }, `Avoids ${avoid.layer}`)));
       out.push(box(rect, `sel${item.drawn ? "" : " idle"}${locked ? " locked" : ""}`, ...handles));
     }
   }
@@ -1381,8 +1394,8 @@ function layerRow(view, marks, item, layers) {
       h("span", { class: "ed-layer-kind", role: "img", "aria-label": KIND_LABEL[item.kind] || item.kind, title: KIND_LABEL[item.kind] || item.kind }, icon(kindIcon(item.kind))),
       h("span", { class: "ed-layer-name" }, name),
     ),
-    toggle("locked", locked, "lock", "lock-open", `Lock ${name} on the card`, locked ? "Locked, so the card cannot pick or move it" : "Lock on the card"),
-    toggle("snap", snaps, "grid-on", "grid-off", `Snap other items to ${name}`, snaps ? "Others snap to it" : "Snap other items to it"),
+    toggle("locked", locked, "lock", "lock-open", `Lock ${name} on the card`, "Lock/Unlock"),
+    toggle("snap", snaps, "grid-on", "grid-off", `Snap other items to ${name}`, "Allow/Prevent snapping"),
     more,
   );
 }
@@ -1545,8 +1558,15 @@ function drawSelection() {
   const rect = live ? live.rect : item.delivered;
   $("ed-selection-name").textContent = nameOf(item);
   const locked = isMarked(marks.locked, view.layout, refOf(item));
-  const kind = item.drawn ? KIND_LABEL[item.kind] : `${KIND_LABEL[item.kind]}, not drawn: ${item.why}`;
-  $("ed-selection-kind").textContent = locked ? `${kind}. Locked, so the card cannot pick or move it` : kind;
+  $("ed-selection-kind").textContent = KIND_LABEL[item.kind];
+  // What is worth saying about the item besides what it is, under its name
+  const notes = [];
+  if (!item.drawn) notes.push(`Not drawn: ${item.why}`);
+  if (locked) notes.push("Locked, so the card cannot pick or move it");
+  const avoid = avoidOf(view, item, rect);
+  if (avoid) notes.push(avoid.note);
+  $("ed-selection-note").hidden = !notes.length;
+  $("ed-selection-note").textContent = notes.join(". ");
   const blank = rect.width === 0 && rect.height === 0;
   $("ed-sel-x").textContent = blank ? "" : String(rect.x);
   $("ed-sel-y").textContent = blank ? "" : String(rect.y);
@@ -1600,7 +1620,10 @@ function field(label, id, control, extra) {
 function controlFor(f, id) {
   if (f.type === "choice") {
     const sel = h("select", { id });
-    if (!f.required) sel.append(new Option(f.empty ? `Default (${f.empty})` : "Default", ""));
+    if (!f.required) {
+      const said = f.empty ? (f.options.find((o) => o.value === f.empty) || { label: f.empty }).label : "";
+      sel.append(new Option(said ? `Default (${said})` : "Default", ""));
+    }
     for (const o of f.options) sel.append(new Option(o.label, o.value));
     return sel;
   }
@@ -1653,7 +1676,9 @@ function buildForm(container, scope, groups, spec) {
           apply(form, ctl);
         });
       }
-      made.push([f.id, field(f.label, id, c, err)]);
+      // A field with a unit says it inside the field, at its right
+      const shown = f.unit ? h("span", { class: "ed-unit-field" }, c, h("span", { class: "ed-unit", "aria-hidden": "true" }, f.unit)) : c;
+      made.push([f.id, field(f.label, id, shown, err)]);
     }
     // A pair of fields that can be kept in proportion is drawn with a bracket joining
     // them and a padlock on it, which is the one a layer's row has
@@ -1696,7 +1721,7 @@ function syncRatio(form) {
   if (!form.ratioLock) return;
   const on = !!form.spec.ratio.get().locked;
   form.ratioLock.setAttribute("aria-pressed", String(on));
-  form.ratioLock.setAttribute("data-tip", on ? "Width and height are kept in proportion" : "Keep width and height in proportion");
+  form.ratioLock.setAttribute("data-tip", on ? "Unlock ratio" : "Lock ratio");
   form.ratioLock.disabled = !!form.spec.disabled;
   form.ratioLock.replaceChildren(icon(on ? "lock" : "lock-open"));
 }
@@ -1776,7 +1801,7 @@ function ctxFor(view, src) {
   const vocab = store.vocab.peek() || {};
   const layoutDoc = src.docs[layoutFileOf(view)] || {};
   const template = src.docs["template.json"] || {};
-  return { vocab, templateRoles: Object.keys(template.roles || {}), stackIds: (layoutDoc.stack || []).map((e) => e.id || e.part) };
+  return { vocab, templateRoles: Object.keys(template.roles || {}), stackIds: (layoutDoc.stack || []).map((e) => e.id || e.part), textKeys: Object.keys(layoutDoc.textBoxes || {}) };
 }
 
 function drawLevers() {
@@ -1790,14 +1815,16 @@ function drawLevers() {
 
   // the selection's levers
   const box = $("ed-levers");
-  const key = ready && item ? `${view.layout}|${sel}|${view.editable}` : "";
+  const ctx = ready && item ? { ...ctxFor(view, src), selfKey: item.key } : null;
+  // The choices a field offers come from the layers and boxes there are, so the form is made
+  // again when they change
+  const key = ctx ? `${view.layout}|${sel}|${view.editable}|${ctx.stackIds.join(",")}|${ctx.textKeys.join(",")}` : "";
   if (!key) {
     if (itemFormKey) box.replaceChildren();
     itemForm = null;
     itemFormKey = "";
   } else {
     if (key !== itemFormKey) {
-      const ctx = ctxFor(view, src);
       const found = nodeOf(item, view, src);
       itemForm = found
         ? buildForm(box, "lever", fieldGroups(item.kind, ctx), {
@@ -2186,10 +2213,11 @@ export function initEditor() {
   $("ed-rename").addEventListener("click", rename);
   $("ed-delete").addEventListener("click", remove);
   const sections = initSections($("ed-sections"), (app.settings.peek().splits || {}).editorSections, (list) => keepLayout("editorSections", list));
+  initFold("ed-about-sec", "ed-about-toggle", "ed-about-body", "editorAbout");
   initFold("ed-canvas-sec", "ed-canvas-toggle", "ed-canvas-body", "editorCanvas");
   // The test card, its properties and the search are sections that collapse and can be
   // given the height their reader likes, as the right column's are
-  initSections($("ed-left-sections"), (app.settings.peek().splits || {}).editorLeft, (list) => keepLayout("editorLeft", list), { ids: LEFT_SECTIONS, defaults: LEFT_DEFAULTS });
+  initSections($("ed-left-sections"), (app.settings.peek().splits || {}).editorLeftSections, (list) => keepLayout("editorLeftSections", list), { ids: LEFT_SECTIONS, defaults: LEFT_DEFAULTS });
   // The test card's fields are the same form Single edits a card with
   cardEditor = createCardEditor({ idPrefix: "ed", base: store.card, edits: store.edits, reference: store.reference, onEnter: keepCardEdits });
   cardEditor.mount($("ed-card-form"));

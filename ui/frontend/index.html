@@ -1199,11 +1199,72 @@ Sideboard
                     id="ed-delete"
                     class="btn subtle icon-only"
                     type="button"
-                    aria-label="Delete this template"
-                    data-tip="Delete this template"
+                    aria-label="Delete template"
+                    data-tip="Delete template"
                   >
                     <svg class="icon"><use href="icons.svg#i-trash" /></svg>
                   </button>
+                </div>
+              </div>
+              <div id="ed-about-sec" class="ed-fold ed-canvas-sec collapsed">
+                <h3 class="ed-sec-title">
+                  <button
+                    id="ed-about-toggle"
+                    class="ed-sec-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="ed-about-body"
+                  >
+                    <svg class="icon" aria-hidden="true">
+                      <use href="icons.svg#i-chevron-down" /></svg
+                    ><span class="section-heading">About</span>
+                  </button>
+                </h3>
+                <div
+                  id="ed-about-body"
+                  class="ed-fold-body"
+                  role="region"
+                  tabindex="0"
+                  aria-labelledby="ed-about-toggle"
+                  hidden
+                >
+  <p id="ed-about-name" class="ed-about-name"></p>
+                    <p id="ed-about-id" class="ed-about-id mono"></p>
+                    <p id="ed-about-fork" class="dim" hidden></p>
+                    <ul
+                      id="ed-layouts"
+                      class="ed-layouts"
+                      aria-label="Layouts"
+                    ></ul>
+                    <h4 class="ed-subheading">Template details</h4>
+                    <div id="ed-template-levers" class="ed-levers"></div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Credits</h4>
+                      <div id="ed-credits" class="ed-credits"></div>
+                      <button
+                        id="ed-credit-add"
+                        class="btn subtle"
+                        type="button"
+                      >
+                        <svg class="icon"><use href="icons.svg#i-plus" /></svg
+                        >Add a credit
+                      </button>
+                    </div>
+                    <div class="ed-credits-block">
+                      <h4 class="ed-subheading">Fonts</h4>
+                      <div id="ed-fonts" class="ed-fonts"></div>
+                      <button
+                        id="ed-font-add"
+                        class="btn subtle"
+                        type="button"
+                        data-feature="editor.fonts"
+                      >
+                        <svg class="icon"><use href="icons.svg#i-plus" /></svg
+                        >Add a font
+                      </button>
+                      <h4 class="ed-subheading">Text roles</h4>
+                      <div id="ed-roles" class="ed-levers"></div>
+                    </div>
                 </div>
               </div>
               <div id="ed-canvas-sec" class="ed-fold ed-canvas-sec collapsed">
@@ -1232,6 +1293,64 @@ Sideboard
                 </div>
               </div>
               <div id="ed-left-sections" class="ed-sections">
+                <section id="ed-search-sec" class="ed-sec" data-sec="search">
+                  <div class="ed-sec-head">
+                    <h3 class="ed-sec-title">
+                      <button
+                        id="ed-search-toggle"
+                        class="ed-sec-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="ed-search-body"
+                      >
+                        <svg class="icon" aria-hidden="true">
+                          <use href="icons.svg#i-chevron-down" /></svg
+                        ><span class="ed-sec-name section-heading"
+                          >Search Scryfall</span
+                        >
+                      </button>
+                    </h3>
+                  </div>
+                  <div
+                    id="ed-search-body"
+                    class="ed-sec-body ed-search-body"
+                    role="region"
+                    tabindex="0"
+                    aria-labelledby="ed-search-toggle"
+                    hidden
+                  >
+                    <form id="ed-search-form" class="search-form" role="search">
+                      <div class="search-field">
+                        <svg class="icon">
+                          <use href="icons.svg#i-search" />
+                        </svg>
+                        <input
+                          id="ed-search-input"
+                          autocomplete="off"
+                          spellcheck="false"
+                          placeholder="Search Scryfall"
+                          aria-label="Search Scryfall for a test card"
+                        />
+                      </div>
+                    </form>
+                    <ul
+                      id="ed-results"
+                      class="results"
+                      role="listbox"
+                      aria-label="Search results"
+                    ></ul>
+                    <div class="panel-footer">
+                      <span id="ed-results-count"
+                        >Pick a preset above, or search for a card</span
+                      >
+                    </div>
+                  </div>
+                </section>
+                <div
+                  class="ed-vsplit"
+                  role="separator"
+                  aria-orientation="horizontal"
+                ></div>
                 <section class="ed-sec" data-sec="card">
                   <div class="ed-sec-head">
                     <h3 class="ed-sec-title">
@@ -1306,64 +1425,6 @@ Sideboard
                     </details>
                   </div>
                 </section>
-                <div
-                  class="ed-vsplit"
-                  role="separator"
-                  aria-orientation="horizontal"
-                ></div>
-                <section id="ed-search-sec" class="ed-sec" data-sec="search">
-                  <div class="ed-sec-head">
-                    <h3 class="ed-sec-title">
-                      <button
-                        id="ed-search-toggle"
-                        class="ed-sec-toggle"
-                        type="button"
-                        aria-expanded="false"
-                        aria-controls="ed-search-body"
-                      >
-                        <svg class="icon" aria-hidden="true">
-                          <use href="icons.svg#i-chevron-down" /></svg
-                        ><span class="ed-sec-name section-heading"
-                          >Search Scryfall</span
-                        >
-                      </button>
-                    </h3>
-                  </div>
-                  <div
-                    id="ed-search-body"
-                    class="ed-sec-body ed-search-body"
-                    role="region"
-                    tabindex="0"
-                    aria-labelledby="ed-search-toggle"
-                    hidden
-                  >
-                    <form id="ed-search-form" class="search-form" role="search">
-                      <div class="search-field">
-                        <svg class="icon">
-                          <use href="icons.svg#i-search" />
-                        </svg>
-                        <input
-                          id="ed-search-input"
-                          autocomplete="off"
-                          spellcheck="false"
-                          placeholder="Search Scryfall"
-                          aria-label="Search Scryfall for a test card"
-                        />
-                      </div>
-                    </form>
-                    <ul
-                      id="ed-results"
-                      class="results"
-                      role="listbox"
-                      aria-label="Search results"
-                    ></ul>
-                    <div class="panel-footer">
-                      <span id="ed-results-count"
-                        >Pick a preset above, or search for a card</span
-                      >
-                    </div>
-                  </div>
-                </section>
               </div>
             </div>
 
@@ -1415,7 +1476,7 @@ Sideboard
                       type="button"
                       aria-pressed="true"
                       aria-label="Select"
-                      data-tip="Select and move (hold Space to pan)"
+                      data-tip="Select/Move"
                     >
                       <svg class="icon"><use href="icons.svg#i-cursor" /></svg>
                     </button>
@@ -1425,7 +1486,7 @@ Sideboard
                       type="button"
                       aria-pressed="false"
                       aria-label="Pan"
-                      data-tip="Pan the card around"
+                      data-tip="Pan"
                     >
                       <svg class="icon"><use href="icons.svg#i-hand" /></svg>
                     </button>
@@ -1595,7 +1656,7 @@ Sideboard
                           class="btn subtle icon-only"
                           type="button"
                           aria-label="Add a layer, text box or art window"
-                          data-tip="Add"
+                          data-tip="Add layer"
                           disabled
                         >
                           <svg class="icon">
@@ -1656,15 +1717,19 @@ Sideboard
                         Click the card, or a layer in the list.
                       </p>
                       <div id="ed-selection" hidden>
-                        <p id="ed-selection-name" class="ed-about-name"></p>
-                        <p id="ed-selection-kind" class="dim"></p>
-                        <dl class="ed-readout">
+                        <p class="ed-about-name ed-selection-head">
+                          <span id="ed-selection-name"></span
+                          ><span class="dim" aria-hidden="true"> - </span
+                          ><span id="ed-selection-kind" class="dim"></span>
+                        </p>
+                        <p id="ed-selection-note" class="dim" hidden></p>
+                        <dl class="ed-readout ed-readout-grid">
                           <dt>X</dt>
                           <dd id="ed-sel-x"></dd>
-                          <dt>Y</dt>
-                          <dd id="ed-sel-y"></dd>
                           <dt>Width</dt>
                           <dd id="ed-sel-w"></dd>
+                          <dt>Y</dt>
+                          <dd id="ed-sel-y"></dd>
                           <dt>Height</dt>
                           <dd id="ed-sel-h"></dd>
                         </dl>
@@ -1672,75 +1737,6 @@ Sideboard
                         <div id="ed-levers" class="ed-levers"></div>
                       </div>
                       <p id="ed-edit-note" class="dim" hidden></p>
-                    </div>
-                  </section>
-                  <div
-                    class="ed-vsplit"
-                    role="separator"
-                    aria-orientation="horizontal"
-                  ></div>
-                  <section class="ed-sec" data-sec="about">
-                    <div class="ed-sec-head">
-                      <h3 class="ed-sec-title">
-                        <button
-                          id="ed-sec-about-toggle"
-                          class="ed-sec-toggle"
-                          type="button"
-                          aria-expanded="true"
-                          aria-controls="ed-sec-about-body"
-                        >
-                          <svg class="icon" aria-hidden="true">
-                            <use href="icons.svg#i-chevron-down" /></svg
-                          ><span class="ed-sec-name section-heading"
-                            >About</span
-                          >
-                        </button>
-                      </h3>
-                    </div>
-                    <div
-                      id="ed-sec-about-body"
-                      class="ed-sec-body"
-                      role="region"
-                      tabindex="0"
-                      aria-labelledby="ed-sec-about-toggle"
-                    >
-                      <p id="ed-about-name" class="ed-about-name"></p>
-                      <p id="ed-about-id" class="ed-about-id mono"></p>
-                      <p id="ed-about-fork" class="dim" hidden></p>
-                      <ul
-                        id="ed-layouts"
-                        class="ed-layouts"
-                        aria-label="Layouts"
-                      ></ul>
-                      <h4 class="ed-subheading">Template details</h4>
-                      <div id="ed-template-levers" class="ed-levers"></div>
-                      <div class="ed-credits-block">
-                        <h4 class="ed-subheading">Credits</h4>
-                        <div id="ed-credits" class="ed-credits"></div>
-                        <button
-                          id="ed-credit-add"
-                          class="btn subtle"
-                          type="button"
-                        >
-                          <svg class="icon"><use href="icons.svg#i-plus" /></svg
-                          >Add a credit
-                        </button>
-                      </div>
-                      <div class="ed-credits-block">
-                        <h4 class="ed-subheading">Fonts</h4>
-                        <div id="ed-fonts" class="ed-fonts"></div>
-                        <button
-                          id="ed-font-add"
-                          class="btn subtle"
-                          type="button"
-                          data-feature="editor.fonts"
-                        >
-                          <svg class="icon"><use href="icons.svg#i-plus" /></svg
-                          >Add a font
-                        </button>
-                        <h4 class="ed-subheading">Text roles</h4>
-                        <div id="ed-roles" class="ed-levers"></div>
-                      </div>
                     </div>
                   </section>
                   <div
@@ -1791,7 +1787,7 @@ Sideboard
                     Use in mimic
                   </button>
                   <button id="ed-export" class="btn" type="button">
-                    Export…
+                    Export
                   </button>
                   <button id="ed-folder" class="btn" type="button">
                     Show folder
@@ -1803,7 +1799,7 @@ Sideboard
                     aria-expanded="false"
                     aria-controls="ed-json-pane"
                   >
-                    Edit JSON…
+                    Edit JSON
                   </button>
                 </div>
               </div>

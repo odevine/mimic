@@ -338,14 +338,48 @@ test("a lever being typed in is left alone when the files are read again", async
   await expect(editor.lever("lever-color")).toHaveValue("#12");
 });
 
-test("the canvas has a size and a rotation of their own", async ({ bridge, page }) => {
+test("the canvas has one Size group with its resolution and rotation under the width and height", async ({ bridge, page }) => {
   const editor = await ready(bridge, page);
   await editor.openCanvas();
-  await expect(page.locator("#ed-canvas-levers .ed-lever-title")).toHaveText(["Size", "Rotation"]);
-  await expect(page.locator("#ed-canvas-levers .ed-lever-group").first().locator("#canvas-width, #canvas-height, #canvas-dpi")).toHaveCount(3);
-  await expect(editor.lever("canvas-rotate")).toBeVisible();
-  // The rotation is not among the size's fields
+  await expect(page.locator("#ed-canvas-levers .ed-lever-title")).toHaveText(["Size"]);
+  await expect(page.locator("#ed-canvas-levers .ed-lever-group").first().locator("#canvas-width, #canvas-height, #canvas-dpi, #canvas-rotate")).toHaveCount(4);
+  // The rotation is the last field, called Rotation, and is not among the pair kept in proportion
+  await expect(page.locator('label[for="canvas-rotate"]')).toHaveText("Rotation");
   await expect(page.locator("#ed-canvas-levers .ed-ratio #canvas-rotate")).toHaveCount(0);
+  const y = async (id) => (await editor.lever(id).boundingBox()).y;
+  expect(await y("canvas-width")).toBeLessThan(await y("canvas-height"));
+  expect(await y("canvas-height")).toBeLessThan(await y("canvas-dpi"));
+  expect(await y("canvas-dpi")).toBeLessThan(await y("canvas-rotate"));
+  // Each turn says its unit, and the default does too
+  await expect(editor.lever("canvas-rotate").locator("option")).toHaveText(["Default (0 deg)", "0 deg", "90 deg", "180 deg", "270 deg"]);
+});
+
+test("the width, height and resolution say their units inside the field, at its right", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  const units = page.locator("#ed-canvas-levers .ed-unit");
+  await expect(units).toHaveText(["px", "px", "dpi"]);
+  for (const id of ["canvas-width", "canvas-height", "canvas-dpi"]) {
+    const field = await editor.lever(id).boundingBox();
+    const unit = await page.locator(`#${id} + .ed-unit`).boundingBox();
+    // The unit is within the field's box and nearer its right edge than its left
+    expect(unit.x).toBeGreaterThan(field.x + field.width / 2);
+    expect(unit.x + unit.width).toBeLessThanOrEqual(field.x + field.width);
+    expect(unit.y).toBeGreaterThanOrEqual(field.y);
+    expect(unit.y + unit.height).toBeLessThanOrEqual(field.y + field.height);
+  }
+  // The number does not run under the unit
+  await expect(editor.lever("canvas-width")).toHaveCSS("padding-right", "34px");
+  // A field with no unit has none
+  await expect(page.locator("#ed-canvas-levers .ed-unit")).toHaveCount(3);
+});
+
+test("a dropdown is as tall as the text fields", async ({ bridge, page }) => {
+  const editor = await ready(bridge, page);
+  await editor.openCanvas();
+  const text = (await editor.lever("canvas-width").boundingBox()).height;
+  const select = (await editor.lever("canvas-rotate").boundingBox()).height;
+  expect(select).toBe(text);
 });
 
 test("a bracket joins the width and height with a padlock that is closed to begin with", async ({ bridge, page }) => {
@@ -359,6 +393,9 @@ test("a bracket joins the width and height with a padlock that is closed to begi
   await expect(lock).toHaveAttribute("aria-pressed", "true");
   await expect(lock.locator("use")).toHaveAttribute("href", "icons.svg#i-lock");
   const full = await lock.evaluate((el) => getComputedStyle(el).color);
+  // The bracket is drawn in the same color while the padlock is closed
+  const bracketColor = () => page.locator("#ed-canvas-levers .ed-ratio-bracket").evaluate((el) => getComputedStyle(el).borderRightColor);
+  expect(await bracketColor()).toBe(full);
 
   // The bracket runs from the middle of the width to the middle of the height, and the
   // padlock is on it
@@ -378,7 +415,9 @@ test("a bracket joins the width and height with a padlock that is closed to begi
   await page.mouse.move(0, 0);
   await lock.evaluate((el) => el.blur());
   expect(await lock.evaluate((el) => getComputedStyle(el).color)).not.toBe(full);
+  expect(await bracketColor()).not.toBe(full);
   await lock.click();
+  expect(await bracketColor()).toBe(full);
   await expect(lock).toHaveAttribute("aria-pressed", "true");
 });
 

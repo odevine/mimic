@@ -3,26 +3,26 @@ import assert from "node:assert/strict";
 
 import { SECTIONS, DEFAULTS, LEFT_SECTIONS, LEFT_DEFAULTS, MIN_HEIGHT, restore, pack, nextOpen, restFrom, resizePair } from "../js/sectionlayout.js";
 
-test("the column starts with the layers and selection open and the rest down to their headings", () => {
-  assert.deepEqual(SECTIONS, ["layers", "selection", "about", "problems"]);
-  assert.deepEqual(DEFAULTS.collapsed, [false, false, true, true]);
+test("the column starts with the layers and selection open and the problems down to their heading", () => {
+  assert.deepEqual(SECTIONS, ["layers", "selection", "problems"]);
+  assert.deepEqual(DEFAULTS.collapsed, [false, false, true]);
   // The layers have the most room
   assert.equal(Math.max(...DEFAULTS.weights), DEFAULTS.weights[0]);
   assert.deepEqual(restore(undefined), DEFAULTS);
 });
 
 test("what was kept is read back, and anything else is the default", () => {
-  const state = { collapsed: [true, false, false, true], weights: [100.4, 300, 200, 150] };
+  const state = { collapsed: [true, false, true], weights: [100.4, 300, 200] };
   const list = pack(state);
-  assert.deepEqual(list, [1, 0, 0, 1, 100, 300, 200, 150]);
-  assert.deepEqual(restore(list), { collapsed: [true, false, false, true], weights: [100, 300, 200, 150] });
-  // What was kept when the column had five sections is not read as these four
-  assert.deepEqual(restore([1, 0, 0, 1, 0, 100, 300, 200, 150, 90]), DEFAULTS);
+  assert.deepEqual(list, [1, 0, 1, 100, 300, 200]);
+  assert.deepEqual(restore(list), { collapsed: [true, false, true], weights: [100, 300, 200] });
+  // What was kept when the column had four sections is not read as these three
+  assert.deepEqual(restore([1, 0, 0, 1, 100, 300, 200, 150]), DEFAULTS);
   for (const bad of [null, [], [1, 2, 3], "x", [...list, 1], list.map(() => NaN), { length: 10 }]) {
     assert.deepEqual(restore(bad), DEFAULTS, JSON.stringify(bad));
   }
   // A weight that is not above zero keeps the default for that section
-  const odd = restore([0, 0, 0, 0, 0, -5, 50, 50]);
+  const odd = restore([0, 0, 0, 0, -5, 50]);
   assert.equal(odd.weights[0], DEFAULTS.weights[0]);
   assert.equal(odd.weights[1], DEFAULTS.weights[1]);
   assert.equal(odd.weights[2], 50);
@@ -68,9 +68,9 @@ test("a pair already at the minimum or less does not move", () => {
   assert.deepEqual(resizePair([50, 60], 0, 1, 30), { hi: 50, hj: 60 });
 });
 
-test("the left column has its own sections, the test card and the search, with only the test card open", () => {
-  assert.deepEqual(LEFT_SECTIONS, ["card", "search"]);
-  assert.deepEqual(LEFT_DEFAULTS.collapsed, [false, true]);
+test("the left column has its own sections, the search above the test card, with only the test card open", () => {
+  assert.deepEqual(LEFT_SECTIONS, ["search", "card"]);
+  assert.deepEqual(LEFT_DEFAULTS.collapsed, [true, false]);
   assert.equal(LEFT_DEFAULTS.weights.length, LEFT_SECTIONS.length);
   assert.deepEqual(restore(undefined, LEFT_DEFAULTS), LEFT_DEFAULTS);
   // What it kept is read as its own, and what the right column kept is not

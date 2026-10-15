@@ -105,7 +105,7 @@ test("an item that is not drawn can be read in the list but not picked on the ca
 
   await editor.layers.first().click();
   await expect(editor.selectionName).toHaveText("pt");
-  await expect(page.locator("#ed-selection-kind")).toContainText("not drawn: the card has no pt to draw");
+  await expect(page.locator("#ed-selection-note")).toContainText("Not drawn: the card has no pt to draw");
   await expect(page.locator("#ed-sel-x")).toHaveText("780");
   await expect(editor.selectionBox).toHaveClass(/idle/);
 });

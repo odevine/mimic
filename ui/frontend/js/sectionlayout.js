@@ -3,21 +3,21 @@
 // a drag changes. The column's own code reads and writes the elements
 
 // The sections of the right column, top to bottom
-export const SECTIONS = ["layers", "selection", "about", "problems"];
+export const SECTIONS = ["layers", "selection", "problems"];
 
 // DEFAULTS is how the right column starts: the layers and the selection are open, with
-// the layers given the most room, and the rest are collapsed to their headings. A
+// the layers given the most room, and the problems are collapsed to their heading. A
 // weight says how the height is shared among the open sections
 export const DEFAULTS = {
-  collapsed: [false, false, true, true],
-  weights: [6, 4, 3, 2],
+  collapsed: [false, false, true],
+  weights: [6, 4, 2],
 };
 
-// The left column's sections, the test card, which holds the properties of the card, and
-// the search, which starts collapsed
-export const LEFT_SECTIONS = ["card", "search"];
+// The left column's sections, the search, which starts collapsed, and the test card, which
+// holds the properties of the card
+export const LEFT_SECTIONS = ["search", "card"];
 export const LEFT_DEFAULTS = {
-  collapsed: [false, true],
+  collapsed: [true, false],
   weights: [6, 6],
 };
 

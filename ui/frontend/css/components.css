@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: var(--control-h);
+  height: var(--primary-h);
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-control);
@@ -24,7 +24,6 @@
 }
 
 .btn.primary {
-  height: var(--primary-h);
   padding: 0 14px;
   border-color: var(--accent);
   background: var(--accent);
@@ -53,6 +52,7 @@
 
 .btn.icon-only {
   width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
 }
 

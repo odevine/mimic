@@ -605,3 +605,26 @@ func TestSetOnALayoutThatExtendsAnotherIsRefused(t *testing.T) {
 		t.Errorf("a change to the template was refused: %v", err)
 	}
 }
+
+func TestTakingTheLastFlowSettingOutTakesTheEmptyFlowOutToo(t *testing.T) {
+	fsys := draft(0)
+	original := string(fsys["layouts/normal.json"].Data)
+	made := apply(t, fsys, set(KindText, "title", `"crown"`, "flow", "avoidLayer"), set(KindText, "title", `0.75`, "flow", "clearGap"))
+	if got := string(layoutAfter(t, made).Path("textBoxes", "title", "flow").Compact()); got != `{"avoidLayer":"crown","clearGap":0.75}` {
+		t.Fatalf("flow = %s", got)
+	}
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: made.Files["layouts/normal.json"]}
+	// One setting out leaves the other, and the last one out leaves no flow behind
+	one := apply(t, fsys, unset(KindText, "title", "flow", "avoidLayer"))
+	if got := string(layoutAfter(t, one).Path("textBoxes", "title", "flow").Compact()); got != `{"clearGap":0.75}` {
+		t.Errorf("flow = %s", got)
+	}
+	fsys["layouts/normal.json"] = &fstest.MapFile{Data: one.Files["layouts/normal.json"]}
+	both := apply(t, fsys, unset(KindText, "title", "flow", "clearGap"))
+	if layoutAfter(t, both).Path("textBoxes", "title", "flow") != nil {
+		t.Errorf("an empty flow was left: %s", both.Files["layouts/normal.json"])
+	}
+	if string(both.Files["layouts/normal.json"]) != original {
+		t.Errorf("the file is not as it was:\n%s", both.Files["layouts/normal.json"])
+	}
+}

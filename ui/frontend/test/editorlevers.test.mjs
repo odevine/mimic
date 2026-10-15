@@ -13,11 +13,11 @@ const vocab = {
 const ctx = { vocab, templateRoles: ["saga", "title"], stackIds: ["background", "frame"] };
 const find = (groups, id) => groups.flatMap((g) => g.fields).find((f) => f.id === id);
 
-test("a text box offers its place, content, text and shadow", () => {
+test("a text box offers its place, content, text, flow and shadow", () => {
   const groups = fieldGroups("text", ctx);
-  assert.deepEqual(groups.map((g) => g.title), ["Place", "Content", "Text", "Shadow"]);
+  assert.deepEqual(groups.map((g) => g.title), ["Place", "Content", "Text", "Flow", "Shadow"]);
   assert.deepEqual(groups[0].fields.map((f) => f.path.join(".")), ["rect.x", "rect.y", "rect.width", "rect.height"]);
-  assert.equal(groups[3].shadow, true);
+  assert.equal(groups[4].shadow, true);
   assert.deepEqual(find(groups, "draws").options.map((o) => o.value), ["title", "oracle", "pt"]);
 });
 
@@ -159,13 +159,17 @@ test("clearing an optional field of a credit takes the key out, and the name sta
   assert.deepEqual(creditEdit(credits, 0, "name", "", 0), [{ name: "", url: "u", note: "n" }]);
 });
 
-test("the canvas has a size and a rotation, and only the size can be kept in proportion", () => {
+test("the canvas has one group of its size, resolution and rotation, with the size kept in proportion", () => {
   const groups = fieldGroups("canvas", { vocab });
-  assert.deepEqual(groups.map((g) => g.title), ["Size", "Rotation"]);
-  assert.deepEqual(groups[0].fields.map((f) => f.id), ["width", "height", "dpi"]);
+  assert.deepEqual(groups.map((g) => g.title), ["Size"]);
+  assert.deepEqual(groups[0].fields.map((f) => f.id), ["width", "height", "dpi", "rotate"]);
   assert.deepEqual(groups[0].ratio, ["width", "height"]);
-  assert.deepEqual(groups[1].fields.map((f) => f.id), ["rotate"]);
-  assert.equal(groups[1].ratio, undefined);
+  // The sides and the resolution say their units, and a turn is in degrees
+  assert.deepEqual(groups[0].fields.map((f) => f.unit), ["px", "px", "dpi", undefined]);
+  const rotate = groups[0].fields[3];
+  assert.equal(rotate.label, "Rotation");
+  assert.deepEqual(rotate.options.map((o) => o.label), ["0 deg", "90 deg", "180 deg", "270 deg"]);
+  assert.deepEqual(rotate.options.map((o) => o.value), ["0", "90", "180", "270"]);
 });
 
 test("keeping a ratio makes the other side follow the one changed", () => {
@@ -188,4 +192,18 @@ test("a change of size is the edits for the sides that differ, in the layout's c
   ]);
   assert.deepEqual(sizeOps(target, { width: 500, height: 1400 }, { width: 1000, height: 1400 }).map((o) => o.path), [["width"]]);
   assert.deepEqual(sizeOps(target, { width: 1000, height: 1400 }, { width: 1000, height: 1400 }), []);
+});
+
+test("a text box has a Flow group for the layer it steps around and the box it stays clear of", () => {
+  const ctx = { vocab, stackIds: ["background", "frame", "pt"], textKeys: ["title", "oracle", "pt"], selfKey: "oracle" };
+  const flow = fieldGroups("text", ctx).find((g) => g.title === "Flow");
+  assert.deepEqual(flow.fields.map((f) => f.id), ["avoidLayer", "clearOf", "clearGap"]);
+  assert.deepEqual(flow.fields.map((f) => f.path), [["flow", "avoidLayer"], ["flow", "clearOf"], ["flow", "clearGap"]]);
+  assert.deepEqual(flow.fields[0].options.map((o) => o.value), ["background", "frame", "pt"]);
+  // A box does not stay clear of itself
+  assert.deepEqual(flow.fields[1].options.map((o) => o.value), ["title", "pt"]);
+  assert.deepEqual(parseField(flow.fields[0], ""), { ok: true, unset: true });
+  assert.deepEqual(parseField(flow.fields[0], "pt"), { ok: true, value: "pt" });
+  assert.deepEqual(parseField(flow.fields[2], "0.75"), { ok: true, value: 0.75 });
+  assert.equal(parseField(flow.fields[2], "-1").ok, false);
 });

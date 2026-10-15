@@ -112,6 +112,12 @@ textarea {
   transition: border-color var(--t-hover), box-shadow var(--t-hover);
 }
 
+/* Every field that holds one line is the same height, a dropdown with the text fields */
+input:not([type="checkbox"], [type="radio"], [type="range"]),
+select {
+  height: var(--control-h);
+}
+
 textarea {
   resize: vertical;
   line-height: 1.5;

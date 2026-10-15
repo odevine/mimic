@@ -321,10 +321,10 @@ test("a template opened with an edited test card has it, and no preset is in use
 
 // The sections of the left column
 
-test("the left column is the template, its canvas, the test card with its properties, and the search, in that order", async ({ bridge, page }) => {
+test("the left column is the template, its about, its canvas, the search, and the test card with its properties, in that order", async ({ bridge, page }) => {
   const editor = await withDrafts(bridge, page);
   const top = async (sel) => (await page.locator(sel).boundingBox()).y;
-  const order = [await top(".ed-draft"), await top("#ed-canvas-sec"), await top('[data-sec="card"]'), await top("#ed-fine-details"), await top("#ed-search-sec")];
+  const order = [await top(".ed-draft"), await top("#ed-about-sec"), await top("#ed-canvas-sec"), await top("#ed-search-sec"), await top('[data-sec="card"]'), await top("#ed-fine-details")];
   expect(order).toEqual([...order].sort((a, b) => a - b));
   await expect(editor.fineSummary).toContainText("Properties");
   await expect(editor.searchToggle).toContainText("Search Scryfall");
@@ -340,10 +340,10 @@ test("the search starts collapsed with its arrow, and opens to the search and it
   await expect(editor.searchInput).toBeHidden();
   await expect(page.locator("#ed-results")).toBeHidden();
   await expect((await editor.searchToggle.locator(".icon").boundingBox()).width).toBeGreaterThanOrEqual(20);
-  // The search is below the properties
-  const properties = await page.locator("#ed-fine-details").boundingBox();
+  // The search is above the test card
+  const card = await page.locator('[data-sec="card"]').boundingBox();
   const search = await page.locator("#ed-search-sec").boundingBox();
-  expect(search.y).toBeGreaterThan(properties.y);
+  expect(search.y).toBeLessThan(card.y);
 
   await editor.openSearch();
   await expect(editor.searchInput).toBeVisible();
@@ -352,7 +352,7 @@ test("the search starts collapsed with its arrow, and opens to the search and it
   await expect(editor.results).toHaveCount(1);
   await expect(page.locator("#ed-results-count")).toHaveText("1 result");
   await expect.poll(() => bridge.calledWith("Settings.Put").length).toBeGreaterThan(0);
-  expect(bridge.calledWith("Settings.Put").at(-1)[0].splits.editorLeft.slice(0, 2)).toEqual([0, 0]);
+  expect(bridge.calledWith("Settings.Put").at(-1)[0].splits.editorLeftSections.slice(0, 2)).toEqual([0, 0]);
 });
 
 test("undo and redo are in the template's section, which says they are for all of it", async ({ bridge, page }) => {
@@ -373,7 +373,7 @@ test("undo and redo are in the template's section, which says they are for all o
 
 test("the presets are six real cards, and the first is looked up when a template opens with no card", async ({ bridge, page }) => {
   const editor = await withDrafts(bridge, page);
-  await expect(editor.presets).toHaveText(["Monocolored", "Two Colors", "Three Colors", "Legendary Creature", "Artifact", "Land"]);
+  await expect(editor.presets).toHaveText(["Monocolored", "Two Colors", "Three Colors", "Legendary", "Artifact", "Land"]);
   await expect.poll(() => bridge.calledWith("Studio.ResolvePreset")).toEqual([["monocolored"]]);
   await expect(editor.preset("Monocolored")).toHaveAttribute("aria-pressed", "true");
   await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
@@ -385,7 +385,7 @@ test("the presets are six real cards, and the first is looked up when a template
 test("each preset is looked up by its id when it is chosen", async ({ bridge, page }) => {
   const editor = await withDrafts(bridge, page);
   await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
-  const names = { "Two Colors": "Consuming Aberration · GTC", "Three Colors": "Eerie Ultimatum · IKO", "Legendary Creature": "Norin the Wary · TSP", Artifact: "Sensei's Divining Top · 2X2", Land: "Flooded Strand · KTK" };
+  const names = { "Two Colors": "Consuming Aberration · GTC", "Three Colors": "Eerie Ultimatum · IKO", Legendary: "Norin the Wary · TSP", Artifact: "Sensei's Divining Top · 2X2", Land: "Flooded Strand · KTK" };
   for (const [label, line] of Object.entries(names)) {
     await editor.preset(label).click();
     await expect(editor.cardLine).toHaveText(line);
@@ -446,12 +446,12 @@ test("the test card and the search are sections that collapse and open, starting
   await expect(page.locator("#ed-presets")).toBeVisible();
 });
 
-test("the template and the canvas stay as they are, above the sections that can be resized", async ({ bridge, page }) => {
+test("the template, its about and the canvas stay as they are, above the sections that can be resized", async ({ bridge, page }) => {
   await withDrafts(bridge, page);
   await expect(page.locator(".ed-draft")).toBeVisible();
   await expect(page.locator("#ed-canvas-sec")).toBeVisible();
   // They are not among the sections that share the column's height
-  await expect(page.locator('#ed-left-sections .ed-draft, #ed-left-sections #ed-canvas-sec')).toHaveCount(0);
+  await expect(page.locator('#ed-left-sections .ed-draft, #ed-left-sections #ed-about-sec, #ed-left-sections #ed-canvas-sec')).toHaveCount(0);
   const template = await page.locator(".ed-draft").boundingBox();
   const canvas = await page.locator("#ed-canvas-sec").boundingBox();
   const sections = await page.locator("#ed-left-sections").boundingBox();
@@ -465,46 +465,50 @@ test("a line between the open sections of the left column is dragged to share th
   await editor.openSearch();
   await expect(page.locator("#ed-left-sections .ed-vsplit:visible")).toHaveCount(1);
   const height = async (sel) => (await page.locator(sel).boundingBox()).height;
-  const before = [await height('[data-sec="card"]'), await height('[data-sec="search"]')];
+  const before = [await height('[data-sec="search"]'), await height('[data-sec="card"]')];
   const split = await page.locator("#ed-left-sections .ed-vsplit:visible").first().boundingBox();
   await page.mouse.move(split.x + split.width / 2, split.y + 1);
   await page.mouse.down();
   await page.mouse.move(split.x + split.width / 2, split.y + 41, { steps: 6 });
   await page.mouse.up();
-  const after = [await height('[data-sec="card"]'), await height('[data-sec="search"]')];
+  const after = [await height('[data-sec="search"]'), await height('[data-sec="card"]')];
   expect(after[0] - before[0]).toBeGreaterThan(30);
   expect(after[0] - before[0]).toBeLessThan(50);
   expect(after[0] + after[1]).toBeCloseTo(before[0] + before[1], 0);
   await expect.poll(() => bridge.calledWith("Settings.Put").length).toBeGreaterThan(0);
-  const kept = bridge.calledWith("Settings.Put").at(-1)[0].splits.editorLeft;
+  const kept = bridge.calledWith("Settings.Put").at(-1)[0].splits.editorLeftSections;
   expect(kept).toHaveLength(4);
   expect(kept.slice(0, 2)).toEqual([0, 0]);
 });
 
-test("the search and the test card share the height, and the search rests at the bottom when it is collapsed", async ({ bridge, page }) => {
+test("the search and the test card share the height, and the test card takes the room when the search is collapsed", async ({ bridge, page }) => {
   const editor = await withDrafts(bridge, page);
   await editor.openSearch();
   await expect(page.locator("#ed-left-sections .ed-vsplit:visible")).toHaveCount(1);
   const split = page.locator("#ed-left-sections .ed-vsplit:visible").first();
-  await expect(split).toHaveAttribute("aria-label", "Resize Test card and Search Scryfall");
-  // With the search collapsed again, it is at the bottom of the column and the test card takes the room
+  await expect(split).toHaveAttribute("aria-label", "Resize Search Scryfall and Test card");
+  // With the search collapsed again, it is at the top of the column and the test card takes the room
   await editor.searchToggle.click();
   const column = await page.locator("#ed-left-sections").boundingBox();
   const search = await page.locator('[data-sec="search"]').boundingBox();
   const card = await page.locator('[data-sec="card"]').boundingBox();
-  expect(Math.abs(search.y + search.height - (column.y + column.height))).toBeLessThan(2);
-  expect(Math.abs(card.y + card.height - search.y)).toBeLessThan(2);
+  expect(Math.abs(search.y - column.y)).toBeLessThan(2);
+  expect(Math.abs(card.y - (search.y + search.height))).toBeLessThan(2);
+  expect(Math.abs(card.y + card.height - (column.y + column.height))).toBeLessThan(2);
 });
 
 test("a line in the left column is moved with the arrow keys and never under the minimum", async ({ bridge, page }) => {
   const editor = await withDrafts(bridge, page);
   await editor.openSearch();
   const split = page.locator("#ed-left-sections .ed-vsplit:visible").first();
+  const search = async () => (await page.locator('[data-sec="search"]').boundingBox()).height;
   const card = async () => (await page.locator('[data-sec="card"]').boundingBox()).height;
-  const before = await card();
+  const before = await search();
   await split.focus();
   await page.keyboard.press("ArrowDown");
-  await expect.poll(async () => Math.abs((await card()) - (before + 16)) < 2).toBe(true);
+  await expect.poll(async () => Math.abs((await search()) - (before + 16)) < 2).toBe(true);
   for (let i = 0; i < 60; i++) await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => (await search()) >= 95).toBe(true);
+  for (let i = 0; i < 120; i++) await page.keyboard.press("ArrowDown");
   await expect.poll(async () => (await card()) >= 95).toBe(true);
 });

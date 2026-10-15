@@ -783,3 +783,30 @@ test("the coverage strip draws the six test cards through the template", async (
   // A strip tile is smaller than the card drawn for the preview at 100 dpi
   for (const [w] of sizes) expect(w).toBeLessThan(272);
 });
+
+test("a text box's flow is set from its fields, the part it keeps out of is hatched, and undo takes it out of the file", async ({ editor, scratch, page }) => {
+  await editor.create("Flowing", 100);
+  const file = draftFile(scratch, "flowing", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  await editor.layers.filter({ hasText: "title" }).click();
+  await expect(page.locator("#ed-selection-note")).toBeHidden();
+  // The title stays clear of the mana cost to begin with, and the layer it could step
+  // around is the one the starter has
+  await expect(editor.lever("lever-clearOf")).toHaveValue("mana");
+  await expect(editor.lever("lever-avoidLayer").locator("option")).toHaveText(["Default (nothing)", "background"]);
+  await editor.lever("lever-avoidLayer").selectOption("background");
+  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.flow).toEqual({ clearOf: "mana", avoidLayer: "background" });
+  // The background fills the card, so the whole box is what the text keeps out of
+  await expect(page.locator("#ed-overlay .ed-box.avoid .ed-avoid-label")).toHaveText("Avoids background");
+  await expect(page.locator("#ed-selection-note")).toHaveText("Steps around background");
+  const hatched = await page.locator("#ed-overlay .ed-box.avoid").boundingBox();
+  const outline = await page.locator("#ed-overlay .ed-box.sel").boundingBox();
+  expect(Math.abs(hatched.width - outline.width)).toBeLessThan(2);
+  expect(Math.abs(hatched.height - outline.height)).toBeLessThan(2);
+
+  await editor.undoButton.click();
+  await expect(editor.lever("lever-avoidLayer")).toHaveValue("");
+  await expect(page.locator("#ed-overlay .ed-box.avoid")).toHaveCount(0);
+  // The file is as it was, with no empty flow left behind
+  expect(await readFile(file, "utf8")).toBe(original);
+});

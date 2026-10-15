@@ -46,7 +46,7 @@ func presets() []Preset {
 		{ID: "monocolored", Label: "Monocolored", Name: "Mirran Spy", Set: "mbs", Number: "26"},
 		{ID: "two-colors", Label: "Two Colors", Name: "Consuming Aberration", Set: "gtc", Number: "152"},
 		{ID: "three-colors", Label: "Three Colors", Name: "Eerie Ultimatum", Set: "iko", Number: "184"},
-		{ID: "legendary", Label: "Legendary Creature", Name: "Norin the Wary", Set: "tsp", Number: "171"},
+		{ID: "legendary", Label: "Legendary", Name: "Norin the Wary", Set: "tsp", Number: "171"},
 		{ID: "artifact", Label: "Artifact", Name: "Sensei's Divining Top", Set: "2x2", Number: "314"},
 		{ID: "land", Label: "Land", Name: "Flooded Strand", Set: "ktk", Number: "233"},
 	}

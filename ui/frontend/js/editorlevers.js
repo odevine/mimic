@@ -9,6 +9,9 @@ const TURNS = ["0", "90", "180", "270"];
 
 const choice = (values) => values.map((v) => ({ value: v, label: v }));
 
+// A turn is a number of degrees, written with its unit
+const turn = (id) => ({ id, label: "Rotation", path: ["rotate"], type: "choice", options: TURNS.map((v) => ({ value: v, label: `${v} deg` })), empty: "0" });
+
 // number fields
 const int = (id, label, path, extra = {}) => ({ id, label, path, type: "int", ...extra });
 const num = (id, label, path, extra = {}) => ({ id, label, path, type: "number", ...extra });
@@ -60,6 +63,14 @@ export function fieldGroups(kind, ctx) {
           ],
         },
         {
+          title: "Flow",
+          fields: [
+            { id: "avoidLayer", label: "Steps around", path: ["flow", "avoidLayer"], type: "choice", options: choice(ctx.stackIds || []), empty: "nothing" },
+            { id: "clearOf", label: "Stays clear of", path: ["flow", "clearOf"], type: "choice", options: choice((ctx.textKeys || []).filter((k) => k !== ctx.selfKey)), empty: "nothing" },
+            num("clearGap", "Gap kept", ["flow", "clearGap"], { min: 0, step: 0.05 }),
+          ],
+        },
+        {
           title: "Shadow",
           shadow: true,
           fields: [
@@ -93,7 +104,7 @@ export function fieldGroups(kind, ctx) {
           title: "Window",
           fields: [
             { id: "after", label: "Above layer", path: ["after"], type: "choice", options: choice(ctx.stackIds || []), required: true },
-            { id: "rotate", label: "Turned", path: ["rotate"], type: "choice", options: choice(TURNS), empty: "0" },
+            turn("rotate"),
           ],
         },
       ];
@@ -117,14 +128,11 @@ export function fieldGroups(kind, ctx) {
           // The width and the height can be kept in proportion, which the page draws
           ratio: ["width", "height"],
           fields: [
-            int("width", "Width", ["width"], { min: 1, required: true }),
-            int("height", "Height", ["height"], { min: 1, required: true }),
-            int("dpi", "Resolution", ["dpi"], { min: 1, max: 10000 }),
+            int("width", "Width", ["width"], { min: 1, required: true, unit: "px" }),
+            int("height", "Height", ["height"], { min: 1, required: true, unit: "px" }),
+            int("dpi", "Resolution", ["dpi"], { min: 1, max: 10000, unit: "dpi" }),
+            turn("rotate"),
           ],
-        },
-        {
-          title: "Rotation",
-          fields: [{ id: "rotate", label: "Turned", path: ["rotate"], type: "choice", options: choice(TURNS), empty: "0" }],
         },
       ];
     case "template":

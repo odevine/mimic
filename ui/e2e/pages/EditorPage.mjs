@@ -129,13 +129,14 @@ export class EditorPage {
   }
 
   // sectionToggle is the heading of one of the right column's sections, which opens
-  // and collapses it, by its name: layers, selection, about or problems
+  // and collapses it, by its name: layers, selection or problems. About is the template's
+  // own, in the left column under the template, and opens and collapses the same way
   sectionToggle(name) {
-    return this.page.locator(`#ed-sec-${name}-toggle`);
+    return this.page.locator(name === "about" ? "#ed-about-toggle" : `#ed-sec-${name}-toggle`);
   }
 
   sectionBody(name) {
-    return this.page.locator(`#ed-sec-${name}-body`);
+    return this.page.locator(name === "about" ? "#ed-about-body" : `#ed-sec-${name}-body`);
   }
 
   // openSection shows a section that is collapsed, and leaves one that is open

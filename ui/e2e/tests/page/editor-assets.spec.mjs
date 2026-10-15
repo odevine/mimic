@@ -334,7 +334,7 @@ test("locking an item keeps the card from picking or moving it", async ({ bridge
   await expect.poll(() => bridge.calledWith("Studio.SetMarks").length).toBe(1);
   expect(bridge.calledWith("Studio.SetMarks")[0][0]).toEqual({ id: "mine", locked: ["normal/text:title"], snapTo: [] });
   await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#ed-selection-kind")).toContainText("Locked");
+  await expect(page.locator("#ed-selection-note")).toContainText("Locked");
   // It keeps its outline, with no handles, and is not moved by the arrow keys
   await expect(editor.selectionBox).toHaveClass(/locked/);
   await expect(editor.handles).toHaveCount(0);

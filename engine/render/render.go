@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"strconv"
 	"strings"
 
 	"github.com/odevine/impasto/blend"
@@ -110,13 +111,16 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		}
 		req.Report(stepFrame, lerp(fracFrameFrom, fracFrameTo, i, len(layout.Stack)))
 		_, k := fc.get(e.Face)
-		node, err := layerNode(ctx, loads, t, req, geo, authored, e, k, scale)
-		if err != nil {
-			return nil, err
-		}
-		if node != nil {
-			nodes = append(nodes, node)
-			loads.total++
+		// A hidden entry is not loaded or drawn, and the art above it still takes its place
+		if !req.Hides("layer", e.ID) {
+			node, err := layerNode(ctx, loads, t, req, geo, authored, e, k, scale)
+			if err != nil {
+				return nil, err
+			}
+			if node != nil {
+				nodes = append(nodes, node)
+				loads.total++
+			}
 		}
 
 		// The art takes its place in the stack whether or not the entry it follows
@@ -125,7 +129,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 			continue
 		}
 		for slotIdx, slot := range geo.Art {
-			if slot.After != e.ID {
+			if slot.After != e.ID || req.Hides("art", strconv.Itoa(slotIdx)) {
 				continue
 			}
 			src := req.Art
@@ -152,7 +156,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
 	syms := newSymbols(fr, boxes)
 
-	if drawSymbol {
+	if drawSymbol && !req.Hides("symbol", template.SymbolSet) {
 		node, err := symbolNode(req.SetSymbol, symSpec)
 		if err != nil {
 			return nil, err
@@ -171,6 +175,9 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		docW, docH := geo.Width, geo.Height
 		if job.space == template.SpaceOutput {
 			docW, docH = geo.DeliveredWidth, geo.DeliveredHeight
+		}
+		if req.Hides("text", job.key) {
+			continue
 		}
 		got, err := drawBox(req, t, layout, authored, job, boxes, fc, syms, fr, scale, docW, docH)
 		if err != nil {

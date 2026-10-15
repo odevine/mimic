@@ -233,7 +233,25 @@ async function flows(outDir) {
     await until("the selection", () => shown($("ed-selection")) && $("ed-selection-name").textContent === "title");
     const x = readX();
     doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    await until(() => `the title to move (it is at ${readX()}, from ${x})`, () => readX() === x + 1 && !$("ed-undo").disabled);
+    try {
+      await until(() => `the title to move (it is at ${readX()}, from ${x})`, () => readX() === x + 1 && !$("ed-undo").disabled);
+    } catch (err) {
+      // Say where the nudge got to, since a window with no display to look at is all there is to go on
+      const active = doc.activeElement;
+      const src = await api.draftSource(doc.querySelector("#ed-about-id").textContent.replace(/^user\./, "")).catch(() => null);
+      const rect = src && src.files.find((f) => f.name === "layouts/normal.json");
+      let inFile = "unread";
+      try {
+        inFile = JSON.stringify(JSON.parse(rect.content).textBoxes.title.rect);
+      } catch {
+        // The file could not be read, which the note says
+      }
+      throw new Error(
+        `${err.message}. Focus is on ${active ? `${active.tagName}#${active.id}` : "nothing"}, ` +
+          `${doc.querySelectorAll("dialog[open]").length} dialogs are open, the mode is ${doc.querySelector(".mode:not([hidden])")?.id}, ` +
+          `undo is ${$("ed-undo").disabled ? "off" : "on"}, the title's rect in the file is ${inFile}, the toasts "${$("toasts").textContent}"`,
+      );
+    }
     doc.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
     await until("the move to be undone", () => readX() === x && $("ed-undo").disabled);
     notes.push("an edit in the editor is saved, shown and undone");

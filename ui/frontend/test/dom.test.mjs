@@ -32,3 +32,15 @@ test("single-key shortcuts stay out of text controls", async () => {
   assert.equal(isTyping({ tagName: "BUTTON" }), false);
   assert.equal(isTyping(null), false);
 });
+
+test("a text control that is not drawn is not one a person is typing in", async () => {
+  const { isTyping } = await load("Win32");
+  const drawn = (tagName, type) => ({ tagName, type, getClientRects: () => [{}] });
+  const hidden = (tagName, type) => ({ tagName, type, getClientRects: () => [] });
+  assert.equal(isTyping(drawn("INPUT", "text")), true);
+  assert.equal(isTyping(drawn("TEXTAREA")), true);
+  // Some webviews leave the field of a mode that was left as the active element
+  assert.equal(isTyping(hidden("INPUT", "text")), false);
+  assert.equal(isTyping(hidden("TEXTAREA")), false);
+  assert.equal(isTyping(hidden("SELECT")), false);
+});

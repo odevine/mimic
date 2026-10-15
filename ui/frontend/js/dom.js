@@ -39,6 +39,9 @@ export function icon(name, cls = "icon") {
 // shortcuts must not fire
 export function isTyping(el = document.activeElement) {
   if (!el) return false;
+  // A field that is not drawn, such as one in a mode that was left, is not one a person is typing in,
+  // though some webviews leave it as the active element
+  if (typeof el.getClientRects === "function" && el.getClientRects().length === 0) return false;
   if (el.isContentEditable) return true;
   if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
   if (el.tagName === "INPUT") return !["checkbox", "radio", "button", "submit"].includes(el.type);

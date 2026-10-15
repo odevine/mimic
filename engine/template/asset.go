@@ -31,7 +31,8 @@ type TextBoxSpec struct {
 	Color    string  `json:"color"` // "#RRGGBB"
 	// VAlign anchors the text block vertically: "top", "center", "bottom", or one of
 	// "baseline", "cap-top" and "cap-center", which set Y on the first line of point text,
-	// at its baseline, the top of its capitals or their middle. Empty means top
+	// at its baseline, the top of its capitals or their middle. The capitals are those of
+	// the first text face on the line. Empty means top
 	VAlign string `json:"vAlign,omitempty"`
 	// LineSpacing sets the baseline-to-baseline distance to this multiple of the
 	// font size, the way leading reads in a PSD, so 1.0 is solid. Zero or less

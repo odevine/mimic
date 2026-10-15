@@ -63,11 +63,24 @@ type RenderRequest struct {
 	// layer that is hidden and a box still gives way to one, and a description reports the
 	// item as it would draw. A name that matches nothing hides nothing
 	Hide []string
+	// Show names stack entries to draw even where their condition does not hold, as
+	// "layer:crown". A forced entry is there for the rest of the card, so text steps around
+	// it and a box ducks for it, and a description reports it drawn. It still draws nothing
+	// when no image of its part fits the card, or its opacity is 0, and an entry named by
+	// Hide as well is not drawn. Only layers can be shown, and any other name is ignored
+	Show []string
 }
 
 // Hides reports whether the request leaves an item out of the drawing
-func (r RenderRequest) Hides(kind, key string) bool {
-	for _, h := range r.Hide {
+func (r RenderRequest) Hides(kind, key string) bool { return named(r.Hide, kind, key) }
+
+// Shows reports whether the request draws a stack entry whatever its condition says
+func (r RenderRequest) Shows(key string) bool { return named(r.Show, "layer", key) }
+
+// named reports whether a list holds the name of an item, which is its kind, a colon and
+// its key
+func named(list []string, kind, key string) bool {
+	for _, h := range list {
 		if len(h) == len(kind)+1+len(key) && h[:len(kind)] == kind && h[len(kind)] == ':' && h[len(kind)+1:] == key {
 			return true
 		}

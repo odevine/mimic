@@ -113,7 +113,7 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 		_, k := fc.get(e.Face)
 		// A hidden entry is not loaded or drawn, and the art above it still takes its place
 		if !req.Hides("layer", e.ID) {
-			node, err := layerNode(ctx, loads, t, req, geo, authored, e, k, scale)
+			node, err := layerNode(ctx, loads, t, req, geo, authored, forced(req, e), k, scale)
 			if err != nil {
 				return nil, err
 			}
@@ -358,7 +358,7 @@ func placeBox(req template.RenderRequest, t *template.Template, layout *template
 			return image.Rectangle{}, false
 		}
 		_, k := fc.get(e.Face)
-		return template.EntryBounds(t.Assets(), e, k, req.Features, scale, authored.X, authored.Y)
+		return template.EntryBounds(t.Assets(), forced(req, e), k, req.Features, scale, authored.X, authored.Y)
 	}
 	if box.DuckLayer != "" && box.DuckRow != "" {
 		if _, ok := bounds(box.DuckLayer); ok {
@@ -452,6 +452,18 @@ func lerp(from, to float64, i, n int) float64 {
 		return from
 	}
 	return from + (to-from)*float64(i+1)/float64(n)
+}
+
+// forced is the entry as the request has it: one it shows draws whatever its condition says,
+// so it is the entry without the condition, and any other is as it is. It is a copy, since
+// a template is shared by every render
+func forced(req template.RenderRequest, e *template.Entry) *template.Entry {
+	if !req.Shows(e.ID) {
+		return e
+	}
+	c := *e
+	c.Condition = frame.Condition{}
+	return &c
 }
 
 // layerNode builds one stack entry's node for this card, or returns nil when its

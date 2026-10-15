@@ -139,6 +139,7 @@ func (d *describer) both(r image.Rectangle, output bool) (authored, delivered im
 }
 
 func (d *describer) layer(e *template.Entry) {
+	e = forced(d.req, e)
 	it := Item{Kind: ItemLayer, Key: e.ID, Part: e.Part.Name}
 	_, k := d.fc.get(e.Face)
 	switch {

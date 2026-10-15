@@ -69,3 +69,27 @@ test("an installed template offers the choices it declares", async ({ templates,
   await expect(templates.entry("test.featured").getByLabel("Banner")).toBeChecked();
   await expect(templates.entry("test.featured").getByLabel("Tone")).toHaveValue("dark");
 });
+
+test("a template exported from the editor is imported from its file and is listed as installed", async ({ editor, templates, scratch }) => {
+  await editor.create("Portable", 100);
+  await editor.exportButton.click();
+  await editor.exportConfirm.click();
+  await expect(editor.toasts.last()).toContainText("Saved user.portable-0.1.0.mimic");
+  // The file the export wrote is the one an open dialog is given
+  await scratch.offer("user.portable-0.1.0.mimic", { path: scratch.savedPath("user.portable-0.1.0.mimic") });
+
+  await templates.show();
+  await expect(templates.libraryList.locator(".tp-template", { hasText: "user.portable" })).toHaveCount(0);
+  await editor.page.locator("#tm-import-template").click();
+  await expect(editor.toasts.last()).toHaveText("Imported Portable 0.1.0");
+  const entry = templates.entry("Portable");
+  await expect(entry).toContainText("user.portable");
+  await expect(entry.getByRole("button", { name: "Select" })).toBeVisible();
+
+  // The same file again changes nothing, and the template can be selected like any other
+  await editor.page.locator("#tm-import-template").click();
+  await expect(editor.toasts.last()).toHaveText("Portable 0.1.0 is installed already");
+  await entry.getByRole("button", { name: "Select" }).click();
+  await expect(templates.label).toHaveText("Portable · 0.1.0");
+  await scratch.reset();
+});

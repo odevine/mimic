@@ -311,6 +311,15 @@ starts from that template instead. The copy keeps the original's license and
 credits and adds a credit that names the original and its version, and it is
 independent of the original from then on.
 
+Import template, beside New template in the Templates library, installs a `.mimic` file from
+anywhere on the computer, such as one exported from the Editor or sent by someone else. The app checks
+that it can read the file, that the template's id looks like `owner.name` and its version like
+`1.2.3`, and that its manifest loads, and then copies it into the folder the downloaded templates are
+kept in, where it is listed in the library with that version as installed. It is not made the active
+template. Importing a file that is installed already says so, and one that is a different copy of an
+installed version asks before it takes that one's place, reopening the template in use when that is the
+one replaced. A file the app cannot read says why and changes nothing.
+
 The left column picks the draft, with Undo and Redo beside its name since they take
 back a change made anywhere in the template, has the template's About and its canvas under
 it, and picks the card the draft is drawn with, from six presets, which are real cards that are looked
@@ -386,25 +395,19 @@ The middle button pans in either tool. A pan does not select or move anything or
 what is under the pointer, and what is drawn on the card, the outlines, handles and guides,
 goes with it. Fit puts the card back in the middle, and so does opening another template.
 
-Three more controls sit in the same cluster. An eye shows and hides the overlays, the marks the
+Two more controls sit in the same cluster. An eye shows and hides the overlays, the marks the
 card draws for a selected item: the room a text box has left, what is in its way and the red
 stripes, the placement line of a box that was moved or narrowed, and the caption of tags beneath the
 outline. The selection's outline, a baseline and its ends to drag, the handles and the guides of a
 drag stay, since they are how an item is edited, and so do the notes under the selection's name.
-`O` does the same, and whether the overlays show is kept with the layout settings. Save image asks where to put
-the picture of the card as it is drawn now and writes it as a PNG named for the card, in the folder
-the app saves renders to. It is the picture the card shows, at the preview resolution, with anything
-the layer eyes have hidden or forced left out or put in. Render at full size draws the card again at
-the resolution the layout is authored at, which the preview is not, and asks where to put that picture
-the same way, leaving the preview as it is. Both wait until a card has been drawn, and a render that
-fails leaves nothing to save.
-
-A PNG dropped on the card or on the layers list adds it to the template. A dialog names the file, offers
-a name for the part made from it and asks what it follows, either nothing, so it draws on every card, or
-one of the frame's color slots, and then makes the part with the image as its first, and a layer on top of
-the stack for it, as one step of undo. Several files dropped are asked about one after another, and
-closing the dialog leaves the rest. A file that is not a PNG is said and starts nothing, and a drop
-on another mode, or on a template that cannot be changed, does nothing.
+`O` does the same, and whether the overlays show is kept with the layout settings. Save image saves the picture of the card, as a PNG named for the card in the folder the app saves
+renders to, after asking where. When the preview is drawn smaller than the template is authored, which
+the preview's resolution setting makes common, it opens a menu of two. As shown saves the preview as it
+is drawn now, with anything the layer eyes have hidden or forced left out or put in, and is at once. At
+full size draws the card again at the resolution the layout is authored at and asks where to put that,
+leaving the preview as it is, which takes longer as the template gets larger. A template authored at
+the preview's resolution or smaller has no larger picture, so Save image saves at once. The button
+waits until a card has been drawn, and a render that fails leaves nothing to save.
 
 The files of a template can change under the editor, from another program. When the window comes back to
 the front, the editor compares a fingerprint of the template's files with the one it last wrote or read,

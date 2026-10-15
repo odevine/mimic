@@ -358,6 +358,7 @@ body.resizing-rows * {
 .tm-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -1397,12 +1398,4 @@ body.resizing-rows * {
 
 .ed-box.hazard {
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--err) 55%, transparent) 0 3px, transparent 3px 7px);
-}
-
-/* A file dragged over the card or the layers list */
-#ed-stage.drop,
-#ed-sec-layers-body.drop {
-  outline: 2px dashed var(--accent);
-  outline-offset: -4px;
-  background-color: var(--accent-weak);
 }

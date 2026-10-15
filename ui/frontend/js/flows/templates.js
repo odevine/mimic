@@ -289,7 +289,33 @@ function refresh() {
   if (tab === "defaults") loadDefaults();
 }
 
+// importTemplate installs a .mimic file the person chooses beside the templates that were
+// downloaded. A different copy of a version that is installed is asked about first, since
+// importing it takes the place of the one there
+async function importTemplate() {
+  if (busy) return;
+  busy = true;
+  try {
+    const path = await api.chooseTemplateFile();
+    if (!path) return;
+    let res = await api.importTemplate(path, false);
+    if (res.exists) {
+      const ok = await api.confirm("Replace the installed template?", `${res.title} ${res.version} is installed already, and the file you chose is a different copy of it. Replace the installed one with it?`, "Replace");
+      if (!ok) return;
+      res = await api.importTemplate(path, true);
+    }
+    await loadLibrary();
+    if (res.active) await changed();
+    toast(res.same ? `${res.title} ${res.version} is installed already` : `${res.replaced ? "Replaced" : "Imported"} ${res.title} ${res.version}`, "ok");
+  } catch (err) {
+    toast(err.message, "err", 7000);
+  } finally {
+    busy = false;
+  }
+}
+
 export function initTemplates() {
+  $("tm-import-template").addEventListener("click", importTemplate);
   for (const chip of document.querySelectorAll("#mode-templates [data-tab]")) {
     chip.addEventListener("click", () => showTab(chip.dataset.tab));
   }

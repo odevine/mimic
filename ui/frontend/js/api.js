@@ -196,6 +196,13 @@ export const api = {
   activeTemplate: () => rpc("Templates", "Active"),
   selectTemplate: async (name, version, install = false) => ({ jobId: await rpc("Templates", "Select", { name, version, install }) }),
   selectEvents: (jobId, onStep) => watchJob(jobId, onStep),
+  // chooseTemplateFile asks for a .mimic bundle and resolves to its path, or an empty string when
+  // the user cancelled. importTemplate installs the file at path beside the downloaded ones and
+  // resolves to { template, version, title, same, replaced, exists, active }. exists says a
+  // different copy of that version is installed and nothing was written, until it is sent again
+  // with replace
+  chooseTemplateFile: () => pickFile({ title: "Choose a template", filters: BUNDLES }),
+  importTemplate: (path, replace) => rpc("Templates", "Import", { path, replace: !!replace }),
   // setTemplateFeature keeps the value chosen for one feature of an installed
   // template, and resolves to the template's details with it in force. A null
   // value takes the choice back
@@ -272,8 +279,6 @@ export const api = {
     const path = await pickFile({ title: "Choose a PNG image", filters: PNGS });
     return path ? rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }) : null;
   },
-  // importDraftImageAt does the same for a file already chosen, such as one dropped on the window
-  importDraftImageAt: (id, part, material, slot, path) => rpc("Studio", "ImportImage", { id, part, material, slot: slot || "", path }),
   importDraftFont: async (id, assign) => {
     const path = await pickFile({ title: "Choose a font", filters: FONTS });
     return path ? rpc("Studio", "ImportFont", { id, path, assign: assign || [] }) : null;

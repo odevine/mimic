@@ -933,6 +933,15 @@ Sideboard
               </p>
               <div class="tm-actions">
                 <button
+                  id="tm-import-template"
+                  class="btn"
+                  type="button"
+                  data-tip="Add a template from a .mimic file"
+                >
+                  <svg class="icon"><use href="icons.svg#i-upload" /></svg>Import
+                  template
+                </button>
+                <button
                   id="tm-new-template"
                   class="btn"
                   type="button"
@@ -1438,7 +1447,7 @@ Sideboard
 
             <div class="region grow preview-region" data-region="1">
               <div class="ed-viewport">
-                <div id="ed-stage" class="stage fit" data-file-drop-target>
+                <div id="ed-stage" class="stage fit">
                   <div class="stage-inner">
                     <div
                       id="ed-placeholder"
@@ -1544,20 +1553,12 @@ Sideboard
                     class="btn subtle icon-only"
                     type="button"
                     aria-label="Save the image"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
                     data-tip="Save image"
                     disabled
                   >
                     <svg class="icon"><use href="icons.svg#i-download" /></svg>
-                  </button>
-                  <button
-                    id="ed-render-full"
-                    class="btn subtle icon-only"
-                    type="button"
-                    aria-label="Render the card at full size and save it"
-                    data-tip="Render at full size"
-                    disabled
-                  >
-                    <svg class="icon"><use href="icons.svg#i-render" /></svg>
                   </button>
                 </div>
               </div>
@@ -1700,7 +1701,6 @@ Sideboard
                     <div
                       id="ed-sec-layers-body"
                       class="ed-sec-body"
-                      data-file-drop-target
                       role="region"
                       tabindex="0"
                       aria-labelledby="ed-sec-layers-toggle"
@@ -2551,53 +2551,6 @@ Sideboard
         <button class="btn" type="button" data-close>Cancel</button>
         <button id="ed-add-confirm" class="btn primary" type="button">
           Add
-        </button>
-      </div>
-    </dialog>
-
-    <dialog
-      id="ed-drop-dialog"
-      class="dialog"
-      aria-labelledby="ed-drop-title"
-      style="width: min(460px, calc(100vw - 32px))"
-    >
-      <div class="dialog-head">
-        <h2 id="ed-drop-title">Add this image</h2>
-        <button
-          class="btn subtle icon-only"
-          type="button"
-          data-close
-          aria-label="Close"
-        >
-          <svg class="icon"><use href="icons.svg#i-close" /></svg>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <p id="ed-drop-file" class="desc"></p>
-        <div class="setting">
-          <label for="ed-drop-name">Name of the part</label>
-          <input
-            id="ed-drop-name"
-            autocomplete="off"
-            spellcheck="false"
-            maxlength="40"
-          />
-        </div>
-        <div class="setting">
-          <label for="ed-drop-slot">It follows</label>
-          <select id="ed-drop-slot"></select>
-          <p class="desc">
-            An image that draws on every card is one layer. One that follows the
-            card's colors is the first of an image for each color, and the rest
-            are added in the layer's panel
-          </p>
-        </div>
-        <p id="ed-drop-error" class="rules-error" role="alert" hidden></p>
-      </div>
-      <div class="dialog-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button id="ed-drop-confirm" class="btn primary" type="button">
-          Add layer
         </button>
       </div>
     </dialog>

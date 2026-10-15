@@ -34,13 +34,13 @@ export function initAssets(host) {
   // the part leaves it and its thumbnails alone
   let drawn = "";
 
-  // bring asks for an image file, or takes the one at path, and has the app put it in a part.
-  // It resolves to the app's answer, or null when the person cancelled or it was refused, which is said
-  async function bring(part, material, slot, path) {
+  // bring asks for an image file and has the app put it in a part. It resolves to the
+  // app's answer, or null when the person cancelled or it was refused, which is said
+  async function bring(part, material, slot) {
     host.flushNudge();
     const id = store.current.peek();
     try {
-      return await (path ? api.importDraftImageAt(id, part, material, slot, path) : api.importDraftImage(id, part, material, slot));
+      return await api.importDraftImage(id, part, material, slot);
     } catch (err) {
       toast(err.message, "err", 7000);
       return null;
@@ -289,28 +289,16 @@ export function initAssets(host) {
       return made;
     }
     const name = $("ed-add-partname").value.trim();
-    const wrong = newPartProblem(name);
-    if (wrong) {
-      addError(wrong);
+    if (!PART_NAME.test(name)) {
+      addError("A part's name is lowercase letters, digits, underscores and hyphens");
       return false;
     }
-    return await makePartLayer(view, name, $("ed-add-slot").value, "");
-  }
-
-  // newPartProblem says what is wrong with a name for a part that is to be made, or "" when it is fine
-  function newPartProblem(name) {
-    if (!PART_NAME.test(name)) return "A part's name is lowercase letters, digits, underscores and hyphens";
     const assets = store.assets.peek() || { parts: [] };
-    if (assets.parts.some((p) => p.name === name)) return `The template has a part named ${name} already. Choose it above, or give this one another name`;
-    return "";
-  }
-
-  // makePartLayer brings an image in as the first image of a new part and adds a layer for it,
-  // which is one step of undo. The image is chosen now, or is the file at path. It resolves to
-  // false when the image was not brought in
-  async function makePartLayer(view, name, slot, path) {
-    const entries = view.items.filter((it) => it.kind === "layer").map((it) => ({ id: it.key, part: it.part }));
-    const res = await bring(name, "any", slot, path);
+    if (assets.parts.some((p) => p.name === name)) {
+      addError(`The template has a part named ${name} already. Choose it above, or give this one another name`);
+      return false;
+    }
+    const res = await bring(name, "any", $("ed-add-slot").value);
     if (!res) return false;
     sayWarnings(res);
     const op = newLayer(view.layout, name, entries);
@@ -319,102 +307,6 @@ export function initAssets(host) {
     else host.select(`layer:${op.key}`);
     return true;
   }
-
-  // --- images dropped on the window ---
-
-  // dropped holds the PNG files dropped and not yet added, the first being the one the dialog is for
-  let dropped = [];
-  let advancing = false;
-
-  const fileName = (path) => path.split(/[\\/]/).pop();
-
-  // takeDrops starts the dialog for dropped files that are images, and says so when none is. It
-  // does nothing when the editor is not what is showing, or a template that cannot be changed
-  function takeDrops(files) {
-    if (!host.droppable()) return;
-    const pngs = files.filter((f) => /\.png$/i.test(f));
-    if (!pngs.length) {
-      toast("The editor takes layer images as PNG. Export the layer as a PNG first", "warn", 6000);
-      return;
-    }
-    const open = $("ed-drop-dialog").open;
-    dropped = open ? [...dropped, ...pngs] : pngs;
-    if (!open) askDrop();
-  }
-
-  function dropError(text) {
-    $("ed-drop-error").textContent = text || "";
-    $("ed-drop-error").hidden = !text;
-  }
-
-  // askDrop asks what the first dropped image is for, with a name for its part from the file's
-  function askDrop() {
-    const view = store.layout.peek();
-    const vocab = store.vocab.peek() || { slots: [] };
-    const assets = store.assets.peek() || { parts: [] };
-    if (!view || !dropped.length) return;
-    const path = dropped[0];
-    dropError("");
-    $("ed-drop-title").textContent = dropped.length > 1 ? `Add this image, ${dropped.length} to go` : "Add this image";
-    $("ed-drop-file").textContent = fileName(path);
-    $("ed-drop-name").value = partNameFor(fileName(path), assets.parts.map((p) => p.name));
-    fill($("ed-drop-slot"), [["", "Nothing, one image for every card"], ...vocab.slots.map((s) => [s, `The ${s} colors`])]);
-    $("ed-drop-dialog").showModal();
-    $("ed-drop-name").select();
-  }
-
-  async function confirmDrop() {
-    const view = store.layout.peek();
-    if (!view || !dropped.length) return;
-    const name = $("ed-drop-name").value.trim();
-    const wrong = newPartProblem(name);
-    if (wrong) {
-      dropError(wrong);
-      return;
-    }
-    const btn = $("ed-drop-confirm");
-    btn.disabled = true;
-    try {
-      const path = dropped[0];
-      const made = await makePartLayer(view, name, $("ed-drop-slot").value, path);
-      if (!made) {
-        $("ed-drop-dialog").close();
-        dropped = [];
-        return;
-      }
-      dropped = dropped.slice(1);
-      advancing = true;
-      $("ed-drop-dialog").close();
-      if (dropped.length) askDrop();
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  // The card and the layers list light up while a file is dragged over them
-  for (const el of [$("ed-stage"), $("ed-sec-layers-body")]) {
-    el.addEventListener("dragover", () => el.classList.add("drop"));
-    el.addEventListener("dragleave", () => el.classList.remove("drop"));
-    el.addEventListener("drop", () => el.classList.remove("drop"));
-  }
-  api.onFilesDropped((files) => {
-    $("ed-stage").classList.remove("drop");
-    $("ed-sec-layers-body").classList.remove("drop");
-    takeDrops(files);
-  });
-  $("ed-drop-confirm").addEventListener("click", confirmDrop);
-  $("ed-drop-name").addEventListener("input", () => dropError(""));
-  $("ed-drop-name").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      confirmDrop();
-    }
-  });
-  // A dialog closed any other way than by adding an image drops the images still waiting
-  $("ed-drop-dialog").addEventListener("close", () => {
-    if (advancing) advancing = false;
-    else dropped = [];
-  });
 
   $("ed-add").addEventListener("click", openAdd);
   $("ed-add-kind").addEventListener("change", showAddKind);

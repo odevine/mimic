@@ -894,11 +894,12 @@ test("hiding a layer is in the picture that is saved, and showing it again puts 
   expect(alpha).toBe(0);
 });
 
-test("full size draws the card at the template's own resolution and saves it", async ({ editor, scratch }) => {
+test("saving at full size draws the card at the template's own resolution and saves it", async ({ editor, scratch }) => {
   // The preview draws at 300 dpi, so a template authored at 400 has a larger full size
   await editor.create("Full size", 400);
   const [w, h] = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
-  await editor.page.locator("#ed-render-full").click();
+  await editor.page.locator("#ed-save-image").click();
+  await editor.page.getByRole("menuitem", { name: "At full size" }).click();
   await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png", { timeout: 60_000 });
   const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
   expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);

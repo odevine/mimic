@@ -204,23 +204,6 @@ export const scenes = {
       await expect(editor.addSlot).toBeVisible();
     },
   },
-  "editor-drop": {
-    mask: ["#ed-activity"],
-    run: async ({ bridge, page }) => {
-      const mine = draftSummary("my-frame", "My frame");
-      bridge.reply("Studio.List", [mine]);
-      bridge.reply("Studio.Open", draftView(mine));
-      await bridge.boot();
-      const editor = new EditorPage(page);
-      await editor.show();
-      await expect.poll(() => bridge.calledWith("Studio.Render").length).toBe(1);
-      await bridge.job("job-1", [done(1)]);
-      await expect(editor.layers).toHaveCount(7);
-      await bridge.emit("files-dropped", ["/art/Frame Glow.png", "/art/second.png"]);
-      await expect(page.locator("#ed-drop-dialog")).toBeVisible();
-      await expect(page.locator("#ed-drop-name")).toHaveValue("frame_glow");
-    },
-  },
   "editor-export": {
     mask: ["#ed-activity"],
     run: async ({ bridge, page }) => {

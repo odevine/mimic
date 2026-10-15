@@ -85,6 +85,7 @@ const store = {
   overlays: signal(true),
   // the render whose image is on the card now, or "" when there is none, which is what is copied and saved
   shown: signal(""),
+  shownDpi: signal(0), // the resolution the card shown was drawn at
 };
 
 const history = createHistory();
@@ -166,7 +167,7 @@ async function render() {
   const name = (store.edits.peek() && store.edits.peek().name) || card.Name;
   begin(`Drawing ${name}`);
   try {
-    const { jobId } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek(), false, currentLists());
+    const { jobId, dpi } = await api.renderDraft(id, card, store.edits.peek(), store.face.peek(), false, currentLists());
     if (seq !== renderSeq) {
       api.cancelRender(jobId);
       return;
@@ -182,6 +183,7 @@ async function render() {
     const img = $("ed-img");
     img.src = api.renderImageURL(jobId);
     store.shown.value = jobId;
+    store.shownDpi.value = dpi || 0;
     $("ed-canvas").hidden = false;
     $("ed-placeholder").hidden = true;
     loadLayout();
@@ -2323,6 +2325,49 @@ async function saveImage() {
   }
 }
 
+// savesAtFullSize says whether the card shown was drawn smaller than the layout's own resolution,
+// since a card drawn at it is the same picture either way and saving it needs no question
+function savesAtFullSize() {
+  const view = store.view.peek();
+  const shown = store.layout.peek();
+  const layout = view && shown && view.layouts.find((l) => l.name === shown.layout);
+  const dpi = store.shownDpi.peek();
+  return !!layout && !!dpi && dpi < layout.dpi;
+}
+
+// pressSave saves the picture of the card. When the preview is smaller than the layout it asks
+// whether to save it as shown, which is at once, or at full size, which draws the card again first
+function pressSave(anchor) {
+  if (!savesAtFullSize()) {
+    saveImage();
+    return;
+  }
+  const body = h(
+    "div",
+    { class: "menu", role: "menu" },
+    ...[
+      ["As shown", "Saves the preview as it is", saveImage],
+      ["At full size", "Draws the card again at the template's own resolution", renderFullSize],
+    ].map(([label, note, run]) =>
+      h(
+        "button",
+        {
+          class: "menu-item",
+          type: "button",
+          role: "menuitem",
+          title: note,
+          onclick: () => {
+            closePopover();
+            run();
+          },
+        },
+        label,
+      ),
+    ),
+  );
+  openPopover(anchor, body, { align: "end" });
+}
+
 // renderFullSize draws the test card at the resolution the layout is authored at, which the preview
 // is not, and asks where to put the picture. The preview and the card shown are left as they are
 let fullBusy = false;
@@ -2352,7 +2397,7 @@ async function renderFullSize() {
 
 function setFullBusy(on) {
   fullBusy = on;
-  const button = $("ed-render-full");
+  const button = $("ed-save-image");
   button.setAttribute("aria-busy", String(on));
   button.disabled = on || !store.shown.peek();
 }
@@ -2385,12 +2430,10 @@ function initView() {
     button.setAttribute("aria-pressed", String(on));
     button.replaceChildren(icon(on ? "eye" : "eye-off"));
   });
-  $("ed-save-image").addEventListener("click", saveImage);
-  $("ed-render-full").addEventListener("click", renderFullSize);
+  $("ed-save-image").addEventListener("click", (e) => pressSave(e.currentTarget));
   effect(() => {
     const none = !store.shown.value;
-    $("ed-save-image").disabled = none;
-    $("ed-render-full").disabled = none || fullBusy;
+    $("ed-save-image").disabled = none || fullBusy;
   });
   effect(() => {
     stage.classList.toggle("pan-mode", tool.pan.value || tool.space.value);
@@ -2503,7 +2546,7 @@ export function initEditor() {
   $("ed-layers").addEventListener("keydown", onLayersKey);
   $("ed-undo").addEventListener("click", undo);
   $("ed-redo").addEventListener("click", redo);
-  initAssets({ store, droppable: () => app.mode.peek() === "editor" && !!store.layout.peek() && store.layout.peek().editable && !document.querySelector("dialog[open]:not(#ed-drop-dialog)"), commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
+  initAssets({ store, commit, recordApplied, select, loadAssets, nameOf, itemOf, takenKeys, flushNudge });
   document.addEventListener("keydown", onKey);
   $("ed-credit-add").addEventListener("click", addCredit);
   $("ed-use").addEventListener("click", useTemplate);

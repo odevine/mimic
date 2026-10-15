@@ -75,6 +75,7 @@ System.SmokeResult(bool, string)
 System.Version() -> desktop.VersionInfo
 Templates.Active() -> templates.ActiveView
 Templates.Faces() -> []pipeline.FaceRow
+Templates.Import(templates.ImportRequest) -> templates.ImportResult !
 Templates.List() -> []templates.TemplateView
 Templates.Select(templates.SelectRequest) -> string !
 Templates.SetFace(templates.FaceChoice) -> []pipeline.FaceRow !
@@ -973,6 +974,21 @@ templates.FeatureView struct {
 	max float64 (omitempty)
 	step float64 (omitempty)
 	value any
+}
+
+templates.ImportRequest struct {
+	path string
+	replace bool
+}
+
+templates.ImportResult struct {
+	template string
+	version string
+	title string
+	same bool
+	replaced bool
+	exists bool
+	active bool
 }
 
 templates.SelectRequest struct {

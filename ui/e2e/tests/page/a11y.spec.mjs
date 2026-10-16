@@ -17,10 +17,6 @@ import { scenes } from "../../bridge/scenes.mjs";
 // says about it
 const generic = (target) => target.replace(/tbody\[data-id="\d+"\]/g, "tbody");
 
-// What axe finds depends on how the browser draws the page, so the scan is taken
-// in Chromium
-test.skip(({ browserName }) => browserName !== "chromium", "the scan is taken in Chromium");
-
 const allowlist = JSON.parse(await readFile(path.join(import.meta.dirname, "../../a11y-allowlist.json"), "utf8"));
 const used = new Set();
 const dump = new Map();
@@ -31,8 +27,16 @@ for (const theme of ["dark", "light"]) {
       bridge.reply("Settings.Get", { theme });
       await scene.run({ bridge, page });
       await page.evaluate(() => document.fonts.ready);
-      // A control still fading in is measured against a half-mixed color
-      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+      // A control still fading in is measured against a half-mixed color. A spinner never
+      // finishes, so only the animations that end are waited for
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+            .map((a) => a.finished.catch(() => {})),
+        ),
+      );
       const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
 
       const found = [];

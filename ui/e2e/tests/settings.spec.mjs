@@ -63,8 +63,12 @@ test("a font added to the folder can be given to a role, and says so when it goe
   await expect(settings.resetFonts).toBeHidden();
 });
 
-test("a font picked for a role is dropped when the settings are cancelled", async ({ settings, scratch }) => {
+test("a font dialog that is cancelled changes nothing, and a font picked for a role is dropped when the settings are", async ({ settings, scratch }) => {
   await settings.show();
+  await settings.addFont.click();
+  await expect(settings.fontsPool).toHaveCount(0);
+  await expect(settings.fontPick("Rules text").locator("option")).toHaveCount(1);
+
   await scratch.offer("Gotham-Medium.otf", FONT);
   await settings.addFont.click();
   await settings.fontPick("Rules text").selectOption("Gotham Medium");
@@ -72,11 +76,4 @@ test("a font picked for a role is dropped when the settings are cancelled", asyn
 
   await settings.show();
   await expect(settings.fontPick("Rules text")).toHaveValue("");
-});
-
-test("a font dialog that is cancelled changes nothing", async ({ settings }) => {
-  await settings.show();
-  await settings.addFont.click();
-  await expect(settings.fontsPool).toHaveCount(0);
-  await expect(settings.fontPick("Rules text").locator("option")).toHaveCount(1);
 });

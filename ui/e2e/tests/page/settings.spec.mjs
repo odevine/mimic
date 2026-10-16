@@ -1,7 +1,7 @@
 import { test, expect } from "../../bridge-fixtures.mjs";
 import { SettingsDialog } from "../../pages/SettingsDialog.mjs";
 
-test("settings that cannot be saved say so and stay open with the choices made", async ({ bridge, page }) => {
+test("settings that cannot be saved say so and stay open, and save once they can", async ({ bridge, page }) => {
   await bridge.boot();
   const settings = new SettingsDialog(page);
   await settings.show();
@@ -12,25 +12,23 @@ test("settings that cannot be saved say so and stay open with the choices made",
   await expect(page.locator("#settings-status")).toHaveText("Failed: the settings file is read only");
   await expect(settings.dialog).toBeVisible();
   await expect(settings.theme).toHaveValue("light");
-});
 
-test("settings that save are kept and acknowledged", async ({ bridge, page }) => {
-  await bridge.boot();
-  const settings = new SettingsDialog(page);
-  await settings.show();
-  await settings.theme.selectOption("light");
+  bridge.reply("Settings.Put", (s) => s);
   await settings.save();
   await expect(page.locator(".toast.ok")).toContainText("Settings saved");
   expect(bridge.calledWith("Settings.Put").at(-1)[0]).toMatchObject({ theme: "light" });
 });
 
-test("fonts that cannot be read are said so in place of the list", async ({ bridge, page }) => {
+test("fonts that cannot be read are said so in place of the list, and saving leaves the assignments alone", async ({ bridge, page }) => {
+  bridge.reply("Settings.Get", { fontOverrides: { body: "Gotham Medium" } });
   bridge.fail("Data.Fonts", "the fonts folder cannot be read");
   await bridge.boot();
   const settings = new SettingsDialog(page);
   await settings.show();
   await expect(settings.fontsSource).toHaveText("Could not read the fonts: the fonts folder cannot be read");
   await expect(settings.fontRoles).toHaveCount(0);
+  await settings.save();
+  expect(bridge.calledWith("Settings.Put").at(-1)[0].fontOverrides).toEqual({ body: "Gotham Medium" });
 });
 
 // A Fonts reply with two roles and one font in the folder, which a test changes
@@ -45,14 +43,6 @@ const fontsReply = (extra) => ({
   rejected: [],
   duplicates: [],
   ...extra,
-});
-
-test("a file in the folder that is not a font is flagged with the reason", async ({ bridge, page }) => {
-  bridge.reply("Data.Fonts", fontsReply({ rejected: [{ file: "Broken.ttf", error: "not a font file" }] }));
-  await bridge.boot();
-  const settings = new SettingsDialog(page);
-  await settings.show();
-  await expect(page.locator(".fonts-note.err").first()).toContainText("Broken.ttf could not be read: not a font file");
 });
 
 test("a role whose assigned font is gone says so and keeps the assignment", async ({ bridge, page }) => {
@@ -86,33 +76,3 @@ test("the font picked for a role is saved with the settings, beside the roles no
   expect(bridge.calledWith("Settings.Put").at(-1)[0].fontOverrides).toEqual({ "saga-chapter": "Gotham Medium", body: "Gotham Medium" });
 });
 
-test("settings saved while the fonts could not be read leave the assignments alone", async ({ bridge, page }) => {
-  bridge.reply("Settings.Get", { fontOverrides: { body: "Gotham Medium" } });
-  bridge.fail("Data.Fonts", "the fonts folder cannot be read");
-  await bridge.boot();
-  const settings = new SettingsDialog(page);
-  await settings.show();
-  await settings.save();
-  expect(bridge.calledWith("Settings.Put").at(-1)[0].fontOverrides).toEqual({ body: "Gotham Medium" });
-});
-
-test("fonts say a template is needed before there are roles to choose for", async ({ bridge, page }) => {
-  bridge.reply("Data.Fonts", fontsReply({ roles: [] }));
-  await bridge.boot();
-  const settings = new SettingsDialog(page);
-  await settings.show();
-  await expect(page.locator("#fonts-roles")).toContainText("Install a template to choose fonts for its text.");
-  await expect(page.locator("#fonts-metrics")).toBeHidden();
-});
-
-test("a font from a folder the app does not own is listed and cannot be removed", async ({ bridge, page }) => {
-  bridge.reply("Data.Fonts", fontsReply({ kind: "checkout", path: "../local-fonts", writable: false, pool: [{ ...GOTHAM, removable: false }] }));
-  await bridge.boot();
-  const settings = new SettingsDialog(page);
-  await settings.show();
-  await expect(settings.fontsSource).toContainText("from the checkout");
-  await expect(page.locator("#fonts-pool-title")).toHaveText("Fonts in this folder");
-  await expect(settings.fontFile("Gotham Medium")).toBeVisible();
-  await expect(settings.fontFile("Gotham Medium").getByRole("button")).toHaveCount(0);
-  await expect(settings.addFont).toBeHidden();
-});

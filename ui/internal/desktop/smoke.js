@@ -281,8 +281,16 @@ async function flows(outDir) {
       }
     });
     $("ed-json-close").click();
+    // The file can be read back before the page hears that the edit was made, and only
+    // then is there an edit to undo
+    await until("the lever's change to be undoable", () => !$("ed-undo").disabled);
     $("ed-undo").click();
-    await until("the lever's change to be undone", () => Number($("lever-fontSize").value) === was);
+    const undone = Date.now() + 20000;
+    while ((await sizeInFile()) !== was) {
+      if (Date.now() > undone) throw new Error("timed out waiting for the lever's change to be undone in the file");
+      await sleep(100);
+    }
+    await until("the lever's change to be undone", () => Number($("lever-fontSize").value) === was && $("ed-undo").disabled);
     notes.push("a lever edits the file and the JSON editor shows it");
 
     // A text box is added from the dialog, which is saved, locking it is kept with the

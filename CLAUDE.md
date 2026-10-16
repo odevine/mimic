@@ -61,11 +61,15 @@ answers each call into the app from a reply the test sets and sends the page its
 events, so they reach states the real app makes hard to reach, such as a render
 that fails, an update that errors or a lookup that stops partway. They start from
 replies captured from the real app in `e2e/bridge/replies.json`, and a test fails
-on a call no reply covers. `test:e2e:page` runs only them, in a few seconds. When
-a test in `e2e/tests/bridge-replies.spec.mjs` reports the captured replies are
-stale after a change to what the bridge returns, run `test:e2e:capture`. Reach
-for a page test when a state needs a reply the fake upstream cannot produce, and
-for a test against the test server when the real services should answer.
+on a call no reply covers. They run in Chromium only, since they check the page's
+logic and the tests against the test server cover WebKit. `test:e2e:page` runs
+only them, in a few seconds. When a test in `e2e/tests/bridge-replies.spec.mjs`
+reports the captured replies are stale after a change to what the bridge
+returns, run `test:e2e:capture`. Reach for a page test when a state needs a reply
+the fake upstream cannot produce, and for a test against the test server when
+only the real services can show the result, such as what is written to disk or
+what the engine draws. Most changes need one of the two or neither, and seldom
+both.
 
 Two more checks run from the same bridge scenes in `e2e/bridge/scenes.mjs`, the
 states of the page a reviewer would look at. `tests/page/a11y.spec.mjs` scans each
@@ -186,9 +190,9 @@ cannot open, such as a private design doc, and verify any URL you cite.
 
 ## Tests
 
-New behavior comes with a test next to the code. Go tests use the fixtures in the
-`*test` packages (`carddatatest`, `catalogtest`, `pipelinetest`,
-`workspacetest`) and run with the race detector. Frontend logic that does not
+New behavior comes with a test at the lowest layer that can catch it. Go tests
+use the fixtures in the `*test` packages (`carddatatest`, `catalogtest`,
+`pipelinetest`, `workspacetest`) and run with the race detector. Frontend logic that does not
 need a document is tested under `frontend/test` with the dependency-free Node
 runner and the Wails runtime stubbed. When a bug is fixed, the test should fail
 on the old code.
@@ -199,6 +203,20 @@ that crosses the bridge comes with the golden update described under
 architecture. Pure frontend logic, such as parsing, formatting or state, goes in
 a module that imports nothing from the document so it can be tested under
 `frontend/test`, and the part that builds elements stays thin.
+
+The Playwright suite is kept small, because each test costs a browser and
+seconds on every run. A Playwright test covers one user flow and checks each
+step of it, so a new requirement usually adds steps to the test for its flow
+rather than a test of its own. Look for that test before writing one. A new test
+earns its place when it reaches a flow or a failure that no existing test does,
+and a detail that a Go or Node test can check belongs there instead.
+
+How the page looks is not asserted in Playwright. Sizes, positions, colors,
+icons, the wording of labels and the order of panels are covered by the visual
+baselines and the accessibility scan, and a test that reads bounding boxes or
+computed styles to check a layout request is not added. When a change to the
+look of the page cannot be seen in a real window, look at it with
+`test:e2e:shot` and say in the hand-off what was checked that way.
 
 Report results faithfully. If a check fails or was skipped, say so with the
 output, and say which parts of a change were only exercised in tests.

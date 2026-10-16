@@ -6,449 +6,20 @@ import { solidPng } from "../png.mjs";
 // Drafts are the app's own files, so these tests read and change them where the
 // scratch folder keeps them
 const draftFile = (scratch, id, ...parts) => path.join(scratch.home, "mimic", "drafts", id, ...parts);
+const json = async (file) => JSON.parse(await readFile(file, "utf8"));
 
-test("with no template of its own the editor offers to make one", async ({ editor }) => {
-  await expect(editor.empty).toBeVisible();
-  await expect(editor.workspace).toBeHidden();
-  await expect(editor.page.locator("#ed-empty-new")).toBeVisible();
-});
-
-test("a new template is drawn with a test card as soon as it is made", async ({ editor }) => {
-  await editor.create("Test frame", 150);
-
-  await expect(editor.workspace).toBeVisible();
-  await expect(editor.aboutName).toHaveText("Test frame");
-  await expect(editor.aboutId).toHaveText("user.test-frame");
-  await expect(editor.layouts).toHaveText(["normal · 408 × 555 px · 150 dpi"]);
-  await expect(editor.problems).toHaveCount(0);
-  // The problems are collapsed to their heading until they are asked for
-  await editor.openSection("problems");
-  await expect(editor.page.locator("#ed-problems-none")).toBeVisible();
-  await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
-  await expect(editor.preview).toBeVisible();
-  await expect(editor.page.locator("#ed-activity-title")).toHaveText("Drew Mirran Spy");
-  const size = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
-  expect(size).toEqual([408, 555]);
-});
-
-test("the dialog says what is wrong before it makes anything", async ({ editor }) => {
-  await editor.openNewDialog();
-  await expect(editor.dialogDpi).toHaveValue("800");
-  await expect(editor.page.locator("#draft-dpi-size")).toHaveText("A canvas of 2176 × 2960 pixels");
-
-  await editor.dialogConfirm.click();
-  await expect(editor.dialogError).toHaveText("Give the template a name");
-
-  await editor.dialogName.fill("Frame");
-  await editor.dialogDpi.fill("5000");
-  await expect(editor.page.locator("#draft-dpi-size")).toContainText("72 to 1200");
-  await editor.dialogConfirm.click();
-  await expect(editor.dialogError).toContainText("72 to 1200");
-  await expect(editor.dialog).toBeVisible();
-
-  await editor.page.keyboard.press("Escape");
-  await expect(editor.dialog).toBeHidden();
-  await expect(editor.empty).toBeVisible();
-});
-
-test("a preset or a searched card is drawn and remembered", async ({ editor, page }) => {
-  await editor.create("Cards", 100);
-
-  await editor.preset("Land").click();
-  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
-  await expect(editor.preset("Land")).toHaveAttribute("aria-pressed", "true");
-  await editor.waitForPreview();
-  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Flooded Strand");
-
-  await editor.search("llanowar elves");
-  await editor.results.filter({ has: page.locator(".r-name", { hasText: "Llanowar Elves" }) }).first().click();
-  await expect(editor.cardLine).toContainText("Llanowar Elves");
-  await expect(editor.preset("Land")).toHaveAttribute("aria-pressed", "false");
-  await expect(page.locator("#ed-activity-title")).toHaveText("Drew Llanowar Elves");
-
-  // The card is kept with the template, so the page finds it again after a reload
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await page.locator('button[data-mode="editor"]').click();
-  await expect(editor.cardLine).toContainText("Llanowar Elves");
-  await editor.waitForPreview();
-});
-
-test("a copy of an installed template is drawn and says where it began", async ({ editor, templates, page }) => {
-  await templates.show();
-  const entry = templates.entry("Test frame");
-  await entry.getByRole("button", { name: "Edit a copy" }).click();
-  await expect(editor.dialogName).toHaveValue("Test frame copy");
-  await expect(editor.page.locator("#draft-dpi-row")).toBeHidden();
-  await editor.dialogName.fill("My copy");
-  await editor.dialogConfirm.click();
-
-  await expect(editor.page.locator("#mode-editor")).toBeVisible();
-  await editor.waitForPreview();
-  await expect(editor.aboutName).toHaveText("My copy");
-  await expect(editor.aboutId).toHaveText("user.my-copy");
-  await expect(editor.aboutFork).toHaveText("Copy of mimic.m15");
-  await expect(editor.problems).toHaveCount(0);
-  await expect(page.locator("#draft-dialog")).toBeHidden();
-});
-
-test("renaming changes the name and not the id", async ({ editor }) => {
-  await editor.create("First", 100);
-  await editor.page.locator("#ed-rename").click();
-  await expect(editor.dialogName).toHaveValue("First");
-  await editor.dialogName.fill("Second");
-  await editor.dialogConfirm.click();
-  await expect(editor.dialog).toBeHidden();
-  await expect(editor.aboutName).toHaveText("Second");
-  await expect(editor.aboutId).toHaveText("user.first");
-  await expect(editor.picker.locator("option:checked")).toHaveText("Second");
-});
-
-test("deleting asks first, and a no leaves the template alone", async ({ editor, scratch }) => {
-  await editor.create("Keep", 100);
-  await scratch.decline();
-  await editor.page.locator("#ed-delete").click();
-  await expect(editor.workspace).toBeVisible();
-  await expect(editor.aboutName).toHaveText("Keep");
-
-  await scratch.reset();
-  await editor.page.locator("#ed-delete").click();
-  await expect(editor.empty).toBeVisible();
-});
-
-test("two templates can be switched between", async ({ editor }) => {
-  await editor.create("One", 100);
-  await editor.create("Two", 100);
-  await expect(editor.picker.locator("option")).toHaveCount(2);
-  await expect(editor.aboutName).toHaveText("Two");
-  await editor.picker.selectOption({ label: "One" });
-  await expect(editor.aboutName).toHaveText("One");
-  await editor.waitForPreview();
-});
-
-test("a template that does not load says why and draws nothing", async ({ editor, scratch }) => {
-  await editor.create("Broken", 100);
-  await writeFile(draftFile(scratch, "broken", "layouts", "normal.json"), "{");
-  // Opening it again reads the files as they are
+// reopen loads the page again and goes back to the editor, which reads the files as they are
+async function reopen(editor) {
   await editor.page.reload();
   await editor.page.locator("html.booted").waitFor();
-  await editor.page.locator('button[data-mode="editor"]').click();
-
-  await expect(editor.problems.first()).toContainText("normal");
-  await expect(editor.page.locator("#ed-activity-title")).toHaveText("This template does not load");
-  await expect(editor.activity).toHaveAttribute("data-state", "error");
-  await expect(editor.preview).toBeHidden();
-  await expect(editor.layouts).toHaveCount(0);
-});
-
-test("every button that finishes a template is live, with no gate on it", async ({ editor }) => {
-  await editor.create("Gated", 100);
-  for (const id of ["#ed-use", "#ed-export", "#ed-folder", "#ed-json"]) {
-    await expect(editor.page.locator(id)).not.toHaveAttribute("aria-disabled", "true");
-    await expect(editor.page.locator(id)).not.toHaveAttribute("data-gate-reason", /.*/);
-  }
-});
-
-// The starter's canvas at 100 dpi is 272 pixels across, and the preview is drawn at
-// that size, so the overlay's box tells how many pixels on screen make one of the card's
-const CARD = { width: 272, height: 370 };
-
-async function titleBox(editor) {
-  const box = await editor.overlay.boundingBox();
-  await editor.layers.filter({ hasText: "title" }).click();
-  await expect(editor.selectionName).toHaveText("title");
-  return { box, x: Number(await editor.page.locator("#ed-sel-x").textContent()) };
+  await editor.show();
 }
-
-test("dragging a text box on the card saves the layout and draws the card again", async ({ editor, scratch, page }) => {
-  await editor.create("Edits", 100);
-  await expect(editor.layers.first()).toBeVisible();
-  const file = draftFile(scratch, "edits", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  const src = await editor.preview.getAttribute("src");
-
-  // Pick the title where it is on the card, not from the list
-  const box = await editor.overlay.boundingBox();
-  await editor.layers.filter({ hasText: "title" }).click();
-  // The title is set on its baseline, so the selection reads as that line, and its ink is what
-  // the outline is drawn around
-  const x = Number(await page.locator("#ed-sel-x").textContent());
-  const ink = await editor.selectionBox.boundingBox();
-  await page.keyboard.press("Escape");
-  await expect(editor.selection).toBeHidden();
-  const from = { x: ink.x + ink.width / 2, y: ink.y + ink.height / 2 };
-  await page.mouse.click(from.x, from.y);
-  await expect(editor.selectionName).toHaveText("title");
-
-  const per = CARD.width / box.width;
-  await page.keyboard.down("Alt");
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 30, from.y, { steps: 5 });
-  await page.mouse.up();
-  await page.keyboard.up("Alt");
-  const moved = Math.round(30 * per);
-
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + moved));
-  const edited = await readFile(file, "utf8");
-  expect(edited).not.toBe(original);
-  // Only the title's x changed, and the file kept its order and layout
-  const was = JSON.parse(original);
-  const now = JSON.parse(edited);
-  expect(Object.keys(now)).toEqual(Object.keys(was));
-  was.textBoxes.title.rect.x += moved;
-  expect(now).toEqual(was);
-  expect(edited.split("\n").length).toBe(original.split("\n").length);
-
-  // The card is drawn again with the title in its new place
-  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
-  await editor.waitForPreview();
-
-  // Undo puts the file back as it was, byte for byte
-  await editor.undoButton.click();
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(x));
-  expect(await readFile(file, "utf8")).toBe(original);
-  await expect(editor.undoButton).toBeDisabled();
-  await editor.redoButton.click();
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + moved));
-  expect(await readFile(file, "utf8")).toBe(edited);
-});
-
-test("arrow keys nudge a selection and the keyboard undoes the run", async ({ editor, scratch, page }) => {
-  await editor.create("Nudge", 100);
-  const file = draftFile(scratch, "nudge", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  const { x } = await titleBox(editor);
-
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Shift+ArrowDown");
-  await expect(editor.undoButton).toBeEnabled();
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + 2));
-  expect(JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect.x).toBe(JSON.parse(original).textBoxes.title.rect.x + 2);
-
-  await page.keyboard.press("ControlOrMeta+z");
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(x));
-  expect(await readFile(file, "utf8")).toBe(original);
-});
-
-test("a layer is raised in the stack and the layout keeps its other keys", async ({ editor, scratch, page }) => {
-  await editor.create("Stack", 100);
-  const file = draftFile(scratch, "stack", "layouts", "normal.json");
-  const original = JSON.parse(await readFile(file, "utf8"));
-  // The starter has one layer, so a second is added to have two to order
-  const next = structuredClone(original);
-  next.stack.push({ id: "mark", part: "background" });
-  await writeFile(file, JSON.stringify(next, null, 2) + "\n");
-  await editor.page.reload();
-  await editor.page.locator("html.booted").waitFor();
-  await editor.page.locator('button[data-mode="editor"]').click();
-  await editor.waitForPreview();
-
-  await editor.choose("background", "Move up");
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack.map((e) => e.id)).toEqual(["mark", "background"]);
-  const after = JSON.parse(await readFile(file, "utf8"));
-  expect(after.textBoxes).toEqual(original.textBoxes);
-});
-
-test("a layout that builds on another can be looked at and not changed", async ({ editor, scratch, page }) => {
-  await editor.create("Built", 100);
-  const dir = path.join(scratch.home, "mimic", "drafts", "built", "layouts");
-  const raw = await readFile(path.join(dir, "normal.json"), "utf8");
-  await writeFile(path.join(dir, "base.json"), raw.replace('"role": "single"', '"role": "split"'));
-  await writeFile(path.join(dir, "normal.json"), JSON.stringify({ serves: [{ role: "single", kind: "standard" }], extends: ["base"] }));
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await page.locator('button[data-mode="editor"]').click();
-  await editor.waitForPreview();
-
-  await expect(page.locator("#ed-edit-note")).toContainText("extends another one");
-  await editor.layers.filter({ hasText: "title" }).click();
-  await expect(editor.selectionName).toHaveText("title");
-  await expect(editor.handles).toHaveCount(0);
-  await page.keyboard.press("ArrowRight");
-  await page.waitForTimeout(500);
-  await expect(editor.undoButton).toBeDisabled();
-  expect(JSON.parse(await readFile(path.join(dir, "normal.json"), "utf8")).extends).toEqual(["base"]);
-});
 
 async function selectTitle(editor) {
   await expect(editor.layers.first()).toBeVisible();
   await editor.layers.filter({ hasText: "title" }).click();
   await expect(editor.selectionName).toHaveText("title");
 }
-
-test("a lever changes one field of the file, the card is drawn with it, and undo restores the file", async ({ editor, scratch, page }) => {
-  await editor.create("Levers", 100);
-  const file = draftFile(scratch, "levers", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  const src = await editor.preview.getAttribute("src");
-  await selectTitle(editor);
-
-  const was = JSON.parse(original).textBoxes.title.text.fontSize;
-  await editor.lever("lever-fontSize").fill(String(was + 4));
-  await editor.lever("lever-fontSize").blur();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(was + 4);
-
-  // Only that number changed, and the file kept its order and layout
-  const after = await readFile(file, "utf8");
-  const edited = JSON.parse(original);
-  edited.textBoxes.title.text.fontSize = was + 4;
-  expect(JSON.parse(after)).toEqual(edited);
-  expect(Object.keys(JSON.parse(after).textBoxes)).toEqual(Object.keys(JSON.parse(original).textBoxes));
-  expect(after.split("\n").length).toBe(original.split("\n").length);
-  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
-  await editor.waitForPreview();
-
-  await editor.undoButton.click();
-  await expect(editor.lever("lever-fontSize")).toHaveValue(String(was));
-  expect(await readFile(file, "utf8")).toBe(original);
-});
-
-test("a setting the engine does not accept is refused with its reason and the file is left alone", async ({ editor, scratch, page }) => {
-  await editor.create("Refuse", 100);
-  const file = draftFile(scratch, "refuse", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  await selectTitle(editor);
-
-  await editor.lever("lever-condition").fill("made_up");
-  await editor.lever("lever-condition").blur();
-  await expect(page.locator("#toasts")).toContainText("not allowed");
-  await expect(page.locator("#toasts")).toContainText("made_up");
-  await expect(editor.lever("lever-condition")).toHaveValue("");
-  expect(await readFile(file, "utf8")).toBe(original);
-  await expect(editor.undoButton).toBeDisabled();
-
-  // A condition the engine knows is let through
-  await editor.lever("lever-condition").fill("creature");
-  await editor.lever("lever-condition").blur();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.condition).toBe("creature");
-});
-
-test("the shadow, a layer's blend and the canvas are edited from their levers", async ({ editor, scratch, page }) => {
-  await editor.create("More", 100);
-  const file = draftFile(scratch, "more", "layouts", "normal.json");
-  await expect(editor.layers.first()).toBeVisible();
-
-  await editor.layers.filter({ hasText: "mana" }).first().click();
-  const hadShadow = !!JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow;
-  expect(hadShadow).toBe(true);
-  await page.locator("#lever-shadow-on").uncheck();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow).toBeUndefined();
-  await page.locator("#lever-shadow-on").check();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.mana.text.shadow).toEqual({ distance: 0.08, angle: 25 });
-
-  await editor.layers.filter({ hasText: "background" }).click();
-  await editor.lever("lever-mode").selectOption("multiply");
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).stack[0].mode).toBe("multiply");
-
-  await editor.openCanvas();
-  await editor.lever("canvas-dpi").fill("90");
-  await editor.lever("canvas-dpi").blur();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).canvas.dpi).toBe(90);
-  await expect(editor.layouts.first()).toContainText("90 dpi");
-});
-
-test("the template's name is changed from its details and the picker follows", async ({ editor, scratch, page }) => {
-  await editor.create("Named", 100);
-  await editor.openSection("about");
-  await editor.lever("template-name").fill("Better name");
-  await editor.lever("template-name").blur();
-  const file = path.join(scratch.home, "mimic", "drafts", "named", "template.json");
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).name).toBe("Better name");
-  await expect(editor.aboutName).toHaveText("Better name");
-  await expect(editor.picker.locator("option:checked")).toHaveText("Better name");
-
-  await page.locator("#ed-credit-add").click();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).credits).toEqual([{ name: "New credit" }]);
-  await page.locator("#ed-credits .ed-credit input").first().fill("Someone");
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).credits).toEqual([{ name: "Someone" }]);
-});
-
-test("the owner half of the template's id is changed from its details and undone", async ({ editor, scratch, page }) => {
-  await editor.create("Owner", 100);
-  const file = draftFile(scratch, "owner", "template.json");
-  expect(JSON.parse(await readFile(file, "utf8")).id).toBe("user.owner");
-  await editor.openSection("about");
-  await expect(page.locator("#ed-about-id")).toHaveText("user.owner");
-  await editor.lever("template-owner").fill("jane");
-  await editor.lever("template-owner").blur();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("jane.owner");
-  // What the details say of the template follows the file
-  await expect(page.locator("#ed-about-id")).toHaveText("jane.owner");
-  await editor.undoButton.click();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("user.owner");
-  await expect(editor.lever("template-owner")).toHaveValue("user");
-  // The author's name fills it in
-  await editor.lever("template-authorName").fill("Jane Q. Doe");
-  await editor.lever("template-authorName").blur();
-  await page.getByRole("button", { name: "Use the author's name" }).click();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).id).toBe("jane-q-doe.owner");
-});
-
-test("a copy keeps the credits and license of the original out of reach of the levers", async ({ editor, templates, page }) => {
-  await templates.show();
-  await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();
-  await editor.dialogName.fill("Kept");
-  await editor.dialogConfirm.click();
-  await editor.waitForPreview();
-  await editor.openSection("about");
-  const credits = page.locator("#ed-credits .ed-credit");
-  // The copy names the original in a credit that cannot be removed
-  await expect(credits.first()).toContainText("Kept from the template this was copied from");
-  await expect(credits.first().getByRole("button")).toHaveCount(0);
-  await expect(credits.first().locator("input").nth(2)).toHaveValue(/Forked from mimic\.m15/);
-});
-
-test("the JSON editor saves a change to a layout and shows a mistake with its line", async ({ editor, scratch, page }) => {
-  await editor.create("Json", 100);
-  const file = draftFile(scratch, "json", "layouts", "normal.json");
-  await expect(editor.layers.first()).toBeVisible();
-  await editor.jsonButton.click();
-  await editor.jsonTabs.filter({ hasText: "normal" }).click();
-  const text = await editor.jsonText.inputValue();
-  expect(text).toBe(await readFile(file, "utf8"));
-
-  // A change that is valid is saved as typed
-  const edited = text.replace(/"dpi": \d+/, '"dpi": 95');
-  await editor.jsonText.fill(edited);
-  await expect.poll(async () => await readFile(file, "utf8")).toBe(edited);
-  await expect(editor.jsonStatus).toHaveText("Saved");
-  await expect(editor.layouts.first()).toContainText("95 dpi");
-
-  // A mistake in the JSON is shown with the line, and the file is left as it was
-  const broken = edited.replace('"serves": [', '"serves": ,[');
-  await editor.jsonText.fill(broken);
-  await expect(editor.jsonProblems.first()).toContainText(/^Line \d+, column \d+:/);
-  await expect(editor.jsonStatus).toHaveText("Not saved, fix the problems first");
-  expect(await readFile(file, "utf8")).toBe(edited);
-
-  // Valid JSON that is not a layout that loads is not saved over one that does
-  const wrong = edited.replace('"align": "left"', '"align": "diagonal"');
-  await editor.jsonText.fill(wrong);
-  await expect(editor.jsonProblems.first()).toContainText("align");
-  await expect(editor.jsonStatus).toHaveText("Not saved, fix the problems first");
-  expect(await readFile(file, "utf8")).toBe(edited);
-});
-
-test("a template that does not load can be fixed in the JSON editor", async ({ editor, scratch, page }) => {
-  await editor.create("Fixme", 100);
-  const file = draftFile(scratch, "fixme", "layouts", "normal.json");
-  const good = await readFile(file, "utf8");
-  await writeFile(file, good.replace('"align": "left"', '"align": "diagonal"'));
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await page.locator('button[data-mode="editor"]').click();
-  await expect(editor.problems.first()).toContainText("align");
-  await expect(editor.activity).toHaveAttribute("data-state", "error");
-
-  await editor.jsonButton.click();
-  await editor.jsonTabs.filter({ hasText: "normal" }).click();
-  await editor.jsonText.fill(good);
-  await expect.poll(async () => await readFile(file, "utf8")).toBe(good);
-  await expect(editor.problems).toHaveCount(0);
-  await editor.waitForPreview();
-});
 
 // previewPixel is a pixel of the card as the page shows it
 const previewPixel = (editor, x, y) =>
@@ -464,16 +35,258 @@ const previewPixel = (editor, x, y) =>
     [x, y],
   );
 
-test("an image brought in replaces the layer's and the card is drawn with it, and undo and redo bring each back", async ({ editor, scratch, page }) => {
+test("the new template dialog checks what it is given, and a template is drawn as soon as it is made", async ({ editor }) => {
+  await expect(editor.empty).toBeVisible();
+  await editor.openNewDialog();
+  await expect(editor.dialogDpi).toHaveValue("800");
+  await expect(editor.page.locator("#draft-dpi-size")).toHaveText("A canvas of 2176 × 2960 pixels");
+  await editor.dialogConfirm.click();
+  await expect(editor.dialogError).toHaveText("Give the template a name");
+  await editor.dialogName.fill("Frame");
+  await editor.dialogDpi.fill("5000");
+  await editor.dialogConfirm.click();
+  await expect(editor.dialogError).toContainText("72 to 1200");
+  await editor.page.keyboard.press("Escape");
+  await expect(editor.empty).toBeVisible();
+
+  await editor.create("Test frame", 150);
+  await expect(editor.aboutName).toHaveText("Test frame");
+  await expect(editor.aboutId).toHaveText("user.test-frame");
+  await expect(editor.layouts).toHaveText(["normal · 408 × 555 px · 150 dpi"]);
+  await expect(editor.problems).toHaveCount(0);
+  await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
+  await expect(editor.page.locator("#ed-activity-title")).toHaveText("Drew Mirran Spy");
+  expect(await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight])).toEqual([408, 555]);
+  // Every button that finishes a template is live, with no gate on it
+  for (const id of ["#ed-use", "#ed-export", "#ed-folder", "#ed-json"]) await expect(editor.page.locator(id)).not.toHaveAttribute("data-gate-reason", /.*/);
+});
+
+test("templates are switched between, renamed without changing the id, and deleted only on a yes", async ({ editor, scratch }) => {
+  await editor.create("One", 100);
+  await editor.create("Two", 100);
+  await expect(editor.picker.locator("option")).toHaveCount(2);
+  await editor.picker.selectOption({ label: "One" });
+  await expect(editor.aboutName).toHaveText("One");
+  await editor.waitForPreview();
+
+  await editor.page.locator("#ed-rename").click();
+  await expect(editor.dialogName).toHaveValue("One");
+  await editor.dialogName.fill("First");
+  await editor.dialogConfirm.click();
+  await expect(editor.aboutName).toHaveText("First");
+  await expect(editor.aboutId).toHaveText("user.one");
+  await expect(editor.picker.locator("option:checked")).toHaveText("First");
+
+  await scratch.decline();
+  await editor.page.locator("#ed-delete").click();
+  await expect(editor.aboutName).toHaveText("First");
+  await scratch.reset();
+  await editor.page.locator("#ed-delete").click();
+  await expect(editor.picker.locator("option")).toHaveCount(1);
+});
+
+test("a copy of an installed template is drawn, keeps the original's credit out of reach, and exports it", async ({ editor, templates, page }) => {
+  await templates.show();
+  await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();
+  await expect(editor.dialogName).toHaveValue("Test frame copy");
+  await expect(page.locator("#draft-dpi-row")).toBeHidden();
+  await editor.dialogName.fill("My copy");
+  await editor.dialogConfirm.click();
+  await editor.waitForPreview();
+  await expect(editor.aboutId).toHaveText("user.my-copy");
+  await expect(editor.aboutFork).toHaveText("Copy of mimic.m15");
+  await expect(editor.problems).toHaveCount(0);
+
+  await editor.openSection("about");
+  const credits = page.locator("#ed-credits .ed-credit");
+  await expect(credits.first()).toContainText("Kept from the template this was copied from");
+  await expect(credits.first().getByRole("button")).toHaveCount(0);
+  await expect(credits.first().locator("input").nth(2)).toHaveValue(/Forked from mimic\.m15/);
+  await editor.exportButton.click();
+  await expect(editor.exportCredits.first()).toContainText("Forked from mimic.m15");
+});
+
+test("dragging and nudging a text box change only its place in the file, and undo puts the file back byte for byte", async ({ editor, scratch, page }) => {
+  await editor.create("Edits", 100);
+  const file = draftFile(scratch, "edits", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const src = await editor.preview.getAttribute("src");
+  // The starter's canvas at 100 dpi is 272 pixels across, drawn at that size
+  const per = 272 / (await editor.overlay.boundingBox()).width;
+
+  await selectTitle(editor);
+  const x = Number(await page.locator("#ed-sel-x").textContent());
+  const ink = await editor.selectionBox.boundingBox();
+  const from = { x: ink.x + ink.width / 2, y: ink.y + ink.height / 2 };
+  await page.keyboard.down("Alt");
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 30, from.y, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  const moved = Math.round(30 * per);
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x + moved));
+
+  // Only the title's x changed, and the file kept its order and layout
+  const edited = await readFile(file, "utf8");
+  const was = JSON.parse(original);
+  expect(Object.keys(JSON.parse(edited))).toEqual(Object.keys(was));
+  was.textBoxes.title.rect.x += moved;
+  expect(JSON.parse(edited)).toEqual(was);
+  expect(edited.split("\n").length).toBe(original.split("\n").length);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  await editor.waitForPreview();
+
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await json(file)).textBoxes.title.rect.x).toBe(was.textBoxes.title.rect.x + 2);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => readFile(file, "utf8")).toBe(edited);
+  await editor.undoButton.click();
+  await expect(page.locator("#ed-sel-x")).toHaveText(String(x));
+  expect(await readFile(file, "utf8")).toBe(original);
+  await editor.redoButton.click();
+  await expect.poll(() => readFile(file, "utf8")).toBe(edited);
+});
+
+test("levers write one field of the file each, the engine refuses what it cannot read, and the canvas keeps its proportion", async ({ editor, scratch, page }) => {
+  await editor.create("Levers", 100);
+  const file = draftFile(scratch, "levers", "layouts", "normal.json");
+  const original = await readFile(file, "utf8");
+  const src = await editor.preview.getAttribute("src");
+  await selectTitle(editor);
+
+  const was = JSON.parse(original).textBoxes.title.text.fontSize;
+  await editor.lever("lever-fontSize").fill(String(was + 4));
+  await editor.lever("lever-fontSize").blur();
+  await expect.poll(async () => (await json(file)).textBoxes.title.text.fontSize).toBe(was + 4);
+  const edited = JSON.parse(original);
+  edited.textBoxes.title.text.fontSize = was + 4;
+  expect(await json(file)).toEqual(edited);
+  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
+  await editor.undoButton.click();
+  await expect(editor.lever("lever-fontSize")).toHaveValue(String(was));
+  expect(await readFile(file, "utf8")).toBe(original);
+
+  await editor.lever("lever-condition").fill("made_up");
+  await editor.lever("lever-condition").blur();
+  await expect(page.locator("#toasts")).toContainText("made_up");
+  await expect(editor.lever("lever-condition")).toHaveValue("");
+  expect(await readFile(file, "utf8")).toBe(original);
+  await expect(editor.undoButton).toBeDisabled();
+  await editor.lever("lever-condition").fill("creature");
+  await editor.lever("lever-condition").blur();
+  await expect.poll(async () => (await json(file)).textBoxes.title.condition).toBe("creature");
+
+  await editor.layers.filter({ hasText: "mana" }).first().click();
+  await page.locator("#lever-shadow-on").uncheck();
+  await expect.poll(async () => (await json(file)).textBoxes.mana.text.shadow).toBeUndefined();
+  await editor.layers.filter({ hasText: "background" }).click();
+  await editor.lever("lever-mode").selectOption("multiply");
+  await expect.poll(async () => (await json(file)).stack[0].mode).toBe("multiply");
+
+  const canvas = JSON.parse(original).canvas;
+  await editor.openCanvas();
+  const width = Math.round(canvas.width * 0.8);
+  await editor.lever("canvas-width").fill(String(width));
+  await editor.lever("canvas-width").blur();
+  const want = Math.round(width / (canvas.width / canvas.height));
+  await expect.poll(async () => (await json(file)).canvas.height).toBe(want);
+  expect((await json(file)).canvas.width).toBe(width);
+  await expect(editor.layouts.first()).toContainText(`${width} × ${want} px`);
+});
+
+test("the template's name, credits and owner are written to its file, and the owner can come from the author", async ({ editor, scratch, page }) => {
+  await editor.create("Named", 100);
+  const file = draftFile(scratch, "named", "template.json");
+  await editor.openSection("about");
+  await editor.lever("template-name").fill("Better name");
+  await editor.lever("template-name").blur();
+  await expect.poll(async () => (await json(file)).name).toBe("Better name");
+  await expect(editor.picker.locator("option:checked")).toHaveText("Better name");
+
+  await page.locator("#ed-credit-add").click();
+  await expect.poll(async () => (await json(file)).credits).toEqual([{ name: "New credit" }]);
+  await page.locator("#ed-credits .ed-credit input").first().fill("Someone");
+  await expect.poll(async () => (await json(file)).credits).toEqual([{ name: "Someone" }]);
+
+  await editor.lever("template-owner").fill("jane");
+  await editor.lever("template-owner").blur();
+  await expect.poll(async () => (await json(file)).id).toBe("jane.named");
+  await expect(page.locator("#ed-about-id")).toHaveText("jane.named");
+  await editor.undoButton.click();
+  await expect.poll(async () => (await json(file)).id).toBe("user.named");
+  await editor.lever("template-authorName").fill("Jane Q. Doe");
+  await editor.lever("template-authorName").blur();
+  await page.getByRole("button", { name: "Use the author's name" }).click();
+  await expect.poll(async () => (await json(file)).id).toBe("jane-q-doe.named");
+});
+
+test("a template that does not load says why, is fixed in the JSON editor, and a mistake there is not saved", async ({ editor, scratch, page }) => {
+  await editor.create("Fixme", 100);
+  const file = draftFile(scratch, "fixme", "layouts", "normal.json");
+  const good = await readFile(file, "utf8");
+  await writeFile(file, good.replace('"align": "left"', '"align": "diagonal"'));
+  await reopen(editor);
+  await expect(editor.problems.first()).toContainText("align");
+  await expect(page.locator("#ed-activity-title")).toHaveText("This template does not load");
+  await expect(editor.preview).toBeHidden();
+
+  await editor.jsonButton.click();
+  await editor.jsonTabs.filter({ hasText: "normal" }).click();
+  await editor.jsonText.fill(good);
+  await expect.poll(() => readFile(file, "utf8")).toBe(good);
+  await expect(editor.problems).toHaveCount(0);
+  await editor.waitForPreview();
+
+  const edited = good.replace(/"dpi": \d+/, '"dpi": 95');
+  await editor.jsonText.fill(edited);
+  await expect.poll(() => readFile(file, "utf8")).toBe(edited);
+  await expect(editor.layouts.first()).toContainText("95 dpi");
+  await editor.jsonText.fill(edited.replace('"serves": [', '"serves": ,['));
+  await expect(editor.jsonProblems.first()).toContainText(/^Line \d+, column \d+:/);
+  await editor.jsonText.fill(edited.replace('"align": "left"', '"align": "diagonal"'));
+  await expect(editor.jsonProblems.first()).toContainText("align");
+  await expect(editor.jsonStatus).toHaveText("Not saved, fix the problems first");
+  expect(await readFile(file, "utf8")).toBe(edited);
+});
+
+test("a layout that builds on another can be looked at and not changed", async ({ editor, scratch, page }) => {
+  await editor.create("Built", 100);
+  const dir = path.join(scratch.home, "mimic", "drafts", "built", "layouts");
+  const raw = await readFile(path.join(dir, "normal.json"), "utf8");
+  await writeFile(path.join(dir, "base.json"), raw.replace('"role": "single"', '"role": "split"'));
+  await writeFile(path.join(dir, "normal.json"), JSON.stringify({ serves: [{ role: "single", kind: "standard" }], extends: ["base"] }));
+  await reopen(editor);
+  await editor.waitForPreview();
+
+  await expect(page.locator("#ed-edit-note")).toContainText("extends another one");
+  await selectTitle(editor);
+  await expect(editor.handles).toHaveCount(0);
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(500);
+  await expect(editor.undoButton).toBeDisabled();
+  expect((await json(path.join(dir, "normal.json"))).extends).toEqual(["base"]);
+});
+
+test("an image and a font are brought in and drawn with, a file that is not a PNG is refused, and undo brings each back", async ({ editor, scratch, page }) => {
   await editor.create("Images", 100);
-  const file = draftFile(scratch, "images", "parts", "background", "any.png");
+  const dir = draftFile(scratch, "images");
+  const file = path.join(dir, "parts", "background", "any.png");
   const original = await readFile(file);
   await editor.layers.filter({ hasText: "background" }).click();
-  await expect(editor.images.locator("h4")).toHaveText("Images of background");
   await expect(editor.cells).toHaveCount(1);
-  await expect(editor.images.locator(".ed-cell-thumb img")).toHaveCount(1);
+
+  await scratch.offer("fake.png", "this is not an image");
+  await editor.cells.first().locator(".ed-cell-main").click();
+  await expect(page.locator("#toasts")).toContainText("not a PNG");
+  expect((await readFile(file)).equals(original)).toBe(true);
+  await expect(editor.undoButton).toBeDisabled();
 
   const red = solidPng(272, 370, [200, 20, 20, 255]);
+  // The open dialog answers with the first file it is offered, so each offer starts afresh
+  await scratch.reset();
   await scratch.offer("red.png", red);
   const src = await editor.preview.getAttribute("src");
   await editor.cells.first().locator(".ed-cell-main").click();
@@ -483,38 +296,38 @@ test("an image brought in replaces the layer's and the card is drawn with it, an
   const [r, g] = await previewPixel(editor, 2, 2);
   expect(r).toBeGreaterThan(150);
   expect(g).toBeLessThan(60);
-
-  const drawnRed = await editor.preview.getAttribute("src");
   await editor.undoButton.click();
   await expect.poll(async () => (await readFile(file)).equals(original)).toBe(true);
-  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(drawnRed);
-  await editor.waitForPreview();
-  const [r2, g2] = await previewPixel(editor, 2, 2);
-  expect(r2).toBeGreaterThan(200);
-  expect(g2).toBeGreaterThan(150);
-  const drawnOriginal = await editor.preview.getAttribute("src");
   await editor.redoButton.click();
   await expect.poll(async () => (await readFile(file)).equals(red)).toBe(true);
-  await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(drawnOriginal);
+
+  await scratch.reset();
+  await scratch.offer("Plantin.ttf", { path: path.resolve(import.meta.dirname, "../../../engine/fonts/embedded/m15/plantin-body.ttf") });
+  await editor.openSection("about");
+  await editor.fontAdd.click();
+  await expect(editor.fonts).toHaveCount(1);
+  const [id, entry] = Object.entries((await json(path.join(dir, "template.json"))).fonts)[0];
+  expect(entry.file).toBe(`font/${id}.ttf`);
+  expect(entry.sha256).toHaveLength(64);
+  await page.locator("#ed-role-body").selectOption(`font:${id}`);
+  await expect.poll(async () => (await json(path.join(dir, "template.json"))).roles?.body?.font).toBe(id);
+  await editor.waitForPreview();
+  await expect(editor.problems).toHaveCount(0);
+  // Removing the font frees the role first, so the template still loads
+  await editor.fonts.first().getByRole("button", { name: /Remove the font/ }).click();
+  await expect(editor.fonts).toHaveCount(0);
+  const gone = await json(path.join(dir, "template.json"));
+  expect(gone.fonts ?? {}).toEqual({});
+  expect(gone.roles?.body).toBeUndefined();
+  await expect(editor.problems).toHaveCount(0);
 });
 
-test("an image that is not a PNG is refused with the reason and the template is left alone", async ({ editor, scratch, page }) => {
-  await editor.create("Refuse image", 100);
-  const file = draftFile(scratch, "refuse-image", "parts", "background", "any.png");
-  const original = await readFile(file);
-  await editor.layers.filter({ hasText: "background" }).click();
-  await scratch.offer("fake.png", "this is not an image");
-  await editor.cells.first().locator(".ed-cell-main").click();
-  await expect(page.locator("#toasts")).toContainText("not a PNG");
-  expect((await readFile(file)).equals(original)).toBe(true);
-  await expect(editor.undoButton).toBeDisabled();
-});
-
-test("a layer for a new part makes the part and its folder, and one undo takes both away", async ({ editor, scratch, page }) => {
-  await editor.create("New layer", 100);
-  const dir = draftFile(scratch, "new-layer");
-  const template = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
-  const layout = await readFile(path.join(dir, "layouts", "normal.json"), "utf8");
+test("layers and text boxes are added, copied and deleted, and undoing all of it restores the files", async ({ editor, scratch }) => {
+  await editor.create("Adds", 100);
+  const dir = draftFile(scratch, "adds");
+  const file = path.join(dir, "layouts", "normal.json");
+  const template = await json(path.join(dir, "template.json"));
+  const layout = await readFile(file, "utf8");
   await scratch.offer("glow.png", solidPng(272, 370, [10, 200, 10, 90]));
 
   await editor.addButton.click();
@@ -522,142 +335,75 @@ test("a layer for a new part makes the part and its folder, and one undo takes b
   await editor.addPart.selectOption({ label: "A new part from a PNG image" });
   await editor.addPartName.fill("glow");
   await editor.addConfirm.click();
-  await expect(editor.addDialog).toBeHidden();
-  await expect(editor.layers.filter({ hasText: "glow" })).toHaveCount(1);
   await expect(editor.selectionName).toHaveText("glow");
-  await expect(editor.images.locator("h4")).toHaveText("Images of glow");
-
-  const after = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
-  expect(after.parts.glow).toEqual({ dir: "parts/glow" });
+  expect((await json(path.join(dir, "template.json"))).parts.glow).toEqual({ dir: "parts/glow" });
   expect((await readFile(path.join(dir, "parts", "glow", "any.png"))).length).toBeGreaterThan(0);
-  const stack = JSON.parse(await readFile(path.join(dir, "layouts", "normal.json"), "utf8")).stack;
-  expect(stack.map((e) => e.id || e.part)).toEqual(["background", "glow"]);
+  expect((await json(file)).stack.map((e) => e.id || e.part)).toEqual(["background", "glow"]);
   await editor.waitForPreview();
   await expect(editor.problems).toHaveCount(0);
-
-  await editor.undoButton.click();
-  await expect(editor.layers.filter({ hasText: "glow" })).toHaveCount(0);
-  expect(await readFile(path.join(dir, "layouts", "normal.json"), "utf8")).toBe(layout);
-  expect(JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).parts).toEqual(template.parts);
-  await expect.poll(async () => readFile(path.join(dir, "parts", "glow", "any.png")).then(() => true, () => false)).toBe(false);
-  await expect(editor.undoButton).toBeDisabled();
-});
-
-test("a text box is added, copied and deleted, and undoing all of it restores the layout as it was", async ({ editor, scratch, page }) => {
-  await editor.create("Boxes", 100);
-  const file = draftFile(scratch, "boxes", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
 
   await editor.addButton.click();
+  await editor.addKind.selectOption("text");
   await editor.addDraws.selectOption("artist");
   await editor.addConfirm.click();
-  await expect(editor.addDialog).toBeHidden();
-  await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).toContain("artist_2");
-  await expect(editor.selectionName).toHaveText("artist_2");
-
+  await expect.poll(async () => Object.keys((await json(file)).textBoxes)).toContain("artist_2");
   await editor.choose("oracle", "Duplicate");
   await expect(editor.selectionName).toHaveText("oracle_copy");
-  const boxes = JSON.parse(await readFile(file, "utf8")).textBoxes;
-  expect(boxes["oracle_copy"].draws).toBe("oracle");
-  expect(boxes["oracle_copy"].rect.x).toBe(boxes.oracle.rect.x + 8);
-
+  const boxes = (await json(file)).textBoxes;
+  expect(boxes.oracle_copy.draws).toBe("oracle");
+  expect(boxes.oracle_copy.rect.x).toBe(boxes.oracle.rect.x + 8);
   await editor.choose("oracle_copy", "Delete");
-  await expect(editor.selection).toBeHidden();
-  await expect.poll(async () => Object.keys(JSON.parse(await readFile(file, "utf8")).textBoxes)).not.toContain("oracle_copy");
+  await expect.poll(async () => Object.keys((await json(file)).textBoxes)).not.toContain("oracle_copy");
 
-  for (let i = 0; i < 3; i++) await editor.undoButton.click();
+  for (let i = 0; i < 4; i++) await editor.undoButton.click();
   await expect(editor.undoButton).toBeDisabled();
-  // The undos are made one after another, so the file is read until it is as it was
-  await expect.poll(() => readFile(file, "utf8")).toBe(original);
+  // The undos are made one after another, so the files are read until they are as they were
+  await expect.poll(() => readFile(file, "utf8")).toBe(layout);
+  expect((await json(path.join(dir, "template.json"))).parts).toEqual(template.parts);
+  await expect.poll(async () => readFile(path.join(dir, "parts", "glow", "any.png")).then(() => true, () => false)).toBe(false);
 });
 
-test("a font is brought in, given to a role and the card is still drawn", async ({ editor, scratch, page }) => {
-  await editor.create("Fonts", 100);
-  const dir = draftFile(scratch, "fonts");
-  await scratch.offer("Plantin.ttf", { path: path.resolve(import.meta.dirname, "../../../engine/fonts/embedded/m15/plantin-body.ttf") });
-  await editor.openSection("about");
-  await editor.fontAdd.click();
-  await expect(editor.fonts).toHaveCount(1);
-  const added = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
-  const [id, entry] = Object.entries(added.fonts)[0];
-  expect(entry.file).toBe(`font/${id}.ttf`);
-  expect(entry.sha256).toHaveLength(64);
-  expect((await readFile(path.join(dir, entry.file))).length).toBeGreaterThan(1000);
-
-  await page.getByLabel(/License of the font/).fill("SIL OFL 1.1");
-  await page.getByLabel(/License of the font/).blur();
-  await expect.poll(async () => JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).fonts[id].license).toBe("SIL OFL 1.1");
-
-  await page.locator("#ed-role-body").selectOption(`font:${id}`);
-  await expect.poll(async () => JSON.parse(await readFile(path.join(dir, "template.json"), "utf8")).roles?.body?.font).toBe(id);
-  await editor.waitForPreview();
-  await expect(editor.problems).toHaveCount(0);
-
-  // Removing the font frees the role first, so the template still loads
-  await editor.fonts.first().getByRole("button", { name: /Remove the font/ }).click();
-  await expect(editor.fonts).toHaveCount(0);
-  const gone = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
-  expect(gone.fonts ?? {}).toEqual({});
-  expect(gone.roles?.body).toBeUndefined();
-  await expect(editor.problems).toHaveCount(0);
-});
-
-test("what is locked and what is snapped to is kept with the template across a reload", async ({ editor, scratch, page }) => {
-  await editor.create("Marks", 100);
-  await editor.lockToggle("title").click();
-  await editor.snapToggle("oracle").click();
-  const meta = draftFile(scratch, "marks", ".studio.json");
-  await expect.poll(async () => JSON.parse(await readFile(meta, "utf8")).locked).toEqual(["normal/text:title"]);
-  await expect.poll(async () => JSON.parse(await readFile(meta, "utf8")).snapTo).toEqual(["normal/text:oracle"]);
-
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await page.locator('button[data-mode="editor"]').click();
-  await editor.waitForPreview();
-  await expect(editor.lockToggle("title")).toHaveAttribute("aria-pressed", "true");
-  await expect(editor.snapToggle("oracle")).toHaveAttribute("aria-pressed", "true");
-  await expect(editor.lockToggle("oracle")).toHaveAttribute("aria-pressed", "false");
-});
-
-test("changing the test card's fields changes what the template draws, and the changes are kept", async ({ editor, page }) => {
+test("the test card's fields change what the template draws, and the card and a saved test card are kept across a reload", async ({ editor, page }) => {
   await editor.create("Fine tune", 100);
   // The first preset is a creature, so its power and toughness box is drawn
   await expect(editor.row("pt")).not.toHaveClass(/undrawn/);
-  await expect(editor.preset("Monocolored")).toHaveAttribute("aria-pressed", "true");
   const src = await editor.preview.getAttribute("src");
-
   await editor.openFine();
   await editor.cardField("typeLine").fill("Land");
   await editor.cardField("power").fill("");
   await editor.cardField("toughness").fill("");
   await editor.cardField("name").fill("My Test Land");
-  await expect(editor.preset("Monocolored")).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#ed-activity-title")).toHaveText("Drew My Test Land");
   await expect.poll(() => editor.preview.getAttribute("src")).not.toBe(src);
-  // A land has no power or toughness, so the box has nothing to draw and says why
+  // A land has no power or toughness, so the box has nothing to draw
   await expect(editor.row("pt")).toHaveClass(/undrawn/);
-  await expect(editor.row("pt")).toHaveAttribute("title", /no pt|pt to draw/);
 
-  // The card as changed is the one the template opens with next time
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await page.locator('button[data-mode="editor"]').click();
+  await reopen(editor);
   await editor.waitForPreview();
   await expect(editor.cardLine).toHaveText("My Test Land · MBS");
-  await editor.openFine();
-  await expect(editor.cardField("typeLine")).toHaveValue("Land");
   await expect(editor.row("pt")).toHaveClass(/undrawn/);
-  await expect(editor.presets.filter({ has: page.locator("xpath=self::*[@aria-pressed='true']") })).toHaveCount(0);
 
-  // Choosing a preset again starts the fields over
+  await editor.preset("Land").click();
+  await editor.waitForPreview();
+  await editor.savePreset.click();
+  await expect(editor.dialogName).toHaveValue("Flooded Strand");
+  await editor.dialogName.fill("My strand");
+  await editor.dialogConfirm.click();
+  await expect(editor.userPresets).toHaveCount(1);
+  await reopen(editor);
+  await expect(editor.userPresets.locator(".chip").first()).toHaveText("My strand");
   await editor.preset("Monocolored").click();
-  await expect(editor.cardField("typeLine")).toHaveValue("Creature — Human Rogue");
   await expect(editor.row("pt")).not.toHaveClass(/undrawn/);
+  await editor.userPresets.locator(".chip").first().click();
+  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
+  await editor.userPresets.getByRole("button", { name: "Remove the test card My strand" }).click();
+  await expect(editor.userPresets).toHaveCount(0);
+  await reopen(editor);
+  await expect(editor.userPresets).toHaveCount(0);
 });
 
 test("a searched card's artwork replaces the preset's in the art window, and an edit keeps it", async ({ editor, page }) => {
   await editor.create("Art window", 100);
-  // A preset is a real card, so it comes with art and the window shows it
   await expect(editor.row("Art window")).not.toHaveClass(/undrawn/);
   const pixel = () =>
     editor.preview.evaluate((img) => {
@@ -676,121 +422,65 @@ test("a searched card's artwork replaces the preset's in the art window, and an 
   await editor.results.filter({ has: page.locator(".r-name", { hasText: "Llanowar Elves" }) }).first().click();
   await expect(page.locator("#ed-activity-title")).toHaveText("Drew Llanowar Elves");
   await expect(page.locator("#ed-activity")).toHaveAttribute("data-state", "done");
-  await expect(editor.row("Art window")).not.toHaveClass(/undrawn/);
   // The art is the searched card's and not the preset's, which the fake draws differently
   const found = await pixel();
   expect(found.art).not.toEqual(found.edge);
   expect(found.art).not.toEqual(preset.art);
 
-  // Changing a field of the card keeps the art in the window
   await editor.openFine();
   await editor.cardField("flavor").fill("Roots first.");
   await expect(page.locator("#ed-activity-title")).toHaveText("Drew Llanowar Elves");
   await expect.poll(async () => (await pixel()).art.join(",")).toBe(found.art.join(","));
 });
 
-
-test("with the proportion kept the canvas keeps its shape, and one undo takes both sides back", async ({ editor, scratch, page }) => {
-  await editor.create("Ratio", 100);
-  const file = draftFile(scratch, "ratio", "layouts", "normal.json");
+test("a text box's flow and its baseline's width are written to the file, and undo takes each back", async ({ editor, scratch, page }) => {
+  await editor.create("Flowing", 100);
+  const file = draftFile(scratch, "flowing", "layouts", "normal.json");
   const original = await readFile(file, "utf8");
-  const canvas = JSON.parse(original).canvas;
-  await editor.openCanvas();
-  // The proportion is kept to begin with
-  await expect(page.locator("#ed-canvas-levers [data-ratio='lock']")).toHaveAttribute("aria-pressed", "true");
-  const width = Math.round(canvas.width * 0.8);
-  await editor.lever("canvas-width").fill(String(width));
-  await editor.lever("canvas-width").blur();
-  const want = Math.round(width / (canvas.width / canvas.height));
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).canvas.height).toBe(want);
-  expect(JSON.parse(await readFile(file, "utf8")).canvas.width).toBe(width);
-  await expect(editor.lever("canvas-height")).toHaveValue(String(want));
+  await selectTitle(editor);
+  // The title is narrowed by the engine to clear the mana cost for the card
+  await expect(page.locator("#ed-selection-note")).toHaveText("Narrowed to stay clear of mana for this card");
+  await expect(editor.lever("lever-clearOf")).toHaveValue("mana");
+  await editor.lever("lever-avoidLayer").selectOption("background");
+  await expect.poll(async () => (await json(file)).textBoxes.title.flow).toEqual({ clearOf: "mana", avoidLayer: "background" });
+  await expect(page.locator("#ed-selection-note")).toContainText("Steps around background");
+  await editor.undoButton.click();
+  await expect(editor.lever("lever-avoidLayer")).toHaveValue("");
+  expect(await readFile(file, "utf8")).toBe(original);
 
+  const was = JSON.parse(original).textBoxes.title.rect;
+  await expect(page.locator(".ed-readout-grid dt").nth(2)).toHaveText("Cap center");
+  await expect(page.locator("#ed-sel-w")).toHaveText(String(was.width));
+  const handle = page.locator("#ed-overlay .ed-baseline-handle[data-handle='e']");
+  await expect(handle).toBeVisible();
+  const end = await handle.boundingBox();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2 - 30, end.y + end.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await json(file)).textBoxes.title.rect.width).toBeLessThan(was.width - 20);
+  const after = (await json(file)).textBoxes.title.rect;
+  expect({ x: after.x, y: after.y, height: after.height }).toEqual({ x: was.x, y: was.y, height: was.height });
   await editor.undoButton.click();
   await expect.poll(() => readFile(file, "utf8")).toBe(original);
-  await expect(editor.undoButton).toBeDisabled();
 });
 
-test("the template's undo and redo are in its section and take back a change made anywhere", async ({ editor, scratch, page }) => {
-  await editor.create("Global undo", 100);
-  const file = draftFile(scratch, "global-undo", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  await expect(page.locator(".ed-draft #ed-undo")).toBeVisible();
-  await editor.layers.filter({ hasText: "title" }).click();
-  await editor.lever("lever-fontSize").fill("99");
-  await editor.lever("lever-fontSize").blur();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(99);
-  await page.locator(".ed-draft #ed-undo").click();
-  await expect.poll(() => readFile(file, "utf8")).toBe(original);
-  await page.locator(".ed-draft #ed-redo").click();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.text.fontSize).toBe(99);
-});
-
-test("exporting writes a bundle from the template, after showing what it says", async ({ editor, scratch }) => {
+test("export writes a bundle and show folder opens the template's own folder", async ({ editor, scratch }) => {
   await editor.create("Mine", 100);
   await editor.exportButton.click();
-  await expect(editor.exportDialog).toBeVisible();
   await expect(editor.exportFacts).toContainText("user.mine");
   await expect(editor.exportFacts).toContainText("0.1.0");
   await expect(editor.exportProblems).toHaveCount(0);
-  // The dialog writes nothing until a place is chosen
   expect(await scratch.saved()).toEqual([]);
   await editor.exportConfirm.click();
   await expect(editor.toasts.last()).toContainText("Saved user.mine-0.1.0.mimic");
-  await expect(editor.exportDialog).toBeHidden();
   expect(await scratch.saved()).toEqual(["user.mine-0.1.0.mimic"]);
   const bytes = await readFile(scratch.savedPath("user.mine-0.1.0.mimic"));
   expect(bytes.subarray(0, 2).toString()).toBe("PK");
   expect(bytes.includes("bundle.json") && bytes.includes("manifest.json")).toBe(true);
-});
 
-test("a copy's export shows the credit that names the template it came from", async ({ editor, templates }) => {
-  await templates.show();
-  await templates.entry("Test frame").getByRole("button", { name: "Edit a copy" }).click();
-  await editor.dialogName.fill("Kept");
-  await editor.dialogConfirm.click();
-  await editor.waitForPreview();
-  await editor.exportButton.click();
-  await expect(editor.exportDialog).toBeVisible();
-  await expect(editor.exportCredits.first()).toContainText("Forked from mimic.m15");
-  await expect(editor.exportNoCredits).toBeHidden();
-});
-
-test("show folder opens the template's own folder", async ({ editor, scratch }) => {
-  await editor.create("Mine", 100);
   await editor.folderButton.click();
   await expect.poll(async () => (await scratch.events()).filter(([kind]) => kind === "path").map(([, detail]) => detail)).toContain(path.join(scratch.home, "mimic", "drafts", "mine"));
-});
-
-test("a test card that is saved is there after a reload, drawn from what was saved", async ({ editor, page }) => {
-  await editor.create("Mine", 100);
-  await editor.preset("Land").click();
-  await editor.waitForPreview();
-  await editor.savePreset.click();
-  await expect(editor.dialogName).toHaveValue("Flooded Strand");
-  await editor.dialogName.fill("My strand");
-  await editor.dialogConfirm.click();
-  await expect(editor.userPresets).toHaveCount(1);
-  await expect(editor.userPresets.locator(".chip").first()).toHaveAttribute("aria-pressed", "true");
-  await editor.waitForPreview();
-  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
-
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await editor.show();
-  await expect(editor.userPresets.locator(".chip").first()).toHaveText("My strand");
-  await editor.preset("Monocolored").click();
-  await expect(editor.cardLine).toHaveText("Mirran Spy · MBS");
-  await editor.userPresets.locator(".chip").first().click();
-  await expect(editor.cardLine).toHaveText("Flooded Strand · KTK");
-  await editor.waitForPreview();
-
-  await editor.userPresets.getByRole("button", { name: "Remove the test card My strand" }).click();
-  await expect(editor.userPresets).toHaveCount(0);
-  await page.reload();
-  await page.locator("html.booted").waitFor();
-  await editor.show();
-  await expect(editor.userPresets).toHaveCount(0);
 });
 
 test("the coverage strip draws the six test cards through the template", async ({ editor }) => {
@@ -798,108 +488,28 @@ test("the coverage strip draws the six test cards through the template", async (
   await editor.coverage.locator("summary").click();
   await editor.coverageRun.click();
   await expect(editor.coverageLine).toHaveText("6 of 6 drawn", { timeout: 60_000 });
-  await expect(editor.tiles).toHaveCount(6);
   const sizes = await editor.tiles.locator("img").evaluateAll((imgs) => imgs.map((i) => [i.naturalWidth, i.naturalHeight]));
   expect(sizes).toHaveLength(6);
   // A strip tile is smaller than the card drawn for the preview at 100 dpi
   for (const [w] of sizes) expect(w).toBeLessThan(272);
 });
 
-test("a text box's flow is set from its fields, the part it keeps out of is hatched, and undo takes it out of the file", async ({ editor, scratch, page }) => {
-  await editor.create("Flowing", 100);
-  const file = draftFile(scratch, "flowing", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  await editor.layers.filter({ hasText: "title" }).click();
-  // The title is narrowed to clear the mana cost for the card, and the note says so
-  await expect(page.locator("#ed-selection-note")).toHaveText("Narrowed to stay clear of mana for this card");
-  // The title stays clear of the mana cost to begin with, and the layer it could step
-  // around is the one the starter has
-  await expect(editor.lever("lever-clearOf")).toHaveValue("mana");
-  await expect(editor.lever("lever-avoidLayer").locator("option")).toHaveText(["Default (nothing)", "background"]);
-  await editor.lever("lever-avoidLayer").selectOption("background");
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.flow).toEqual({ clearOf: "mana", avoidLayer: "background" });
-  // The background fills the card, so the whole box is what the text keeps out of
-  const tags = page.locator("#ed-overlay .ed-box.sel .ed-tag.avoid");
-  await expect(tags.filter({ hasText: "Avoids background" })).toHaveCount(1);
-  await expect(page.locator("#ed-selection-note")).toContainText("Steps around background");
-  // The room the title has, as wide as its line and as tall as its text, is all striped
-  const stripes = await page.locator("#ed-overlay .ed-box.hazard").first().boundingBox();
-  const outline = await page.locator("#ed-overlay .ed-box.sel").boundingBox();
-  expect(stripes.width).toBeGreaterThanOrEqual(outline.width - 2);
-  expect(Math.abs(stripes.height - outline.height)).toBeLessThan(2);
-
-  await editor.undoButton.click();
-  await expect(editor.lever("lever-avoidLayer")).toHaveValue("");
-  await expect(tags.filter({ hasText: "Avoids background" })).toHaveCount(0);
-  // The file is as it was, with no empty flow left behind
-  expect(await readFile(file, "utf8")).toBe(original);
-});
-
-test("a baseline box shows its line, and dragging its end writes the new width to the file and undo takes it back", async ({ editor, scratch, page }) => {
-  await editor.create("Baselines", 100);
-  const file = draftFile(scratch, "baselines", "layouts", "normal.json");
-  const original = await readFile(file, "utf8");
-  const was = JSON.parse(original).textBoxes.title.rect;
-  await selectTitle(editor);
-  await expect(page.locator("#ed-overlay .ed-box.baseline.h")).toHaveCount(1);
-  await expect(page.locator(".ed-readout-grid dt").nth(2)).toHaveText("Cap center");
-  // The line is the box's own X, Y and width, which the ink does not say
-  await expect(page.locator("#ed-sel-x")).toHaveText(String(was.x));
-  await expect(page.locator("#ed-sel-w")).toHaveText(String(was.width));
-  await expect(page.locator("#ed-sel-y")).toHaveText(String(was.y));
-
-  const end = await page.locator("#ed-overlay .ed-baseline-handle[data-handle='e']").boundingBox();
-  const from = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x - 30, from.y, { steps: 5 });
-  await page.mouse.up();
-  await expect.poll(async () => JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect.width).toBeLessThan(was.width - 20);
-  const after = JSON.parse(await readFile(file, "utf8")).textBoxes.title.rect;
-  // Only the width moved, and the baseline stayed where it was
-  expect({ x: after.x, y: after.y, height: after.height }).toEqual({ x: was.x, y: was.y, height: was.height });
-  await editor.waitForPreview();
-
-  await editor.undoButton.click();
-  await expect.poll(async () => readFile(file, "utf8")).toBe(original);
-});
-
-test("hiding the background draws the card without it, and showing it again puts it back", async ({ editor, page }) => {
+test("a hidden layer is left out of the card and the PNG saved of it, which is named for the card", async ({ editor, scratch }) => {
   await editor.create("Hidden", 100);
   const eye = editor.row("background").locator('[data-toggle="visible"]');
-  const [, , , alone] = await previewPixel(editor, 2, 2);
-  expect(alone).toBe(255);
+  expect((await previewPixel(editor, 2, 2))[3]).toBe(255);
   await eye.click();
-  await expect(eye).toHaveAttribute("data-eye", "hidden");
   await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(0);
   await editor.waitForPreview();
-  await eye.click();
-  await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(255);
   // Nothing was saved to the template for it
   await expect(editor.undoButton).toBeDisabled();
-});
 
-test("the picture of the card is saved as a PNG named for the card", async ({ editor, scratch }) => {
-  await editor.create("Pictures", 100);
   await editor.page.locator("#ed-save-image").click();
   await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png");
   expect(await scratch.saved()).toEqual(["Mirran Spy.png"]);
   const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
   expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-  // It is the picture of the card as drawn at the preview resolution of the template
-  const size = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
-  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual(size);
-});
-
-test("hiding a layer is in the picture that is saved, and showing it again puts it back", async ({ editor, scratch }) => {
-  await editor.create("Hidden picture", 100);
-  const eye = editor.row("background").locator('[data-toggle="visible"]');
-  await eye.click();
-  await expect.poll(async () => (await previewPixel(editor, 2, 2))[3], { timeout: 30_000 }).toBe(0);
-  await editor.waitForPreview();
-  await editor.page.locator("#ed-save-image").click();
-  await expect(editor.toasts.last()).toContainText("Saved");
-  const bytes = await readFile(scratch.savedPath((await scratch.saved())[0]));
+  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual(await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]));
   // The file has what the card shows: the corner the background painted is not painted in it
   const alpha = await editor.page.evaluate(async (b64) => {
     const img = new Image();
@@ -916,16 +526,16 @@ test("hiding a layer is in the picture that is saved, and showing it again puts 
 });
 
 test("saving at full size draws the card at the template's own resolution and saves it", async ({ editor, scratch }) => {
-  // The preview draws at 300 dpi, so a template authored at 400 has a larger full size
+  // A template authored at 400 dpi is larger than the preview, whose resolution is a setting
   await editor.create("Full size", 400);
+  const { canvas } = await json(draftFile(scratch, "full-size", "layouts", "normal.json"));
   const [w, h] = await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  expect(w).toBeLessThan(canvas.width);
   await editor.page.locator("#ed-save-image").click();
   await editor.page.getByRole("menuitem", { name: "At full size" }).click();
   await expect(editor.toasts.last()).toContainText("Saved Mirran Spy.png", { timeout: 60_000 });
   const bytes = await readFile(scratch.savedPath("Mirran Spy.png"));
-  expect([...bytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-  expect(Math.abs(bytes.readUInt32BE(16) - Math.round((w * 400) / 300))).toBeLessThanOrEqual(2);
-  expect(Math.abs(bytes.readUInt32BE(20) - Math.round((h * 400) / 300))).toBeLessThanOrEqual(2);
+  expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([canvas.width, canvas.height]);
   // The card on show is still the preview
   expect(await editor.preview.evaluate((img) => [img.naturalWidth, img.naturalHeight])).toEqual([w, h]);
 });

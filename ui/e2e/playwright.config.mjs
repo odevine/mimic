@@ -20,12 +20,16 @@ export const browsers = {
 };
 
 // The page tests run the frontend against a bridge in the test and need no
-// server, so they have projects of their own that a config without servers shares
-export const pageProjects = Object.entries(browsers).map(([browser, device]) => ({
-  name: `${browser}-page`,
-  testMatch: /tests\/page\/.*\.spec\.mjs$/,
-  use: { ...device, viewport: { width: 1280, height: 820 } },
-}));
+// server, so they have a project of their own that a config without servers shares.
+// They check the page's logic and run in Chromium alone, and the flows against the
+// test server cover WebKit
+export const pageProjects = [
+  {
+    name: "chromium-page",
+    testMatch: /tests\/page\/.*\.spec\.mjs$/,
+    use: { ...browsers.chromium, viewport: { width: 1280, height: 820 } },
+  },
+];
 
 const projects = Object.entries(browsers).flatMap(([browser, device]) =>
   [

@@ -29,8 +29,13 @@ func TestEveryConditionHoldsExactlyWhenItsFactDoes(t *testing.T) {
 		{"set_symbol", Keys{SetSymbol: true}, Keys{}},
 		{"icon_left", Keys{Front: true, TransformIcon: Named("sunmoondfc")}, Keys{}},
 		{"icon_right", Keys{Back: true, TransformIcon: Named(triangleIcon)}, Keys{Back: true, TransformIcon: Named("sunmoondfc")}},
+		{"loyalty", Keys{Loyalty: true}, Keys{}},
+		{"chaos", Keys{Chaos: true}, Keys{}},
+		{"snow", Keys{Snow: true}, Keys{}},
+		{"nonsnow", Keys{}, Keys{Snow: true}},
+		{"rows>3", Keys{Rows: 4}, Keys{Rows: 3}},
 	}
-	covered := map[string]bool{}
+	covered := map[string]bool{"rows": true}
 	for _, c := range cases {
 		covered[c.name] = true
 		cond, err := Compile(c.name)
@@ -47,6 +52,68 @@ func TestEveryConditionHoldsExactlyWhenItsFactDoes(t *testing.T) {
 	for _, name := range Conditions() {
 		if !covered[name] {
 			t.Errorf("condition %q is in the vocabulary and has no case here", name)
+		}
+	}
+}
+
+func TestACountComparesWithANumber(t *testing.T) {
+	cases := []struct {
+		expr string
+		rows int
+		want bool
+	}{
+		{"rows=4", 4, true}, {"rows = 4", 3, false}, {"rows<4", 3, true}, {"rows<=3", 4, false},
+		{"rows>=4", 4, true}, {"rows>4", 4, false}, {"rows>3,nonland", 4, true},
+	}
+	for _, c := range cases {
+		cond, err := Compile(c.expr)
+		if err != nil {
+			t.Fatalf("Compile(%q): %v", c.expr, err)
+		}
+		if got := cond.Met(Keys{Rows: c.rows}, nil); got != c.want {
+			t.Errorf("%q with %d rows = %v, want %v", c.expr, c.rows, got, c.want)
+		}
+	}
+	for _, bad := range []string{"rows", "rows>", "rows>many", "row>3", "rows!3"} {
+		if _, err := Compile(bad); err == nil {
+			t.Errorf("Compile(%q) should fail", bad)
+		}
+	}
+}
+
+func TestDeriveReadsTheSectionFacts(t *testing.T) {
+	jace := &card.Data{TypeLine: "Legendary Planeswalker — Jace", Loyalty: "3", Colors: []card.Color{card.Blue},
+		OracleText: "+2: Look.\n0: Draw.\n−1: Bounce.\n−12: Mill."}
+	if k := Derive(jace); k.Rows != 4 || !k.Loyalty || k.Chaos || !k.Prototype.IsNone() {
+		t.Errorf("planeswalker keys = rows %d loyalty %v chaos %v prototype %v", k.Rows, k.Loyalty, k.Chaos, k.Prototype)
+	}
+	plane := &card.Data{TypeLine: "Plane — Zendikar", OracleText: "Creatures can't block.\nWhenever chaos ensues, draw a card."}
+	if k := Derive(plane); !k.Chaos || k.Rows != 0 {
+		t.Errorf("plane keys = chaos %v rows %d", k.Chaos, k.Rows)
+	}
+	proxy := &card.Data{TypeLine: "Artifact Creature — Wizard", ManaCost: "{7}", Power: "4", Toughness: "4",
+		OracleText: "Prototype {1}{U}{U} — 2/1 (Reminder.)\nWhen this enters, copy."}
+	if k := Derive(proxy); k.Prototype != Mono(card.Blue) || k.Material(SlotPrototype) != Mono(card.Blue) {
+		t.Errorf("prototype = %v", k.Prototype)
+	}
+	colorless := &card.Data{TypeLine: "Artifact Creature", OracleText: "Prototype {3} — 1/1"}
+	if k := Derive(colorless); k.Prototype != Artifact {
+		t.Errorf("colorless prototype = %v", k.Prototype)
+	}
+}
+
+func TestDeriveReadsTheSnowSupertype(t *testing.T) {
+	cases := map[string]bool{
+		"Basic Snow Land — Island":   true,
+		"Snow Creature — Elemental":  true,
+		"Legendary Snow Artifact":    true,
+		"Basic Land — Island":        false,
+		"Creature — Snowfield Beast": false,
+		"Enchantment — Aura":         false,
+	}
+	for typeLine, want := range cases {
+		if got := Derive(&card.Data{TypeLine: typeLine}).Snow; got != want {
+			t.Errorf("%q: snow = %v, want %v", typeLine, got, want)
 		}
 	}
 }

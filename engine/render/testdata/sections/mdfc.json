@@ -1,0 +1,22 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-mdfc",
+  "name": "Modal double-faced boxes",
+  "description": "The other face's type and cost along the bottom",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } }
+  },
+  "layouts": {
+    "front": {
+      "serves": [{ "role": "mdfc_front", "kind": "standard" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }],
+      "art": [{ "x": 60, "y": 80, "width": 624, "height": 500, "after": "frame" }],
+      "textBoxes": {
+        "title": { "rect": { "x": 48, "y": 40, "width": 520, "height": 40 }, "text": { "fontSize": 30, "font": "title", "vAlign": "baseline" } },
+        "flipside_type": { "rect": { "x": 50, "y": 960, "width": 300, "height": 30 }, "text": { "fontSize": 18, "font": "title", "vAlign": "center" } },
+        "flipside_mana": { "rect": { "x": 400, "y": 960, "width": 290, "height": 30 }, "text": { "fontSize": 18, "align": "right", "vAlign": "center" } }
+      }
+    }
+  }
+}

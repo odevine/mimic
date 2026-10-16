@@ -51,6 +51,22 @@ type Keys struct {
 	Fuse       bool
 	FuseKey    Material
 	FusePinKey Material
+	// Rows is how many rows the face's rules text splits into for its kind: the
+	// loyalty abilities of a planeswalker, the chapters of a saga, the levels of a
+	// class, or the tiers of a leveler. A frame whose text box grows with them,
+	// such as a planeswalker's, picks its art by it
+	Rows int
+	// Loyalty marks a face that prints a starting loyalty
+	Loyalty bool
+	// Snow marks a face whose type line has the Snow supertype, such as a
+	// Snow-Covered basic
+	Snow bool
+	// Chaos marks a plane that prints a chaos ability, which a phenomenon does not
+	Chaos bool
+	// Prototype colors a prototype card's second set of boxes, from the colors of
+	// its prototype cost: one color, a pair, gold for more, and artifact for none.
+	// It is none for any other card
+	Prototype Material
 }
 
 // iconRight reports whether the transform icon sits at the right end of the
@@ -103,6 +119,14 @@ func DeriveFace(d *card.Data, side Side) Keys {
 	}
 	if k.Fuse {
 		k.FuseKey, k.FusePinKey = fuseKeys(d)
+	}
+	k.Rows = card.RowCount(d)
+	k.Loyalty = d.Loyalty != ""
+	types, _, _ := strings.Cut(tl, "—")
+	k.Snow = slices.Contains(strings.Fields(types), "snow")
+	k.Chaos = card.ChaosText(d) != ""
+	if p, ok := card.ParsePrototype(d.OracleText); ok {
+		k.Prototype = pinlineMaterial(false, true, canonical(card.ColorsFromManaCost(p.ManaCost)))
 	}
 	if side != Single {
 		k.TransformIcon = Named(transformIcon(d.FrameEffects))

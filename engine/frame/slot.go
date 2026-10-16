@@ -17,6 +17,7 @@ const (
 	SlotTransformIcon
 	SlotFuse
 	SlotFusePinlines
+	SlotPrototype
 )
 
 var slotNames = [...]string{
@@ -30,6 +31,7 @@ var slotNames = [...]string{
 	SlotTransformIcon: "transform_icon",
 	SlotFuse:          "fuse",
 	SlotFusePinlines:  "fuse_pinlines",
+	SlotPrototype:     "prototype",
 }
 
 // String is the name a manifest gives the slot
@@ -77,6 +79,8 @@ func (k Keys) Material(s Slot) Material {
 		return k.FuseKey
 	case SlotFusePinlines:
 		return k.FusePinKey
+	case SlotPrototype:
+		return k.Prototype
 	}
 	return Material{}
 }

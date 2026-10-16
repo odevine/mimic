@@ -1,0 +1,157 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-adventure",
+  "name": "Adventure boxes",
+  "description": "Two columns of text, the adventure on the left and the creature on the right",
+  "parts": {
+    "frame": {
+      "slot": "pinlines",
+      "variants": {
+        "r": {
+          "path": "img/frame-0-0-744-1039-f0d0c0.png"
+        }
+      }
+    },
+    "adventure_box": {
+      "slot": "pinlines",
+      "variants": {
+        "r": {
+          "path": "img/adv-40-600-320-400-c04030.png"
+        }
+      }
+    }
+  },
+  "layouts": {
+    "adventure": {
+      "serves": [
+        {
+          "role": "adventure",
+          "kind": "standard"
+        }
+      ],
+      "canvas": {
+        "width": 744,
+        "height": 1039
+      },
+      "stack": [
+        {
+          "part": "frame",
+          "face": "first"
+        },
+        {
+          "part": "adventure_box",
+          "face": "second"
+        }
+      ],
+      "art": [
+        {
+          "x": 60,
+          "y": 80,
+          "width": 624,
+          "height": 500,
+          "after": "frame"
+        }
+      ],
+      "textBoxes": {
+        "title": {
+          "face": "first",
+          "rect": {
+            "x": 48,
+            "y": 40,
+            "width": 520,
+            "height": 40
+          },
+          "text": {
+            "fontSize": 30,
+            "font": "title",
+            "vAlign": "baseline"
+          }
+        },
+        "mana": {
+          "face": "first",
+          "rect": {
+            "x": 560,
+            "y": 40,
+            "width": 140,
+            "height": 40
+          },
+          "text": {
+            "fontSize": 26,
+            "align": "right",
+            "vAlign": "baseline"
+          }
+        },
+        "oracle": {
+          "face": "first",
+          "rect": {
+            "x": 380,
+            "y": 610,
+            "width": 320,
+            "height": 330
+          },
+          "text": {
+            "fontSize": 20
+          }
+        },
+        "adventure_title": {
+          "draws": "title",
+          "face": "second",
+          "rect": {
+            "x": 50,
+            "y": 630,
+            "width": 200,
+            "height": 30
+          },
+          "text": {
+            "fontSize": 20,
+            "font": "title",
+            "vAlign": "baseline"
+          }
+        },
+        "adventure_mana": {
+          "draws": "mana",
+          "face": "second",
+          "rect": {
+            "x": 250,
+            "y": 630,
+            "width": 100,
+            "height": 30
+          },
+          "text": {
+            "fontSize": 18,
+            "align": "right",
+            "vAlign": "baseline"
+          }
+        },
+        "adventure_type": {
+          "draws": "type",
+          "face": "second",
+          "rect": {
+            "x": 50,
+            "y": 670,
+            "width": 300,
+            "height": 30
+          },
+          "text": {
+            "fontSize": 16,
+            "font": "title",
+            "vAlign": "baseline"
+          }
+        },
+        "adventure_oracle": {
+          "draws": "oracle",
+          "face": "second",
+          "rect": {
+            "x": 50,
+            "y": 690,
+            "width": 300,
+            "height": 300
+          },
+          "text": {
+            "fontSize": 18
+          }
+        }
+      }
+    }
+  }
+}

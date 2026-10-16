@@ -1,0 +1,22 @@
+{
+  "name": "Arcane Proxy",
+  "mana_cost": "{7}",
+  "type_line": "Artifact Creature — Wizard",
+  "oracle_text": "Prototype {1}{U}{U} — 2/1 (You may cast this spell with different mana cost, color, and size. It keeps its abilities and types.)\nWhen this creature enters, if you cast it, exile target instant or sorcery card with mana value less than or equal to this creature's power from your graveyard. Copy that card. You may cast the copy without paying its mana cost.",
+  "power": "4",
+  "toughness": "3",
+  "colors": [],
+  "color_identity": [
+    "U"
+  ],
+  "rarity": "mythic",
+  "collector_number": "75",
+  "set": "bro",
+  "lang": "en",
+  "released_at": "2022-11-18",
+  "artist": "Kekai Kotaki",
+  "layout": "prototype",
+  "keywords": [
+    "Prototype"
+  ]
+}

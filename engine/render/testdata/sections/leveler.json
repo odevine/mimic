@@ -1,0 +1,32 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-leveler",
+  "name": "Leveler boxes",
+  "description": "The level up ability and each tier's levels, power and toughness, and text",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "tiers": { "slot": "ptBox", "variants": { "w": { "path": "img/tiers-40-700-664-280-d0c8a0.png" }, "any": { "path": "img/tiers-40-700-664-280-a0a0a0.png" } } }
+  },
+  "layouts": {
+    "leveler": {
+      "serves": [{ "role": "single", "kind": "leveler" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }, { "part": "tiers" }],
+      "art": [{ "x": 60, "y": 80, "width": 624, "height": 500, "after": "frame" }],
+      "textBoxes": {
+        "title": { "rect": { "x": 48, "y": 40, "width": 520, "height": 40 }, "text": { "fontSize": 30, "font": "title", "vAlign": "baseline" } },
+        "level_up": { "rect": { "x": 50, "y": 610, "width": 500, "height": 80 }, "text": { "fontSize": 20 } },
+        "level_label_1": { "draws": "level_label", "rect": { "x": 50, "y": 712, "width": 80, "height": 16 }, "text": { "fontSize": 12, "align": "center" } },
+        "level_1": { "rect": { "x": 50, "y": 730, "width": 80, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } },
+        "level_1_text": { "rect": { "x": 150, "y": 710, "width": 420, "height": 120 }, "text": { "fontSize": 20 } },
+        "level_1_pt": { "rect": { "x": 600, "y": 740, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } },
+        "level_label_2": { "draws": "level_label", "rect": { "x": 50, "y": 852, "width": 80, "height": 16 }, "text": { "fontSize": 12, "align": "center" } },
+        "level_2": { "rect": { "x": 50, "y": 870, "width": 80, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } },
+        "level_2_text": { "rect": { "x": 150, "y": 850, "width": 420, "height": 120 }, "text": { "fontSize": 20 } },
+        "level_2_pt": { "rect": { "x": 600, "y": 880, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } },
+        "oracle": { "rect": { "x": 50, "y": 990, "width": 500, "height": 30 }, "text": { "fontSize": 16 } },
+        "pt": { "rect": { "x": 600, "y": 620, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } }
+      }
+    }
+  }
+}

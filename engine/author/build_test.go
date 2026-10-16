@@ -369,3 +369,28 @@ func TestExtendsRefusesWhatItCannotResolve(t *testing.T) {
 		})
 	}
 }
+
+func TestExtendsInheritsAndPatchesSections(t *testing.T) {
+	got, ds := layoutsOf(t, map[string]string{
+		"walker": `{
+		  "serves": [{"role": "single", "kind": "planeswalker"}],
+		  "stack": [{"part": "bg"}],
+		  "textBoxes": {},
+		  "sections": {"abilities": {"split": "loyalty", "gap": 10}, "extra": {"split": "loyalty"}}
+		}`,
+		"walker_tall": `{
+		  "extends": ["walker"],
+		  "serves": [{"role": "mdfc_back", "kind": "planeswalker"}],
+		  "patch": {"sections": {"abilities": {"gap": 20}, "extra": null}}
+		}`,
+	})
+	if ds.HasErrors() {
+		t.Fatal(ds)
+	}
+	if s := string(got["walker_tall"]["sections"]); s != `{"abilities":{"gap":20,"split":"loyalty"}}` {
+		t.Errorf("sections = %s", s)
+	}
+	if s := string(got["walker"]["sections"]); !strings.Contains(s, `"extra"`) {
+		t.Errorf("the base changed: %s", s)
+	}
+}

@@ -1,0 +1,26 @@
+{
+  "name": "Gemrazer",
+  "mana_cost": "{3}{G}",
+  "type_line": "Creature — Beast",
+  "oracle_text": "Mutate {1}{G}{G} (If you cast this spell for its mutate cost, put it over or under target non-Human creature you own. They mutate into the creature on top plus all abilities from under it.)\nReach, trample\nWhenever this creature mutates, destroy target artifact or enchantment an opponent controls.",
+  "power": "4",
+  "toughness": "4",
+  "colors": [
+    "G"
+  ],
+  "color_identity": [
+    "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "155",
+  "set": "iko",
+  "lang": "en",
+  "released_at": "2020-04-24",
+  "artist": "Svetlin Velinov",
+  "layout": "mutate",
+  "keywords": [
+    "Reach",
+    "Mutate",
+    "Trample"
+  ]
+}

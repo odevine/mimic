@@ -1,0 +1,23 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-planar",
+  "name": "Planar boxes",
+  "description": "A plane's static ability and its chaos ability beside the chaos symbol",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-1039-744-f0ead6.png" } } },
+    "chaos_symbol": { "variants": { "any": { "path": "img/chaos-60-640-50-50-202020.png" } } }
+  },
+  "layouts": {
+    "plane": {
+      "serves": [{ "role": "single", "kind": "plane" }],
+      "canvas": { "width": 1039, "height": 744 },
+      "stack": [{ "part": "frame" }, { "id": "chaos_symbol", "part": "chaos_symbol", "condition": "chaos" }],
+      "art": [{ "x": 0, "y": 0, "width": 1039, "height": 744 }],
+      "textBoxes": {
+        "title": { "rect": { "x": 400, "y": 50, "width": 300, "height": 40 }, "text": { "fontSize": 28, "font": "title", "vAlign": "baseline", "align": "center" } },
+        "oracle": { "rect": { "x": 60, "y": 540, "width": 900, "height": 90 }, "text": { "fontSize": 20 } },
+        "chaos": { "rect": { "x": 120, "y": 640, "width": 840, "height": 60 }, "text": { "fontSize": 20 } }
+      }
+    }
+  }
+}

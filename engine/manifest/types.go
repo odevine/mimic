@@ -16,8 +16,8 @@ import (
 // Contract is the version of the resolved form this package reads, as MAJOR.MINOR.
 // A manifest with a different major is refused, and one with a newer minor loads
 // with a warning because a minor release only adds optional fields. Minor 1 added
-// the fonts and roles tables
-const Contract = "1.1"
+// the fonts and roles tables, and minor 2 a layout's sections
+const Contract = "1.2"
 
 // Manifest is a template as the engine reads it
 type Manifest struct {
@@ -157,6 +157,10 @@ type Layout struct {
 	// Art is the places the card's art goes
 	Art     []ArtWindow       `json:"art,omitempty"`
 	Symbols map[string]Symbol `json:"symbols,omitempty"`
+	// Sections are the regions whose rules text the engine splits into rows, one
+	// for each loyalty ability, saga chapter, or class level, by a name local to
+	// the layout
+	Sections map[string]Section `json:"sections,omitempty"`
 }
 
 // Entry is one use of a part in a layout's stack, which runs bottom to top
@@ -209,8 +213,9 @@ type ArtWindow struct {
 	Y      int `json:"y"`
 	Width  int `json:"width"`
 	Height int `json:"height"`
-	// After is the ID of the stack entry the art sits directly above
-	After string `json:"after"`
+	// After is the ID of the stack entry the art sits directly above. Empty puts
+	// the art beneath every entry, for a frame that is translucent over it
+	After string `json:"after,omitempty"`
 	// Face is which face's art the window shows, as for an entry
 	Face   string `json:"face,omitempty"`
 	Rotate int    `json:"rotate,omitempty"`
@@ -300,6 +305,11 @@ type TextStyle struct {
 	// Tracking is letter spacing in thousandths of an em
 	Tracking float64 `json:"tracking,omitempty"`
 	Shadow   *Shadow `json:"shadow,omitempty"`
+	// Prefix is literal text drawn before this box's own value, in the same
+	// style, such as the "Illus. " an old-bordered card prints before its
+	// artist credit in place of the modern frame's nib icon. The artist
+	// box's nib icon does not draw when a Prefix is set
+	Prefix string `json:"prefix,omitempty"`
 }
 
 // Shadow is a solid offset copy of a box's ink drawn behind it
@@ -347,6 +357,127 @@ type Override struct {
 	// Box is the text box with the patch merged over it, filled in when the
 	// manifest is decoded
 	Box *TextBox
+}
+
+// Section is a region of a layout whose rules text the engine splits into rows
+// and spreads from top to bottom, a row for each ability, chapter, or level the
+// card prints. The rows' text shrinks together until every row fits, and each
+// row can carry images and text beside it, such as a loyalty cost's badge or a
+// chapter's number, which move with the row
+type Section struct {
+	// Split is how the rules text splits into rows: "loyalty" for a
+	// planeswalker's abilities, "chapters" for a saga's, or "levels" for a
+	// class's. A line the split does not recognize, such as a static ability, is
+	// a row with no cost or chapter
+	Split string `json:"split"`
+	// Rect is the region the rows spread over
+	Rect Rect `json:"rect"`
+	// Text is how each row's rules text looks, and the size it starts from before
+	// the rows shrink to fit
+	Text TextStyle `json:"text"`
+	// Body is the column a row's text sits in, which is the rect's width when
+	// unset. Plain is the column of a row that has nothing for its split's key
+	// field, such as a static ability, when that sits apart from the others
+	Body  *Span `json:"body,omitempty"`
+	Plain *Span `json:"plain,omitempty"`
+	// Gap is the least space kept between rows and at the region's top and bottom
+	// before the text shrinks, in pixels
+	Gap int `json:"gap,omitempty"`
+	// Spread shares out the space the rows leave
+	Spread *Spread `json:"spread,omitempty"`
+	// Header reserves room above each row that has a field, such as the level bar
+	// over each of a class's levels after the first
+	Header *Header `json:"header,omitempty"`
+	// Items are the images and text drawn beside each row
+	Items []RowItem `json:"items,omitempty"`
+	// Divider is an image drawn in the middle of the space between two rows
+	Divider *RowPart `json:"divider,omitempty"`
+	// Bands shade every other row, such as a planeswalker's alternate abilities
+	Bands *Bands `json:"bands,omitempty"`
+	// AvoidLayer names the ID of a stack entry the rows' text keeps out of, such
+	// as a loyalty box, for a card whose render draws it
+	AvoidLayer string `json:"avoidLayer,omitempty"`
+	// Above is the ID of the stack entry the section's images sit directly above.
+	// Empty draws them above the whole stack. Text always draws on top
+	Above     string `json:"above,omitempty"`
+	Condition string `json:"condition,omitempty"`
+	Face      string `json:"face,omitempty"`
+}
+
+// Span is a horizontal stretch of the canvas
+type Span struct {
+	X     int `json:"x"`
+	Width int `json:"width"`
+}
+
+// Spread weighs how the space the rows leave is shared. Outside is the share of
+// the space above the first row and of the space below the last, and Inside the
+// share of each space between two rows. Zero is 1 for both, which spaces the
+// rows evenly
+type Spread struct {
+	Outside float64 `json:"outside,omitempty"`
+	Inside  float64 `json:"inside,omitempty"`
+}
+
+// Header is room held above each row that has a field
+type Header struct {
+	// For is the row field a row needs to have a header: "cost", "chapter", or
+	// "level"
+	For    string `json:"for"`
+	Height int    `json:"height"`
+}
+
+// RowItem is an image or a text drawn beside each row, authored in place for one
+// row and moved with each. Y is where the anchor of that authored row was, so a
+// row whose anchor is 100 pixels lower draws the item 100 pixels lower
+type RowItem struct {
+	// For is the row field the item shows: "cost", "chapter", or "level". The item
+	// draws only for a row that has it, once for each value it holds. Empty draws
+	// for every row
+	For string `json:"for,omitempty"`
+	// Part is the image the item draws. Parts picks one by the key of the row's
+	// value in place of it: a loyalty cost's sign, "plus", "minus", or "zero", or
+	// the value itself, such as a chapter's "II". A row whose key has no image
+	// draws Part, or nothing when there is none
+	Part  string            `json:"part,omitempty"`
+	Parts map[string]string `json:"parts,omitempty"`
+	// Rect and Text draw the row's value as text in place of an image. Format
+	// wraps the value, with {} standing for it, such as "Level {}" or "{}:", and
+	// one with no {} prints as written, such as a planeswalker's colon
+	Rect   *Rect      `json:"rect,omitempty"`
+	Text   *TextStyle `json:"text,omitempty"`
+	Format string     `json:"format,omitempty"`
+	// Anchor is the point of a row the item moves with: "center", the middle of
+	// the row's text and the default, "top", the top of the row with its header,
+	// or "first-line", the middle of the row's opening line alone, for an item
+	// such as a planeswalker's loyalty badge that is authored beside one line
+	// and should not drift toward the middle of a row that wraps further
+	Anchor string `json:"anchor,omitempty"`
+	Y      int    `json:"y"`
+	// Step is how far apart the copies of an item for a row with several values
+	// sit, centered on the anchor as a group
+	Step int `json:"step,omitempty"`
+}
+
+// RowPart is an image placed between rows. Y is the point of the image as
+// authored that lands on the place it goes
+type RowPart struct {
+	Part string `json:"part"`
+	Y    int    `json:"y"`
+}
+
+// Bands shade alternate rows with an image cut to each row's band, which runs
+// from the middle of the space above the row to the middle of the space below,
+// or to the image's own edge for the first and last row
+type Bands struct {
+	Part string `json:"part"`
+	// Rows is which rows are shaded: "odd" for the second, fourth, and so on, the
+	// default, or "even" for the first, third, and so on
+	Rows string `json:"rows,omitempty"`
+	// Top and Bottom are images drawn at a band's top and bottom edges, such as a
+	// ragged line, where those edges fall between two rows
+	Top    *RowPart `json:"top,omitempty"`
+	Bottom *RowPart `json:"bottom,omitempty"`
 }
 
 // Feature is a choice the user makes

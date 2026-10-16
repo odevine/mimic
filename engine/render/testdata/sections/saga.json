@@ -1,0 +1,39 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-saga",
+  "name": "Saga sections",
+  "description": "Chapters as rows with a numeral badge, and the reminder above them",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "chapter_i": { "variants": { "any": { "path": "img/chapter-20-500-50-60-701010.png" } } },
+    "chapter_ii": { "variants": { "any": { "path": "img/chapter-20-500-50-60-107010.png" } } },
+    "chapter_iii": { "variants": { "any": { "path": "img/chapter-20-500-50-60-101070.png" } } },
+    "divider": { "variants": { "any": { "path": "img/divider-80-498-280-4-404040.png" } } }
+  },
+  "layouts": {
+    "saga": {
+      "serves": [{ "role": "single", "kind": "saga" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }],
+      "art": [{ "x": 372, "y": 100, "width": 330, "height": 820 }],
+      "textBoxes": {
+        "title": { "rect": { "x": 48, "y": 40, "width": 520, "height": 40 }, "text": { "fontSize": 30, "font": "title", "vAlign": "baseline" } },
+        "description": { "rect": { "x": 80, "y": 100, "width": 280, "height": 140 }, "text": { "fontSize": 18, "color": "#000000" } },
+        "oracle": { "rect": { "x": 400, "y": 940, "width": 300, "height": 60 }, "text": { "fontSize": 18 } }
+      },
+      "sections": {
+        "chapters": {
+          "split": "chapters",
+          "rect": { "x": 80, "y": 260, "width": 280, "height": 660 },
+          "text": { "fontSize": 20, "color": "#000000" },
+          "gap": 16,
+          "spread": { "outside": 1, "inside": 1.5 },
+          "items": [
+            { "for": "chapter", "parts": { "I": "chapter_i", "II": "chapter_ii", "III": "chapter_iii" }, "y": 530, "step": 66 }
+          ],
+          "divider": { "part": "divider", "y": 500 }
+        }
+      }
+    }
+  }
+}

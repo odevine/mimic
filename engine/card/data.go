@@ -25,7 +25,9 @@ const (
 type Data struct {
 	Name, ManaCost, TypeLine, OracleText, FlavorText string
 	Power, Toughness, Loyalty                        string
-	Colors, ColorIdentity                            []Color // WUBRG
+	// Defense is a battle's starting defense
+	Defense               string
+	Colors, ColorIdentity []Color // WUBRG
 	// ProducedMana is the mana a land or other source can add, as Scryfall
 	// reports it. It may include Colorless and is the signal a land's frame
 	// colors come from, since a land's own Colors are empty
@@ -68,7 +70,7 @@ type Data struct {
 // by the whole card and lives on Data
 type Face struct {
 	Name, ManaCost, TypeLine, OracleText, FlavorText string
-	Power, Toughness, Loyalty                        string
+	Power, Toughness, Loyalty, Defense               string
 	Colors                                           []Color
 	ColorIndicator                                   []Color
 	Artist, ArtworkURL                               string
@@ -96,6 +98,7 @@ func (d *Data) overlay(i int) *Data {
 	out.Power = f.Power
 	out.Toughness = f.Toughness
 	out.Loyalty = f.Loyalty
+	out.Defense = f.Defense
 	out.Colors = f.Colors
 	out.ColorIndicator = f.ColorIndicator
 	if f.Artist != "" {

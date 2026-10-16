@@ -97,6 +97,8 @@ type Layout struct {
 	Boxes   []*Box
 	Art     []manifest.ArtWindow
 	Symbols map[string]*Symbol
+	// Sections lists the regions whose rules text splits into rows, sorted by key
+	Sections []*Section
 
 	entries map[string]*Entry
 	boxes   map[string]*Box
@@ -152,6 +154,11 @@ func compileLayout(name string, ml manifest.Layout, parts map[string]*Part) (*La
 		l.Boxes = append(l.Boxes, b)
 		l.boxes[k] = b
 	}
+	secs, err := compileSections(ml.Sections)
+	if err != nil {
+		return nil, fmt.Errorf("layout %q sections: %w", name, err)
+	}
+	l.Sections = secs
 	for sn, ms := range ml.Symbols {
 		c, err := frame.Compile(ms.Condition)
 		if err != nil {
@@ -399,7 +406,7 @@ func SpecOf(draws string, b manifest.TextBox) TextBoxSpec {
 		FontSize: b.Text.FontSize, Align: b.Text.Align, Color: b.Text.Color,
 		VAlign: b.Text.VAlign, LineSpacing: b.Text.LineSpacing, MinFontSize: b.Text.MinFontSize,
 		PaddingX: &px, PaddingY: &py,
-		Tracking: b.Text.Tracking, Font: b.Text.Font,
+		Tracking: b.Text.Tracking, Font: b.Text.Font, Prefix: b.Text.Prefix,
 		ClearOf: b.Flow.ClearOf, ClearGap: b.Flow.ClearGap, AvoidLayer: b.Flow.AvoidLayer,
 		Space: b.Space, Rotate: b.Rotate,
 	}

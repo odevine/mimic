@@ -1,0 +1,41 @@
+{
+  "name": "Bonecrusher Giant // Stomp",
+  "mana_cost": "{2}{R} // {1}{R}",
+  "type_line": "Creature — Giant // Instant — Adventure",
+  "flavor_text": "Not every tale ends in glory.",
+  "power": "4",
+  "toughness": "3",
+  "colors": [
+    "R"
+  ],
+  "color_identity": [
+    "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "781",
+  "set": "clb",
+  "lang": "en",
+  "released_at": "2022-06-10",
+  "artist": "Victor Adame Minguez",
+  "layout": "adventure",
+  "keywords": [],
+  "card_faces": [
+    {
+      "name": "Bonecrusher Giant",
+      "mana_cost": "{2}{R}",
+      "type_line": "Creature — Giant",
+      "oracle_text": "Whenever this creature becomes the target of a spell, this creature deals 2 damage to that spell's controller.",
+      "flavor_text": "Not every tale ends in glory.",
+      "power": "4",
+      "toughness": "3",
+      "artist": "Victor Adame Minguez"
+    },
+    {
+      "name": "Stomp",
+      "mana_cost": "{1}{R}",
+      "type_line": "Instant — Adventure",
+      "oracle_text": "Damage can't be prevented this turn. Stomp deals 2 damage to any target.",
+      "artist": "Victor Adame Minguez"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-prototype",
+  "name": "Prototype boxes",
+  "description": "The prototype line, cost, and power and toughness, in the prototype's own color",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "proto_box": { "slot": "prototype", "variants": { "u": { "path": "img/proto-40-600-664-110-4060c0.png" }, "artifact": { "path": "img/proto-40-600-664-110-909090.png" } } }
+  },
+  "layouts": {
+    "prototype": {
+      "serves": [{ "role": "single", "kind": "prototype" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }, { "id": "proto", "part": "proto_box" }],
+      "art": [{ "x": 60, "y": 80, "width": 624, "height": 500, "after": "frame" }],
+      "textBoxes": {
+        "prototype": { "rect": { "x": 50, "y": 610, "width": 520, "height": 90 }, "text": { "fontSize": 16 } },
+        "prototype_mana": { "rect": { "x": 580, "y": 610, "width": 110, "height": 40 }, "text": { "fontSize": 24, "align": "right" } },
+        "prototype_pt": { "rect": { "x": 600, "y": 655, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } },
+        "oracle": { "rect": { "x": 50, "y": 720, "width": 640, "height": 220 }, "text": { "fontSize": 20 } },
+        "pt": { "rect": { "x": 600, "y": 960, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } }
+      }
+    }
+  }
+}

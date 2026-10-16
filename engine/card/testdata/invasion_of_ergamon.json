@@ -1,0 +1,52 @@
+{
+  "name": "Invasion of Ergamon // Truga Cliffcharger",
+  "type_line": "Battle — Siege // Creature — Rhino",
+  "color_identity": [
+    "G",
+    "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "233",
+  "set": "mom",
+  "lang": "en",
+  "released_at": "2023-04-21",
+  "artist": "Manuel Castañón",
+  "layout": "battle",
+  "keywords": [
+    "Transform",
+    "Treasure",
+    "Trample"
+  ],
+  "card_faces": [
+    {
+      "name": "Invasion of Ergamon",
+      "mana_cost": "{R}{G}",
+      "type_line": "Battle — Siege",
+      "oracle_text": "(As a Siege enters, choose an opponent to protect it. You and others can attack it. When it's defeated, exile it, then cast it transformed.)\nWhen this Siege enters, create a Treasure token. Then you may discard a card. If you do, draw a card.",
+      "defense": "5",
+      "colors": [
+        "G",
+        "R"
+      ],
+      "artist": "Manuel Castañón"
+    },
+    {
+      "name": "Truga Cliffcharger",
+      "mana_cost": "",
+      "type_line": "Creature — Rhino",
+      "oracle_text": "Trample\nWhen this creature enters, you may discard a card. If you do, search your library for a land or battle card, reveal it, put it into your hand, then shuffle.",
+      "flavor_text": "Throughout Ergamon's wild Truga Jungle, predator-prey relationships stopped until every last invader was crushed to dust.",
+      "power": "3",
+      "toughness": "4",
+      "colors": [
+        "G",
+        "R"
+      ],
+      "color_indicator": [
+        "G",
+        "R"
+      ],
+      "artist": "Manuel Castañón"
+    }
+  ]
+}

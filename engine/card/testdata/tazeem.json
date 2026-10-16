@@ -1,0 +1,16 @@
+{
+  "name": "Tazeem",
+  "mana_cost": "",
+  "type_line": "Plane — Zendikar",
+  "oracle_text": "Creatures can't block.\nWhenever chaos ensues, draw a card for each land you control.",
+  "colors": [],
+  "color_identity": [],
+  "rarity": "common",
+  "collector_number": "78",
+  "set": "opca",
+  "lang": "en",
+  "released_at": "2016-11-25",
+  "artist": "Vincent Proce",
+  "layout": "planar",
+  "keywords": []
+}

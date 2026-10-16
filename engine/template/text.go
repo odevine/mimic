@@ -273,6 +273,23 @@ func MeasureTextBox(box TextBoxSpec, parts ...TextPart) (image.Rectangle, error)
 	return image.Rect(left, top, right, top+height), nil
 }
 
+// FirstLineHeight is the baseline-to-baseline distance the parts lay out at in
+// box, the way a badge that sits beside only a row's opening line, such as a
+// planeswalker's loyalty cost, centers on that line rather than on the ink of
+// however many lines the row wraps to. Zero means the parts draw nothing
+func FirstLineHeight(box TextBoxSpec, parts ...TextPart) (int, error) {
+	inner := insetBox(box)
+	lay, err := fitLayout(inner, parts)
+	if err != nil {
+		return 0, err
+	}
+	face := firstTextFace(lay)
+	if face == nil {
+		return 0, nil
+	}
+	return lineHeightPx(face.Metrics(), lay.size, box.LineSpacing), nil
+}
+
 // insetBox shrinks box by its padding on each axis, giving the rectangle the
 // text occupies. All layout and drawing use this inner rectangle, so the
 // horizontal padding governs the wrap width and the horizontal anchor while the

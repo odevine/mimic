@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.0.0](https://github.com/odevine/mimic/compare/ui/v1.0.0...ui/v2.0.0) (2026-10-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** add a visual template editor ([#128](https://github.com/odevine/mimic/issues/128))
+* **ui:** the -fonts flag names a folder of fonts to choose from and no longer one subfolder per role, and AddFont and RemoveFont take a file and a font name in place of a role folder.
+* **ui:** Linux releases no longer include an AppImage, and Linux installs no longer update in place. Install the .flatpak bundle, .deb or .rpm.
+
+### Features
+
+* **ui:** add a visual template editor ([#128](https://github.com/odevine/mimic/issues/128)) ([8f78fc1](https://github.com/odevine/mimic/commit/8f78fc1706607c2f22b2579b6e409c643772a19d))
+* **ui:** assign any font to any text role ([#111](https://github.com/odevine/mimic/issues/111)) ([ff68464](https://github.com/odevine/mimic/commit/ff68464eb980323fe1c83d95697d56f0e9b30185))
+* **ui:** ship a Flatpak instead of an AppImage and trim the release files ([#107](https://github.com/odevine/mimic/issues/107)) ([fd4f76f](https://github.com/odevine/mimic/commit/fd4f76fe0c4dced58977cebc76100f8c7b47bb0d))
+
+
+### Bug Fixes
+
+* **ui:** fix the settings dialog height, the name casing, counts of one and accessibility ([#105](https://github.com/odevine/mimic/issues/105)) ([bd6d090](https://github.com/odevine/mimic/commit/bd6d090101c23763689e3b4e5ce32a4a43354664))
+
+
+### Build System
+
+* **ui:** depend on the released engine v0.19.1 ([#114](https://github.com/odevine/mimic/issues/114)) ([cd56098](https://github.com/odevine/mimic/commit/cd5609811624f951ec7803883d377f4b724c01b4))
+
 ## [1.0.0](https://github.com/odevine/mimic/compare/ui/v0.9.2...ui/v1.0.0) (2026-10-12)
 
 

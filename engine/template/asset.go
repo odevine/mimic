@@ -67,6 +67,12 @@ type TextBoxSpec struct {
 	// "body-italic", "mana", "small-caps", or "info" (see engine/fonts).
 	// Empty, or a name the engine does not recognize, draws in the body role
 	Font string `json:"font,omitempty"`
+	// Prefix is literal text drawn before this box's own value, in the same
+	// style, such as the "Illus. " an old-bordered card prints before its
+	// artist credit in place of the modern frame's nib icon. Empty draws
+	// nothing extra, and the artist box's nib icon does not draw when a
+	// Prefix is set, since the prefix already labels the credit
+	Prefix string `json:"prefix,omitempty"`
 	// AvoidLayer names a layer this box's ink keeps clear of, the way a
 	// creature's rules text steps around its P/T box. The engine resolves
 	// the named layer the same way the main compositing pass would (its own

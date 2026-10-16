@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/odevine/mimic/engine/card"
 	"github.com/odevine/mimic/engine/frame"
 	"github.com/odevine/mimic/engine/manifest"
 )
@@ -48,6 +49,7 @@ type layoutPatchDoc struct {
 	Stack     *stackPatch    `json:"stack,omitempty"`
 	TextBoxes map[string]any `json:"textBoxes,omitempty"`
 	Symbols   map[string]any `json:"symbols,omitempty"`
+	Sections  map[string]any `json:"sections,omitempty"`
 	Canvas    map[string]any `json:"canvas,omitempty"`
 	Art       []any          `json:"art,omitempty"`
 }
@@ -123,7 +125,48 @@ func (g *schemaGen) object(t reflect.Type) map[string]any {
 		props["kind"] = map[string]any{"type": "string", "enum": frame.Kinds()}
 		out["required"] = []string{"role", "kind"}
 	}
+	for field, extra := range fieldNotes[t] {
+		if p, ok := props[field].(map[string]any); ok {
+			for k, v := range extra {
+				p[k] = v
+			}
+		}
+	}
+	if req, ok := requiredFields[t]; ok {
+		out["required"] = req
+	}
 	return out
+}
+
+// fieldNotes adds to the schema of fields whose values are a fixed set or whose
+// empty value means something of its own
+var fieldNotes = map[reflect.Type]map[string]map[string]any{
+	reflect.TypeOf(manifest.ArtWindow{}): {
+		"after": {"description": "The id of the stack entry the art sits directly above. Empty or left out puts the art beneath every entry"},
+	},
+	reflect.TypeOf(manifest.Section{}): {
+		"split": {"enum": card.SplitNames(), "description": "How the rules text splits into rows"},
+		"above": {"description": "The id of the stack entry the section's images sit directly above. Empty draws them above the whole stack"},
+	},
+	reflect.TypeOf(manifest.RowItem{}): {
+		"for":    {"enum": append([]string{""}, card.RowFields()...), "description": "The row field the item shows. Empty draws for every row"},
+		"anchor": {"enum": []string{"", "center", "top"}},
+		"y":      {"description": "Where the anchor of the row the item was authored against was"},
+	},
+	reflect.TypeOf(manifest.Header{}): {
+		"for": {"enum": card.RowFields()},
+	},
+	reflect.TypeOf(manifest.Bands{}): {
+		"rows": {"enum": []string{"", "odd", "even"}},
+	},
+}
+
+// requiredFields are the fields an object must have
+var requiredFields = map[reflect.Type][]string{
+	reflect.TypeOf(manifest.Section{}): {"split", "rect", "text"},
+	reflect.TypeOf(manifest.Header{}):  {"for", "height"},
+	reflect.TypeOf(manifest.RowPart{}): {"part", "y"},
+	reflect.TypeOf(manifest.Bands{}):   {"part"},
 }
 
 // fields adds the JSON fields of a struct, with an embedded struct's fields as its own

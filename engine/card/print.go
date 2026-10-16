@@ -2,15 +2,21 @@ package card
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
 
 // TextFor returns the printed text for a named card-anatomy box: title, mana,
-// type, pt, flipside_pt, artist, collector, or set. It is the standard vocabulary a WUBRG
-// frame's boxes draw from, shared by any template rather than reimplemented
-// per frame. Unknown names return empty so a manifest can define boxes this
-// mapping does not fill.
+// type, pt, loyalty, defense, flipside_pt, flipside_type, flipside_mana, artist,
+// collector, or set, and the parts of the rules text some frames print apart:
+// description, mutate, prototype, prototype_mana, prototype_pt, chaos, and the
+// leveler boxes level_up, level_label, level_N, level_N_pt, and level_N_text.
+// The pt box reads a face's loyalty in place of its power and toughness when it
+// has one, and the loyalty box reads only the loyalty. It is the standard
+// vocabulary a WUBRG frame's boxes draw from, shared by any template rather than
+// reimplemented per frame. Unknown names return empty so a manifest can define
+// boxes this mapping does not fill.
 //
 // The oracle box is rules text layered with flavor text as separate styled
 // parts by whatever builds a card's text parts, so this direct lookup returns
@@ -34,8 +40,33 @@ func TextFor(name string, d *Data) string {
 		default:
 			return ""
 		}
+	case "loyalty":
+		return d.Loyalty
+	case "defense":
+		return d.Defense
 	case "flipside_pt":
 		return flipsidePT(d)
+	case "flipside_type":
+		return flipsideType(d)
+	case "flipside_mana":
+		return flipsideMana(d)
+	case "description":
+		return Description(d)
+	case "mutate":
+		return MutateText(d.OracleText)
+	case "prototype", "prototype_mana", "prototype_pt":
+		p, ok := ParsePrototype(d.OracleText)
+		switch {
+		case !ok:
+			return ""
+		case name == "prototype_mana":
+			return p.ManaCost
+		case name == "prototype_pt":
+			return p.PT
+		}
+		return p.Text()
+	case "chaos":
+		return ChaosText(d)
 	case "fuse":
 		return d.FuseText()
 	case "artist":
@@ -44,16 +75,26 @@ func TextFor(name string, d *Data) string {
 		return CollectorLine(d)
 	case "set":
 		return SetLine(d)
-	default:
-		return ""
 	}
+	if text, ok := levelerText(name, d); ok {
+		return text
+	}
+	return ""
 }
 
 // TextBoxNames lists the box names the engine fills with card text, sorted. The
 // oracle and copyright boxes are built from more than TextFor's lookup, and are
 // listed with the rest
 func TextBoxNames() []string {
-	return []string{"artist", "collector", "copyright", "flipside_pt", "fuse", "mana", "oracle", "pt", "set", "title", "type"}
+	names := []string{
+		"artist", "chaos", "collector", "copyright", "defense", "description",
+		"flipside_mana", "flipside_pt", "flipside_type", "fuse", "loyalty", "mana",
+		"mutate", "oracle", "prototype", "prototype_mana", "prototype_pt", "pt", "set",
+		"title", "type",
+	}
+	names = append(names, levelerBoxNames()...)
+	slices.Sort(names)
+	return names
 }
 
 // CollectorLine formats the rarity and collector number, as "R 0177". Real

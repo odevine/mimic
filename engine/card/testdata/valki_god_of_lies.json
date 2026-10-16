@@ -1,0 +1,48 @@
+{
+  "name": "Valki, God of Lies // Tibalt, Cosmic Impostor",
+  "type_line": "Legendary Creature — God // Legendary Planeswalker — Tibalt",
+  "color_identity": [
+    "B",
+    "R"
+  ],
+  "produced_mana": [
+    "R"
+  ],
+  "rarity": "mythic",
+  "collector_number": "114",
+  "set": "khm",
+  "lang": "en",
+  "released_at": "2021-02-05",
+  "artist": "Yongjae Choi",
+  "layout": "modal_dfc",
+  "frame_effects": [
+    "legendary"
+  ],
+  "keywords": [],
+  "card_faces": [
+    {
+      "name": "Valki, God of Lies",
+      "mana_cost": "{1}{B}",
+      "type_line": "Legendary Creature — God",
+      "oracle_text": "When Valki enters, each opponent reveals their hand. For each opponent, exile a creature card they revealed this way until Valki leaves the battlefield.\n{X}: Choose a creature card exiled with Valki with mana value X. Valki becomes a copy of that card.",
+      "power": "2",
+      "toughness": "1",
+      "colors": [
+        "B"
+      ],
+      "artist": "Yongjae Choi"
+    },
+    {
+      "name": "Tibalt, Cosmic Impostor",
+      "mana_cost": "{5}{B}{R}",
+      "type_line": "Legendary Planeswalker — Tibalt",
+      "oracle_text": "As Tibalt enters, you get an emblem with \"You may play cards exiled with Tibalt, Cosmic Impostor, and you may spend mana as though it were mana of any color to cast those spells.\"\n+2: Exile the top card of each player's library.\n−3: Exile target artifact or creature.\n−8: Exile all graveyards. Add {R}{R}{R}.",
+      "loyalty": "5",
+      "colors": [
+        "B",
+        "R"
+      ],
+      "artist": "Yongjae Choi"
+    }
+  ]
+}

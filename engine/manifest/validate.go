@@ -435,7 +435,7 @@ func (v *validator) layout(path, name string, l *Layout, served map[frame.Shape]
 	for i, a := range l.Art {
 		ap := fmt.Sprintf("%s.art[%d]", path, i)
 		v.size(ap, a.X, a.Y, a.Width, a.Height)
-		if !entries[a.After] {
+		if a.After != "" && !entries[a.After] {
 			v.c.errorf(ap+".after", "no stack entry has the id %q", a.After)
 		}
 		v.face(ap+".face", a.Face)
@@ -444,6 +444,7 @@ func (v *validator) layout(path, name string, l *Layout, served map[frame.Shape]
 	for _, sn := range sortedKeys(l.Symbols) {
 		v.symbol(path+".symbols."+sn, sn, l.Symbols[sn])
 	}
+	v.sections(path+".sections", l, entries, used)
 	// A layout's boxes refer to each other, so those references are checked once
 	// every box in it is known
 	for _, bn := range sortedKeys(l.TextBoxes) {
@@ -609,8 +610,21 @@ func (v *validator) textBox(path, name string, b *TextBox, l *Layout, entries ma
 // boxFields checks what a box holds that does not refer to the rest of its layout
 func (v *validator) boxFields(path string, b *TextBox) {
 	v.size(path+".rect", b.Rect.X, b.Rect.Y, b.Rect.Width, b.Rect.Height)
-	t := b.Text
-	tp := path + ".text"
+	v.textStyle(path+".text", b.Text)
+	if b.Flow.ClearGap < 0 {
+		v.c.errorf(path+".flow.clearGap", "the gap cannot be negative")
+	}
+	v.face(path+".face", b.Face)
+	switch b.Space {
+	case "", "output":
+	default:
+		v.c.errorf(path+".space", "%q is not empty or \"output\"", b.Space)
+	}
+	v.rotate(path+".rotate", b.Rotate)
+}
+
+// textStyle checks how a box's text looks
+func (v *validator) textStyle(tp string, t TextStyle) {
 	if t.FontSize <= 0 {
 		v.c.errorf(tp+".fontSize", "%g is not a size above 0", t.FontSize)
 	}
@@ -647,16 +661,6 @@ func (v *validator) boxFields(path string, b *TextBox) {
 			v.c.errorf(tp+".shadow.color", "%q is not a color like #RRGGBB", s.Color)
 		}
 	}
-	if b.Flow.ClearGap < 0 {
-		v.c.errorf(path+".flow.clearGap", "the gap cannot be negative")
-	}
-	v.face(path+".face", b.Face)
-	switch b.Space {
-	case "", "output":
-	default:
-		v.c.errorf(path+".space", "%q is not empty or \"output\"", b.Space)
-	}
-	v.rotate(path+".rotate", b.Rotate)
 }
 
 // mergeOverride merges an override's patch over a box and reads the result back,

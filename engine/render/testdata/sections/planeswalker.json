@@ -1,0 +1,50 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-planeswalker",
+  "name": "Planeswalker sections",
+  "description": "Loyalty abilities as rows, each with a badge by its cost's sign",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "textbox_short": { "variants": { "any": { "path": "img/textbox-60-700-624-300-e8e0d0.png" } } },
+    "textbox_tall": { "variants": { "any": { "path": "img/textbox-60-620-624-380-e8e0d0.png" } } },
+    "loyalty_box": { "variants": { "any": { "path": "img/loyalty-600-940-100-70-202020.png" } } },
+    "band": { "variants": { "any": { "path": "img/band-60-620-624-380-b0a890.png" } } },
+    "badge_plus": { "variants": { "any": { "path": "img/badge-30-700-50-40-30a030.png" } } },
+    "badge_minus": { "variants": { "any": { "path": "img/badge-30-700-50-40-a03030.png" } } },
+    "badge_zero": { "variants": { "any": { "path": "img/badge-30-700-50-40-3030a0.png" } } }
+  },
+  "layouts": {
+    "planeswalker": {
+      "serves": [{ "role": "single", "kind": "planeswalker" }, { "role": "mdfc_back", "kind": "planeswalker" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [
+        { "part": "frame" },
+        { "id": "textbox", "part": "textbox_short", "condition": "rows<4" },
+        { "id": "textbox_tall", "part": "textbox_tall", "condition": "rows>3" },
+        { "id": "loyalty", "part": "loyalty_box", "condition": "loyalty" }
+      ],
+      "art": [{ "x": 60, "y": 80, "width": 624, "height": 500, "after": "frame" }],
+      "textBoxes": {
+        "title": { "rect": { "x": 48, "y": 40, "width": 520, "height": 40 }, "text": { "fontSize": 30, "font": "title", "vAlign": "baseline" } },
+        "loyalty": { "rect": { "x": 600, "y": 950, "width": 100, "height": 50 }, "text": { "fontSize": 30, "font": "title", "color": "#FFFFFF", "align": "center", "vAlign": "center" } }
+      },
+      "sections": {
+        "abilities": {
+          "split": "loyalty",
+          "rect": { "x": 60, "y": 620, "width": 624, "height": 380 },
+          "text": { "fontSize": 22, "color": "#000000", "paddingX": 4 },
+          "body": { "x": 100, "width": 580 },
+          "plain": { "x": 70, "width": 610 },
+          "gap": 12,
+          "items": [
+            { "for": "cost", "parts": { "plus": "badge_plus", "minus": "badge_minus", "zero": "badge_zero" }, "y": 720 },
+            { "for": "cost", "rect": { "x": 30, "y": 708, "width": 50, "height": 24 }, "text": { "fontSize": 18, "font": "title", "color": "#FFFFFF", "align": "center", "vAlign": "center" }, "y": 720 }
+          ],
+          "bands": { "part": "band" },
+          "avoidLayer": "loyalty",
+          "above": "textbox_tall"
+        }
+      }
+    }
+  }
+}

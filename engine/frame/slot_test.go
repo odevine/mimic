@@ -49,6 +49,7 @@ func TestMaterialReadsEverySlot(t *testing.T) {
 		TransformIcon: Named("sunmoondfc"),
 		FuseKey:       Run(card.Red, card.White),
 		FusePinKey:    Colorless,
+		Prototype:     Mono(card.Blue),
 	}
 	cases := map[Slot]Material{
 		SlotNone:          {},
@@ -61,6 +62,7 @@ func TestMaterialReadsEverySlot(t *testing.T) {
 		SlotTransformIcon: Named("sunmoondfc"),
 		SlotFuse:          Run(card.Red, card.White),
 		SlotFusePinlines:  Colorless,
+		SlotPrototype:     Mono(card.Blue),
 	}
 	for slot, want := range cases {
 		if got := k.Material(slot); got != want {
@@ -71,7 +73,7 @@ func TestMaterialReadsEverySlot(t *testing.T) {
 
 func TestSlotNamesParseBack(t *testing.T) {
 	names := SlotNames()
-	if len(names) != int(SlotFusePinlines) {
+	if len(names) != int(SlotPrototype) {
 		t.Fatalf("%d names: %v", len(names), names)
 	}
 	for _, n := range names {

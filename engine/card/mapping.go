@@ -17,6 +17,7 @@ type scryfallCard struct {
 	Power           string    `json:"power"`
 	Toughness       string    `json:"toughness"`
 	Loyalty         string    `json:"loyalty"`
+	Defense         string    `json:"defense"`
 	Colors          []string  `json:"colors"`
 	ColorIdentity   []string  `json:"color_identity"`
 	ProducedMana    []string  `json:"produced_mana"`
@@ -55,6 +56,7 @@ type face struct {
 	Power          string    `json:"power"`
 	Toughness      string    `json:"toughness"`
 	Loyalty        string    `json:"loyalty"`
+	Defense        string    `json:"defense"`
 	Colors         []string  `json:"colors"`
 	ColorIndicator []string  `json:"color_indicator"`
 	Artist         string    `json:"artist"`
@@ -89,6 +91,7 @@ func (sc *scryfallCard) toData() *Data {
 		Power:           sc.Power,
 		Toughness:       sc.Toughness,
 		Loyalty:         sc.Loyalty,
+		Defense:         sc.Defense,
 		Colors:          toColors(sc.Colors),
 		ColorIdentity:   toColors(sc.ColorIdentity),
 		ProducedMana:    toColors(sc.ProducedMana),
@@ -114,6 +117,7 @@ func (sc *scryfallCard) toData() *Data {
 			Power:          f.Power,
 			Toughness:      f.Toughness,
 			Loyalty:        f.Loyalty,
+			Defense:        f.Defense,
 			Colors:         toColors(f.Colors),
 			ColorIndicator: toColors(f.ColorIndicator),
 			Artist:         f.Artist,
@@ -145,6 +149,7 @@ func (sc *scryfallCard) toData() *Data {
 		d.Power = f.Power
 		d.Toughness = f.Toughness
 		d.Loyalty = f.Loyalty
+		d.Defense = f.Defense
 		d.Colors = toColors(f.Colors)
 		d.ColorIndicator = toColors(f.ColorIndicator)
 		d.Artist = f.Artist

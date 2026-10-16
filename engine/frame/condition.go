@@ -17,6 +17,7 @@ type Features map[string]any
 // to a feature: "feature:textless" for a feature that is on,
 // "feature:ptStyle=dark" for a feature with that value, and
 // "feature:texture>0.5" for a number, which compares with =, <, <=, > or >=.
+// A count the card decides compares with a number the same way, as "rows>3".
 // The zero Condition always holds
 type Condition struct {
 	src   string
@@ -24,7 +25,8 @@ type Condition struct {
 }
 
 type term struct {
-	name    string // a name from the vocabulary, or empty for a feature term
+	name    string // a name from the vocabulary or of a count, or empty for a feature term
+	count   bool   // name is a count, which compares with op and num
 	feature string
 	op      string // "" for a feature that must be on, otherwise =, <, <=, > or >=
 	value   string
@@ -50,13 +52,27 @@ var vocabulary = map[string]func(Keys) bool{
 	"set_symbol":      func(k Keys) bool { return k.SetSymbol },
 	"icon_left":       func(k Keys) bool { return !k.TransformIcon.IsNone() && !k.iconRight() },
 	"icon_right":      func(k Keys) bool { return k.iconRight() },
+	"loyalty":         func(k Keys) bool { return k.Loyalty },
+	"chaos":           func(k Keys) bool { return k.Chaos },
+	"snow":            func(k Keys) bool { return k.Snow },
+	"nonsnow":         func(k Keys) bool { return !k.Snow },
+}
+
+// counts are the numbers a card decides that a condition compares, such as
+// "rows>3" for a planeswalker with four abilities or more
+var counts = map[string]func(Keys) int{
+	"rows": func(k Keys) int { return k.Rows },
 }
 
 // Conditions lists the names a condition can use, sorted, for a message that
-// tells an author what is available
+// tells an author what is available. A count is listed by its name and compares
+// with a number
 func Conditions() []string {
-	out := make([]string, 0, len(vocabulary))
+	out := make([]string, 0, len(vocabulary)+len(counts))
 	for n := range vocabulary {
+		out = append(out, n)
+	}
+	for n := range counts {
 		out = append(out, n)
 	}
 	sort.Strings(out)
@@ -87,10 +103,10 @@ func compileTerm(s string) (term, error) {
 	}
 	rest, isFeature := strings.CutPrefix(s, "feature:")
 	if !isFeature {
-		if _, ok := vocabulary[s]; !ok {
-			return term{}, fmt.Errorf("unknown condition %q", s)
+		if _, ok := vocabulary[s]; ok {
+			return term{name: s}, nil
 		}
-		return term{name: s}, nil
+		return compileCount(s)
 	}
 	end := 0
 	for end < len(rest) && isNameChar(rest[end]) {
@@ -121,6 +137,32 @@ func compileTerm(s string) (term, error) {
 	if t.op != "=" && !t.isNum {
 		return term{}, fmt.Errorf("feature %q compares with %s but %q is not a number", t.feature, t.op, t.value)
 	}
+	return t, nil
+}
+
+// compileCount reads a comparison of a count with a number, such as "rows>=4"
+func compileCount(s string) (term, error) {
+	end := 0
+	for end < len(s) && isNameChar(s[end]) {
+		end++
+	}
+	name := s[:end]
+	if _, ok := counts[name]; !ok {
+		return term{}, fmt.Errorf("unknown condition %q", s)
+	}
+	rest := strings.TrimSpace(s[end:])
+	t := term{name: name, count: true}
+	for _, op := range []string{"<=", ">=", "<", ">", "="} {
+		if v, ok := strings.CutPrefix(rest, op); ok {
+			t.op, t.value = op, strings.TrimSpace(v)
+			break
+		}
+	}
+	n, err := strconv.ParseFloat(t.value, 64)
+	if t.op == "" || err != nil {
+		return term{}, fmt.Errorf("%q is a count, which compares with a number as in %q", name, name+">3")
+	}
+	t.num, t.isNum = n, true
 	return t, nil
 }
 
@@ -167,6 +209,9 @@ func (c Condition) Met(k Keys, f Features) bool {
 }
 
 func (t term) met(k Keys, f Features) bool {
+	if t.count {
+		return compare(float64(counts[t.name](k)), t.op, t.num)
+	}
 	if t.feature == "" {
 		return vocabulary[t.name](k)
 	}
@@ -184,21 +229,24 @@ func (t term) met(k Keys, f Features) bool {
 	case string:
 		return t.op == "=" && t.value == v
 	case float64:
-		if !t.isNum {
-			return false
-		}
-		switch t.op {
-		case "=":
-			return v == t.num
-		case "<":
-			return v < t.num
-		case "<=":
-			return v <= t.num
-		case ">":
-			return v > t.num
-		case ">=":
-			return v >= t.num
-		}
+		return t.isNum && compare(v, t.op, t.num)
+	}
+	return false
+}
+
+// compare reports whether v stands in the relation op to n
+func compare(v float64, op string, n float64) bool {
+	switch op {
+	case "=":
+		return v == n
+	case "<":
+		return v < n
+	case "<=":
+		return v <= n
+	case ">":
+		return v > n
+	case ">=":
+		return v >= n
 	}
 	return false
 }

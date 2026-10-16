@@ -19,13 +19,20 @@ const (
 	ItemArt    ItemKind = "art"
 	ItemSymbol ItemKind = "symbol"
 	ItemText   ItemKind = "text"
+	// ItemSection is a region whose rules text splits into rows. Its rows' text and
+	// the images and text beside each are items of their own, keyed under it
+	ItemSection ItemKind = "section"
 )
 
 // Item is one thing a layout draws, or would draw for another card
 type Item struct {
 	Kind ItemKind
 	// Key names the item within its layout: a stack entry's id, an art window's
-	// index, a symbol's name, or a text box's key
+	// index, a symbol's name, a text box's key, or a section's key. What a section
+	// draws is keyed under it, as "abilities.rows[1]" for a row's text,
+	// "abilities.rows[1].items[0]" for an item beside it, with a further index for
+	// each of several values, and "abilities.dividers[0]" and "abilities.bands[1]"
+	// for what sits between rows
 	Key string
 	// Part is the art set a layer draws from, and After is the stack entry an art
 	// window sits directly above
@@ -94,7 +101,8 @@ type Description struct {
 	Authored  image.Point
 	Delivered image.Point
 	// Items lists the stack in draw order with each art window right after the entry
-	// it sits above, then the symbols, then the text boxes by key
+	// it sits above, and art beneath the whole stack first, then the symbols, then
+	// the text boxes by key, then each section and what it draws
 	Items []Item
 }
 
@@ -129,12 +137,15 @@ func Describe(t *template.Template, req template.RenderRequest) (*Description, e
 	f.SetSymbol = drawSymbol
 	d.fc = newFaces(req, shapes, req.FaceCard(), f)
 
+	d.art(geo, "")
 	for _, e := range layout.Stack {
 		d.layer(e)
 		d.art(geo, e.ID)
 	}
 	d.symbols(geo, drawSymbol)
-	d.text(geo)
+	if err := d.text(geo); err != nil {
+		return nil, err
+	}
 	return &d.out, nil
 }
 
@@ -267,8 +278,10 @@ func (d *describer) symbols(geo *template.Geometry, drawSymbol bool) {
 	}
 }
 
-func (d *describer) text(geo *template.Geometry) {
+func (d *describer) text(geo *template.Geometry) error {
 	boxes := resolveBoxes(d.layout, geo, d.fc, d.req.Features)
+	sections := resolveSections(d.layout, 1, d.fc, d.req.Features)
+	boxes.take(sections)
 	fr := fonts.NewResolver(d.t.Fonts(), d.req.FontPool, d.req.FontOverrides)
 	syms := newSymbols(fr, boxes)
 	for _, b := range d.layout.Boxes {
@@ -307,6 +320,57 @@ func (d *describer) text(geo *template.Geometry) {
 		}
 		d.add(it, r, job.space == template.SpaceOutput)
 	}
+	return d.sections(boxes, sections, fr, syms)
+}
+
+// sections describes each section and what it draws for the card
+func (d *describer) sections(boxes boxSet, jobs []sectionJob, fr *fonts.Resolver, syms symbols) error {
+	drawn := map[string]sectionJob{}
+	for _, j := range jobs {
+		drawn[j.sec.Key] = j
+	}
+	for _, s := range d.layout.Sections {
+		r := s.Spec.Rect
+		it := Item{Kind: ItemSection, Key: s.Key}
+		rect := image.Rect(r.X, r.Y, r.X+r.Width, r.Y+r.Height)
+		job, ok := drawn[s.Key]
+		if !ok {
+			it.Why = fmt.Sprintf("its condition %q does not hold for this card", s.Condition.String())
+			d.add(it, rect, false)
+			continue
+		}
+		ps, err := placeSection(d.req, d.t, d.layout, d.authored, job, d.fc, boxes.takenBy(job.face), syms, fr, 1)
+		if err != nil {
+			return err
+		}
+		it.Drawn = len(ps.rows) > 0
+		if !it.Drawn {
+			it.Why = fmt.Sprintf("the card's rules text has no %s to split into rows", s.Spec.Split)
+		}
+		d.add(it, rect, false)
+		for _, p := range ps.images {
+			pi := Item{Kind: ItemLayer, Key: p.key, Part: p.part, Images: []string{p.path}}
+			b, ok := p.bounds(d.t)
+			pi.Drawn = ok
+			if !ok {
+				pi.Why = "its image has no visible pixel where it lands"
+			}
+			d.add(pi, b, false)
+		}
+		for _, p := range ps.texts {
+			ti := Item{Kind: ItemText, Key: p.key, Drawn: true}
+			b := p.ink
+			if b.Empty() {
+				var err error
+				if b, err = template.MeasureTextBox(p.spec, p.parts...); err != nil {
+					return err
+				}
+			}
+			ti.Ink = true
+			d.add(ti, b, false)
+		}
+	}
+	return nil
 }
 
 // override says which override of a box is in force for the card, or nil for none. The

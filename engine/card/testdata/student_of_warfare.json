@@ -1,0 +1,26 @@
+{
+  "name": "Student of Warfare",
+  "mana_cost": "{W}",
+  "type_line": "Creature — Human Knight",
+  "oracle_text": "Level up {W} ({W}: Put a level counter on this. Level up only as a sorcery.)\nLEVEL 2-6\n3/3\nFirst strike\nLEVEL 7+\n4/4\nDouble strike",
+  "power": "1",
+  "toughness": "1",
+  "colors": [
+    "W"
+  ],
+  "color_identity": [
+    "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "47",
+  "set": "roe",
+  "lang": "en",
+  "released_at": "2010-04-23",
+  "artist": "Volkan Baǵa",
+  "layout": "leveler",
+  "keywords": [
+    "First strike",
+    "Level Up",
+    "Double strike"
+  ]
+}

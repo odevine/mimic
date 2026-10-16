@@ -13,7 +13,7 @@ import (
 type rawLayout map[string]json.RawMessage
 
 // layoutFields are the parts of a layout that are inherited and patched
-var inherited = []string{"canvas", "stack", "textBoxes", "art", "symbols"}
+var inherited = []string{"canvas", "stack", "textBoxes", "art", "symbols", "sections"}
 
 // authorFields are what a layout file may hold, beside the layout's own fields
 var authorFields = []string{"extends", "patch"}
@@ -21,10 +21,11 @@ var authorFields = []string{"extends", "patch"}
 // layoutPatch is the edits a layout makes to what it extends
 type layoutPatch struct {
 	Stack *stackPatch `json:"stack,omitempty"`
-	// TextBoxes, Symbols, and Canvas merge into the inherited ones as a JSON merge
-	// patch, so an object merges and null removes. Art replaces the list
+	// TextBoxes, Symbols, Sections, and Canvas merge into the inherited ones as a
+	// JSON merge patch, so an object merges and null removes. Art replaces the list
 	TextBoxes json.RawMessage `json:"textBoxes,omitempty"`
 	Symbols   json.RawMessage `json:"symbols,omitempty"`
+	Sections  json.RawMessage `json:"sections,omitempty"`
 	Canvas    json.RawMessage `json:"canvas,omitempty"`
 	Art       json.RawMessage `json:"art,omitempty"`
 }
@@ -157,8 +158,9 @@ func (r *layoutResolver) resolve(name string) (rawLayout, bool) {
 }
 
 // overlay lays a parent over what the layouts before it gave. Stacks join in
-// order, and an entry with an id already held replaces it in place. Text boxes and
-// symbols join by name, and a canvas or a list of art windows replaces
+// order, and an entry with an id already held replaces it in place. Text boxes,
+// symbols, and sections join by name, and a canvas or a list of art windows
+// replaces
 func (r *layoutResolver) overlay(name string, into, parent rawLayout) bool {
 	ok := true
 	if raw, has := parent["stack"]; has {
@@ -182,7 +184,7 @@ func (r *layoutResolver) overlay(name string, into, parent rawLayout) bool {
 		}
 		into["stack"], _ = json.Marshal(base)
 	}
-	for _, field := range []string{"textBoxes", "symbols"} {
+	for _, field := range []string{"textBoxes", "symbols", "sections"} {
 		raw, has := parent[field]
 		if !has {
 			continue
@@ -221,7 +223,7 @@ func (r *layoutResolver) applyPatch(name string, l rawLayout, raw json.RawMessag
 		field string
 		patch json.RawMessage
 		empty string
-	}{{"textBoxes", p.TextBoxes, `{}`}, {"symbols", p.Symbols, `{}`}, {"canvas", p.Canvas, `{}`}} {
+	}{{"textBoxes", p.TextBoxes, `{}`}, {"symbols", p.Symbols, `{}`}, {"sections", p.Sections, `{}`}, {"canvas", p.Canvas, `{}`}} {
 		if f.patch == nil {
 			continue
 		}

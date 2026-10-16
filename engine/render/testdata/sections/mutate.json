@@ -1,0 +1,23 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-mutate",
+  "name": "Mutate boxes",
+  "description": "The mutate ability in a box of its own above the rest of the rules",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "mutate_box": { "slot": "pinlines", "variants": { "g": { "path": "img/mutate-40-600-664-110-60a060.png" } } }
+  },
+  "layouts": {
+    "mutate": {
+      "serves": [{ "role": "single", "kind": "mutate" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }, { "part": "mutate_box" }],
+      "art": [{ "x": 60, "y": 80, "width": 624, "height": 500, "after": "frame" }],
+      "textBoxes": {
+        "mutate": { "rect": { "x": 50, "y": 610, "width": 640, "height": 90 }, "text": { "fontSize": 20 } },
+        "oracle": { "rect": { "x": 50, "y": 720, "width": 640, "height": 220 }, "text": { "fontSize": 20 } },
+        "pt": { "rect": { "x": 600, "y": 960, "width": 90, "height": 40 }, "text": { "fontSize": 28, "font": "title", "align": "center" } }
+      }
+    }
+  }
+}

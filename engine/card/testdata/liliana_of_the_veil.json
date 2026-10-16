@@ -1,0 +1,21 @@
+{
+  "name": "Liliana of the Veil",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Legendary Planeswalker — Liliana",
+  "oracle_text": "+1: Each player discards a card.\n−2: Target player sacrifices a creature.\n−6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice.",
+  "loyalty": "3",
+  "colors": [
+    "B"
+  ],
+  "color_identity": [
+    "B"
+  ],
+  "rarity": "mythic",
+  "collector_number": "475",
+  "set": "inr",
+  "lang": "en",
+  "released_at": "2025-01-24",
+  "artist": "Steve Argyle",
+  "layout": "normal",
+  "keywords": []
+}

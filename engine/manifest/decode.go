@@ -17,7 +17,7 @@ const (
 	MaxBytes = 4 << 20
 	// MaxDimension is the largest width, height, or position in a canvas
 	MaxDimension = 20000
-	MaxParts     = 256
+	MaxParts     = 1024
 	MaxVariants  = 128
 	MaxLayouts   = 64
 	MaxStack     = 128

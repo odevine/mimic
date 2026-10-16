@@ -102,8 +102,44 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 	// Of the specs a text box offers, the override whose condition holds draws, and
 	// every lookup by box key below sees it. Each box resolves against its own face
 	boxes := resolveBoxes(layout, geo, fc, req.Features)
+	sections := resolveSections(layout, scale, fc, req.Features)
+	boxes.take(sections)
+
+	// One renderer serves every box, so its faces and rasterized pips are built
+	// once for the card rather than once per box. The artist credit draws from
+	// that same font but in its own box color, so it takes a renderer beside it
+	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
+	syms := newSymbols(fr, boxes)
+
+	// A section's images sit in the stack, so its rows are laid out first
+	placed := make([]*placedSection, 0, len(sections))
+	for _, job := range sections {
+		ps, err := placeSection(req, t, layout, authored, job, fc, boxes.takenBy(job.face), syms, fr, scale)
+		if err != nil {
+			return nil, err
+		}
+		placed = append(placed, ps)
+	}
+	sectionImages := func(above string) []canvas.Node {
+		var out []canvas.Node
+		for _, ps := range placed {
+			if ps.job.spec.Above != above {
+				continue
+			}
+			for _, p := range ps.images {
+				out = append(out, p.imageNode(t, scale, authored))
+			}
+		}
+		return out
+	}
 
 	var nodes []canvas.Node
+	// Art with no entry to follow sits beneath the whole stack
+	artNodes, err := artFor(req, geo, "")
+	if err != nil {
+		return nil, err
+	}
+	nodes = append(nodes, artNodes...)
 	loads := &frameLoads{req: req}
 	for i, e := range layout.Stack {
 		if err := ctx.Err(); err != nil {
@@ -125,36 +161,14 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 
 		// The art takes its place in the stack whether or not the entry it follows
 		// draws, so a template with a background per face can name the last of them
-		if req.Art == nil {
-			continue
+		artNodes, err := artFor(req, geo, e.ID)
+		if err != nil {
+			return nil, err
 		}
-		for slotIdx, slot := range geo.Art {
-			if slot.After != e.ID || req.Hides("art", strconv.Itoa(slotIdx)) {
-				continue
-			}
-			src := req.Art
-			if len(geo.Art) > 1 {
-				src = template.HalfOfArt(req.Art, slotIdx, len(geo.Art))
-			}
-			fw, fh := slot.Width, slot.Height
-			if quarter(slot.Rotate) {
-				fw, fh = fh, fw
-			}
-			art := template.FitArt(src, fw, fh)
-			artBuf, err := raster.FromImage(art)
-			if err != nil {
-				return nil, fmt.Errorf("render: wrapping art: %w", err)
-			}
-			artBuf = template.Rotate(artBuf, slot.Rotate)
-			nodes = append(nodes, &canvas.Layer{Content: artBuf, Origin: image.Pt(slot.X, slot.Y), Mode: blend.Normal})
-		}
+		nodes = append(nodes, artNodes...)
+		nodes = append(nodes, sectionImages(e.ID)...)
 	}
-
-	// One renderer serves every box, so its faces and rasterized pips are built
-	// once for the card rather than once per box. The artist credit draws from
-	// that same font but in its own box color, so it takes a renderer beside it
-	fr := fonts.NewResolver(t.Fonts(), req.FontPool, req.FontOverrides)
-	syms := newSymbols(fr, boxes)
+	nodes = append(nodes, sectionImages("")...)
 
 	if drawSymbol && !req.Hides("symbol", template.SymbolSet) {
 		node, err := symbolNode(req.SetSymbol, symSpec)
@@ -189,6 +203,18 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 			nodes = append(nodes, got...)
 		}
 	}
+	for _, ps := range placed {
+		for _, p := range ps.texts {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			node, err := p.textNode(geo.Width, geo.Height)
+			if err != nil {
+				return nil, err
+			}
+			nodes = append(nodes, node)
+		}
+	}
 
 	// A pass-through root is the correct default. Nothing sits beneath the
 	// document root, so pass-through and isolated behave the same here
@@ -216,6 +242,36 @@ func Render(ctx context.Context, t *template.Template, req template.RenderReques
 			[]canvas.Node{&canvas.Layer{Content: out, Mode: blend.Normal}}, outNodes...)},
 	}
 	return canvas.Render(turned)
+}
+
+// artFor is the art windows that sit directly above the stack entry with the id,
+// or beneath the whole stack for the empty id, with the card's art fitted to each
+func artFor(req template.RenderRequest, geo *template.Geometry, after string) ([]canvas.Node, error) {
+	if req.Art == nil {
+		return nil, nil
+	}
+	var out []canvas.Node
+	for slotIdx, slot := range geo.Art {
+		if slot.After != after || req.Hides("art", strconv.Itoa(slotIdx)) {
+			continue
+		}
+		src := req.Art
+		if len(geo.Art) > 1 {
+			src = template.HalfOfArt(req.Art, slotIdx, len(geo.Art))
+		}
+		fw, fh := slot.Width, slot.Height
+		if quarter(slot.Rotate) {
+			fw, fh = fh, fw
+		}
+		art := template.FitArt(src, fw, fh)
+		artBuf, err := raster.FromImage(art)
+		if err != nil {
+			return nil, fmt.Errorf("render: wrapping art: %w", err)
+		}
+		artBuf = template.Rotate(artBuf, slot.Rotate)
+		out = append(out, &canvas.Layer{Content: artBuf, Origin: image.Pt(slot.X, slot.Y), Mode: blend.Normal})
+	}
+	return out, nil
 }
 
 // faces is what each face a layout can scope something to prints and frames from.
@@ -300,7 +356,30 @@ type boxSet struct {
 	// jobs lists every box in draw order, the face being drawn first and then the
 	// first and second halves, each in sorted key order
 	jobs []resolvedBox
+	// taken is what each face's boxes and sections print apart from its rules
+	// text, by the face's name, which the rules box then leaves out
+	taken map[string]card.Taken
 }
+
+// take records what the boxes and the sections that draw for the card print
+// apart from the rules text of the face each reads
+func (b *boxSet) take(sections []sectionJob) {
+	b.taken = map[string]card.Taken{}
+	for _, j := range b.jobs {
+		t := b.taken[faceKey(j.face)]
+		if t.Take(j.draws) {
+			b.taken[faceKey(j.face)] = t
+		}
+	}
+	for _, s := range sections {
+		t := b.taken[faceKey(s.face)]
+		t.Rows = true
+		b.taken[faceKey(s.face)] = t
+	}
+}
+
+// takenBy is what the layout prints apart from the rules text of a face
+func (b boxSet) takenBy(face string) card.Taken { return b.taken[faceKey(face)] }
 
 func (b boxSet) byDraws(name string) (resolvedBox, bool) {
 	for _, j := range b.jobs {
@@ -351,7 +430,7 @@ func resolveBoxes(layout *template.Layout, geo *template.Geometry, fc *faces, fe
 func placeBox(req template.RenderRequest, t *template.Template, layout *template.Layout, authored image.Point, job resolvedBox, boxes boxSet, fc *faces, syms symbols, fr *fonts.Resolver, scale template.Scale) (template.TextBoxSpec, []template.TextPart, error) {
 	box := job.spec
 	d, _ := fc.get(job.face)
-	parts := textParts(job.draws, box, d, syms, fr, req.Copyright)
+	parts := textParts(job.draws, box, d, boxes.takenBy(job.face), syms, fr, req.Copyright)
 	if len(parts) == 0 {
 		return box, nil, nil
 	}
@@ -375,7 +454,7 @@ func placeBox(req template.RenderRequest, t *template.Template, layout *template
 	if box.ClearOf != "" {
 		if other, ok := boxes.byKey[box.ClearOf]; ok {
 			od, _ := fc.get(other.face)
-			if otherParts := textParts(other.draws, other.spec, od, syms, fr, req.Copyright); len(otherParts) > 0 {
+			if otherParts := textParts(other.draws, other.spec, od, boxes.takenBy(other.face), syms, fr, req.Copyright); len(otherParts) > 0 {
 				span, err := template.MeasureTextSpan(other.spec, otherParts...)
 				if err != nil {
 					return box, nil, fmt.Errorf("render: measuring %q to clear: %w", box.ClearOf, err)
@@ -605,10 +684,10 @@ type symbols struct {
 // a divider. The mana cost and the rules text are where a card's own symbols
 // appear, and the artist credit opens with the nib the engine prepends, so
 // those are the parts that carry a renderer
-func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols, fr *fonts.Resolver, copyrightOverride string) []template.TextPart {
+func textParts(name string, box template.TextBoxSpec, d *card.Data, taken card.Taken, syms symbols, fr *fonts.Resolver, copyrightOverride string) []template.TextPart {
 	if name == "oracle" {
 		var parts []template.TextPart
-		if p, ok := part(d.OracleText, fonts.Body, fr); ok {
+		if p, ok := part(card.Rules(d, taken), fonts.Body, fr); ok {
 			// Parenthesized reminder text and leading ability or flavor words
 			// italicize, while keyword abilities stay roman
 			p.Emph = fr.Font(fonts.BodyItalic)
@@ -622,9 +701,14 @@ func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols
 		return parts
 	}
 	text := card.TextFor(name, d)
+	if rulesBoxes[name] || strings.HasPrefix(name, "level_") && strings.HasSuffix(name, "_text") {
+		return rulesParts(text, roleFor(box.Font, fr), syms, fr)
+	}
 	switch {
 	case name == "copyright":
 		text = card.CopyrightLine(copyrightOverride, d)
+	case name == "artist" && box.Prefix != "" && text != "":
+		text = box.Prefix + text
 	case name == "artist" && syms.artist != nil && text != "":
 		// The nib sits flush against the name, so the code carries no space and
 		// the symbol's own advance opens the gap
@@ -635,12 +719,20 @@ func textParts(name string, box template.TextBoxSpec, d *card.Data, syms symbols
 		return nil
 	}
 	switch name {
-	case "mana":
+	case "mana", "prototype_mana", "flipside_mana":
 		p.Sym = syms.mana
 	case "artist":
-		p.Sym = syms.artist
+		if box.Prefix == "" {
+			p.Sym = syms.artist
+		}
 	}
 	return []template.TextPart{p}
+}
+
+// rulesBoxes are the boxes that print part of the rules text, which draw it the
+// way the oracle box draws its rules, beside the leveler's tier text
+var rulesBoxes = map[string]bool{
+	"description": true, "mutate": true, "prototype": true, "chaos": true, "level_up": true,
 }
 
 // part resolves a font for role and pairs it with text, normalizing the text

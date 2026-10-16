@@ -1,0 +1,23 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-battle",
+  "name": "Battle boxes",
+  "description": "A landscape frame with a defense box in its corner",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-1039-744-f0ead6.png" } } },
+    "defense_box": { "variants": { "any": { "path": "img/defense-930-640-90-90-303030.png" } } }
+  },
+  "layouts": {
+    "battle": {
+      "serves": [{ "role": "transform_front", "kind": "battle" }],
+      "canvas": { "width": 1039, "height": 744 },
+      "stack": [{ "part": "frame" }, { "id": "defense_box", "part": "defense_box" }],
+      "art": [{ "x": 40, "y": 60, "width": 960, "height": 420 }],
+      "textBoxes": {
+        "title": { "rect": { "x": 90, "y": 40, "width": 600, "height": 40 }, "text": { "fontSize": 28, "font": "title", "vAlign": "baseline" } },
+        "oracle": { "rect": { "x": 60, "y": 520, "width": 900, "height": 200 }, "text": { "fontSize": 20 }, "flow": { "avoidLayer": "defense_box" } },
+        "defense": { "rect": { "x": 930, "y": 660, "width": 90, "height": 50 }, "text": { "fontSize": 32, "font": "title", "color": "#FFFFFF", "align": "center", "vAlign": "center" } }
+      }
+    }
+  }
+}

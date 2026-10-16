@@ -1,0 +1,36 @@
+{
+  "contract": "1.2",
+  "id": "mimic.test-class",
+  "name": "Class sections",
+  "description": "Levels as rows under a level bar with the cost and the level",
+  "parts": {
+    "frame": { "variants": { "any": { "path": "img/frame-0-0-744-1039-f0ead6.png" } } },
+    "level_bar": { "variants": { "any": { "path": "img/bar-372-400-330-40-605040.png" } } }
+  },
+  "layouts": {
+    "class": {
+      "serves": [{ "role": "single", "kind": "class" }],
+      "canvas": { "width": 744, "height": 1039 },
+      "stack": [{ "part": "frame" }],
+      "art": [{ "x": 40, "y": 100, "width": 320, "height": 820 }],
+      "textBoxes": {
+        "title": { "rect": { "x": 48, "y": 40, "width": 520, "height": 40 }, "text": { "fontSize": 30, "font": "title", "vAlign": "baseline" } },
+        "description": { "rect": { "x": 380, "y": 100, "width": 320, "height": 100 }, "text": { "fontSize": 18, "color": "#000000" } }
+      },
+      "sections": {
+        "levels": {
+          "split": "levels",
+          "rect": { "x": 372, "y": 210, "width": 330, "height": 720 },
+          "text": { "fontSize": 20, "color": "#000000", "paddingX": 8 },
+          "gap": 12,
+          "header": { "for": "cost", "height": 52 },
+          "items": [
+            { "for": "cost", "part": "level_bar", "anchor": "top", "y": 400 },
+            { "for": "cost", "rect": { "x": 380, "y": 406, "width": 150, "height": 28 }, "text": { "fontSize": 18, "color": "#FFFFFF", "vAlign": "center" }, "format": "{}:", "anchor": "top", "y": 400 },
+            { "for": "level", "rect": { "x": 560, "y": 406, "width": 134, "height": 28 }, "text": { "fontSize": 18, "font": "title", "color": "#FFFFFF", "align": "right", "vAlign": "center" }, "format": "Level {}", "anchor": "top", "y": 400 }
+          ]
+        }
+      }
+    }
+  }
+}

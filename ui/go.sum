@@ -223,8 +223,8 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/kevinburke/ssh_config v1.4.0 h1:6xxtP5bZ2E4NF5tuQulISpTO2z8XbtH8cg1PWkxoFkQ=
 github.com/kevinburke/ssh_config v1.4.0/go.mod h1:q2RIzfka+BXARoNexmF9gkxEX7DmvbW9P4hIVx2Kg4M=
-github.com/klauspost/compress v1.18.3 h1:9PJRvfbmTabkOX8moIpXPbMMbYN60bWImDDU7L+/6zw=
-github.com/klauspost/compress v1.18.3/go.mod h1:R0h/fSBs8DE4ENlcrlib3PsXS61voFxhIs2DeRhCvJ4=
+github.com/klauspost/compress v1.18.7 h1:aUyZsS4kH3QTKurYhAOwAHxllVPnOthb3vPfnF1Ehjw=
+github.com/klauspost/compress v1.18.7/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.0.10/go.mod h1:g2LTdtYhdyuGPqyWyv7qRAmj1WBqxuObKfj5c0PQa7c=
 github.com/klauspost/cpuid/v2 v2.0.12/go.mod h1:g2LTdtYhdyuGPqyWyv7qRAmj1WBqxuObKfj5c0PQa7c=
@@ -292,10 +292,6 @@ github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 h1:zYyBkD/k9seD2A7fsi6
 github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
 github.com/odevine/impasto v0.2.2 h1:mFf0x55V2o+/qWRFLsbadpY1fjgsu5rTVIjmd0e6Mh8=
 github.com/odevine/impasto v0.2.2/go.mod h1:hsDtuh29Ba47P2Rv9Zr/FIvG9pA5Zv7Tp81NJoUdbvk=
-github.com/odevine/mimic/engine v0.19.3 h1:TlQQQSkveNSs+LHFthEUz0uAKlocSuGzwZbrf1VZv7g=
-github.com/odevine/mimic/engine v0.19.3/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
-github.com/odevine/mimic/engine v0.19.4 h1:PUFooXVnQyWedexwJjr4vTjeRAfSC/FICZnIEPwosjA=
-github.com/odevine/mimic/engine v0.19.4/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
 github.com/odevine/mimic/engine v0.19.5 h1:3RYdqQjmMD8czfkqGM7j0iEmX/tzVO82DJFCqnNS3/0=
 github.com/odevine/mimic/engine v0.19.5/go.mod h1:tZajuc//AfDxJOYxtEAxdw5zRvcR2yvyzvBMzCeEApo=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
